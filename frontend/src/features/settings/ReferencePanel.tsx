@@ -3,6 +3,7 @@ import { api } from '@/api'
 import type { PromptInfo, SlashCommand } from '@/types'
 import { CommandsPanel } from './CommandsPanel'
 import { StepKindsPanel } from './StepKindsPanel'
+import { useTranslation } from 'react-i18next'
 
 export function ReferencePanel({
   commands,
@@ -11,6 +12,7 @@ export function ReferencePanel({
   commands: SlashCommand[]
   initialTab?: 'commands' | 'stepkinds'
 }) {
+  const { t } = useTranslation('settings')
   const [tab, setTab] = useState(initialTab)
   const [prompts, setPrompts] = useState<PromptInfo[]>([])
   const [promptsDir, setPromptsDir] = useState('')
@@ -27,19 +29,17 @@ export function ReferencePanel({
         setPromptsDir(result.dir)
       })
       .catch(() => {
-        if (!cancelled) setError('Prompt details could not be loaded.')
+        if (!cancelled) setError(t('reference.loadError'))
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [t])
 
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Read-only help. There are no settings to save here.
-      </p>
-      <div aria-label="Reference sections" className="flex gap-2">
+      <p className="text-xs text-[var(--color-text-dim)]">{t('reference.description')}</p>
+      <div aria-label={t('reference.sectionsAria')} className="flex gap-2">
         {(['commands', 'stepkinds'] as const).map((key) => (
           <button
             key={key}
@@ -47,7 +47,7 @@ export function ReferencePanel({
             onClick={() => setTab(key)}
             className={`rounded px-3 py-2 text-sm ${tab === key ? 'bg-[var(--color-accent-soft)]' : 'bg-[var(--color-surface-2)]'}`}
           >
-            {key === 'commands' ? 'Commands' : 'Activity step types'}
+            {key === 'commands' ? t('reference.commands') : t('reference.stepKinds')}
           </button>
         ))}
       </div>

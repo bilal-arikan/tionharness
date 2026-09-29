@@ -1,0 +1,33 @@
+{
+  "title": "Özet",
+  "button": {
+    "hint": "Bu ekranın ajana verilen kompakt özeti (get_view ile aynı çıktı)"
+  },
+  "back": "Geri",
+  "close": "Kapat",
+  "refresh": "Yenile",
+  "loading": "Yükleniyor…",
+  "level": {
+    "tiny": "Küçük",
+    "card": "Kart",
+    "full": "Tam"
+  },
+  "sourceVersion": "Kaynak sürüm: {{source}}",
+  "asOf": "itibarıyla",
+  "tokenEstimateHint": "Yaklaşık token maliyeti (karakter/4)",
+  "tokenEstimate_one": "~{{count}} token",
+  "tokenEstimate_other": "~{{count}} token",
+  "item": "öğe",
+  "elided_one": "{{count}} {{unit}} gizlendi — daha fazlası için seviyeyi yükselt veya bir bağlantıyı aç.",
+  "elided_other": "{{count}} {{unit}} gizlendi — daha fazlası için seviyeyi yükselt veya bir bağlantıyı aç.",
+  "sendToAgent": "Ajana gönder",
+  "copy": {
+    "button": "Kopyala",
+    "done": "Panoya kopyalandı",
+    "sameLevels": "Panoya kopyalandı (üç seviye de aynı içeriği veriyor)",
+    "levels_one": "{{count}} farklı seviye panoya kopyalandı",
+    "levels_other": "{{count}} farklı seviye panoya kopyalandı",
+    "tokenCount_one": "~{{count}} token",
+    "tokenCount_other": "~{{count}} token"
+  }
+}

@@ -15,10 +15,8 @@ import {
 } from 'lucide-react'
 import { api } from '@/api'
 import { InfoPopover } from '@/shared/components/InfoPopover'
-import {
-  CoordinatorWorkflowPicker,
-  WORKFLOW_HELP,
-} from '@/shared/components/CoordinatorWorkflowPicker'
+import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
+import { workflowHelp } from '@/shared/components/coordinatorWorkflowText'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 import { workerAgent } from '@/shared/lib/workerAgent'
@@ -26,6 +24,7 @@ import { isCoordinatorSession, isWorkerSession } from '@/shared/lib/coordination
 import { CoordinatorBreadcrumb } from './CoordinatorBreadcrumb'
 import { CoordinatorTreeView } from './CoordinatorTreeView'
 import type { WorkerInfo } from '@/types'
+import { Trans, useTranslation } from 'react-i18next'
 
 interface Props {
   sessionId: string
@@ -77,6 +76,7 @@ export function CoordinatorSection({
   onSelectSession,
   onOpenSkill,
 }: Props) {
+  const { t } = useTranslation('sessions')
   const session = { role, coordinatorMode, coordinatorSessionId, coordinatorDepth }
   const isCoordinator = isCoordinatorSession(session)
   const isWorker = isWorkerSession(session)
@@ -184,18 +184,23 @@ export function CoordinatorSection({
     <div className="mb-2 space-y-1.5">
       <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-[11px] text-[var(--color-text-dim)]">
         {isCoordinator ? (
-          <>
-            Bu oturum bir{' '}
-            <span className="font-medium text-[var(--color-text)]">alt-koordinatör</span> — hem
-            kendi worker'larını yönetir hem de üstündeki koordinatöre rapor verir. Turu bitmesi
-            işinin bittiği anlamına gelmez; sonucu <code>report_to_coordinator</code> ile kapatır.
-          </>
+          <Trans
+            ns="sessions"
+            i18nKey="coordinator.workerHeader.subCoordinator"
+            components={{
+              strong: <span className="font-medium text-[var(--color-text)]" />,
+              code: <code />,
+            }}
+          />
         ) : (
-          <>
-            Bu oturum bir <span className="font-medium text-[var(--color-text)]">worker</span> — bir
-            koordinatör tarafından başlatıldı. Sonucu, koordinatör oturumuna{' '}
-            <code>&lt;task-notification&gt;</code> olarak iletilir.
-          </>
+          <Trans
+            ns="sessions"
+            i18nKey="coordinator.workerHeader.worker"
+            components={{
+              strong: <span className="font-medium text-[var(--color-text)]" />,
+              code: <code />,
+            }}
+          />
         )}
       </div>
       <CoordinatorBreadcrumb sessionId={sessionId} onSelectSession={onSelectSession} />
@@ -203,10 +208,10 @@ export function CoordinatorSection({
         <button
           type="button"
           onClick={() => onSelectSession(coordinatorSessionId)}
-          title="Koordinatör oturumunu aç"
+          title={t('coordinator.openCoordinator')}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
         >
-          <ArrowLeft size={13} className="shrink-0" /> Koordinatöre dön
+          <ArrowLeft size={13} className="shrink-0" /> {t('coordinator.back')}
         </button>
       )}
     </div>
@@ -215,7 +220,7 @@ export function CoordinatorSection({
   return (
     <section>
       <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-        <Network size={12} /> <span>Koordinasyon</span>
+        <Network size={12} /> <span>{t('coordinator.title')}</span>
       </div>
 
       {workerHeader}
@@ -244,30 +249,31 @@ export function CoordinatorSection({
           ) : (
             <Users size={13} className="shrink-0" />
           )}
-          {isWorker
-            ? "Koordinatör modunu aç (bu worker kendi worker'larını yönetsin)"
-            : "Koordinatör modunu aç (paralel worker'ları yönet)"}
+          {isWorker ? t('coordinator.enableNested') : t('coordinator.enable')}
         </button>
       ) : (
         <div className="space-y-2">
           <div className="flex items-center justify-between rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)]/5 px-2.5 py-2">
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-accent)]">
-              <Users size={13} /> Koordinatör modu açık
+              <Users size={13} /> {t('coordinator.enabled')}
             </span>
             <button
               onClick={() => toggleRole('')}
               disabled={toggling}
               className="text-[10px] text-[var(--color-text-dim)] underline-offset-2 hover:underline disabled:opacity-50"
             >
-              {toggling ? '…' : 'Kapat'}
+              {toggling ? '…' : t('actions.close')}
             </button>
           </div>
           {/* Scope, not decoration: an agent can be configured as a coordinator BY
               DEFAULT, in which case closing it here and opening a new chat looks like
               the switch "came back on". It did not — this one is per-session. */}
           <p className="px-0.5 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-            Bu anahtar yalnız <strong>bu oturumu</strong> etkiler. Ajan koordinatör olarak
-            ayarlanmışsa (Ajanlar ▸ Koordinatör) açtığı her yeni oturum yine koordinatör başlar.
+            <Trans
+              ns="sessions"
+              i18nKey="coordinator.scopeHint"
+              components={{ strong: <strong /> }}
+            />
           </p>
 
           {/* Phantom-spawn hard-halt: a persistent, actionable banner (not a transient
@@ -276,13 +282,14 @@ export function CoordinatorSection({
           {stallHalted && (
             <div className="space-y-1.5 rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger)]/5 px-2.5 py-2">
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-danger)]">
-                <OctagonAlert size={13} className="shrink-0" /> Koordinatör durduruldu
+                <OctagonAlert size={13} className="shrink-0" /> {t('coordinator.halted.title')}
               </div>
               <p className="text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-                Koordinatör worker başlattığını anlatıp gerçek bir <code>spawn_worker</code> çağrısı
-                yapmadı; düzeltici uyarılar sonuç vermedi, otomatik turlar durduruldu. Sohbete{' '}
-                <code>spawn_worker'ı gerçekten çağır</code> gibi bir mesaj yazın ya da aşağıdan tek
-                turluk devam ettirin.
+                <Trans
+                  ns="sessions"
+                  i18nKey="coordinator.halted.description"
+                  components={{ code: <code /> }}
+                />
               </p>
               <button
                 onClick={resumeCoordinator}
@@ -294,7 +301,7 @@ export function CoordinatorSection({
                 ) : (
                   <RotateCw size={12} className="shrink-0" />
                 )}
-                Devam ettir
+                {t('coordinator.halted.resume')}
               </button>
             </div>
           )}
@@ -319,12 +326,12 @@ export function CoordinatorSection({
                 ) : (
                   <ChevronRight size={12} className="shrink-0" />
                 )}
-                <Workflow size={12} className="shrink-0" /> Workflow
+                <Workflow size={12} className="shrink-0" /> {t('coordinator.workflow')}
               </button>
               {/* fixed: the session panel is `overflow-hidden` + `overflow-y-auto`
                   and barely wider than the bubble, so an absolutely-positioned one
                   is clipped on both axes no matter which edge it aligns to. */}
-              <InfoPopover text={WORKFLOW_HELP} label="Workflow nedir?" fixed />
+              <InfoPopover text={workflowHelp()} label={t('coordinator.workflowHelp')} fixed />
               {savingWf && <Loader2 size={11} className="animate-spin" />}
             </div>
             {workflowOpen && (
@@ -342,7 +349,11 @@ export function CoordinatorSection({
 
           {workers.length === 0 ? (
             <p className="px-1 text-[11px] text-[var(--color-text-dim)]">
-              Henüz worker yok. Sohbette <code>spawn_worker</code> ile paralel worker başlatın.
+              <Trans
+                ns="sessions"
+                i18nKey="coordinator.noWorkers"
+                components={{ code: <code /> }}
+              />
             </p>
           ) : (
             <>
@@ -356,7 +367,7 @@ export function CoordinatorSection({
                 ) : (
                   <ChevronRight size={12} className="shrink-0" />
                 )}
-                Worker'lar · {workers.length}
+                {t('coordinator.workers', { count: workers.length })}
               </button>
               {workersOpen && (
                 <>
@@ -371,7 +382,8 @@ export function CoordinatorSection({
                           : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                       }`}
                     >
-                      <Play size={11} className="shrink-0" /> Çalışan · {runningWorkers.length}
+                      <Play size={11} className="shrink-0" />{' '}
+                      {t('coordinator.runningWorkers', { count: runningWorkers.length })}
                     </button>
                     <button
                       onClick={() => selectTab('done')}
@@ -382,15 +394,15 @@ export function CoordinatorSection({
                           : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                       }`}
                     >
-                      <CheckCircle2 size={11} className="shrink-0" /> Tamamlanan ·{' '}
-                      {doneWorkers.length}
+                      <CheckCircle2 size={11} className="shrink-0" />{' '}
+                      {t('coordinator.completedWorkers', { count: doneWorkers.length })}
                     </button>
                   </div>
                   {shownWorkers.length === 0 ? (
                     <p className="px-1 text-[10px] text-[var(--color-text-dim)]">
                       {workerTab === 'running'
-                        ? 'Şu an çalışan worker yok.'
-                        : 'Henüz tamamlanan worker yok.'}
+                        ? t('coordinator.noRunningWorkers')
+                        : t('coordinator.noCompletedWorkers')}
                     </p>
                   ) : (
                     <ul className="space-y-1.5">
@@ -426,10 +438,11 @@ export function CoordinatorSection({
                                     stop_worker. */}
                                     {w.running && w.queued && (
                                       <span
-                                        title="Bekleyen mesaj: bu tur bitince otomatik teslim edilecek"
+                                        title={t('coordinator.queuedMessage')}
                                         className="flex items-center gap-1 rounded-full bg-[var(--color-warning)]/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-warning)]"
                                       >
-                                        <Inbox size={9} className="shrink-0" /> kuyrukta
+                                        <Inbox size={9} className="shrink-0" />{' '}
+                                        {t('coordinator.queued')}
                                       </span>
                                     )}
                                     {/* "delegating" is NOT "running": a sub-coordinator
@@ -439,10 +452,10 @@ export function CoordinatorSection({
                                     still — its result does not exist yet. */}
                                     <span className="whitespace-nowrap text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
                                       {w.delegating
-                                        ? 'dağıtıyor'
+                                        ? t('coordinator.workerState.delegating')
                                         : w.running
-                                          ? 'çalışıyor'
-                                          : 'bitti'}
+                                          ? t('coordinator.workerState.running')
+                                          : t('coordinator.workerState.done')}
                                     </span>
                                   </span>
                                 }
@@ -461,7 +474,7 @@ export function CoordinatorSection({
                               <button
                                 type="button"
                                 onClick={() => onSelectSession!(w.sessionId)}
-                                title="Worker oturumunu aç"
+                                title={t('coordinator.openWorker')}
                                 className="block w-full rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-left transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
                               >
                                 {inner}

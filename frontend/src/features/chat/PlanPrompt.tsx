@@ -1,4 +1,5 @@
 import { ClipboardList } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { PendingAsk } from './AskPrompt'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { ScrollableCard } from '@/shared/components'
@@ -15,12 +16,22 @@ interface Props {
 // returns control to the model so it can revise. Each delivers the answer over the
 // same channel as ask_user, unblocking the CLI permission-prompt tool.
 export function PlanPrompt({ ask, onAnswer }: Props) {
-  const options = ask.options?.length ? ask.options : ['Planı onayla', 'Reddet']
+  const { t } = useTranslation('chatStatus')
+  const values = ask.options?.length ? ask.options : ['Planı onayla', 'Reddet']
+  const options = values.map((value) => ({
+    value,
+    label:
+      value === 'Planı onayla' || value === 'Approve plan'
+        ? t('plan.approve')
+        : value === 'Reddet' || value === 'Reject'
+          ? t('plan.reject')
+          : value,
+  }))
   return (
     <ComposerCard tone="plan" className="px-3 py-2.5">
       <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
         <ClipboardList size={16} className="mt-0.5 shrink-0 text-[var(--color-success)]" />
-        <span className="min-w-0 flex-1 font-medium">Ajan bir plan sunuyor. Onaylıyor musun?</span>
+        <span className="min-w-0 flex-1 font-medium">{t('plan.question')}</span>
       </div>
       {ask.cmd && (
         <ScrollableCard
@@ -32,18 +43,18 @@ export function PlanPrompt({ ask, onAnswer }: Props) {
       )}
       <div className="flex flex-wrap gap-1.5">
         {options.map((opt, i) => {
-          const reject = /reddet|reject|deny/i.test(opt)
+          const reject = /reddet|reject|deny/i.test(opt.value)
           return (
             <button
               key={i}
-              onClick={() => onAnswer(opt)}
+              onClick={() => onAnswer(opt.value)}
               className={
                 reject
                   ? 'rounded-full border border-[var(--color-danger)]/60 px-3 py-1 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10'
                   : 'rounded-full bg-[var(--color-success)] px-3 py-1 text-xs font-medium text-[var(--color-on-success)] hover:opacity-90'
               }
             >
-              {opt}
+              {opt.label}
             </button>
           )
         })}

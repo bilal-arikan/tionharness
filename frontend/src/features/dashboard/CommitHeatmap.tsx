@@ -3,6 +3,9 @@ import { Loader2, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import type { CommitActivity, CommitActivityDay } from '@/types'
 import { dateFormat } from '@/shared/lib/intl'
+import { count } from '@/shared/lib/format'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   commitCountLabel,
   commitLevel,
@@ -23,8 +26,12 @@ function dayLabel(day: string): string {
   )
 }
 
-function commitAriaLabel(point: CommitActivityDay): string {
-  return `${dayLabel(point.day)}: ${commitCountLabel(point.value)}`
+function commitAriaLabel(point: CommitActivityDay, t: TFunction<'dashboard'>): string {
+  return t('commits.dayLabel', {
+    date: dayLabel(point.day),
+    count: point.value,
+    value: commitCountLabel(point.value),
+  })
 }
 
 const LEVEL_CLASS = [
@@ -36,6 +43,7 @@ const LEVEL_CLASS = [
 ]
 
 export function CommitHeatmap() {
+  const { t } = useTranslation('dashboard')
   const [data, setData] = useState<CommitActivity | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,51 +101,49 @@ export function CommitHeatmap() {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 id="commit-activity-title" className="text-sm font-medium">
-            Commit etkinliği
+            {t('commits.title')}
           </h2>
-          <p className="text-[11px] text-[var(--color-text-dim)]">Son 52 hafta</p>
+          <p className="text-[11px] text-[var(--color-text-dim)]">{t('commits.period')}</p>
         </div>
         {!loading && data?.isGitRepo !== false && total > 0 && (
           <span className="text-xs tabular-nums text-[var(--color-text-dim)]">
-            toplam <strong className="text-[var(--color-text)]">{total}</strong> commit
+            {t('commits.total', { count: total, value: count(total) })}
           </span>
         )}
       </div>
 
       {loading ? (
         <p className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]" role="status">
-          <Loader2 size={14} className="animate-spin" /> Commit etkinliği yükleniyor…
+          <Loader2 size={14} className="animate-spin" /> {t('commits.loading')}
         </p>
       ) : error ? (
         <div
           role="alert"
           className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-danger)]"
         >
-          <span>Commit etkinliği yüklenemedi: {error}</span>
+          <span>{t('commits.error', { error })}</span>
           <button
             type="button"
             onClick={() => void load()}
             className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text)] hover:border-[var(--color-accent)]"
           >
-            <RefreshCw size={12} /> Tekrar dene
+            <RefreshCw size={12} /> {t('commits.retry')}
           </button>
         </div>
       ) : data?.isGitRepo === false ? (
-        <p className="text-xs text-[var(--color-text-dim)]">
-          Bu çalışma alanı bir Git deposu değil.
-        </p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('commits.notRepository')}</p>
       ) : points.length === 0 || total === 0 ? (
-        <p className="text-xs text-[var(--color-text-dim)]">Son 52 haftada commit yok.</p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('commits.empty')}</p>
       ) : (
         <>
-          <div className="overflow-x-auto pb-2" tabIndex={0} aria-label="Commit etkinliği grafiği">
+          <div className="overflow-x-auto pb-2" tabIndex={0} aria-label={t('commits.chartLabel')}>
             <div
               className="grid w-max grid-flow-col grid-rows-7 gap-1"
               role="grid"
-              aria-label={`${total} commit, son 52 hafta`}
+              aria-label={t('commits.gridLabel', { count: total, value: count(total) })}
             >
               {points.map((point, index) => {
-                const label = commitAriaLabel(point)
+                const label = commitAriaLabel(point, t)
                 const tooltipId = `commit-tooltip-${index}`
                 const tooltipVisible = isHeatmapTooltipVisible(tooltip, index)
                 return (
@@ -180,7 +186,7 @@ export function CommitHeatmap() {
                       }}
                       className={`block h-3 w-3 rounded-[2px] border border-[var(--color-border)] focus:outline-2 focus:outline-offset-1 focus:outline-[var(--color-accent)] ${LEVEL_CLASS[commitLevel(point.value, peak)]}`}
                     >
-                      <span className="sr-only">{point.value}</span>
+                      <span className="sr-only">{count(point.value)}</span>
                     </button>
                     {tooltipVisible && (
                       <span
@@ -197,9 +203,9 @@ export function CommitHeatmap() {
             </div>
           </div>
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--color-text-dim)]">
-            <span>Sayı için güne odaklan veya üzerine gel.</span>
-            <div className="flex items-center gap-1" aria-label="Etkinlik yoğunluğu: azdan çoğa">
-              <span>Az</span>
+            <span>{t('commits.interactionHint')}</span>
+            <div className="flex items-center gap-1" aria-label={t('commits.intensityLabel')}>
+              <span>{t('commits.less')}</span>
               {LEVEL_CLASS.map((className) => (
                 <span
                   key={className}
@@ -207,7 +213,7 @@ export function CommitHeatmap() {
                   aria-hidden="true"
                 />
               ))}
-              <span>Çok</span>
+              <span>{t('commits.more')}</span>
             </div>
           </div>
         </>

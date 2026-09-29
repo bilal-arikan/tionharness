@@ -4,6 +4,7 @@ import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { Section } from './SessionDetailBits'
 import { formatTokens } from './sessionDetailFormat'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   info: SessionInfo
@@ -12,8 +13,9 @@ interface Props {
 
 // Agents participating in the conversation, with optional navigation.
 export function SessionAgentsSection({ info, onSelectAgent }: Props) {
+  const { t } = useTranslation('sessions')
   return (
-    <Section title={`Konuşmadaki ajanlar (${info.agents.length})`}>
+    <Section title={t('agents.title', { count: info.agents.length })}>
       <div className="flex flex-col gap-2">
         {info.agents.map((a) => {
           const row = (
@@ -23,14 +25,16 @@ export function SessionAgentsSection({ info, onSelectAgent }: Props) {
               dim={a.disabled}
               nameSuffix={
                 a.isOwner ? (
-                  <span className="ml-1 text-[var(--color-accent)]" title="Varsayılan ajan">
+                  <span className="ml-1 text-[var(--color-accent)]" title={t('agents.default')}>
                     ★
                   </span>
                 ) : undefined
               }
-              subtitle={`${a.turns} tur · ~${formatTokens(a.tokens)} token${
-                a.model ? ` · ${modelDisplayName(a.model)}` : ''
-              }`}
+              subtitle={t('agents.summary', {
+                count: a.turns,
+                tokens: formatTokens(a.tokens),
+                model: a.model ? ` · ${modelDisplayName(a.model)}` : '',
+              })}
             />
           )
           // Without a handler, render the bare row (read-only). With one,
@@ -43,7 +47,7 @@ export function SessionAgentsSection({ info, onSelectAgent }: Props) {
               key={a.agentId}
               type="button"
               onClick={() => onSelectAgent(a.agentId)}
-              title={`${a.name} sayfasına git`}
+              title={t('agents.open', { name: a.name })}
               className="group flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left transition hover:border-[var(--color-border)] hover:bg-[var(--color-surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >
               <span className="min-w-0 flex-1">{row}</span>

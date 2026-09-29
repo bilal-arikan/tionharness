@@ -13,6 +13,7 @@ import { PathText } from './PathText'
 import { CommandProgramTag } from './CommandProgramTag'
 import { OptimizerChip } from './OptimizerChip'
 import { agentActionTone, type AgentActionTone } from './agentActionTone'
+import { useTranslation } from 'react-i18next'
 
 const AGENT_ACTION_STYLES: Record<
   AgentActionTone,
@@ -37,6 +38,8 @@ const AGENT_ACTION_STYLES: Record<
     icon: 'text-[var(--color-info)]',
   },
 }
+
+const MINUS_SIGN = String.fromCharCode(0x2212)
 
 interface Props {
   step: TurnStep
@@ -66,7 +69,12 @@ function programHint(step: TurnStep): string | null {
 // label in the collapsed header: +added/−removed for diff-producing tools
 // (edit/write) and a line count for file readers — so the at-a-glance card
 // matches the native DiffCard without expanding it.
-function headerBadge(step: TurnStep, diffText: string | null, output: string): ReactNode {
+function headerBadge(
+  step: TurnStep,
+  diffText: string | null,
+  output: string,
+  lineLabel: (count: number) => string,
+): ReactNode {
   if (diffText) {
     const { stats } = parseDiff(diffText)
     if (stats.added > 0 || stats.removed > 0) {
@@ -81,7 +89,10 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
       return (
         <span className="flex shrink-0 gap-1.5 font-mono">
           <span className={addedCls}>+{stats.added}</span>
-          <span className={removedCls}>−{stats.removed}</span>
+          <span className={removedCls}>
+            {MINUS_SIGN}
+            {stats.removed}
+          </span>
         </span>
       )
     }
@@ -90,12 +101,13 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
   // window, so the collapsed header carries how many lines that was.
   if ((isReadTool(step.tool || '') || isShellTool(step.tool || '')) && output.trim()) {
     const count = output.replace(/\n$/, '').split('\n').length
-    return <span className="shrink-0 text-[var(--color-text-dim)]">{count} satır</span>
+    return <span className="shrink-0 text-[var(--color-text-dim)]">{lineLabel(count)}</span>
   }
   return null
 }
 
 export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Props) {
+  const { t } = useTranslation('chat')
   const [open, setOpen] = useState(false)
   const meta = toolMeta(step.tool || '', step.input)
   const output = step.output || ''
@@ -107,7 +119,7 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
       ? output
       : synthDiff(toolBase(step.tool || ''), step.input)
     : null
-  const badge = headerBadge(step, diffText, output)
+  const badge = headerBadge(step, diffText, output, (count) => t('activity.lines', { count }))
   // A loaded skill's body is markdown (use_skill returns "# Skill: <slug>\n\n…").
   // Render it formatted rather than as a raw <pre> block when the card is expanded.
   const isSkill = toolBase(step.tool || '') === 'use_skill' && !step.isError
@@ -154,7 +166,9 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
             {fmtDuration(step.durationMs)}
           </span>
         )}
-        {step.isError && <span className="shrink-0 text-[var(--color-danger)]">hata</span>}
+        {step.isError && (
+          <span className="shrink-0 text-[var(--color-danger)]">{t('activity.error')}</span>
+        )}
         {/* The chip is the first of the right-aligned group, so it carries the
             ml-auto that pushes the group to the edge; the badge then just spaces. */}
         {step.optimizer && (
@@ -172,17 +186,19 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
         <div className="space-y-2 px-3 pb-2 text-xs">
           {isCollab ? (
             <div className="space-y-1 rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
-              <div>İşlem: {collabOperation}</div>
-              {collabTarget && <div>Hedef: {collabTarget}</div>}
-              {step.status && <div>Durum: {step.status}</div>}
-              {step.durationMs != null && <div>Süre: {fmtDuration(step.durationMs)}</div>}
+              <div>{t('activity.operation', { operation: collabOperation })}</div>
+              {collabTarget && <div>{t('activity.target', { target: collabTarget })}</div>}
+              {step.status && <div>{t('activity.status', { status: step.status })}</div>}
+              {step.durationMs != null && (
+                <div>{t('activity.duration', { duration: fmtDuration(step.durationMs) })}</div>
+              )}
             </div>
           ) : (
             step.input != null &&
             !isSkill && (
               <div>
                 <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Girdi
+                  {t('activity.input')}
                 </div>
                 <pre className="overflow-x-auto rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
                   <PathText
@@ -201,14 +217,14 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
             (diffText ? (
               <div>
                 <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Değişiklik
+                  {t('activity.change')}
                 </div>
                 <DiffView text={diffText} />
               </div>
             ) : isSkill && output.trim() ? (
               <div>
                 <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Skill
+                  {t('activity.skill')}
                 </div>
                 <div className="rounded bg-[var(--color-bg)] p-2">
                   <Markdown onOpenFile={onOpenFile}>{output}</Markdown>
@@ -218,7 +234,7 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
               output && (
                 <div>
                   <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                    Çıktı
+                    {t('activity.output')}
                   </div>
                   <pre
                     className={`overflow-x-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 ${
@@ -227,7 +243,9 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
                   >
                     <PathText
                       text={
-                        output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output
+                        output.length > 4000
+                          ? output.slice(0, 4000) + `\n${t('activity.truncated')}`
+                          : output
                       }
                       onOpenFile={onOpenFile}
                     />
@@ -237,9 +255,10 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
                     chip on the turn's tool toggle row (AssistantTurn). */}
                   {step.outputTruncated && (
                     <div className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-                      Sunucu bu çıktıyı kırptı
-                      {step.outputLen ? ` (tamamı ${fmtBytes(step.outputLen)})` : ''} — turun
-                      başındaki “tam iz” ile tamamını getirebilirsin.
+                      {t('activity.serverTruncated', {
+                        size: step.outputLen ? fmtBytes(step.outputLen) : undefined,
+                        context: step.outputLen ? 'withSize' : undefined,
+                      })}
                     </div>
                   )}
                 </div>

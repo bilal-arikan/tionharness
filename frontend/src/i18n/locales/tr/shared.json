@@ -1,0 +1,259 @@
+{
+  "api": {
+    "agents": {
+      "builtInDelete": "Yerleşik ajan silinemez. Değiştirmek için \"Özelleştir\" ile kalıtım alan bir kopya oluşturun."
+    },
+    "http": {
+      "backendUnavailable": "Sunucuya ulaşılamıyor (HTTP {{status}}). TionHarness backend yanıt vermiyor — geliştirme sunucusunun (go run ./cmd/tionharness, 127.0.0.1:8090) çalıştığından emin ol.",
+      "serverError": "Sunucu hatası (HTTP 500). İşlem sırasında bir şeyler ters gitti; ayrıntı için Loglar ekranına bak.",
+      "timeout": "İstek zaman aşımına uğradı (HTTP 408). Sunucu zamanında yanıt vermedi, tekrar dene.",
+      "tooManyRequests": "Çok fazla istek (HTTP 429). Lütfen biraz bekleyip tekrar dene.",
+      "notFound": "Bulunamadı (HTTP 404). İstenen kayıt silinmiş veya adres geçersiz olabilir.",
+      "forbidden": "Yetki reddedildi (HTTP {{status}}). Bu işlem için izin yok.",
+      "badRequest": "Geçersiz istek (HTTP 400). Gönderilen veri sunucu tarafından kabul edilmedi.",
+      "unexpected": "Beklenmeyen sunucu yanıtı (HTTP {{status}})."
+    },
+    "network": {
+      "connectionFailed": "Sunucuya bağlanılamadı. Ağ bağlantını ve backend'in çalışıp çalışmadığını kontrol et."
+    },
+    "sharedAgent": {
+      "confirm": "\"{{agentName}}\" ajanındaki değişiklikler kaydedilsin mi?\n\nBu paylaşılan ajan şu çalışma alanlarını etkiler:\n{{workspaces}}\n\nMerkezi profil bu alanların tümü için güncellenecek.",
+      "cancelled": "Değişiklikler kaydedilmedi. Paylaşılan ajan güncellemesi iptal edildi."
+    }
+  },
+  "attachments": {
+    "image": "Görsel",
+    "text": "Metin",
+    "code": "Kod",
+    "document": "Belge",
+    "archive": "Arşiv",
+    "audio": "Ses",
+    "video": "Video",
+    "file": "Dosya"
+  },
+  "agents": {
+    "deleted": "Silinmiş ajan"
+  },
+  "clipboard": {
+    "copyPrompt": "Kopyalayın (Ctrl+C, Enter):"
+  },
+  "coordination": {
+    "subCoordinator": "Alt-koordinatör",
+    "subCoordinatorLevel": "Alt-koordinatör · seviye {{depth}}",
+    "coordinator": "Koordinatör",
+    "worker": "Worker",
+    "workerLevel": "Worker · seviye {{depth}}"
+  },
+  "emoji": {
+    "smileys": "Yüzler",
+    "people": "İnsan",
+    "nature": "Doğa",
+    "objects": "Nesne",
+    "symbols": "Sembol"
+  },
+  "model": {
+    "unspecified": "(model belirtilmemiş)"
+  },
+  "notifications": {
+    "chat": {
+      "label": "Sohbet yanıtı",
+      "hint": "Asistan yanıtı tamamlandı (yanıt-hazır bildirimi + sesi)."
+    },
+    "prompt": {
+      "label": "Onay / soru",
+      "hint": "Ajan bir onay, izin ya da soru ile senden yanıt bekliyor."
+    },
+    "schedule": {
+      "label": "Zamanlamalar",
+      "hint": "Zamanlanmış prompt çalıştı / başarısız oldu."
+    },
+    "flow": {
+      "label": "Akışlar",
+      "hint": "Akış (flow) çalışması tamamlandı / başarısız oldu."
+    },
+    "spawned": {
+      "label": "Spawn",
+      "hint": "Alt-oturum (spawn) çalışması tamamlandı / başarısız oldu."
+    },
+    "worker": {
+      "label": "Worker",
+      "hint": "Koordinatör worker durumu değişti."
+    },
+    "coordination": {
+      "label": "Koordinasyon",
+      "hint": "Koordinatör tur limiti gibi koordinasyon uyarıları."
+    },
+    "rota": {
+      "label": "Rota",
+      "hint": "Bir rota başladı, bitti, başarısız oldu veya insan yanıtı bekliyor."
+    },
+    "automation": {
+      "label": "Otomasyonlar",
+      "hint": "Etiket/pano otomasyonu tetiklendi."
+    },
+    "artifact": {
+      "label": "Artifact'lar",
+      "hint": "Artifact oluşturuldu / güncellendi."
+    },
+    "board": {
+      "label": "Görevler (pano)",
+      "hint": "Kanban görevi oluşturuldu / taşındı / güncellendi / silindi."
+    },
+    "agent": {
+      "label": "Ajan bildirimi",
+      "hint": "Ajanın notify aracıyla gönderdiği genel bildirim."
+    },
+    "anomaly": {
+      "label": "Anomaliler",
+      "hint": "Oturum uyarısı: düşük cache-isabet, sık kırılım, araç hatası vb."
+    },
+    "agent-model-changed": {
+      "label": "Model değişimi",
+      "hint": "Bir ajanın modeli değiştirildi. Prompt cache soğuyacak."
+    }
+  },
+  "searchIndex": {
+    "ready": "hazır",
+    "indexing": "indeksleniyor…",
+    "stale": "bayat",
+    "failed": "başarısız",
+    "missing": "yok"
+  },
+  "sessionOrigin": {
+    "triggeredBy": " · tetikleyen {{id}}",
+    "automation": {
+      "text": "Otomasyon {{id}} tetikledi",
+      "title": "Bu oturumu bir otomasyon açtı{{entity}}{{via}}"
+    },
+    "schedule": {
+      "text": "Zamanlayıcı {{id}} başlattı",
+      "title": "Bu oturumu zamanlanmış bir çalıştırma açtı{{entity}}"
+    },
+    "flow": {
+      "run": "koşu {{id}}",
+      "node": "düğüm {{id}}",
+      "text": "Akış {{id}}{{details}}",
+      "title": "Bu oturum bir akış koşusuna ait{{entity}}{{details}}{{via}}"
+    },
+    "coordinator": {
+      "text": "Koordinatör {{id}} açtı",
+      "title": "Bu oturum bir koordinatörün worker'ı olarak açıldı{{root}}",
+      "root": " · kök {{id}}"
+    },
+    "subagent": {
+      "text": "Alt-ajan · {{source}}",
+      "parentTurn": "üst tur",
+      "title": "Bu oturum bir run_subagent çağrısıyla açıldı"
+    },
+    "handoff": {
+      "text": "Devir{{target}}",
+      "title": "Bu oturum bir context-reset (handoff) ile önceki oturumdan devraldı"
+    },
+    "spawn": {
+      "text": "Oturum {{id}} başlattı",
+      "title": "Bu oturum spawn_session ile başka bir oturumdan başlatıldı"
+    },
+    "insight": {
+      "text": "İçgörü koşusu{{run}}",
+      "title": "Bu oturum bir içgörü (insight) koşusuna ait"
+    },
+    "unknown": "Köken: {{kind}}"
+  },
+  "theme": {
+    "violet": "Mor",
+    "blue": "Mavi",
+    "emerald": "Zümrüt",
+    "rose": "Gül",
+    "amber": "Kehribar",
+    "nord": "Nord",
+    "cyan": "Camgöbeği",
+    "lime": "Limon yeşili",
+    "orange": "Turuncu",
+    "fuchsia": "Fuşya"
+  },
+  "thinking": {
+    "alwaysOn": "Bu model her zaman düşünür — kapatılamaz",
+    "fallsBackHigh": "Bu modelde \"Yüksek\"e (high) düşer",
+    "fallsBackMax": "Bu modelde \"Maks\"a (max) düşer",
+    "providerFallsBackMax": "Bu sağlayıcıda \"Maks\"a (max) düşer — effort değeri ultra taşımıyor",
+    "unsupported": "Bu model bu seviyeyi desteklemez"
+  },
+  "stepKinds": {
+    "text": {
+      "label": "Metin",
+      "description": "Modelin araç çağrıları arasında ürettiği ara anlatım metni."
+    },
+    "thinking": {
+      "label": "Düşünme",
+      "description": "Modelin akıl yürütme (thinking) içeriği — sağlayıcı sunduğunda."
+    },
+    "tool": {
+      "label": "Araç",
+      "description": "Tek bir araç çağrısı: girdi + sonuç. Edit/Write çıktısı diff olarak gösterilir."
+    },
+    "delta": {
+      "label": "Akış parçası",
+      "description": "Yanıt token token üretilirken gelen anlık metin parçası. Geçici — tam metin mesaja yazılır."
+    },
+    "ask": {
+      "label": "Soru",
+      "description": "ask_user aracı kullanıcıya soru sorup yanıt bekler (tur askıya alınır). Geçici; yanıt gelince araç adımı kalıcılaşır."
+    },
+    "permission": {
+      "label": "İzin onayı",
+      "description": "İzin kapısı (ask modu): yazma/komut aracı için kullanıcıdan onay bekler (İzin ver / Her zaman izin ver / Reddet). Geçici; karar verilince araç çalışır ya da permission_denied hatası yazılır. Hem native hem claude-cli (permission-prompt) yolunda."
+    },
+    "plan": {
+      "label": "Plan onayı",
+      "description": "Plan onayı (claude-cli): ajan ExitPlanMode ile planını sunup kullanıcıdan onay bekler (Planı onayla / Reddet). Geçici; onaylanınca tur devam eder, reddedilince model planı revize eder. Yalnız ask ve salt-okunur modda; otonom turda otomatik onaylanır."
+    },
+    "todo": {
+      "label": "Görev listesi",
+      "description": "todo_write aracının çalışma checklist’i; ilk-sınıf kart olarak render edilir."
+    },
+    "recovery": {
+      "label": "Kurtarma",
+      "description": "Döngü mutlu-yol dışına çıktı (ör. iterasyon limiti). Reason makine etiketi taşır."
+    },
+    "error": {
+      "label": "Hata",
+      "description": "Tur düzeyinde hata (sağlayıcı hatası, bütçe aşımı, iptal) — araç hatasından (tool+isError) ayrı."
+    },
+    "steer": {
+      "label": "Yönlendirme",
+      "description": "Çalışan tura canlı eklenen kullanıcı yönlendirmesi (steer); modelden ayrı gösterilir."
+    },
+    "tool_delta": {
+      "label": "Araç çıktı akışı",
+      "description": "Yalnız eski kalıcı oturumları okumak için korunur. Yeni araç çıktı parçaları generic Append sözleşmesini kullanır."
+    },
+    "tombstone": {
+      "label": "Geri çekme",
+      "description": "İptal veya panic nedeniyle final kartı gelemeyecek canlı adımı UI’dan kaldırır (Ref hedef adım ID’si). Kendisi render edilmez."
+    },
+    "diff": {
+      "label": "Dosya değişikliği",
+      "description": "Write / Edit ile yapılan dosya değişikliği; yol + eklenen/silinen satır sayısı ve açılabilir birleşik diff (patch) olarak gösterilir."
+    },
+    "hook": {
+      "label": "Hook",
+      "description": "Kullanıcı-tanımlı PreToolUse/PostToolUse hook bir araç çağrısının etrafında çalıştı: girdiyi/çıktıyı değiştirdi, otomatik onayladı, ek bağlam ekledi ya da çağrıyı engelledi. Reason makine kararını taşır (hook_block / hook_modify / hook_allow / hook_context). Yalnız native (anthropic/minimax) yolda."
+    },
+    "context_change": {
+      "label": "Bağlam değişikliği",
+      "description": "Oturumun dondurulmuş statik bağlamı (persona/talimat/skill/araç kataloğu) oturum ortasında değişti; prompt cache’i korumak için önbelleğe giren prefix hâlâ oturum-başı snapshot’ını taşır. Değişen bloklar diff olarak gösterilir: eklenen blok `+`, silinen blok `-`, düzenlenen blok `~` (satır düzeyinde unified diff). Başlıktaki `+N -M` sayaçları da satır düzeyindedir; düzenlenen bir blok yalnız gerçekten eklenen/silinen satırları sayar. Drift başına bir kez yayılır; değişiklik bir sonraki bağlam yenilemesinde (/refresh-context, compaction, boşta kalma) tam uygulanır."
+    },
+    "cache_break": {
+      "label": "Cache kırılması",
+      "description": "Bu tur oturumun sıcak prompt-cache önekini kaybetti ve öneki baştan (soğuk) ödedi. Yalnız “bir şey değişti” sebepleri kart olur: model değişimi ve sistem promptu/araç şeması değişimi. Uzun boşluk sonrası TTL soğuması kart açmaz (normaldir) — o yalnız mesaj debug panelinde ve transkriptteki soğuk ayracında görünür. Prompt epoch açıkken prompt/araç kaynaklı kırılım oturum ortasında BEKLENMEZ; görülüyorsa araştırılmalıdır."
+    },
+    "compaction": {
+      "label": "Bağlam sıkıştırma",
+      "description": "Oturum geçmişi bağlam bütçesinde kalmak için yuvarlanan özete katlandı: kaç mesajın katlandığı, katlama öncesi/sonrası bağlam büyüklüğü, tetikleyici (auto = bütçe eşiği, manual = /compact, reactive = taşma kurtarması), kaynak ve CLI oturum işlemi kartta gösterilir. Katlanan mesajların ham metni modelin bağlamından çıkar; transkript diskte olduğu gibi kalır."
+    },
+    "subagent": {
+      "label": "Alt-ajan",
+      "description": "run_subagent ile başlatılan izole alt-ajan: kendi temiz bağlamında bir görevi yürütüp yalnız final sonucunu döndürür (ana bağlam kirlenmez). Katlanabilir kart; açılınca alt-ajanın kendi iz ağacı (SubSteps) iç içe gösterilir. Tek turda birden çok çağrı paralel koşar."
+    }
+  }
+}

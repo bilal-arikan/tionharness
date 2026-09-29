@@ -6,8 +6,21 @@ import { THINKING_OPTIONS as agentOptions } from './agentOptions'
 import { THINKING_OPTIONS as chatOptions } from '@/features/chat/composer/pickerOptions'
 import { thinkingOptionsForModel } from '@/shared/lib/catalog'
 import type { CatalogEntry } from '@/types'
+import { currentLocale, setLocale } from '@/i18n'
 
 describe('thinking options', () => {
+  it('resolves agent option labels from the current UI locale', async () => {
+    const original = currentLocale()
+    try {
+      await setLocale('tr')
+      expect(agentOptions.find((option) => option.value === 'off')?.label).toBe('Kapalı')
+      await setLocale('en')
+      expect(agentOptions.find((option) => option.value === 'off')?.label).toBe('Off')
+    } finally {
+      await setLocale(original)
+    }
+  })
+
   it('keeps agent and chat ramps aligned through ultra', () => {
     const ramp = ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
     expect(agentOptions.map((option) => option.value)).toEqual(ramp)

@@ -1,4 +1,6 @@
 import { ShieldAlert } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type { PendingAsk } from './AskPrompt'
 import { ScrollableCard } from '@/shared/components'
 import { ComposerCard } from './ComposerCard'
@@ -8,19 +10,19 @@ interface Props {
   onAnswer: (text: string) => void
 }
 
-// riskLabel maps a risk tier to a Turkish label for the card.
-function riskLabel(risk?: string): string {
+// riskLabel maps a risk tier to a localized label for the card.
+function riskLabel(t: TFunction<'chatStatus'>, risk?: string): string {
   switch (risk) {
     case 'exec':
-      return 'komut çalıştırma'
+      return t('permission.risk.exec')
     // The decider's tool-risk check flagged a command that would otherwise have
     // run without asking (auto mode or an "always allow" family grant).
     case 'exec:decider':
-      return 'riskli komut — karar modeli onay önerdi'
+      return t('permission.risk.execDecider')
     case 'write':
-      return 'dosya/durum değişikliği'
+      return t('permission.risk.write')
     default:
-      return risk || 'işlem'
+      return risk || t('permission.risk.default')
   }
 }
 
@@ -29,18 +31,32 @@ function riskLabel(risk?: string): string {
 // allow / Deny buttons. Each delivers the answer over the same channel as
 // ask_user, unblocking the agent (or the CLI permission-prompt tool).
 export function PermissionPrompt({ ask, onAnswer }: Props) {
-  const options = ask.options?.length ? ask.options : ['İzin ver', 'Her zaman izin ver', 'Reddet']
+  const { t } = useTranslation('chatStatus')
+  const values = ask.options?.length ? ask.options : ['İzin ver', 'Her zaman izin ver', 'Reddet']
+  const options = values.map((value) => ({
+    value,
+    label:
+      value === 'İzin ver' || value === 'Allow once'
+        ? t('permission.allowOnce')
+        : value === 'Her zaman izin ver' || value === 'Always allow'
+          ? t('permission.alwaysAllow')
+          : value === 'Reddet' || value === 'Deny'
+            ? t('permission.deny')
+            : value,
+  }))
   return (
     <ComposerCard tone="permission" className="px-3 py-2.5">
       <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
         <ShieldAlert size={16} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
         <span className="min-w-0 flex-1">
-          Ajan{' '}
+          {t('permission.intro')}{' '}
           <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 text-xs">
-            {ask.tool || 'bir araç'}
+            {ask.tool || t('permission.defaultTool')}
           </code>{' '}
-          aracını çalıştırmak istiyor (<span className="font-medium">{riskLabel(ask.risk)}</span>).
-          İzin veriyor musun?
+          <span className="font-medium">
+            {' '}
+            {t('permission.question', { risk: riskLabel(t, ask.risk) })}
+          </span>
         </span>
       </div>
       {ask.cmd && (
@@ -52,12 +68,12 @@ export function PermissionPrompt({ ask, onAnswer }: Props) {
       )}
       <div className="flex flex-wrap gap-1.5">
         {options.map((opt, i) => {
-          const deny = /reddet|deny/i.test(opt)
-          const always = /her zaman|always/i.test(opt)
+          const deny = /reddet|deny/i.test(opt.value)
+          const always = /her zaman|always/i.test(opt.value)
           return (
             <button
               key={i}
-              onClick={() => onAnswer(opt)}
+              onClick={() => onAnswer(opt.value)}
               className={
                 deny
                   ? 'rounded-full border border-[var(--color-danger)]/60 px-3 py-1 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10'
@@ -66,7 +82,7 @@ export function PermissionPrompt({ ask, onAnswer }: Props) {
                     : 'rounded-full bg-[var(--color-warning)]/90 px-3 py-1 text-xs font-medium text-[var(--color-on-warning)] hover:opacity-90'
               }
             >
-              {opt}
+              {opt.label}
             </button>
           )
         })}

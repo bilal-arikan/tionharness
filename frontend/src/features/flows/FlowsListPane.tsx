@@ -1,7 +1,7 @@
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { Play, Trash2 } from 'lucide-react'
 import { normalizeAvatar } from '@/shared/lib/avatar'
-import { FLOW_TEMPLATES } from './flowTemplates'
+import { FLOW_TEMPLATES, flowTemplateDescription, flowTemplateName } from './flowTemplates'
 import { flowNodeCount, type FlowsTab } from './flowsPanelShared'
 import type { Flow, FlowRun } from '@/types'
 import { SelectionBar, SelectionBarButton, ListPane, LoadingState } from '@/shared/components'
@@ -12,6 +12,7 @@ import {
 } from '@/shared/components/SidebarChrome'
 import type { MultiSelect } from '@/shared/hooks/useMultiSelect'
 import { formatDateTime } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   flowsListOpen: boolean
@@ -77,13 +78,17 @@ export function FlowsListPane({
   bulkRun,
   bulkDelete,
 }: Props) {
+  const { t, i18n } = useTranslation('flows')
   // The three tab lists are derived once per input change, not per render, and
   // the run rows look their flow up in a map instead of scanning the flow list
   // twice per run (once to filter, once to label).
   const needle = useMemo(() => q.trim().toLowerCase(), [q])
   const flowById = useMemo(() => new Map(flows.map((f) => [f.id, f])), [flows])
   const visibleTemplates = useMemo(
-    () => FLOW_TEMPLATES.filter((t) => t.name.toLowerCase().includes(needle)),
+    () =>
+      FLOW_TEMPLATES.filter((template) =>
+        flowTemplateName(template).toLowerCase().includes(needle),
+      ),
     [needle],
   )
   const visibleRuns = useMemo(
@@ -110,7 +115,7 @@ export function FlowsListPane({
       widthKey="tionharness.flowsListWidth"
       defaultWidth={224}
       minWidth={180}
-      label="Akışlar"
+      label={t('list.label')}
       testId="flows-list-toggle"
     >
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -126,7 +131,11 @@ export function FlowsListPane({
                   : 'text-[var(--color-text-dim)]'
               }`}
             >
-              {t === 'flows' ? 'Akışlarım' : t === 'templates' ? 'Şablonlar' : 'Koşular'}
+              {t === 'flows'
+                ? i18n.t('list.flowsMine', { ns: 'flows' })
+                : t === 'templates'
+                  ? i18n.t('list.templates', { ns: 'flows' })
+                  : i18n.t('list.runs', { ns: 'flows' })}
             </button>
           ))}
         </div>
@@ -137,10 +146,10 @@ export function FlowsListPane({
           onChange={(e) => setQ(e.target.value)}
           placeholder={
             tab === 'runs'
-              ? 'Koşu ara (akış adı)…'
+              ? t('list.searchRun')
               : tab === 'templates'
-                ? 'Şablon ara…'
-                : 'Akış ara…'
+                ? t('list.searchTemplate')
+                : t('list.searchFlow')
           }
           className="mb-2 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
         />
@@ -154,7 +163,7 @@ export function FlowsListPane({
               onChange={(e) => setShowSubRuns(e.target.checked)}
               className="accent-[var(--color-accent)]"
             />
-            Alt koşuları göster
+            {t('actions.showSubRuns')}
           </label>
         )}
 
@@ -168,9 +177,9 @@ export function FlowsListPane({
                     templateId === t.id ? SELECTED_ITEM_CLS : 'hover:bg-[var(--color-surface-2)]'
                   }`}
                 >
-                  <span className="block truncate">{t.name}</span>
+                  <span className="block truncate">{flowTemplateName(t)}</span>
                   <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
-                    {t.description}
+                    {flowTemplateDescription(t)}
                   </span>
                 </button>
               </li>
@@ -180,7 +189,7 @@ export function FlowsListPane({
           <ul className="space-y-1">
             {visibleRuns.map((rn) => {
               const rflow = flowById.get(rn.flowId)
-              const fname = rflow?.name ?? '（silinmiş akış）'
+              const fname = rflow?.name ?? t('flow.deletedName')
               const femoji = normalizeAvatar(rflow?.emoji)
               const badge = rn.status === 'success' ? '✓' : rn.status === 'failure' ? '✕' : '▶'
               const badgeColor =
@@ -217,30 +226,30 @@ export function FlowsListPane({
               )
             })}
             {runs.length === 0 && (
-              <li className="text-sm text-[var(--color-text-dim)]">Henüz koşu yok.</li>
+              <li className="text-sm text-[var(--color-text-dim)]">{t('list.runsNone')}</li>
             )}
           </ul>
         ) : (
           <>
-            <NewItemButton bare onClick={createFlow} label="Yeni akış" className="mb-3" />
+            <NewItemButton bare onClick={createFlow} label={t('list.newFlow')} className="mb-3" />
             {/* Tag filter chips: click to narrow the list to flows carrying any of the
           selected tags. Only shown when at least one flow has a tag. */}
             {allTags.length > 0 && (
               <div className="mb-2 flex flex-wrap items-center gap-1">
-                {allTags.map((t) => {
-                  const on = tagFilter.includes(t)
+                {allTags.map((tag) => {
+                  const on = tagFilter.includes(tag)
                   return (
                     <button
-                      key={t}
-                      onClick={() => toggleTagFilter(t)}
+                      key={tag}
+                      onClick={() => toggleTagFilter(tag)}
                       className={`rounded-full px-1.5 py-0.5 text-[10px] transition ${
                         on
                           ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                           : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:opacity-80'
                       }`}
-                      title={on ? 'Filtreyi kaldır' : 'Bu etikete göre filtrele'}
+                      title={on ? t('list.removeFilter') : t('list.filterByTag')}
                     >
-                      #{t}
+                      #{tag}
                     </button>
                   )
                 })}
@@ -248,9 +257,9 @@ export function FlowsListPane({
                   <button
                     onClick={() => setTagFilter([])}
                     className="text-[10px] text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
-                    title="Etiket filtresini temizle"
+                    title={t('list.clearTagFilter')}
                   >
-                    temizle
+                    {t('list.clear')}
                   </button>
                 )}
               </div>
@@ -280,7 +289,9 @@ export function FlowsListPane({
                       </span>
                       <span className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
                         <span className="truncate font-mono text-[11px]">{f.id}</span>
-                        <span className="flex-shrink-0">· {flowNodeCount(f.graph)} node</span>
+                        <span className="flex-shrink-0">
+                          · {t('list.nodeCount', { count: flowNodeCount(f.graph) })}
+                        </span>
                       </span>
                       {(f.tags?.length ?? 0) > 0 && (
                         <span className="mt-1 flex flex-wrap gap-1">
@@ -316,21 +327,21 @@ export function FlowsListPane({
               ))}
               {flowsLoading && (
                 <li>
-                  <LoadingState label="Akışlar yükleniyor…" />
+                  <LoadingState label={t('list.flowsLoading')} />
                 </li>
               )}
               {!flowsLoading && visibleFlows.length === 0 && (
                 <li className="text-sm text-[var(--color-text-dim)]">
-                  {flows.length === 0 ? 'Henüz akış yok.' : 'Eşleşen akış yok.'}
+                  {flows.length === 0 ? t('list.flowsNone') : t('list.flowsNoMatch')}
                 </li>
               )}
             </ul>
             <SelectionBar count={sel.count} onClear={sel.clear}>
               <SelectionBarButton icon={<Play size={13} />} onClick={bulkRun}>
-                Çalıştır
+                {t('actions.run').replace(/^▶\s*/, '')}
               </SelectionBarButton>
               <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
-                Sil
+                {t('actions.delete')}
               </SelectionBarButton>
             </SelectionBar>
           </>

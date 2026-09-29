@@ -42,8 +42,17 @@ export function reviewGateBadge(reviewBounces: number | undefined): ReviewGateBa
     exhausted,
     label: `${count}/${REVIEW_ROUND_BUDGET}`,
     title: exhausted
-      ? `Doğrulama bütçesi doldu: bu kart incelemeden ${count} kez geri döndü (bütçe ${REVIEW_ROUND_BUDGET}). Yeni bir reviewer turu yerine kartı daralt veya karar ver.`
-      : `Bu kart incelemeden ${count} kez geri döndü (bütçe ${REVIEW_ROUND_BUDGET}).`,
+      ? i18next.t('reviewGate.exhaustedTitle', {
+          ns: 'tasks',
+          count,
+          budget: REVIEW_ROUND_BUDGET,
+        })
+      : i18next.t('reviewGate.warningTitle', {
+          ns: 'tasks',
+          count,
+          budget: REVIEW_ROUND_BUDGET,
+        }),
     color: exhausted ? 'var(--color-danger)' : 'var(--color-warning)',
   }
 }
+import { i18next } from '@/i18n'

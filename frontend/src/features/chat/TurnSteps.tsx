@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from 'react'
+import { i18next } from '@/i18n'
 import { Zap } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { ThinkingBlock } from './ThinkingBlock'
@@ -112,7 +113,7 @@ function renderLiveStep(
       {node}
       {step.running && (
         <span className="pointer-events-none absolute right-7 top-1 animate-pulse text-[10px] text-[var(--color-text-dim)]">
-          çalışıyor…
+          {i18next.t('steps.running', { ns: 'chatStatus' })}
         </span>
       )}
     </div>
@@ -161,7 +162,7 @@ export const TurnSteps = memo(function TurnSteps({
           >
             <div className="mb-0.5 flex items-center gap-1 text-[10px] font-medium text-[var(--color-text-dim)]">
               <Zap size={10} className="text-[var(--color-accent)]" />
-              {rendered.length} paralel araç çağrısı (tek istekte)
+              {i18next.t('steps.parallel', { ns: 'chatStatus', count: rendered.length })}
             </div>
             {rendered}
           </div>,

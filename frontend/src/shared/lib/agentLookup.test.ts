@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Agent } from '@/types'
-import { DELETED_AGENT_LABEL, agentName, resolveAgent } from './agentLookup'
+import { agentName, deletedAgentLabel, resolveAgent } from './agentLookup'
 
 const agent = (over: Partial<Agent> & Pick<Agent, 'id' | 'name'>): Agent =>
   ({
@@ -42,7 +42,7 @@ describe('resolveAgent', () => {
 
   it('never leaks a raw id for an unresolvable agent', () => {
     const got = resolveAgent(ROSTER, 'AGT-gone')
-    expect(got?.name).toBe(DELETED_AGENT_LABEL)
+    expect(got?.name).toBe(deletedAgentLabel())
     expect(got?.name).not.toContain('AGT-gone')
     expect(got).toMatchObject({ deleted: true, missing: true })
   })
@@ -57,6 +57,6 @@ describe('resolveAgent', () => {
   it('agentName is empty only when there is no id at all', () => {
     expect(agentName(ROSTER, undefined)).toBe('')
     expect(agentName(ROSTER, 'AGT1')).toBe('Canli')
-    expect(agentName(ROSTER, 'yok')).toBe(DELETED_AGENT_LABEL)
+    expect(agentName(ROSTER, 'yok')).toBe(deletedAgentLabel())
   })
 })

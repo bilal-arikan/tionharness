@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useAgentEditorApi } from './AgentEditorContext'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   /** Agent whose system role supplies the built-in prompt. */
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function BuiltinPromptRevert({ agentId, current, onRevert, onError, disabled }: Props) {
+  const { t } = useTranslation('agents')
   const api = useAgentEditorApi()
   const [loading, setLoading] = useState(false)
   // Cached so repeated clicks (and the "already at default" check after a
@@ -55,11 +57,15 @@ export function BuiltinPromptRevert({ agentId, current, onRevert, onError, disab
       onClick={doRevert}
       disabled={disabled || loading || atBuiltin}
       data-testid="agent-soul-revert-builtin"
-      title="Bu ajanın koddaki gömülü sistem promptunu geri yükler. Değişiklik kaydedene kadar uygulanmaz."
+      title={t('builtinPrompt.title')}
       className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-normal text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-30 disabled:hover:border-[var(--color-border)] disabled:hover:text-[var(--color-text-dim)]"
     >
       <RotateCcw size={11} />
-      {loading ? 'Yükleniyor…' : atBuiltin ? 'koddaki prompt' : 'Koddaki prompta dön'}
+      {loading
+        ? t('builtinPrompt.loading')
+        : atBuiltin
+          ? t('builtinPrompt.current')
+          : t('builtinPrompt.restore')}
     </button>
   )
 }

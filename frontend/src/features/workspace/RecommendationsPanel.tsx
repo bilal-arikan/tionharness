@@ -6,6 +6,7 @@
 // the shared workspace Save bar — like ExternalToolsPanel. It reuses the SAME rule
 // catalog as the post-create toast, so the two never drift.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EyeOff, Eye, ScanSearch, Bell } from 'lucide-react'
 import { api } from '@/api'
 import { RULES, fetchRecommendationData, runRules, NOOP_NAV } from './recommendations'
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function RecommendationsPanel({ onError, onShowCards }: Props) {
+  const { t } = useTranslation('workspace')
   const [loading, setLoading] = useState(true)
   // Keys of rules whose condition currently holds for this workspace.
   const [applicable, setApplicable] = useState<Set<string>>(new Set())
@@ -70,12 +72,7 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Yeni bir workspace oluşturulduğunda sağ-altta çıkan öneri kartları. Buradan hepsinin{' '}
-        <span className="font-medium text-[var(--color-text)]">şu anki durumunu</span> görür,
-        <span className="font-medium text-[var(--color-text)]"> yok saydıklarını</span> gözden
-        geçirir ve{' '}
-        <span className="font-medium text-[var(--color-text)]">yok saymayı kaldırabilirsin</span>.
-        Yok sayılan bir öneri bir daha kart olarak gösterilmez.
+        {t('recommendations.panel.description')}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -86,7 +83,7 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
           className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-50"
         >
           <ScanSearch size={14} className="text-[var(--color-accent)]" />
-          {loading ? 'Yükleniyor…' : 'Durumu yenile'}
+          {loading ? t('actions.loading') : t('recommendations.panel.refresh')}
         </button>
         {onShowCards && (
           <button
@@ -96,13 +93,15 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
             data-testid="rec-show-cards"
             title={
               visibleCount === 0
-                ? 'Şu an gösterilecek (geçerli ve yok sayılmamış) öneri yok'
-                : 'Geçerli önerileri sağ-altta kart olarak göster'
+                ? t('recommendations.panel.noCardsTitle')
+                : t('recommendations.panel.showCardsTitle')
             }
             className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-accent)] transition hover:opacity-90 disabled:opacity-50"
           >
             <Bell size={14} />
-            {visibleCount > 0 ? `Kartları göster (${visibleCount})` : 'Kartları göster'}
+            {visibleCount > 0
+              ? t('recommendations.panel.showCardsCount', { count: visibleCount })
+              : t('recommendations.panel.showCards')}
           </button>
         )}
       </div>
@@ -129,15 +128,15 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
                     <span className="font-medium text-[var(--color-text)]">{title}</span>
                     {isIgnored ? (
                       <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
-                        Yok sayıldı
+                        {t('recommendations.panel.state.ignored')}
                       </span>
                     ) : isApplicable ? (
                       <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-                        Şu an geçerli
+                        {t('recommendations.panel.state.applicable')}
                       </span>
                     ) : (
                       <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
-                        Uygulanabilir değil
+                        {t('recommendations.panel.state.notApplicable')}
                       </span>
                     )}
                   </div>
@@ -152,19 +151,19 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs font-medium transition hover:border-[var(--color-accent)] disabled:opacity-50"
                 title={
                   isIgnored
-                    ? 'Yok saymayı kaldır — tekrar önerilebilir'
-                    : 'Yok say — bir daha önerme'
+                    ? t('recommendations.panel.unignoreTitle')
+                    : t('recommendations.panel.ignoreTitle')
                 }
               >
                 {busy === key ? (
                   '…'
                 ) : isIgnored ? (
                   <>
-                    <Eye size={12} /> Yok saymayı kaldır
+                    <Eye size={12} /> {t('recommendations.panel.unignore')}
                   </>
                 ) : (
                   <>
-                    <EyeOff size={12} /> Yok say
+                    <EyeOff size={12} /> {t('recommendations.panel.ignore')}
                   </>
                 )}
               </button>

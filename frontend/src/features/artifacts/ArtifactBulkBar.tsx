@@ -2,6 +2,7 @@ import { Archive, ArchiveRestore, FolderInput, Trash2 } from 'lucide-react'
 import type { MultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton } from '@/shared/components'
 import type { ArtifactBulkActions } from './useArtifactBulkActions'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   sel: MultiSelect
@@ -14,6 +15,7 @@ interface Props {
 // ArtifactBulkBar is the multi-select action bar under the list: bulk group
 // assignment, bulk archive / un-archive and bulk delete.
 export function ArtifactBulkBar({ sel, orderedIds, groupNames, showArchived, bulk }: Props) {
+  const { t } = useTranslation('artifacts')
   const { bulkGroup, setBulkGroup, bulkGroupBusy, bulkArchiveBusy } = bulk
   return (
     <SelectionBar
@@ -34,7 +36,7 @@ export function ArtifactBulkBar({ sel, orderedIds, groupNames, showArchived, bul
             }
           }}
           disabled={bulkGroupBusy}
-          placeholder="Grup ata…"
+          placeholder={t('bulk.groupPlaceholder')}
           data-testid="artifacts-bulk-group-input"
           className="w-28 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
         />
@@ -49,11 +51,11 @@ export function ArtifactBulkBar({ sel, orderedIds, groupNames, showArchived, bul
           disabled={bulkGroupBusy}
           title={
             bulkGroup.trim()
-              ? `Seçili artifactları "${bulkGroup.trim()}" grubuna taşı`
-              : 'Seçili artifactları grupsuz yap'
+              ? t('bulk.moveToGroupTitle', { group: bulkGroup.trim() })
+              : t('bulk.ungroupTitle')
           }
         >
-          {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
+          {bulkGroup.trim() ? t('bulk.assign') : t('group.ungrouped')}
         </SelectionBarButton>
       </div>
       {/* Bulk archive / un-archive: hides (or restores) the selection. The
@@ -63,12 +65,12 @@ export function ArtifactBulkBar({ sel, orderedIds, groupNames, showArchived, bul
         icon={showArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
         onClick={() => bulk.bulkSetArchived(!showArchived)}
         disabled={bulkArchiveBusy}
-        title={showArchived ? 'Seçili artifactları arşivden çıkar' : 'Seçili artifactları arşivle'}
+        title={showArchived ? t('bulk.restoreTitle') : t('bulk.archiveTitle')}
       >
-        {showArchived ? 'Arşivden çıkar' : 'Arşivle'}
+        {showArchived ? t('actions.restore') : t('actions.archive')}
       </SelectionBarButton>
       <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulk.bulkDelete} danger>
-        Sil
+        {t('actions.delete')}
       </SelectionBarButton>
     </SelectionBar>
   )

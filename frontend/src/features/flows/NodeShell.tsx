@@ -10,6 +10,7 @@ import {
   type NodeChrome,
 } from './nodeStyles'
 import type { NodeStatus } from './flowGraph'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   id: string
@@ -28,6 +29,7 @@ interface Props {
 // edge) so the flow's endpoints stand out. Handles are rendered by the concrete
 // node component as children.
 export function NodeShell({ id, type, title, isStart, isEnd, selected, status, children }: Props) {
+  const { t } = useTranslation('flows')
   const chrome: NodeChrome = chromeFor(type)
   const bodyBg = isStart ? START_TINT : isEnd ? END_TINT : 'transparent'
   const actions = useContext(NodeActionsContext)
@@ -59,24 +61,24 @@ export function NodeShell({ id, type, title, isStart, isEnd, selected, status, c
               <button
                 onClick={() => actions.onMakeStart(id)}
                 className="rounded px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
-                title="Başlangıç yap"
+                title={t('actions.makeStart')}
               >
-                ▶ Başlangıç
+                ▶ {t('nodeTypes.start')}
               </button>
             )}
             <button
               onClick={() => actions.onDuplicate(id)}
               className="rounded px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
-              title="Çoğalt"
+              title={t('actions.duplicate')}
             >
-              ⧉ Çoğalt
+              ⧉ {t('actions.duplicate')}
             </button>
             <button
               onClick={() => actions.onDelete(id)}
               className="rounded px-1.5 py-0.5 text-[var(--color-danger)] hover:bg-[var(--color-surface-2)]"
-              title="Sil"
+              title={t('actions.delete')}
             >
-              ✕ Sil
+              ✕ {t('actions.delete')}
             </button>
           </div>
         </NodeToolbar>
@@ -88,8 +90,16 @@ export function NodeShell({ id, type, title, isStart, isEnd, selected, status, c
         <chrome.Icon size={13} className="shrink-0" />
         <span className="truncate">{title || chrome.label}</span>
         <span className="ml-auto flex gap-1">
-          {isStart && <span className="rounded bg-[var(--color-overlay)]/25 px-1">başlangıç</span>}
-          {isEnd && <span className="rounded bg-[var(--color-overlay)]/25 px-1">bitiş</span>}
+          {isStart && (
+            <span className="rounded bg-[var(--color-overlay)]/25 px-1">
+              {t('nodeTypes.start').toLocaleLowerCase()}
+            </span>
+          )}
+          {isEnd && (
+            <span className="rounded bg-[var(--color-overlay)]/25 px-1">
+              {t('nodeTypes.end').toLocaleLowerCase()}
+            </span>
+          )}
         </span>
       </div>
       <div className="rounded-b-lg px-2.5 py-2" style={{ background: bodyBg }}>

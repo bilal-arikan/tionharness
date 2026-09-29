@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Smile } from 'lucide-react'
 import { EmojiPicker } from './agents/EmojiPicker'
 import { normalizeAvatar } from '@/shared/lib/avatar'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   /** Currently selected emoji ('' = none / default). */
@@ -28,6 +29,7 @@ interface Props {
 // the current selection plus the shared EmojiPicker popover. Centralizing it
 // here keeps one consistent emoji UI across the app.
 export function EmojiField({ value, onChange, clearLabel = 'Aa', label, compact }: Props) {
+  const { t } = useTranslation('sharedUi')
   const [open, setOpen] = useState(false)
   const text = typeof label === 'function' ? label(value) : label
   // Normalize so a corrupted/mojibake stored value never shows as garbage
@@ -39,7 +41,7 @@ export function EmojiField({ value, onChange, clearLabel = 'Aa', label, compact 
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          title="Emoji seç"
+          title={t('emoji.select')}
           className="flex h-9 w-9 items-center justify-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-lg leading-none hover:border-[var(--color-accent)]"
         >
           {glyph}
@@ -48,7 +50,7 @@ export function EmojiField({ value, onChange, clearLabel = 'Aa', label, compact 
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          title="Emoji seç"
+          title={t('emoji.select')}
           className="flex items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm hover:border-[var(--color-accent)]"
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-lg leading-none text-[var(--color-text)]">

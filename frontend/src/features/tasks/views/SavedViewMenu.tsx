@@ -3,10 +3,11 @@
 // and carries the "unsaved changes" indicator.
 
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, Pencil, Trash2 } from 'lucide-react'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import type { BoardViewDef } from '@/types'
-import { BUILTIN_VIEWS, isBuiltinId } from './boardViewTypes'
+import { isBuiltinId } from './boardViewTypes'
 
 interface Props {
   allViews: BoardViewDef[]
@@ -25,19 +26,21 @@ export function SavedViewMenu({
   onRename,
   onDelete,
 }: Props) {
+  const { t } = useTranslation('tasks')
   const [open, setOpen] = useState(false)
   const ref = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
-  const selected = allViews.find((v) => v.id === selectedId) ?? BUILTIN_VIEWS[0]
+  const builtins = allViews.filter((v) => isBuiltinId(v.id))
+  const selected = allViews.find((v) => v.id === selectedId) ?? builtins[0]
   const saved = allViews.filter((v) => !isBuiltinId(v.id))
 
   const rename = async (v: BoardViewDef) => {
-    const label = prompt('Görünüm adı', v.label)
+    const label = prompt(t('views.namePrompt'), v.label)
     if (label === null) return
     await onRename(v.id, label)
   }
 
   const remove = async (v: BoardViewDef) => {
-    if (!confirm(`"${v.label}" görünümü silinsin mi?`)) return
+    if (!confirm(t('views.deleteConfirm', { label: v.label }))) return
     await onDelete(v.id)
     setOpen(false)
   }
@@ -63,14 +66,14 @@ export function SavedViewMenu({
         <span className="flex flex-shrink-0 items-center gap-0.5 pr-1 opacity-0 transition group-hover:opacity-100">
           <button
             onClick={() => void rename(v)}
-            title="Yeniden adlandır"
+            title={t('actions.rename')}
             className="rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
           >
             <Pencil size={11} />
           </button>
           <button
             onClick={() => void remove(v)}
-            title="Sil"
+            title={t('actions.delete')}
             className="rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
           >
             <Trash2 size={11} />
@@ -91,7 +94,7 @@ export function SavedViewMenu({
         <span className="max-w-[140px] truncate">{selected.label}</span>
         {dirty && (
           <span
-            title="Kaydedilmemiş değişiklik"
+            title={t('views.unsavedChanges')}
             className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]"
           />
         )}
@@ -100,15 +103,15 @@ export function SavedViewMenu({
       {open && (
         <div className="absolute left-0 z-30 mt-1 w-60 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-md)]">
           <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            Hazır
+            {t('views.builtinSection')}
           </div>
-          {BUILTIN_VIEWS.map(row)}
+          {builtins.map(row)}
           <div className="mt-1 border-t border-[var(--color-border)] px-2 pb-1 pt-2 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            Kayıtlı
+            {t('views.savedSection')}
           </div>
           {saved.length === 0 ? (
             <div className="px-2 pb-2 text-xs text-[var(--color-text-dim)]">
-              Henüz kayıtlı görünüm yok — filtreleyip “Kaydet”e basın.
+              {t('views.emptySaved')}
             </div>
           ) : (
             saved.map(row)

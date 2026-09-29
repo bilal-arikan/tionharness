@@ -1,10 +1,9 @@
 // Flow-run status label + colour. Split out so RunView.tsx exports only
 // components (fast refresh).
-export const STATUS_LABEL: Record<string, string> = {
-  running: '▶ devam ediyor',
-  success: '✓ başarılı',
-  failure: '✕ hata',
-  waiting: '⏳ girdi bekleniyor',
+import { i18next } from '@/i18n'
+
+export function statusLabel(status: string): string {
+  return i18next.t(`status.${status}`, { ns: 'flows', defaultValue: status })
 }
 
 export function statusColor(status: string): string {

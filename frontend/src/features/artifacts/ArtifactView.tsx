@@ -7,6 +7,7 @@ import { Lightbox } from '@/shared/components'
 import { fileURL } from '@/shared/lib/attachments'
 import { TextFileArtifact } from './TextFileArtifact'
 import { textFileLang } from './textFileLang'
+import { useTranslation } from 'react-i18next'
 
 // ImageArtifact renders an image artifact with click-to-zoom into the shared
 // Lightbox (zoom + pan). Kept as its own component so the hook is valid even
@@ -41,6 +42,7 @@ interface Props {
 // block, plain text, or a media file (image/video/audio) served from sourcePath.
 // Used by the artifacts screen and the version preview.
 export function ArtifactView({ kind, language, content, sourcePath }: Props) {
+  const { t } = useTranslation('artifacts')
   switch (kind) {
     case 'markdown':
       return <Markdown>{content}</Markdown>
@@ -53,7 +55,7 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
           // so artifact HTML can be interactive yet isolated from the app.
           sandbox="allow-scripts"
           srcDoc={content}
-          title="HTML artifact"
+          title={t('view.htmlTitle')}
           className="h-full min-h-[60vh] w-full rounded-lg border border-[var(--color-border)] bg-white"
         />
       )
@@ -70,7 +72,11 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
       return <CodeBlock code={content} lang="mermaid" />
     case 'image': {
       const url = fileURL(sourcePath)
-      return url ? <ImageArtifact url={url} alt={content || 'image artifact'} /> : <MissingMedia />
+      return url ? (
+        <ImageArtifact url={url} alt={content || t('view.imageAlt')} />
+      ) : (
+        <MissingMedia />
+      )
     }
     case 'video': {
       const url = fileURL(sourcePath)
@@ -107,7 +113,7 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
               rel="noreferrer"
               className="inline-block text-xs text-[var(--color-accent)] hover:underline"
             >
-              Aç / indir
+              {t('view.openDownload')}
             </a>
           </div>
         )
@@ -116,7 +122,9 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
         <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
           <FileIcon size={28} className="shrink-0 text-[var(--color-text-dim)]" />
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{content || sourcePath || 'Dosya'}</div>
+            <div className="truncate text-sm font-medium">
+              {content || sourcePath || t('kind.file')}
+            </div>
             <div className="text-xs text-[var(--color-text-dim)]">
               {url ? (
                 <a
@@ -125,10 +133,10 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
                   rel="noreferrer"
                   className="text-[var(--color-accent)] hover:underline"
                 >
-                  Aç / indir
+                  {t('view.openDownload')}
                 </a>
               ) : (
-                'Çalışma alanında saklı dosya'
+                t('view.storedFile')
               )}
             </div>
           </div>
@@ -146,9 +154,10 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
 
 // MissingMedia is shown when a media artifact has no resolvable source path.
 function MissingMedia() {
+  const { t } = useTranslation('artifacts')
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm text-[var(--color-text-dim)]">
-      Medya dosyası bulunamadı (kaynak yol eksik).
+      {t('view.missingMedia')}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { Loader2, Square, RotateCcw, Flame, EarOff } from 'lucide-react'
 import type { SessionInfo } from '@/types'
 import { ProcBtn } from './SessionDetailBits'
 import { formatElapsed } from './sessionDetailFormat'
+import { useTranslation } from 'react-i18next'
 
 // Silence is only worth showing once it is a meaningful fraction of the window
 // that would cancel the turn. Below that it is just the normal gap between two
@@ -30,6 +31,7 @@ export function SessionProcessCard({
   onDrop,
   hasRerun,
 }: Props) {
+  const { t } = useTranslation('sessions')
   // Idle is derived live from the server-stamped last-activity time, so it keeps
   // growing while the session is silent (a fetched duration would not — the panel
   // refetches on conversation changes, and silence is the absence of those).
@@ -48,7 +50,7 @@ export function SessionProcessCard({
           <div className="flex items-center gap-1.5 text-[11px]">
             <Loader2 size={13} className="shrink-0 animate-spin text-[var(--color-accent)]" />
             <span className="font-medium text-[var(--color-text)]">
-              {info.running.autonomous ? 'Otonom tur çalışıyor' : 'Tur çalışıyor'}
+              {info.running.autonomous ? t('process.autonomousRunning') : t('process.running')}
             </span>
             {info.running.provider && (
               <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]">
@@ -64,18 +66,26 @@ export function SessionProcessCard({
               className={`flex items-center gap-1.5 text-[10px] ${
                 idleUrgent ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-dim)]'
               }`}
-              title={`Tur ${formatElapsed(idleSec)} boyunca anlamlı ilerleme üretmedi. Son ilerleme: ${run?.lastProgressKind ?? 'bilinmiyor'} (#${run?.progressSequence ?? 0}). ${formatElapsed(idleLimit)} sessizlikte otomatik iptal edilir.`}
+              title={t('process.idleTitle', {
+                idle: formatElapsed(idleSec),
+                progress: run?.lastProgressKind ?? t('process.unknown'),
+                sequence: run?.progressSequence ?? 0,
+                limit: formatElapsed(idleLimit),
+              })}
             >
               <EarOff size={12} className="shrink-0" />
               <span className="font-mono">
-                {formatElapsed(idleSec)} sessiz — sınır {formatElapsed(idleLimit)}
+                {t('process.idleLine', {
+                  idle: formatElapsed(idleSec),
+                  limit: formatElapsed(idleLimit),
+                })}
               </span>
             </div>
           )}
           <div className="flex items-center gap-1.5">
             <ProcBtn
               icon={Square}
-              label="Durdur"
+              label={t('process.stop')}
               onClick={onStop}
               busy={procBusy === 'stop'}
               disabled={procBusy !== ''}
@@ -83,7 +93,7 @@ export function SessionProcessCard({
             {hasRerun && (
               <ProcBtn
                 icon={RotateCcw}
-                label="Yeniden başlat"
+                label={t('process.restart')}
                 onClick={onRestart}
                 busy={procBusy === 'restart'}
                 disabled={procBusy !== ''}
@@ -96,15 +106,15 @@ export function SessionProcessCard({
         <div className="flex items-center gap-1.5">
           <Flame size={13} className="shrink-0 text-[var(--color-warning)]" />
           <span className="min-w-0 flex-1 text-[11px] text-[var(--color-text-dim)]">
-            Sıcak claude-cli süreci (turlar arası)
+            {t('process.warmCli')}
           </span>
           <ProcBtn
             icon={RotateCcw}
-            label="Tazele"
+            label={t('process.recycle')}
             onClick={onDrop}
             busy={procBusy === 'drop'}
             disabled={procBusy !== ''}
-            title="Sıcak süreci kapat — sonraki tur temiz başlar (konuşma korunur)"
+            title={t('process.recycleTitle')}
           />
         </div>
       )}

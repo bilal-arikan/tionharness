@@ -9,6 +9,7 @@ import type {
 } from '@/types'
 import { parseArgs, serverToImportJson, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
 import { EmptyState, ModalOverlay, PaneHeader, toast } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 
 // ServerManagement is the MCP server list + add form, shown when no tool is
 // selected. (Extracted so the right pane stays readable.)
@@ -50,6 +51,7 @@ export function ServerManagement(props: {
   onLoadImportable: () => void
   onAddImportable: (item: ImportableMCPServer) => void
 }) {
+  const { t: tr } = useTranslation('tools')
   const {
     servers,
     tools,
@@ -110,24 +112,22 @@ export function ServerManagement(props: {
       document.execCommand('copy')
       document.body.removeChild(ta)
     }
-    toast.info('Panoya kopyalandı')
+    toast.info(tr('server.copied'))
   }
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">MCP Sunucuları</h2>
+        <h2 className="text-sm font-semibold">{tr('server.title')}</h2>
         <button
           data-testid="mcp-importable-open"
           onClick={openImportable}
-          title="TionHarness'teki diğer workspace'lerde tanımlı, buraya eklenmemiş MCP sunucularını gör ve tek tıkla ekle."
+          title={tr('server.otherServersHint')}
           className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium hover:opacity-90"
         >
-          Diğer MCP’ler
+          {tr('server.otherServers')}
         </button>
       </div>
-      <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-        Soldaki listeden bir araç seçerek detaylarını görüntüleyip aç/kapatabilirsin.
-      </p>
+      <p className="mb-3 text-xs text-[var(--color-text-dim)]">{tr('server.intro')}</p>
       <div className="space-y-2">
         {servers.map((s) => {
           // This server's MCP tools — drives the per-server visibility quick action
@@ -151,9 +151,9 @@ export function ServerManagement(props: {
                       <span
                         data-testid="mcp-server-scope-badge"
                         className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--color-accent)]"
-                        title="Session bazlı: her (oturum, ajan) için ayrı canlı bağlantı; boşta kalınca otomatik kapanır."
+                        title={tr('server.scopedBadgeHint')}
                       >
-                        session bazlı
+                        {tr('server.scopedBadge')}
                       </span>
                     )}
                     {(() => {
@@ -167,17 +167,23 @@ export function ServerManagement(props: {
                           className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]"
                           title={
                             st.scoped
-                              ? `${st.live} canlı bağlantı (${st.total} slot). Boşta ${idleMin} dk sonra kapanır (reaper).`
-                              : `${st.live} canlı paylaşımlı bağlantı (workspace geneli, reaper'a tabi değil).`
+                              ? tr('server.liveScopedHint', {
+                                  live: st.live,
+                                  total: st.total,
+                                  minutes: idleMin,
+                                })
+                              : tr('server.liveSharedHint', { live: st.live })
                           }
                         >
                           🔗 {st.live}
-                          {st.scoped ? ' oturum' : ''}
+                          {st.scoped ? tr('server.sessionSuffix') : ''}
                         </span>
                       )
                     })()}
                     {!s.enabled && (
-                      <span className="text-xs text-[var(--color-text-dim)]">(devre dışı)</span>
+                      <span className="text-xs text-[var(--color-text-dim)]">
+                        {tr('status.disabledParenthetical')}
+                      </span>
                     )}
                   </div>
                   <div className="truncate text-xs text-[var(--color-text-dim)]">
@@ -194,16 +200,16 @@ export function ServerManagement(props: {
                     disabled={testing === s.id}
                     className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
                   >
-                    Test
+                    {tr('actions.test')}
                   </button>
                   <button
                     data-testid="mcp-server-copy"
                     data-server-id={s.id}
                     onClick={() => copyServer(s)}
-                    title="Bu sunucunun yapılandırmasını mcpServers JSON'u olarak panoya kopyala (başka yere yapıştırıp içe aktarılabilir)."
+                    title={tr('server.copyJsonHint')}
                     className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
                   >
-                    Json
+                    {tr('server.json')}
                   </button>
                   <button
                     data-testid="mcp-server-toggle"
@@ -211,7 +217,7 @@ export function ServerManagement(props: {
                     role="switch"
                     aria-checked={s.enabled}
                     onClick={() => onToggle(s)}
-                    title={s.enabled ? 'Devre dışı bırak' : 'Etkinleştir'}
+                    title={s.enabled ? tr('actions.disable') : tr('actions.enable')}
                     className={`relative h-5 w-9 flex-shrink-0 rounded-full transition ${
                       s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'
                     }`}
@@ -226,14 +232,14 @@ export function ServerManagement(props: {
                     data-testid="mcp-server-edit"
                     data-server-id={s.id}
                     onClick={() => onEdit(s)}
-                    title="Bu sunucuyu düzenle (isim, komut, URL, başlıklar, kapsam). Değişiklik sonraki turda yeniden bağlanır."
+                    title={tr('server.editHint')}
                     className={`rounded px-2 py-1 text-xs hover:opacity-90 ${
                       editingId === s.id
                         ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                         : 'bg-[var(--color-surface-2)]'
                     }`}
                   >
-                    Düzenle
+                    {tr('actions.edit')}
                   </button>
                   <button
                     data-testid="mcp-server-delete"
@@ -241,14 +247,14 @@ export function ServerManagement(props: {
                     onClick={() => onRemove(s)}
                     className="rounded px-2 py-1 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
                   >
-                    Sil
+                    {tr('actions.delete')}
                   </button>
                 </div>
               </div>
               {serverTools.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-2">
                   <span className="text-xs text-[var(--color-text-dim)]">
-                    Tüm araçlar ({serverTools.length}) →
+                    {tr('server.allToolsArrow', { count: serverTools.length })}
                   </span>
                   {VISIBILITY_TIERS.map((tier) => (
                     <button
@@ -274,21 +280,21 @@ export function ServerManagement(props: {
           )
         })}
         {servers.length === 0 && (
-          <p className="text-sm text-[var(--color-text-dim)]">Henüz MCP sunucusu eklenmedi.</p>
+          <p className="text-sm text-[var(--color-text-dim)]">{tr('server.empty')}</p>
         )}
       </div>
 
       {/* Add server */}
       <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <h3 className="mb-3 text-xs font-semibold text-[var(--color-text-dim)]">
-          Yeni MCP sunucusu
+          {tr('server.newTitle')}
         </h3>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input
             data-testid="mcp-server-name-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="İsim (ör. filesystem)"
+            placeholder={tr('server.namePlaceholder')}
             className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
           />
           <select
@@ -297,8 +303,8 @@ export function ServerManagement(props: {
             onChange={(e) => setTransport(e.target.value as MCPTransport)}
             className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
           >
-            <option value="stdio">stdio</option>
-            <option value="http">http (Streamable HTTP)</option>
+            <option value="stdio">{tr('server.transportStdio')}</option>
+            <option value="http">{tr('server.transportHttp')}</option>
           </select>
           {transport === 'stdio' ? (
             <>
@@ -306,14 +312,14 @@ export function ServerManagement(props: {
                 data-testid="mcp-server-command-input"
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
-                placeholder="Komut (ör. npx)"
+                placeholder={tr('server.commandPlaceholder')}
                 className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
               <input
                 data-testid="mcp-server-args-input"
                 value={argsText}
                 onChange={(e) => setArgsText(e.target.value)}
-                placeholder="Argümanlar (boşlukla ayrılmış)"
+                placeholder={tr('server.argsPlaceholder')}
                 className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
             </>
@@ -323,7 +329,7 @@ export function ServerManagement(props: {
                 data-testid="mcp-server-url-input"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="URL (Streamable HTTP endpoint)"
+                placeholder={tr('server.urlPlaceholder')}
                 className="col-span-2 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
               <textarea
@@ -331,32 +337,30 @@ export function ServerManagement(props: {
                 value={headersText}
                 onChange={(e) => setHeadersText(e.target.value)}
                 spellCheck={false}
-                placeholder={
-                  'Opsiyonel başlıklar — her satıra "Anahtar: Değer"\nör. Authorization: Bearer TOKEN'
-                }
+                placeholder={tr('server.headersPlaceholder')}
                 className="col-span-2 h-20 resize-y rounded bg-[var(--color-surface-2)] px-3 py-2 font-mono text-xs outline-none"
               />
             </>
           )}
           <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-            <span className="shrink-0">Bağlantı kapsamı</span>
+            <span className="shrink-0">{tr('server.connectionScope')}</span>
             <select
               data-testid="mcp-server-scope-select"
               value={scope}
               onChange={(e) => setScope(e.target.value as 'shared' | 'scoped')}
               className="rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none"
             >
-              <option value="shared">Paylaşımlı (workspace geneli, varsayılan)</option>
-              <option value="scoped">Session bazlı (her oturuma ayrı, idle'da kapanır)</option>
+              <option value="shared">{tr('server.scopeShared')}</option>
+              <option value="scoped">{tr('server.scopeScoped')}</option>
             </select>
           </label>
         </div>
         {scope === 'scoped' && poolStats && (
           <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-            Session bazlı bağlantılar{' '}
+            {tr('server.scopedConnections')}{' '}
             {poolStats.idleSec > 0
-              ? `${Math.round(poolStats.idleSec / 60)} dk boşta kaldıktan sonra otomatik kapanır (reaper).`
-              : 'idle eviction kapalı (reaper devre dışı).'}
+              ? tr('server.idleClose', { minutes: Math.round(poolStats.idleSec / 60) })
+              : tr('server.idleDisabled')}
           </p>
         )}
         <div className="mt-3 flex items-center gap-2">
@@ -365,7 +369,7 @@ export function ServerManagement(props: {
             onClick={onAdd}
             className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-on-accent)] hover:opacity-90"
           >
-            {editingId ? 'Kaydet' : 'Ekle'}
+            {editingId ? tr('actions.save') : tr('actions.add')}
           </button>
           {editingId && (
             <button
@@ -373,7 +377,7 @@ export function ServerManagement(props: {
               onClick={onCancelEdit}
               className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-2 text-sm font-medium hover:opacity-90"
             >
-              Vazgeç
+              {tr('actions.cancel')}
             </button>
           )}
         </div>
@@ -382,11 +386,12 @@ export function ServerManagement(props: {
       {/* Bulk import from a pasted mcpServers JSON document. */}
       <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <h3 className="mb-1 text-xs font-semibold text-[var(--color-text-dim)]">
-          JSON ile içe aktar
+          {tr('server.importJsonTitle')}
         </h3>
         <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-          Standart <code className="text-[var(--color-text)]">mcpServers</code> JSON'u yapıştır
-          (Claude Code / .mcp.json biçimi). Birden çok sunucu tek seferde eklenir.
+          {tr('server.importJsonBefore')}{' '}
+          <code className="text-[var(--color-text)]">mcpServers</code>{' '}
+          {tr('server.importJsonAfter')}
         </p>
         <textarea
           data-testid="mcp-import-textarea"
@@ -405,7 +410,7 @@ export function ServerManagement(props: {
             disabled={importing || !importText.trim()}
             className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
           >
-            {importing ? 'İçe aktarılıyor…' : 'İçe aktar'}
+            {importing ? tr('actions.importing') : tr('actions.import')}
           </button>
           {importMsg && (
             <span className="break-words text-xs text-[var(--color-text-dim)]">{importMsg}</span>
@@ -422,22 +427,22 @@ export function ServerManagement(props: {
             onClick={(e) => e.stopPropagation()}
           >
             <PaneHeader
-              title="Diğer workspace’lerdeki MCP’ler"
-              subtitle="Bu workspace’e eklenmemiş sunucular. Tek tıkla kopyala."
+              title={tr('server.otherModalTitle')}
+              subtitle={tr('server.otherModalSubtitle')}
               right={
                 <button
                   data-testid="mcp-importable-close"
                   onClick={() => setShowImportable(false)}
                   className="rounded p-1 text-lg leading-none text-[var(--color-text-dim)] hover:opacity-80"
-                  aria-label="Kapat"
+                  aria-label={tr('actions.close')}
                 >
-                  ×
+                  {tr('actions.closeSymbol')}
                 </button>
               }
             />
             <div className="flex-1 overflow-y-auto p-3">
               {importable.length === 0 ? (
-                <EmptyState title="Eklenebilecek başka MCP sunucusu yok." />
+                <EmptyState title={tr('server.noImportable')} />
               ) : (
                 <div className="space-y-2">
                   {importable.map((item) => (
@@ -474,7 +479,9 @@ export function ServerManagement(props: {
                         disabled={addingImportable === item.server.id}
                         className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
                       >
-                        {addingImportable === item.server.id ? 'Ekleniyor…' : 'Ekle'}
+                        {addingImportable === item.server.id
+                          ? tr('actions.adding')
+                          : tr('actions.add')}
                       </button>
                     </div>
                   ))}

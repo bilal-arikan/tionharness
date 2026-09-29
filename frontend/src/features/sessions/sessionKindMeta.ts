@@ -11,36 +11,37 @@ import {
   Bot,
   type LucideIcon,
 } from 'lucide-react'
+import { i18next } from '@/i18n'
 
 // Shared display metadata for session-kind rendering. Every execution path
 // (chat / task / flow / schedule / spawn) funnels into a Session tagged with a
 // kind, so the sessions sidebar, the bulk overview table and the agent activity
 // rail all render the same icon, label, id trimming and status pill.
 
-const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
-  chat: { label: 'Sohbet', icon: MessageSquare },
-  task: { label: 'Görev', icon: LayoutGrid },
-  flow: { label: 'Akış', icon: GitBranch },
-  schedule: { label: 'Zamanlama', icon: Clock },
+const KIND_META: Record<string, { labelKey: string; icon: LucideIcon }> = {
+  chat: { labelKey: 'kind.chat', icon: MessageSquare },
+  task: { labelKey: 'kind.task', icon: LayoutGrid },
+  flow: { labelKey: 'kind.flow', icon: GitBranch },
+  schedule: { labelKey: 'kind.schedule', icon: Clock },
   // One persistent maintenance thread per token automation (see internal/agent/
   // automation_deliver.go); every fire continues it instead of spawning fresh.
-  automation: { label: 'Otomasyon', icon: Zap },
+  automation: { labelKey: 'kind.automation', icon: Zap },
   // A one-shot automation fire (session mode != continue) still opens its own
   // fresh session per fire, same shape as 'spawned' — just tagged distinctly so
   // it groups under "Otomasyon" here instead of "Spawn" (see kindChipKey below).
-  'automation-run': { label: 'Otomasyon', icon: Zap },
+  'automation-run': { labelKey: 'kind.automation', icon: Zap },
   // A spawn-mode schedule fire's own fresh session (see internal/agent/
   // scheduler.go deliverSpawnedPrompt) — the "schedule" counterpart of
   // 'automation-run', same rationale.
-  'schedule-run': { label: 'Otomasyon', icon: Clock },
-  spawned: { label: 'Spawn', icon: Sparkles },
-  subagent: { label: 'Subagent', icon: Bot },
+  'schedule-run': { labelKey: 'kind.automation', icon: Clock },
+  spawned: { labelKey: 'kind.spawned', icon: Sparkles },
+  subagent: { labelKey: 'kind.subagent', icon: Bot },
   // A flow's coordinator node opens one of these per run (see internal/agent/
   // flow_coordinator.go); its workers hang off it like any coordinator's.
-  'flow-coordinator': { label: 'Akış Koordinatörü', icon: Compass },
+  'flow-coordinator': { labelKey: 'kind.flowCoordinator', icon: Compass },
   // One read-only transcript per insight scan (see internal/agent/
   // insightsession.go); SourceID is the insight run id.
-  insight: { label: 'İçgörü', icon: Telescope },
+  insight: { labelKey: 'kind.insight', icon: Telescope },
 }
 
 // Session filter chips (multi-select, display order). The kind chips cover EVERY
@@ -63,28 +64,37 @@ const OTHER_CHIP = 'other'
 export const RUNNING_CHIP = 'running'
 export const AWAITING_WORKERS_CHIP = 'awaiting-workers'
 
-export const SESSION_CHIPS: { key: string; label: string }[] = [
-  { key: 'chat', label: 'Sohbet' },
-  { key: 'task', label: 'Görev' },
-  { key: 'flow', label: 'Akış' },
-  { key: 'spawned', label: 'Spawn' },
-  { key: SUBAGENT_CHIP, label: 'Subagent' },
+function chip(key: string, labelKey: string): { key: string; readonly label: string } {
+  return {
+    key,
+    get label() {
+      return i18next.t(labelKey, { ns: 'sessions' })
+    },
+  }
+}
+
+export const SESSION_CHIPS: { key: string; readonly label: string }[] = [
+  chip('chat', 'chip.chat'),
+  chip('task', 'chip.task'),
+  chip('flow', 'chip.flow'),
+  chip('spawned', 'chip.spawned'),
+  chip(SUBAGENT_CHIP, 'chip.subagent'),
   // Cron schedules are time-triggered automations, so the chip unifies both
   // kinds under one "Otomasyon" label (matching the management screen's umbrella
   // naming). The per-row icon still distinguishes them (Clock vs Zap).
-  { key: 'automation', label: 'Otomasyon' },
-  { key: 'insight', label: 'İçgörü' },
-  { key: 'flow-coordinator', label: 'Akış Koord.' },
+  chip('automation', 'chip.automation'),
+  chip('insight', 'chip.insight'),
+  chip('flow-coordinator', 'chip.flowCoordinator'),
   // Legacy: peer messages now land in the recipient's ordinary chat thread
   // (TSK507), so nothing creates an 'inbox' session any more. The chip stays so
   // sessions created before that change remain filterable rather than falling
   // into "Diğer".
-  { key: 'inbox', label: 'Inbox' },
-  { key: OTHER_CHIP, label: 'Diğer' },
-  { key: RUNNING_CHIP, label: 'Çalışan' },
-  { key: AWAITING_WORKERS_CHIP, label: 'Bekleyen' },
-  { key: WORKER_CHIP, label: 'Worker' },
-  { key: ARCHIVED_CHIP, label: 'Arşiv' },
+  chip('inbox', 'chip.inbox'),
+  chip(OTHER_CHIP, 'chip.other'),
+  chip(RUNNING_CHIP, 'chip.running'),
+  chip(AWAITING_WORKERS_CHIP, 'chip.awaitingWorkers'),
+  chip(WORKER_CHIP, 'chip.worker'),
+  chip(ARCHIVED_CHIP, 'chip.archived'),
 ]
 
 export const ALL_SESSION_CHIPS: string[] = SESSION_CHIPS.map((c) => c.key)
@@ -208,5 +218,9 @@ export function sessionMatchesChips(
 }
 
 export function kindMeta(kind: string) {
-  return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
+  const meta = KIND_META[kind]
+  if (!meta) {
+    return { label: kind || i18next.t('kind.other', { ns: 'sessions' }), icon: Activity }
+  }
+  return { label: i18next.t(meta.labelKey, { ns: 'sessions' }), icon: meta.icon }
 }

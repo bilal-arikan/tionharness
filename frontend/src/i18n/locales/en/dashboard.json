@@ -1,0 +1,139 @@
+{
+  "title": "Dashboard",
+  "rangeDays_one": "{{count}}d",
+  "rangeDays_other": "{{count}}d",
+  "refresh": "Refresh",
+  "loading": "Loading…",
+  "noData": "No data.",
+  "actions": {
+    "title": "Needs attention",
+    "itemCount_one": "{{value}} item",
+    "itemCount_other": "{{value}} items",
+    "empty": "Nothing needs attention right now — there are no stuck sessions, failed runs/cards, pending questions, or broken schedules.",
+    "kindMeta": "{{kind}} · {{id}}",
+    "kind": {
+      "session": "Session",
+      "run": "Run",
+      "card": "Card",
+      "schedule": "Schedule"
+    }
+  },
+  "charts": {
+    "delta": {
+      "new": "new",
+      "stable": "≈ stable",
+      "previous": "{{current}} (previous period {{previous}})"
+    },
+    "noData": "{{label}}: no data",
+    "totalPeak": "total {{total}} · peak {{peak}}",
+    "noActivity": "no activity in this period",
+    "dayValue": "{{day}}: {{value}}",
+    "noRecords": "{{label}}: no records yet",
+    "noCost": "{{label}}: no cost yet",
+    "categoryValue": "{{name}}: {{count}} ({{percent}})",
+    "status": {
+      "success": "Success",
+      "failure": "Failure",
+      "waiting": "Waiting",
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed",
+      "inProgress": "In progress",
+      "review": "Review"
+    }
+  },
+  "commits": {
+    "title": "Commit activity",
+    "period": "Last 52 weeks",
+    "count_one": "{{value}} commit",
+    "count_other": "{{value}} commits",
+    "total_one": "total {{value}} commit",
+    "total_other": "total {{value}} commits",
+    "loading": "Loading commit activity…",
+    "error": "Could not load commit activity: {{error}}",
+    "retry": "Try again",
+    "notRepository": "This workspace is not a Git repository.",
+    "empty": "No commits in the last 52 weeks.",
+    "chartLabel": "Commit activity chart",
+    "gridLabel_one": "{{value}} commit, last 52 weeks",
+    "gridLabel_other": "{{value}} commits, last 52 weeks",
+    "dayLabel_one": "{{date}}: {{value}}",
+    "dayLabel_other": "{{date}}: {{value}}",
+    "interactionHint": "Focus or hover over a day to see its count.",
+    "intensityLabel": "Activity intensity: low to high",
+    "less": "Less",
+    "more": "More"
+  },
+  "cost": {
+    "title": "Cost",
+    "today": "Today",
+    "thisMonth": "This month",
+    "dailyBurn": "Daily average (burn)",
+    "monthEndProjection": "Month-end projection",
+    "atThisRate": "at this rate",
+    "coolingWasteHint": "Prompt-cache cooling waste that could be avoided by replying in time",
+    "coolingWaste": "· {{value}} avoidable cache waste in this period",
+    "estimatedNote": "The ~ sign means subscription providers (such as claude-cli) are priced using an equivalent API estimate instead of an actual invoice."
+  },
+  "duration": {
+    "seconds_one": "{{value}} sec",
+    "seconds_other": "{{value}} sec",
+    "minutes_one": "{{value}} min",
+    "minutes_other": "{{value}} min",
+    "hours_one": "{{value}} hr",
+    "hours_other": "{{value}} hr",
+    "days_one": "{{value}} day",
+    "days_other": "{{value}} days"
+  },
+  "outcomes": {
+    "title": "Outcomes",
+    "completedCards": "Completed cards",
+    "inWindow": "in this period",
+    "averageCompletion": "Average completion time",
+    "createdToDone": "created → done",
+    "noCompletedCards": "no completed cards",
+    "runSuccessRate": "Run success rate",
+    "noClosedRuns": "no closed runs",
+    "closedRuns_one": "{{value}} closed",
+    "closedRuns_other": "{{value}} closed",
+    "cardsPerDay": "Completed cards / day"
+  },
+  "stats": {
+    "agents": "Agents",
+    "activeSessions": "Active sessions",
+    "sessionsHint": "{{total}} total{{archived}}",
+    "archived_one": " · {{value}} archived",
+    "archived_other": " · {{value}} archived",
+    "stuckSessions": "Stuck sessions",
+    "clear": "clear",
+    "openCards": "Open cards",
+    "total_one": "{{value}} total",
+    "total_other": "{{value}} total",
+    "runningRuns": "Running runs",
+    "waitingForInput_one": "{{value}} waiting for input",
+    "waitingForInput_other": "{{value}} waiting for input",
+    "failedRuns": "Failed runs",
+    "needsReview": "needs review"
+  },
+  "workspaceSummary": {
+    "title": "Workspace summary",
+    "heading": "◱ Workspace summary",
+    "descriptionBefore": "the same text agents receive through",
+    "descriptionAfter": "and shown here verbatim",
+    "tokenEstimateHint": "Approximate token cost (characters/4)",
+    "meta": "~{{tokens}} tok · as of {{time}}"
+  },
+  "trends": {
+    "openedSessions": "Opened sessions",
+    "flowRuns": "Flow runs",
+    "tokens": "Tokens",
+    "cost": "Cost"
+  },
+  "breakdowns": {
+    "boardColumns": "Board columns",
+    "runStatuses": "Run statuses",
+    "sessionKinds": "Session kinds",
+    "busiestAgents": "Busiest agents (session count)",
+    "costliestAgents": "Costliest agents"
+  }
+}

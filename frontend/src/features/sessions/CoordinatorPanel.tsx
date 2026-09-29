@@ -5,6 +5,7 @@ import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { ModalOverlay } from '@/shared/components/ModalOverlay'
 import type { SessionInfo } from '@/types'
 import { CoordinatorSection } from './CoordinatorSection'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   sessionId: string
@@ -33,6 +34,7 @@ export function CoordinatorPanel({
   onOpenSkill,
   refreshKey,
 }: Props) {
+  const { t } = useTranslation('sessions')
   const [info, setInfo] = useState<SessionInfo | null>(null)
   const [loading, setLoading] = useState(true)
   // Local refetch nonce: bumped after a role/workflow toggle so the panel reflects
@@ -62,11 +64,11 @@ export function CoordinatorPanel({
       >
         <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
           <Network size={15} className="shrink-0 text-[var(--color-text-dim)]" />
-          <span className="truncate text-sm font-medium">Koordinasyon</span>
+          <span className="truncate text-sm font-medium">{t('coordinator.title')}</span>
           <button
             type="button"
             onClick={onClose}
-            title="Kapat"
+            title={t('actions.close')}
             className="ml-auto text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
           >
             <X size={15} />
@@ -75,9 +77,9 @@ export function CoordinatorPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {loading && !info ? (
-            <p className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>
+            <p className="text-sm text-[var(--color-text-dim)]">{t('common.loading')}</p>
           ) : !info ? (
-            <p className="text-sm text-[var(--color-text-dim)]">Bilgi yok.</p>
+            <p className="text-sm text-[var(--color-text-dim)]">{t('common.noInformation')}</p>
           ) : (
             <CoordinatorSection
               sessionId={sessionId}

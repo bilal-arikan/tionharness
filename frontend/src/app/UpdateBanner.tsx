@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 // A dismissible strip shown at the top of the app when the release feed reports
 // a newer version. It links to the release notes and to the download for this
 // platform, and NOTHING else: it never self-updates, so replacing the binary
@@ -9,6 +10,7 @@ import type { UpdateStatus } from '@/types'
 import { readDismissedVersion, shouldShowUpdate, writeDismissedVersion } from './updateCheck'
 
 export function UpdateBanner() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<UpdateStatus | null>(null)
   const [dismissed, setDismissed] = useState(() => readDismissedVersion())
 
@@ -39,8 +41,12 @@ export function UpdateBanner() {
     >
       <ArrowUpCircle size={15} className="shrink-0 text-[var(--color-accent)]" />
       <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
-        <span className="font-medium">Yeni sürüm mevcut: {status.latest}</span>
-        <span className="text-[var(--color-text-dim)]"> · yüklü sürüm {status.current}</span>
+        <span className="font-medium">
+          {t('shell.updateAvailable', { version: status.latest })}
+        </span>
+        <span className="text-[var(--color-text-dim)]">
+          {t('shell.installedVersion', { version: status.current })}
+        </span>
       </span>
       {status.downloadUrl && (
         <a
@@ -54,7 +60,7 @@ export function UpdateBanner() {
           className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[var(--color-accent)] transition hover:bg-[var(--color-surface-2)]"
         >
           <Download size={13} />
-          {status.downloadFile ? 'İndir' : 'Sürümler'}
+          {status.downloadFile ? t('shell.download') : t('shell.releases')}
         </a>
       )}
       {status.notesUrl && (
@@ -65,7 +71,7 @@ export function UpdateBanner() {
           className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[var(--color-accent)] transition hover:bg-[var(--color-surface-2)]"
         >
           <ExternalLink size={13} />
-          Sürüm notları
+          {t('shell.releaseNotes')}
         </a>
       )}
       <button
@@ -73,8 +79,8 @@ export function UpdateBanner() {
           writeDismissedVersion(status.latest)
           setDismissed(status.latest)
         }}
-        aria-label="Sürüm bildirimini kapat"
-        title="Kapat"
+        aria-label={t('shell.dismissUpdate')}
+        title={t('shell.close')}
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
       >
         <X size={14} />

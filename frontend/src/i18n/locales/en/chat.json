@@ -1,0 +1,322 @@
+{
+  "activity": {
+    "change": "Change",
+    "duration": "Duration: {{duration}}",
+    "error": "error",
+    "input": "Input",
+    "lines_one": "{{count}} line",
+    "lines_other": "{{count}} lines",
+    "operation": "Operation: {{operation}}",
+    "output": "Output",
+    "serverTruncated": "The server truncated this output. Use “full trace” at the start of the turn to retrieve all of it.",
+    "serverTruncated_withSize": "The server truncated this output (full size: {{size}}). Use “full trace” at the start of the turn to retrieve all of it.",
+    "skill": "Skill",
+    "status": "Status: {{status}}",
+    "target": "Target: {{target}}",
+    "truncated": "… (truncated)"
+  },
+  "agentHeader": { "openSettings": "Open agent settings" },
+  "artifact": {
+    "created": "created",
+    "kind": {
+      "code": "Code",
+      "html": "HTML",
+      "markdown": "Markdown",
+      "mermaid": "Mermaid",
+      "svg": "SVG",
+      "text": "Text"
+    },
+    "saveFailed": "Artifact could not be saved",
+    "updated": "updated",
+    "view": "View"
+  },
+  "ask": {
+    "answerPlaceholder": "Write your answer…",
+    "asyncHint": "Answer when ready. Independent work can continue.",
+    "multipleQuestions_one": "One question",
+    "multipleQuestions_other": "Several questions ({{count}})",
+    "send": "Send"
+  },
+  "assistant": {
+    "badResponse": "This response is poor",
+    "cancelled": "This response was stopped manually. Content produced up to that point was preserved.",
+    "fullTrace": "full trace",
+    "fullTraceDescription": "Retrieve all truncated tool output for this turn from the server",
+    "goodResponse": "This response is good",
+    "hide": "hide",
+    "hideTools": "Hide tool steps",
+    "interrupted": "This response was interrupted when the server restarted. Some content may be missing.",
+    "loadingTrace": "retrieving…",
+    "modelUsage": "Model and token usage for this turn",
+    "readAloud": "Read response aloud",
+    "readAloudTitle": "Read response aloud (skips code)",
+    "retry": "Retry",
+    "retryTitle": "Retry this turn",
+    "show": "show",
+    "showTools": "Show tool steps",
+    "steps_one": "{{count}} step",
+    "steps_other": "{{count}} steps",
+    "stopReading": "Stop reading",
+    "stopReason": {
+      "maxTokens": "output limit — may be truncated",
+      "refusal": "model refused",
+      "stopSequence": "stop sequence"
+    },
+    "tools_one": "{{count}} tool",
+    "tools_other": "{{count}} tools",
+    "traceFailed": "could not retrieve full trace"
+  },
+  "attachment": {
+    "editImage": "Edit image",
+    "openArtifact": "Open artifact",
+    "openFile": "Open file",
+    "openImage": "Open image",
+    "remove": "Remove attachment"
+  },
+  "autoPrompt": {
+    "automation": "Automation trigger",
+    "continuation": "Automatic continuation",
+    "schedule": "Scheduled task"
+  },
+  "cache": {
+    "cold": "Cache cold",
+    "coldDescription": "Prompt cache is cold (the 1h TTL expired). The next turn will pay for the prefix again, and any pending context changes will be adopted during that turn at no extra cost.",
+    "coldTurns_one": "{{count}} cold turn",
+    "coldTurns_other": "{{count}} cold turns",
+    "coldTurnsDescription": "Number of turns in this session that paid for the cache prefix again, excluding the first turn. Open that message's debug panel to see why.",
+    "warm": "Cache warm · {{remaining}}",
+    "warmDescription": "Prompt cache is warm. A turn sent now can reuse the cached prefix at lower cost. The prefix will be written again after the timer expires."
+  },
+  "cacheBreak": {
+    "coldPrefixSize": "Size of the prefix paid again as cold input",
+    "headline": {
+      "generic": "Prompt cache was broken",
+      "model-changed": "Model changed — the prompt cache prefix was rewritten",
+      "prompt-or-tools-changed": "System prompt or tool schema changed — the cache prefix was broken"
+    },
+    "modelChangedDetail": "The cache belongs to the model. Changing models inevitably rewrites the prefix, so frequent model changes incur this cost each time.",
+    "refresh": "Refresh context",
+    "refreshError": "Context could not be refreshed: {{error}}",
+    "refreshSuccess": "Context refreshed. The next turn will freeze the current prompt and tool schemas.",
+    "suspiciousDetail": "With prompt epoch enabled, this break should not happen in the middle of a session: snapshot changes are held until an explicit refresh. Prompt epoch may be disabled for this workspace, or a path may be bypassing the snapshot (Settings → Workspace → “Prompt epoch”)."
+  },
+  "changes": {
+    "close": "Close",
+    "copied": "Copied to clipboard",
+    "copyPatch": "Copy patch to clipboard",
+    "downloadPatch": "Download as a .patch file",
+    "empty": "No file changes.",
+    "files_one": "{{count}} file",
+    "files_other": "{{count}} files",
+    "fullSession": "Full session",
+    "loadFailed": "Could not load: {{error}}",
+    "loading": "Loading…",
+    "multipleChanges_one": "This file was changed once. The change below is the patch captured at that time.",
+    "multipleChanges_other": "This file was changed {{count}} times. The patches below are ordered changes, not one merged diff.",
+    "new": "new",
+    "newFileLines_one": "new file · {{formattedCount}} line",
+    "newFileLines_other": "new file · {{formattedCount}} lines",
+    "noSessionContext": "Session context is unavailable in this view",
+    "openFile": "Open file",
+    "showNewFile_one": "New file · {{formattedCount}} line — show content",
+    "showNewFile_other": "New file · {{formattedCount}} lines — show content",
+    "snapshotNotice": "The displayed diff shows the file when the change was made, not its current contents.",
+    "subagent": "subagent",
+    "synthesized": "synthesized",
+    "synthesizedDescription": "This diff was generated from tool input without surrounding context because claude-cli applied the edit itself.",
+    "thisTurn": "This turn",
+    "title": "File changes",
+    "truncated": "truncated",
+    "truncatedDescription": "The server truncated this patch on the read path; the full trace could not be retrieved."
+  },
+  "changesButton": {
+    "files_one": "{{count}} file",
+    "files_other": "{{count}} files",
+    "title_one": "View the diff for the file changed in this turn",
+    "title_other": "View the diffs for all {{count}} files changed in this turn"
+  },
+  "chatView": {
+    "anotherWindowTyping": "Another window is typing…",
+    "openRunHistory": "Open run history",
+    "windowsOpen_one": "This session is open in {{count}} window",
+    "windowsOpen_other": "This session is open in {{count}} windows",
+    "windowsOpenAsk_one": "Open in {{count}} window — the first answer wins",
+    "windowsOpenAsk_other": "Open in {{count}} windows — the first answer wins"
+  },
+  "commands": {
+    "board": "Summarize the task board",
+    "compact": "Run the native Claude/Codex CLI context compaction",
+    "compactCustom": "Fold older messages into the TionHarness rolling summary",
+    "flows": "Summarize flows",
+    "handoff": "Reset context and continue in a clean window",
+    "refreshContext": "Refresh the frozen context snapshot so tool, skill, and instruction changes appear on the next turn",
+    "rewind": "Rewind the conversation to a checkpoint and remove later messages",
+    "tools": "List available tools"
+  },
+  "compaction": {
+    "complete": "Context compacted",
+    "contextSize": "Context size before → after folding",
+    "folded_one": "Context compacted — {{count}} message folded into the summary",
+    "folded_other": "Context compacted — {{count}} messages folded into the summary",
+    "provider": "Provider",
+    "running": "Compacting CLI context…",
+    "sessionAction": "Session action",
+    "sessionActionValue": {
+      "native-compact": "native compaction",
+      "restart-summary": "restart with summary",
+      "resume": "resume session"
+    },
+    "source": "Source",
+    "sourceValue": { "cli-native": "CLI native", "tionharness": "TionHarness" },
+    "trigger": "Trigger",
+    "triggerValue": {
+      "auto": "budget threshold",
+      "manual": "manual",
+      "prune": "tool output pruning",
+      "reactive": "overflow recovery"
+    }
+  },
+  "common": {
+    "tokenShort": "{{count}} tok"
+  },
+  "composer": {
+    "attachFile": "Attach file",
+    "autoResolved": "Auto ({{label}})",
+    "btw": "Btw side question",
+    "btwTitle": "Btw — ask a side question without saving it to history or interrupting the main task",
+    "close": "Close",
+    "dismissError": "Dismiss error",
+    "editableImageMissing": "The editable image attachment is no longer available.",
+    "imageEditorMissing": "The active image editor attachment is no longer available.",
+    "imageRollbackFailed": "The old image could not be deleted and the new upload could not be rolled back.",
+    "imageUploadFailed": "Image could not be uploaded.",
+    "imageValidationFailed": "Image could not be validated.",
+    "permissionMode": "Permission mode (Shift+Tab)",
+    "permissionModeTitle": "Permission mode: {{label}} — {{hint}} (change with Shift+Tab)",
+    "placeholder": "Write a message — @ agent name, # artifact, / command",
+    "replacementPathMissing": "The replacement upload does not have a deletion path.",
+    "thinkingLevel": "Thinking level",
+    "thinkingLevelTitle": "Thinking level: {{label}} — {{hint}}",
+    "toggleTurnSettings": "Show or hide turn settings",
+    "tools": "Tool information",
+    "toolsTitle": "Tools available to this agent and MCP status (read-only)",
+    "turnSettings": "Turn settings (thinking, permission, working directory, tools)",
+    "waitingPlaceholder": "Automatic continuation is pending — typing will take over the conversation",
+    "writeMessage": "Write a message"
+  },
+  "contextChange": {
+    "applyPrefix": "The change will fully apply on the next context refresh —",
+    "applySuffix": "(or after compaction / idle timeout).",
+    "summary": "Static context changed"
+  },
+  "copy": { "copied": "Copied", "message": "Copy message" },
+  "debug": {
+    "avoidableWaste": "Avoidable extra cost: {{amount}}{{estimate}} — the prefix would have stayed warm if the turn had started sooner.",
+    "breakReason": "Break reason",
+    "breakReasonValue": {
+      "model-changed": "Model changed",
+      "prompt-or-tools-changed": "Prompt or tool schema changed",
+      "ttl-or-server-eviction": "TTL expired or the server evicted it"
+    },
+    "cacheBroken": "cache broken",
+    "cacheRead": "Cache read",
+    "cacheSavings": "Cache savings",
+    "cacheWrite": "Cache write",
+    "cold": "❄ cold",
+    "coldDescription": "This turn started cold and wrote the entire prompt into the cache at higher cost.",
+    "compactions_one": "{{count}} compaction",
+    "compactions_other": "{{count}} compactions",
+    "cost": "Cost",
+    "duration": "Duration",
+    "error": "error",
+    "errors_one": "{{count}} error",
+    "errors_other": "{{count}} errors",
+    "heading": "Message debug",
+    "input": "Input",
+    "loading": "Loading…",
+    "model": "Model",
+    "noData": "No debug data is available for this message. Debug logging may be disabled, or the message may predate it.",
+    "output": "Output",
+    "outputSpeed": "Output speed",
+    "recoveries_one": "{{count}} recovery",
+    "recoveries_other": "{{count}} recoveries",
+    "thinking": "Thinking",
+    "title": "Debug, cost, and performance details for this message",
+    "tools_one": "Tools ({{count}} call)",
+    "tools_other": "Tools ({{count}} calls)",
+    "totalPrompt": "Total prompt",
+    "warm": "🔥 warm · {{percent}}% cache",
+    "warmDescription": "This turn reused the warm prompt cache at lower cost."
+  },
+  "delete": { "cancel": "Cancel", "confirm": "Delete", "message": "Delete message" },
+  "diff": {
+    "change": "Change",
+    "create": "Create",
+    "edit": "Edit",
+    "new": "new",
+    "write": "Write"
+  },
+  "direction": { "addressedTo": "This message is addressed to {{label}}" },
+  "empty": {
+    "agent": "Agent",
+    "createAgent": "Create agent",
+    "createAgentDescription": "You need at least one agent to start a chat. You can quickly create one from the Agents screen.",
+    "createAgentTitle": "Create an agent first",
+    "deletedAgent": "The selected agent was deleted. Its chat history remains; choose another agent to continue.",
+    "newChat": "New chat",
+    "startDescription": "Choose an agent and start chatting. Messages will be handled by the selected agent.",
+    "startTitle": "Start a new chat"
+  },
+  "error": {
+    "generic": "Error",
+    "reason": {
+      "billing": "Credit or quota exhausted",
+      "overloaded": "Provider overloaded",
+      "rate_limit": "Usage limit reached"
+    },
+    "retryHint": "Use the Retry button below to continue the turn."
+  },
+  "messageList": {
+    "cacheCooled": "cache cooled · {{gap}} gap",
+    "cacheGapDescription": "This {{gap}} gap exceeded the 1h cache TTL, so the next turn paid for the prefix again as cold input.",
+    "cliRestart": "new CLI session",
+    "cliRestartDescription": "The CLI session restarted on this turn because --resume could not be applied. The previous thread may have been unavailable, compaction may have reset the base, or this may be the session's first CLI turn. The prepared transcript was sent to the new CLI session from the beginning.",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "everyone": "everyone",
+    "history": "Chat history",
+    "hours_one": "{{count}} hr",
+    "hours_other": "{{count}} hrs",
+    "returnToPinnedQuestion": "Return to pinned question",
+    "returnToQuestion": "Return to this question",
+    "start": "Start chatting",
+    "writeBelow": "Write a message below."
+  },
+  "messageMeta": {
+    "cacheCold": "Cold: the cache prefix was rewritten on this turn at higher cost. Open the debug panel to see why.",
+    "cacheWarm": "Warm: this turn reused the cached prefix at lower cost",
+    "durationDerived": "Time the agent took to produce this response (approximate — reconstructed from timestamps for an older message)",
+    "durationMeasured": "Time the agent took to produce this response (measured on the server)",
+    "liveTimer": "How long the agent has been working"
+  },
+  "notification": {
+    "permissionTitle": "Waiting for permission",
+    "planBody": "The agent is waiting for approval of its plan.",
+    "planTitle": "Waiting for plan approval",
+    "questionBody": "The agent is waiting for your answer.",
+    "questionTitle": "The agent asked a question"
+  },
+  "queue": {
+    "kind": {
+      "automation": "Automation turn running",
+      "command": "Command running",
+      "coordinator": "Processing worker notification",
+      "generic": "Turn running",
+      "peer": "Processing agent message",
+      "spawn": "Spawn turn running",
+      "wake": "Scheduled turn running",
+      "worker": "Worker task running"
+    },
+    "runningLabel": "{{label}} running"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "title": "Loglar",
+  "groupedSummary": "{{rows}} satır · {{records}} kayıt",
+  "recordCount_one": "{{count}} kayıt",
+  "recordCount_other": "{{count}} kayıt",
+  "copyPath": "Log dosyası yolunu kopyala",
+  "download": "İndir",
+  "downloadHint": "Filtrelenmiş logları JSON olarak indir",
+  "refresh": "Yenile",
+  "refreshHint": "Logları yenile",
+  "filters": {
+    "allLevels": "Hepsi",
+    "componentHint": "Bileşene göre filtrele",
+    "allComponents": "Bileşen: hepsi",
+    "uiNotifications": "{{component}} (UI bildirimleri)",
+    "rangeHint": "Zaman aralığına göre filtrele",
+    "searchPlaceholder": "Ara (mesaj/alan)…",
+    "group": "Grupla",
+    "live": "Canlı"
+  },
+  "range": {
+    "all": "Tümü",
+    "minutes15": "15 dk",
+    "hour1": "1 saat",
+    "hours24": "24 saat"
+  },
+  "pendingHint": "Takip kapalıyken gelen yeni kayıtları yükle",
+  "pending_one": "{{count}} yeni kayıt — Yenile",
+  "pending_other": "{{count}} yeni kayıt — Yenile",
+  "empty": "Kayıt yok.",
+  "filterByComponent": "Bileşene göre filtrele: {{component}}",
+  "repeated_one": "{{count}} kez tekrarlandı ({{first}} → {{last}})",
+  "repeated_other": "{{count}} kez tekrarlandı ({{first}} → {{last}})",
+  "copyLine": "Satırı kopyala",
+  "jumpToBottom": "En alta in"
+}

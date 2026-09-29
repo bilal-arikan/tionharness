@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RotateCcw, X } from 'lucide-react'
 import { actionChip, actionChipActive } from './messageActions'
 
@@ -7,6 +8,7 @@ import { actionChip, actionChipActive } from './messageActions'
 // DeleteButton it uses a two-step inline confirm (⟲ → "Geri sar" / ✕) so the
 // action stays in the UI. Visible at rest, in the turn footer.
 export function RewindButton({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation('chatStatus')
   const [armed, setArmed] = useState(false)
   if (armed) {
     return (
@@ -16,15 +18,15 @@ export function RewindButton({ onClick }: { onClick: () => void }) {
             setArmed(false)
             onClick()
           }}
-          title="Bu mesaj ve sonrasını sil, sohbeti buraya geri sar"
+          title={t('rewind.confirmTitle')}
           className={actionChipActive('default', 'font-semibold')}
         >
-          Geri sar
+          {t('rewind.confirm')}
         </button>
         <button
           onClick={() => setArmed(false)}
-          title="Vazgeç"
-          aria-label="Vazgeç"
+          title={t('rewind.cancel')}
+          aria-label={t('rewind.cancel')}
           className={actionChip()}
         >
           <X size={12} />
@@ -35,8 +37,8 @@ export function RewindButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={() => setArmed(true)}
-      title="Buraya geri sar (bu mesaj + sonrasını sil)"
-      aria-label="Buraya geri sar"
+      title={t('rewind.buttonTitle')}
+      aria-label={t('rewind.buttonLabel')}
       className={actionChip()}
     >
       <RotateCcw size={13} />

@@ -15,6 +15,7 @@
 // Pure numbers, no DOM: the canvas asks for a scale and calls it, the tests
 // assert the mapping directly.
 import type { RotaLayout } from './rotaLayout'
+import { i18next } from '@/i18n'
 
 /** A stretch of the time window that carries no activity at all. */
 export interface RotaGap {
@@ -259,11 +260,16 @@ function clamp(t: number, lo: number, hi: number): number {
 /** "2 sa 15 dk" — how much time a collapse marker hides. */
 export function formatGapSpan(sec: number): string {
   const m = Math.round(sec / 60)
-  if (m < 60) return `${m} dk`
+  if (m < 60) return i18next.t('duration.minutes', { ns: 'rota', count: m })
   const h = Math.floor(m / 60)
   const rest = m % 60
-  if (h < 24) return rest ? `${h} sa ${rest} dk` : `${h} sa`
+  if (h < 24)
+    return rest
+      ? i18next.t('duration.hoursMinutes', { ns: 'rota', hours: h, minutes: rest })
+      : i18next.t('duration.hours', { ns: 'rota', count: h })
   const d = Math.floor(h / 24)
   const restH = h % 24
-  return restH ? `${d} gün ${restH} sa` : `${d} gün`
+  return restH
+    ? i18next.t('duration.daysHours', { ns: 'rota', days: d, hours: restH })
+    : i18next.t('duration.days', { ns: 'rota', count: d })
 }

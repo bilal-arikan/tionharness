@@ -1,3 +1,4 @@
+import { i18next } from '@/i18n'
 // View registry: per-view metadata (titles, header layout) and small shared
 // view predicates. Keeping these here (not in App.tsx) lets the shell stay a
 // thin composition layer while every view-list concern lives in one place.
@@ -9,23 +10,57 @@ import type { View } from './NavRail'
 export const SPLASH_MIN_MS = 1100
 
 export const VIEW_TITLE: Record<View, string> = {
-  dashboard: 'Panel',
-  chat: 'Sohbet',
-  agents: 'Ajanlar',
-  rota: 'Rota',
-  explorer: 'Harita',
-  board: 'Görevler',
-  schedules: 'Otomasyon',
-  flows: 'Akışlar',
-  artifacts: 'Artifactlar',
-  skills: 'Skills',
-  tools: 'Araçlar & MCP',
-  budget: 'Bütçe',
-  prompts: 'navigation.promptsFiles',
-  insights: 'İçgörü',
-  market: 'Market',
-  workspace: 'Workspace',
-  settings: 'Ayarlar',
+  get dashboard() {
+    return i18next.t('navigation.dashboard')
+  },
+  get chat() {
+    return i18next.t('navigation.chat')
+  },
+  get agents() {
+    return i18next.t('navigation.agents')
+  },
+  get rota() {
+    return i18next.t('navigation.rota')
+  },
+  get explorer() {
+    return i18next.t('navigation.explorer')
+  },
+  get board() {
+    return i18next.t('navigation.board')
+  },
+  get schedules() {
+    return i18next.t('navigation.schedules')
+  },
+  get flows() {
+    return i18next.t('navigation.flows')
+  },
+  get artifacts() {
+    return i18next.t('navigation.artifacts')
+  },
+  get skills() {
+    return i18next.t('navigation.skills')
+  },
+  get tools() {
+    return i18next.t('navigation.tools')
+  },
+  get budget() {
+    return i18next.t('navigation.budget')
+  },
+  get prompts() {
+    return i18next.t('navigation.promptsFiles')
+  },
+  get insights() {
+    return i18next.t('navigation.insights')
+  },
+  get market() {
+    return i18next.t('navigation.market')
+  },
+  get workspace() {
+    return i18next.t('navigation.workspace')
+  },
+  get settings() {
+    return i18next.t('navigation.settings')
+  },
 }
 
 // Views that render their own left list-sidebar INSIDE the main area. For these we

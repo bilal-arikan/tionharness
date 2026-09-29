@@ -1,7 +1,8 @@
 import type { Flow, FlowRun } from '@/types'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { buildRunTreeRows } from './runTree'
-import { STATUS_LABEL, statusColor } from './runStatus'
+import { statusLabel, statusColor } from './runStatus'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // The tree's members in backend order (root first, parent before children).
@@ -21,6 +22,7 @@ interface Props {
 // A single-run tree renders nothing — an unbranching flow should not pay a column
 // of chrome to be told it has no children.
 export function RunTreePanel({ runs, flows, viewRunId, onSelect }: Props) {
+  const { t } = useTranslation('flows')
   if (runs.length < 2) return null
   const rows = buildRunTreeRows(runs)
   const flowByID = new Map(flows.map((f) => [f.id, f]))
@@ -28,7 +30,7 @@ export function RunTreePanel({ runs, flows, viewRunId, onSelect }: Props) {
   return (
     <div className="flex w-48 shrink-0 flex-col overflow-y-auto border-r border-[var(--color-border)] p-2">
       <div className="px-1 pb-1.5 text-[11px] uppercase tracking-wide text-[var(--color-text-dim)]">
-        Koşu ağacı
+        {t('run.tree')}
       </div>
       <ul className="space-y-0.5">
         {rows.map(({ run, depth }) => {
@@ -41,7 +43,7 @@ export function RunTreePanel({ runs, flows, viewRunId, onSelect }: Props) {
                 onClick={() => onSelect(run.id)}
                 // Indent by ancestry, not by list position, so siblings line up.
                 style={{ paddingLeft: `${6 + depth * 12}px` }}
-                title={`${flow?.name ?? '（silinmiş akış）'} — ${STATUS_LABEL[run.status] ?? run.status}`}
+                title={`${flow?.name ?? t('flow.deletedName')} — ${statusLabel(run.status)}`}
                 className={`flex w-full items-center gap-1 rounded-md py-1 pr-1.5 text-left text-xs ${
                   run.id === viewRunId
                     ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
@@ -55,10 +57,10 @@ export function RunTreePanel({ runs, flows, viewRunId, onSelect }: Props) {
                       : `shrink-0 ${statusColor(run.status)}`
                   }
                 >
-                  {(STATUS_LABEL[run.status] ?? '•').charAt(0)}
+                  {statusLabel(run.status).charAt(0)}
                 </span>
                 {emoji && <span className="shrink-0 leading-none">{emoji}</span>}
-                <span className="truncate">{flow?.name ?? '（silinmiş akış）'}</span>
+                <span className="truncate">{flow?.name ?? t('flow.deletedName')}</span>
               </button>
             </li>
           )

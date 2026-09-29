@@ -4,6 +4,7 @@
 // swallowed silently, _Docs/71 Faz 3).
 import { Boxes, KeyRound, Trash2 } from 'lucide-react'
 import type { ProviderAuthStatus, ProviderInstance, ProviderKind } from '@/api/providers'
+import { useTranslation } from 'react-i18next'
 
 export type ProviderAuthView = 'pending' | ProviderAuthStatus | { error: string }
 
@@ -24,12 +25,9 @@ export function ProviderInstanceList({
   authById,
   onAuthOpen,
 }: Props) {
+  const { t } = useTranslation('settings')
   if (instances.length === 0) {
-    return (
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Henüz sağlayıcı örneği yok. Aşağıdan bir taslak seçip ekle.
-      </p>
-    )
+    return <p className="text-xs text-[var(--color-text-dim)]">{t('providerList.empty')}</p>
   }
 
   return (
@@ -55,7 +53,7 @@ export function ProviderInstanceList({
                 </span>
                 {!inst.enabled && (
                   <span className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
-                    devre dışı
+                    {t('providerList.disabled')}
                   </span>
                 )}
                 {/* Local servers only: `reachable` is absent for hosted kinds, so
@@ -64,9 +62,9 @@ export function ProviderInstanceList({
                 {inst.reachable === false && (
                   <span
                     className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-warning)]"
-                    title="Yerel model sunucusu yanıt vermiyor. LM Studio / Bionic açık ve yerel sunucusu başlatılmış olmalı."
+                    title={t('providerList.offlineHint')}
                   >
-                    ⚠ sunucu kapalı
+                    {t('providerList.offline')}
                   </span>
                 )}
               </div>
@@ -77,17 +75,17 @@ export function ProviderInstanceList({
                     : 'bg-[var(--color-surface-2)] text-[var(--color-warning)]'
                 }`}
               >
-                {secretsOk ? '✓ yapılandırıldı' : '⚠ eksik alan'}
+                {secretsOk ? t('providerList.configured') : t('providerList.missingField')}
               </span>
             </div>
 
             <div className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-2">
               <div className="min-w-0 truncate" title={inst.id}>
-                <span className="text-[var(--color-text-dim)]">id: </span>
+                <span className="text-[var(--color-text-dim)]">{t('providerList.id')}: </span>
                 {inst.id}
               </div>
               <div className="min-w-0 truncate" title={inst.defaultModel}>
-                <span className="text-[var(--color-text-dim)]">model: </span>
+                <span className="text-[var(--color-text-dim)]">{t('providerList.model')}: </span>
                 {inst.defaultModel || '—'}
               </div>
             </div>
@@ -112,12 +110,14 @@ export function ProviderInstanceList({
                     }
                   >
                     {auth === 'pending'
-                      ? 'durum kontrol ediliyor…'
+                      ? t('providerList.authChecking')
                       : auth && 'error' in auth
-                        ? `durum alınamadı: ${auth.error}`
+                        ? t('providerList.authError', { error: auth.error })
                         : auth?.loggedIn
-                          ? `✓ giriş yapılmış${auth.tier ? ` · ${auth.tier}` : ''}`
-                          : 'giriş yok'}
+                          ? t('providerList.loggedIn', {
+                              tier: auth.tier ? ` · ${auth.tier}` : '',
+                            })
+                          : t('providerList.loggedOut')}
                   </span>
                   <button
                     data-testid="provider-instance-auth"
@@ -125,7 +125,8 @@ export function ProviderInstanceList({
                     onClick={() => onAuthOpen(inst)}
                     className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
                   >
-                    <KeyRound size={12} /> {authStatus?.loggedIn ? 'Durum' : 'Giriş yap'}
+                    <KeyRound size={12} />
+                    {authStatus?.loggedIn ? t('providerList.status') : t('providerList.signIn')}
                   </button>
                 </>
               )}
@@ -135,12 +136,13 @@ export function ProviderInstanceList({
                 onClick={() => onEdit(inst)}
                 className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
               >
-                Düzenle
+                {t('common.edit')}
               </button>
               <button
                 data-testid="provider-instance-delete"
                 data-provider-id={inst.id}
                 onClick={() => onDelete(inst)}
+                aria-label={t('providerList.delete', { label: inst.label || inst.id })}
                 className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"
               >
                 <Trash2 size={13} />

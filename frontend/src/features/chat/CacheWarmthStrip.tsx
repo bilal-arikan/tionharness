@@ -3,6 +3,7 @@ import { Flame, Snowflake } from 'lucide-react'
 import type { Message, TranscriptSummary } from '@/types'
 import { serverNow } from '@/shared/lib/serverClock'
 import { cacheRemaining, formatCountdown } from '@/features/sessions/sessionDetailFormat'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   messages: Message[]
@@ -12,6 +13,7 @@ interface Props {
 // Warn (amber) once the warm window is this short: still usable, but a reply
 // written now is worth sending before the prefix cools.
 const SOON_SEC = 5 * 60
+const MIDDLE_DOT = String.fromCharCode(0xb7)
 
 // CacheWarmthStrip sits above the composer and is the only PREVENTIVE cache
 // surface in the chat: it shows whether the session's prompt cache is still warm
@@ -25,6 +27,7 @@ const SOON_SEC = 5 * 60
 // approximation only in that the LLM call happens slightly before the reply is
 // persisted, which shortens the shown window by seconds, never lengthens it.
 export function CacheWarmthStrip({ messages, summary }: Props) {
+  const { t } = useTranslation('chat')
   const [now, setNow] = useState(() => serverNow())
   const last = messages[messages.length - 1]
   const lastAt = Math.max(last?.createdAt ?? 0, summary?.lastMessageAt ?? 0)
@@ -51,11 +54,7 @@ export function CacheWarmthStrip({ messages, summary }: Props) {
     <div className="flex justify-center pb-1">
       <span
         className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[10px] shadow-[var(--shadow-sm)]"
-        title={
-          warm
-            ? "Prompt cache sıcak: şimdi gönderilen tur cache'li öneki okur (ucuz). Süre dolunca önek baştan yazılır."
-            : 'Prompt cache soğuk (1sa TTL doldu) — sonraki tur öneki baştan öder. Bekleyen bağlam değişiklikleri de bu turda bedavaya adopte edilir.'
-        }
+        title={warm ? t('cache.warmDescription') : t('cache.coldDescription')}
       >
         {warm ? (
           <>
@@ -67,21 +66,21 @@ export function CacheWarmthStrip({ messages, summary }: Props) {
                   : 'font-mono text-[var(--color-text-dim)]'
               }
             >
-              Cache sıcak · {formatCountdown(remaining)}
+              {t('cache.warm', { remaining: formatCountdown(remaining) })}
             </span>
           </>
         ) : (
           <>
             <Snowflake size={11} className="shrink-0 text-[var(--color-text-dim)]" />
-            <span className="text-[var(--color-text-dim)]">Cache soğuk</span>
+            <span className="text-[var(--color-text-dim)]">{t('cache.cold')}</span>
           </>
         )}
         {coldTurns > 0 && (
           <span
             className="text-[var(--color-text-dim)] opacity-70"
-            title="Bu oturumda cache önekini baştan ödeyen tur sayısı (ilk tur hariç). Sebebi için o mesajın debug panelini aç."
+            title={t('cache.coldTurnsDescription')}
           >
-            · {coldTurns} soğuk tur
+            {MIDDLE_DOT} {t('cache.coldTurns', { count: coldTurns })}
           </span>
         )}
       </span>

@@ -1,6 +1,10 @@
 import type { DaySeriesPoint, DeltaStat, NamedCost, NamedCount } from '@/types'
 import { compact, fmtUsd } from './chartFormat'
 import { KIND_COLORS } from '@/shared/lib/palette'
+import { count, percent } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 // Hand-rolled SVG/CSS charts, matching how features/sessions/viz already draws
 // its Sankey and Gantt. A charting library would add a large dependency for
@@ -15,30 +19,38 @@ const EMPTY = 'text-xs text-[var(--color-text-dim)]'
 
 // compact renders large counts as 12k / 3.4M so an axis label stays short.
 export function DeltaBadge({ d, invert = false }: { d: DeltaStat; invert?: boolean }) {
+  const { t } = useTranslation('dashboard')
   if (d.pct == null) {
     if (d.curr > 0 && d.prev === 0)
-      return <span className="text-[10px] text-[var(--color-text-dim)]">yeni</span>
+      return (
+        <span className="text-[10px] text-[var(--color-text-dim)]">{t('charts.delta.new')}</span>
+      )
     return null
   }
   if (Math.abs(d.pct) < 0.005)
-    return <span className="text-[10px] text-[var(--color-text-dim)]">≈ sabit</span>
+    return (
+      <span className="text-[10px] text-[var(--color-text-dim)]">{t('charts.delta.stable')}</span>
+    )
   const up = d.pct > 0
   const good = invert ? !up : up
   return (
     <span
       className="text-[10px] font-medium tabular-nums"
       style={{ color: good ? 'var(--color-success)' : 'var(--color-danger)' }}
-      title={`${d.curr} (önceki dönem ${d.prev})`}
+      title={t('charts.delta.previous', { current: count(d.curr), previous: count(d.prev) })}
     >
-      {up ? '▲' : '▼'} {Math.round(Math.abs(d.pct) * 100)}%
+      {up ? '▲' : '▼'} {percent(Math.abs(d.pct))}
     </span>
   )
 }
 
 // dayLabel is the short "04.08" form used on the x-axis.
 function dayLabel(day: string): string {
-  const [, m, d] = day.split('-')
-  return `${d}.${m}`
+  return formatDate(new Date(`${day}T00:00:00Z`), {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'UTC',
+  })
 }
 
 interface SparkProps {
@@ -68,7 +80,8 @@ export function DayBars({
   invert,
   format = compact,
 }: SparkProps) {
-  if (points.length === 0) return <p className={EMPTY}>{label}: veri yok</p>
+  const { t } = useTranslation('dashboard')
+  if (points.length === 0) return <p className={EMPTY}>{t('charts.noData', { label })}</p>
   const max = Math.max(...points.map((p) => p.value))
   const total = points.reduce((a, p) => a + p.value, 0)
 
@@ -80,19 +93,19 @@ export function DayBars({
           {delta && <DeltaBadge d={delta} invert={invert} />}
         </span>
         <span className="text-xs text-[var(--color-text-dim)]">
-          toplam {format(total)} · tepe {format(max)}
+          {t('charts.totalPeak', { total: format(total), peak: format(max) })}
         </span>
       </div>
       {max === 0 ? (
         // An all-zero window is a real answer, not a missing one — say it rather
         // than drawing a row of invisible bars.
-        <p className={EMPTY}>bu aralıkta hiç hareket yok</p>
+        <p className={EMPTY}>{t('charts.noActivity')}</p>
       ) : (
         <div className="flex items-end gap-[2px]" style={{ height }}>
           {points.map((p) => (
             <div
               key={p.day}
-              title={`${p.day}: ${p.value}`}
+              title={t('charts.dayValue', { day: p.day, value: count(p.value) })}
               className="min-w-[3px] flex-1 rounded-sm transition-opacity hover:opacity-70"
               style={{
                 // A non-zero day always keeps 2px so it never reads as an empty
@@ -150,23 +163,42 @@ function colorFor(name: string, index: number): string {
   }
 }
 
+function displayName(name: string, t: TFunction<'dashboard'>): string {
+  const known: Record<string, string> = {
+    success: t('charts.status.success'),
+    failure: t('charts.status.failure'),
+    waiting: t('charts.status.waiting'),
+    running: t('charts.status.running'),
+    done: t('charts.status.done'),
+    failed: t('charts.status.failed'),
+    in_progress: t('charts.status.inProgress'),
+    review: t('charts.status.review'),
+  }
+  return known[name] ?? name
+}
+
 // StackedBar is the one-line composition chart used for board columns and run
 // statuses: proportions at a glance, exact counts in the legend below.
 export function StackedBar({ items, label }: { items: NamedCount[]; label: string }) {
+  const { t } = useTranslation('dashboard')
   const total = items.reduce((a, i) => a + i.count, 0)
-  if (total === 0) return <p className={EMPTY}>{label}: henüz kayıt yok</p>
+  if (total === 0) return <p className={EMPTY}>{t('charts.noRecords', { label })}</p>
 
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-xs font-medium">{label}</span>
-        <span className="text-xs text-[var(--color-text-dim)]">{total}</span>
+        <span className="text-xs text-[var(--color-text-dim)]">{count(total)}</span>
       </div>
       <div className="flex h-3 overflow-hidden rounded-full">
         {items.map((i, idx) => (
           <div
             key={i.name}
-            title={`${i.name}: ${i.count} (%${Math.round((i.count / total) * 100)})`}
+            title={t('charts.categoryValue', {
+              name: displayName(i.name, t),
+              count: count(i.count),
+              percent: percent(i.count / total),
+            })}
             style={{ width: `${(i.count / total) * 100}%`, background: colorFor(i.name, idx) }}
           />
         ))}
@@ -178,8 +210,8 @@ export function StackedBar({ items, label }: { items: NamedCount[]; label: strin
               className="inline-block h-2 w-2 shrink-0 rounded-full"
               style={{ background: colorFor(i.name, idx) }}
             />
-            <span className="text-[var(--color-text-dim)]">{i.name}</span>
-            <span className="font-medium">{i.count}</span>
+            <span className="text-[var(--color-text-dim)]">{displayName(i.name, t)}</span>
+            <span className="font-medium">{count(i.count)}</span>
           </span>
         ))}
       </div>
@@ -198,7 +230,8 @@ export function CostRankBars({
   label: string
   estimated?: boolean
 }) {
-  if (!items || items.length === 0) return <p className={EMPTY}>{label}: henüz maliyet yok</p>
+  const { t } = useTranslation('dashboard')
+  if (!items || items.length === 0) return <p className={EMPTY}>{t('charts.noCost', { label })}</p>
   const max = Math.max(...items.map((i) => i.cost))
 
   return (
@@ -234,7 +267,8 @@ export function CostRankBars({
 
 // RankBars is the horizontal ranking used for "which agents are busiest".
 export function RankBars({ items, label }: { items: NamedCount[]; label: string }) {
-  if (items.length === 0) return <p className={EMPTY}>{label}: henüz kayıt yok</p>
+  const { t } = useTranslation('dashboard')
+  if (items.length === 0) return <p className={EMPTY}>{t('charts.noRecords', { label })}</p>
   const max = Math.max(...items.map((i) => i.count))
 
   return (
@@ -255,7 +289,9 @@ export function RankBars({ items, label }: { items: NamedCount[]; label: string 
                 style={{ width: `${(i.count / max) * 100}%`, background: 'var(--color-accent)' }}
               />
             </div>
-            <span className="w-8 shrink-0 text-right text-[11px] font-medium">{i.count}</span>
+            <span className="w-8 shrink-0 text-right text-[11px] font-medium">
+              {count(i.count)}
+            </span>
           </div>
         ))}
       </div>

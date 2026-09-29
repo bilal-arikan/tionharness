@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { Pack } from '@/types'
 import type { PriceTable } from '@/api/providers'
+import { i18next } from '@/i18n'
 
 vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [
@@ -77,5 +78,26 @@ describe('PackPreview model labels', () => {
     )
     expect(html).toContain('codex oturum modeli')
     expect(html).not.toContain('Varsayılan')
+  })
+
+  it('renders preview chrome in the active UI language', async () => {
+    const provider = pack('provider', {
+      provider: {
+        kind: 'openai',
+        label: 'Test provider',
+        baseUrl: 'https://example.invalid/v1',
+        defaultModel: 'test-model',
+        promptCache: 'auto',
+      },
+    })
+    await i18next.changeLanguage('en')
+    const english = renderToStaticMarkup(<PackPreview pack={provider} prices={prices} />)
+    expect(english).toContain('Provider model')
+    expect(english).toContain('Cache: ✅ automatic')
+
+    await i18next.changeLanguage('tr')
+    const turkish = renderToStaticMarkup(<PackPreview pack={provider} prices={prices} />)
+    expect(turkish).toContain('Sağlayıcı modeli')
+    expect(turkish).toContain('Cache: ✅ otomatik')
   })
 })

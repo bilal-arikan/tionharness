@@ -1,4 +1,5 @@
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   path: string
@@ -6,6 +7,7 @@ interface Props {
 
 // The data folder is assigned by the backend and cannot be edited here.
 export function WorkspaceDataFolder({ path }: Props) {
+  const { t } = useTranslation('workspace')
   if (!path) return null
   return (
     <div className="flex flex-col gap-1.5">
@@ -13,7 +15,7 @@ export function WorkspaceDataFolder({ path }: Props) {
         htmlFor="workspace-data-folder"
         className="text-xs font-medium text-[var(--color-text-dim)]"
       >
-        Workspace dosyaları klasörü
+        {t('dataFolder.label')}
       </label>
       <div className="flex min-w-0 items-center gap-2">
         <input

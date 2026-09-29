@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
 import { api } from '@/api'
@@ -14,6 +15,7 @@ import type {
   Schedule,
 } from '@/types'
 import { ArchiveViewToggle, PaneHeader, toast } from '@/shared/components'
+import { tokens } from '@/shared/lib/format'
 import { ArchivedAutomationsList } from './ArchivedAutomationsList'
 import { AutomationCard } from './AutomationCard'
 import { AutomationModal } from './AutomationModal'
@@ -25,14 +27,6 @@ import { CuratorPanel } from './CuratorPanel'
 
 // Backstop refresh for the lane-header metrics; visibility-gated.
 const LIVE_STATS_POLL_MS = 15000
-
-// compact renders a large count as a short human string (1_240_000 → "1.2M",
-// 850_000 → "850k"), for the token lane's live workspace total.
-function compact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${Math.round(n / 1_000)}k`
-  return String(n)
-}
 
 interface Props {
   agents: Agent[]
@@ -51,6 +45,7 @@ type Editor =
 // automations. Rules are read-only cards; creating and editing happen in a popup
 // (ScheduleModal / AutomationModal) so the lanes stay compact.
 export function AutomationBoard({ agents, focusId, onError }: Props) {
+  const { t } = useTranslation('schedules')
   const [curatorOpen, setCuratorOpen] = useState(false)
   // Archive view (the kanban board's pattern): the lanes give way to the list of
   // archived automations, each restorable back into its lane.
@@ -191,7 +186,11 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       const updated = await api.runSchedule(s.id)
       setSchedules((prev) => prev.map((x) => (x.id === s.id ? updated : x)))
       if (updated.lastDeliveryStatus === 'failure') {
-        onError(`Çalıştırma başarısız: ${updated.lastDeliveryError || 'bilinmeyen hata'}`)
+        onError(
+          t('board.runFailed', {
+            error: updated.lastDeliveryError || t('common.unknownError'),
+          }),
+        )
       }
     } catch (e) {
       onError((e as Error).message)
@@ -211,12 +210,12 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   }
 
   const removeSchedule = async (s: Schedule) => {
-    if (!confirm('Zamanlama silinsin mi?')) return
+    if (!confirm(t('board.confirmDeleteSchedule'))) return
     setEditor(null) // the delete button lives in the edit popup
     setSchedules((prev) => prev.filter((x) => x.id !== s.id))
     try {
       await api.deleteSchedule(s.id)
-      toast.success('Zamanlama silindi')
+      toast.success(t('board.scheduleDeleted'))
     } catch (e) {
       onError((e as Error).message)
       reloadSchedules()
@@ -248,12 +247,11 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   // Archive: the rule leaves the lanes and stops firing but keeps its config and
   // ledger; the header's "Arşiv" view lists it and restores it.
   const archiveAutomation = async (a: Automation) => {
-    if (!confirm('Otomasyon arşivlensin mi? (Silinmez; ateşlenmeyi durdurur ve listeden kalkar)'))
-      return
+    if (!confirm(t('board.confirmArchiveAutomation'))) return
     setAutomations((prev) => prev.filter((x) => x.id !== a.id))
     try {
       await api.setArchived('automations', a.id, true)
-      toast.success('Otomasyon arşivlendi')
+      toast.success(t('board.automationArchived'))
     } catch (e) {
       onError((e as Error).message)
       reloadAutomations()
@@ -273,12 +271,12 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   }
 
   const removeAutomation = async (a: Automation) => {
-    if (!confirm('Otomasyon silinsin mi?')) return
+    if (!confirm(t('board.confirmDeleteAutomation'))) return
     setEditor(null) // the delete button lives in the edit popup
     setAutomations((prev) => prev.filter((x) => x.id !== a.id))
     try {
       await api.deleteAutomation(a.id)
-      toast.success('Otomasyon silindi')
+      toast.success(t('board.automationDeleted'))
     } catch (e) {
       onError((e as Error).message)
       reloadAutomations()
@@ -312,46 +310,44 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     }
   > = {
     tag: {
-      title: 'Etiket otomasyonları',
+      title: t('lanes.tag.title'),
       icon: Repeat,
       accent: COLUMN_ACCENT.tag,
-      description: 'Tetikleyici etiketli bir oturum turu bitince son yanıtla çalışır.',
-      addLabel: 'Yeni etiket otomasyonu',
-      emptyLabel: 'Henüz etiket otomasyonu yok.',
+      description: t('lanes.tag.description'),
+      addLabel: t('lanes.tag.add'),
+      emptyLabel: t('lanes.tag.empty'),
     },
     board: {
-      title: 'Pano otomasyonları',
+      title: t('lanes.board.title'),
       icon: LayoutGrid,
       accent: COLUMN_ACCENT.board,
-      description: 'Bir kanban kartı taşınınca/oluşunca/değişince kart bağlamıyla çalışır.',
-      addLabel: 'Yeni pano otomasyonu',
-      emptyLabel: 'Henüz pano otomasyonu yok.',
+      description: t('lanes.board.description'),
+      addLabel: t('lanes.board.add'),
+      emptyLabel: t('lanes.board.empty'),
     },
     token: {
-      title: 'Token otomasyonları',
+      title: t('lanes.token.title'),
       icon: Zap,
       accent: COLUMN_ACCENT.token,
-      description: 'Oturum/workspace token harcaması eşiği geçince bakım/temizlik için çalışır.',
-      addLabel: 'Yeni token otomasyonu',
-      emptyLabel: 'Henüz token otomasyonu yok.',
+      description: t('lanes.token.description'),
+      addLabel: t('lanes.token.add'),
+      emptyLabel: t('lanes.token.empty'),
     },
     phase: {
-      title: 'Rota fazı otomasyonları',
+      title: t('lanes.phase.title'),
       icon: Waypoints,
       accent: COLUMN_ACCENT.phase,
-      description:
-        'Bir rotanın ilan edilmiş fazı bitince (ya da başlayınca) çalışır; reçete watchers: ile de bağlanır.',
-      addLabel: 'Yeni faz otomasyonu',
-      emptyLabel: 'Henüz faz otomasyonu yok.',
+      description: t('lanes.phase.description'),
+      addLabel: t('lanes.phase.add'),
+      emptyLabel: t('lanes.phase.empty'),
     },
     trajectory_end: {
-      title: 'Rota sonu otomasyonları',
+      title: t('lanes.trajectoryEnd.title'),
       icon: Flag,
       accent: COLUMN_ACCENT.trajectory_end,
-      description:
-        'Bir rota bitince (tamamlandı / başarısız / terk) çalışır — özet, ders, doküman.',
-      addLabel: 'Yeni rota sonu otomasyonu',
-      emptyLabel: 'Henüz rota sonu otomasyonu yok.',
+      description: t('lanes.trajectoryEnd.description'),
+      addLabel: t('lanes.trajectoryEnd.add'),
+      emptyLabel: t('lanes.trajectoryEnd.empty'),
     },
   }
 
@@ -361,7 +357,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   const laneStat = (kind: AutomationTriggerKind): React.ReactNode => {
     if (!liveStats) return undefined
     if (kind === 'token' && byKind('token').some((a) => a.tokenScope === 'workspace')) {
-      return <span>bugün {compact(liveStats.tokensToday)} token</span>
+      return <span>{t('board.tokensToday', { count: tokens(liveStats.tokensToday) })}</span>
     }
     return undefined
   }
@@ -381,7 +377,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         onAdd={() => setEditor({ lane: kind, editing: null })}
         addLabel={meta.addLabel}
         loading={loadingAutomations}
-        loadingLabel="Otomasyonlar yükleniyor…"
+        loadingLabel={t('board.automationsLoading')}
         emptyLabel={meta.emptyLabel}
       >
         {items.map((a) => (
@@ -408,25 +404,25 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneHeader
-        title={showArchived ? 'Otomasyon — Arşiv' : 'Otomasyon'}
+        title={showArchived ? t('board.archiveTitle') : t('board.title')}
         right={
           <>
             <ArchiveViewToggle
               testId="automations-archived-toggle"
               active={showArchived}
               onToggle={() => setShowArchived((v) => !v)}
-              backLabel="Panoya dön"
-              backTitle="Otomasyon panosuna dön"
+              backLabel={t('board.backToBoard')}
+              backTitle={t('board.backToBoardTitle')}
             />
             <button
               type="button"
               onClick={() => setCuratorOpen(true)}
-              title="Küratör: haftalık, boşta tetiklenen LLM'siz temizlik geçişi — son rapor ve elle çalıştırma"
+              title={t('board.curatorTitle')}
               className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
               data-testid="curator-open"
             >
               <Brush size={14} />
-              <span className="hidden sm:inline">Küratör</span>
+              <span className="hidden sm:inline">{t('curator.title')}</span>
             </button>
             {pauseAutonomy !== null ? (
               <button
@@ -435,9 +431,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
                 disabled={savingPause}
                 aria-pressed={pauseAutonomy}
                 title={
-                  pauseAutonomy
-                    ? 'Bu workspace’te otonomi duraklatıldı — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez). Tıkla: sürdür.'
-                    : 'Bu workspace’te otonomiyi duraklat — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez).'
+                  pauseAutonomy ? t('board.autonomyPausedTitle') : t('board.pauseAutonomyTitle')
                 }
                 className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition disabled:opacity-40 ${
                   pauseAutonomy
@@ -455,7 +449,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
                   />
                 </span>
                 <span className="hidden sm:inline">
-                  {pauseAutonomy ? 'Otonomi duraklatıldı' : 'Otonomiyi duraklat'}
+                  {pauseAutonomy ? t('board.autonomyPaused') : t('board.pauseAutonomy')}
                 </span>
               </button>
             ) : undefined}
@@ -488,16 +482,16 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       >
         <BoardColumn
           testId="automation-lane-schedules"
-          title="Zamanlamalar"
+          title={t('lanes.schedules.title')}
           icon={Clock}
           accent={COLUMN_ACCENT.schedules}
           count={schedules.length}
-          description="Cron / zaman tabanlı — ifade dolduğunda ajan ya da akış çalışır."
+          description={t('lanes.schedules.description')}
           onAdd={() => setEditor({ lane: 'schedules', editing: null })}
-          addLabel="Yeni zamanlama"
+          addLabel={t('lanes.schedules.add')}
           loading={loadingSchedules}
-          loadingLabel="Zamanlamalar yükleniyor…"
-          emptyLabel="Henüz zamanlama yok."
+          loadingLabel={t('lanes.schedules.loading')}
+          emptyLabel={t('lanes.schedules.empty')}
         >
           {schedules.map((s) => (
             <ScheduleCard

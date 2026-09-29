@@ -2,6 +2,8 @@ import { Loader2, Check, Pencil, X, Sparkles } from 'lucide-react'
 import type { SessionInfo } from '@/types'
 import { originLabel } from '@/shared/lib/sessionOrigin'
 import { Pill } from './SessionDetailBits'
+import { useTranslation } from 'react-i18next'
+import { kindMeta } from './sessionKindMeta'
 
 interface Props {
   info: SessionInfo
@@ -32,6 +34,7 @@ export function SessionTitleBlock({
   onGenerateTitle,
   titling,
 }: Props) {
+  const { t } = useTranslation('sessions')
   return (
     <div>
       {editingTitle ? (
@@ -45,13 +48,13 @@ export function SessionTitleBlock({
               else if (e.key === 'Escape') setEditingTitle(false)
             }}
             disabled={savingTitle}
-            placeholder="Sohbet başlığı"
+            placeholder={t('title.placeholder')}
             className="min-w-0 flex-1 rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1 text-sm font-semibold text-[var(--color-text)] outline-none disabled:opacity-50"
           />
           <button
             onClick={commitTitle}
             disabled={savingTitle}
-            title="Kaydet"
+            title={t('actions.save')}
             className="rounded p-1 text-[var(--color-accent)] transition hover:opacity-80 disabled:opacity-40"
           >
             {savingTitle ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
@@ -59,7 +62,7 @@ export function SessionTitleBlock({
           <button
             onClick={() => setEditingTitle(false)}
             disabled={savingTitle}
-            title="İptal"
+            title={t('actions.cancel')}
             className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-text)] disabled:opacity-40"
           >
             <X size={15} />
@@ -74,21 +77,21 @@ export function SessionTitleBlock({
             className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text)]"
             title={info.title}
           >
-            {info.title || 'Yeni sohbet'}
+            {info.title || t('sidebar.newConversation')}
           </h3>
           <button
             onClick={onGenerateTitle}
             disabled={info.messageCount === 0 || titling}
-            title={titling ? 'Başlık üretiliyor…' : 'AI ile başlık üret'}
-            aria-label="AI ile başlık üret"
+            title={titling ? t('title.generating') : t('title.generate')}
+            aria-label={t('title.generate')}
             className="shrink-0 rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:cursor-default disabled:opacity-30"
           >
             {titling ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
           </button>
           <button
             onClick={startEditTitle}
-            title="Başlığı düzenle"
-            aria-label="Başlığı düzenle"
+            title={t('title.edit')}
+            aria-label={t('title.edit')}
             className="shrink-0 rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
           >
             <Pencil size={13} />
@@ -96,9 +99,9 @@ export function SessionTitleBlock({
         </div>
       )}
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        {info.state && <Pill>{info.state}</Pill>}
-        {info.kind && <Pill>{info.kind}</Pill>}
-        {info.unread && <Pill accent>okunmadı</Pill>}
+        {info.state && <Pill>{t(`state.${info.state}`, { defaultValue: info.state })}</Pill>}
+        {info.kind && <Pill>{kindMeta(info.kind).label}</Pill>}
+        {info.unread && <Pill accent>{t('title.unread')}</Pill>}
       </div>
       {/* Origin (R1): who started this session and from where. */}
       {(() => {
@@ -127,12 +130,13 @@ export function SessionTitleBlock({
           className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] disabled:cursor-default disabled:hover:text-[var(--color-text-dim)]"
           title={
             info.executionType === 'subagent'
-              ? 'Bu alt-ajan oturumunu başlatan parent oturum'
-              : 'Bu oturum bir context reset (handoff) ile önceki oturumdan devraldı'
+              ? t('title.parentSessionHint')
+              : t('title.handoffSessionHint')
           }
         >
-          ↩ {info.executionType === 'subagent' ? 'Parent oturum' : 'Devraldığı oturum'}:{' '}
-          <span className="font-mono">{info.parentSessionId}</span>
+          ↩{' '}
+          {info.executionType === 'subagent' ? t('title.parentSession') : t('title.handoffSession')}
+          : <span className="font-mono">{info.parentSessionId}</span>
         </button>
       )}
     </div>

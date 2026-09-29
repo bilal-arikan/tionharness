@@ -4,6 +4,7 @@
 // nodes are dashed. Plain SVG like the workspace canvas; the graph is re-read
 // whenever the stream announces a new revision (useTrajectory).
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, GitFork, MessageSquare, Sparkles } from 'lucide-react'
 import { api } from '@/api'
 import { Badge, toast } from '@/shared/components'
@@ -26,7 +27,8 @@ import {
   colWidth,
   columnsOverflow,
 } from './trajectoryGeometry'
-import { STATUS_LABEL, STATUS_TONE } from './trajectoryStatus'
+import { STATUS_TONE, trajectoryStatusLabel } from './trajectoryStatus'
+import { i18next } from '@/i18n'
 import { fmtDurationSec, fmtTokens } from './trajectoryFormat'
 import { useTrajectory } from './useTrajectory'
 import { PhaseActions } from './PhaseActions'
@@ -95,9 +97,13 @@ function nodeLabel(n: TrajectoryNode): string {
 function nodeText(n: TrajectoryNode): string {
   const label = nodeLabel(n)
   if (n.kind === 'automation' && (n.state === 'skipped' || n.state === 'failed') && n.reason) {
-    return `${label} · ${SKIP_REASON_LABEL[n.reason] ?? n.reason}`
+    return `${label} · ${i18next.t(`skipReason.${n.reason}`, {
+      ns: 'rota',
+      defaultValue: SKIP_REASON_LABEL[n.reason] ?? n.reason,
+    })}`
   }
-  if (n.kind === 'automation' && n.state === 'ghost') return `${label} · bekliyor`
+  if (n.kind === 'automation' && n.state === 'ghost')
+    return `${label} · ${i18next.t('state.waiting', { ns: 'rota' })}`
   return label
 }
 
@@ -130,6 +136,7 @@ export function RotaTrajectoryView({
   onOpenFlowRun,
   onBack,
 }: Props) {
+  const { t: translate } = useTranslation('rota')
   const { trajectory: t, loading, error } = useTrajectory({ id: trajectoryId })
   const layout = useMemo(() => (t ? layoutTrajectory(t) : null), [t])
   // Canvas actions (F5): the phase column the user picked, and the fork modal.
@@ -147,34 +154,40 @@ export function RotaTrajectoryView({
           type="button"
           onClick={onBack}
           className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          title="Workspace şeritlerine dön"
+          title={translate('trajectory.backTitle')}
         >
-          <ArrowLeft size={13} /> workspace
+          <ArrowLeft size={13} /> {translate('common.workspace')}
         </button>
         <span className="font-mono font-medium">{trajectoryId}</span>
         {t && (
           <>
-            <span className="text-[var(--color-text-dim)]">{t.templateRef || 'plansız'}</span>
-            <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
-            <span className="text-[var(--color-text-dim)]">rev {t.revision}</span>
+            <span className="text-[var(--color-text-dim)]">
+              {t.templateRef || translate('common.unplanned')}
+            </span>
+            <Badge tone={STATUS_TONE[t.status]}>{trajectoryStatusLabel(t.status)}</Badge>
+            <span className="text-[var(--color-text-dim)]">
+              {translate('trajectory.revision', { revision: t.revision })}
+            </span>
             <PhaseProgress t={t} />
             {t.summary && <SummaryChips s={t.summary} />}
             {layout && layout.ghosts > 0 && (
               <span
                 className="text-[var(--color-text-dim)]"
-                title="İlan edilmiş ama henüz gerçekleşmemiş düğümler"
+                title={translate('trajectory.ghostsTitle')}
               >
-                {layout.ghosts} hayalet
+                {translate('trajectory.ghosts', { count: layout.ghosts })}
               </span>
             )}
             {layout && columnsOverflow(layout.columns.length, width) && (
               <span
                 className="rounded border border-dashed border-[var(--color-border)] px-1.5 text-[var(--color-text-dim)]"
-                title="Sütunlar panele sığmıyor; kanvası sağa kaydır"
+                title={translate('trajectory.columnsOverflowTitle')}
                 data-testid="columns-overflow"
               >
-                {layout.columns.length} sütun · sağa kaydır ⇢{' '}
-                {layout.columns[layout.columns.length - 1].label}
+                {translate('trajectory.columnsOverflow', {
+                  count: layout.columns.length,
+                  label: layout.columns[layout.columns.length - 1].label,
+                })}
               </span>
             )}
             <span className="ml-auto flex items-center gap-1.5">
@@ -188,16 +201,23 @@ export function RotaTrajectoryView({
                       .then((r) =>
                         r.ran
                           ? toast.info(
-                              `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi) — İçgörü ▸ recipe-opt`,
+                              translate('trajectory.optimizerResult', {
+                                proposals: r.proposals.length,
+                                dropped: r.dropped,
+                              }),
                             )
-                          : toast.warning(`Optimizer çalışmadı: ${r.skipped ?? '—'}`),
+                          : toast.warning(
+                              translate('trajectory.optimizerSkipped', {
+                                reason: r.skipped ?? '—',
+                              }),
+                            ),
                       )
                       .catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
                   }}
                   className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
-                  title="Bu rotanın reçetesi için optimizer'ı şimdi çalıştır (öneri üretir, uygulamaz)"
+                  title={translate('trajectory.optimizeTitle')}
                 >
-                  <Sparkles size={12} /> optimize et
+                  <Sparkles size={12} /> {translate('trajectory.optimize')}
                 </button>
               )}
               {selected?.kind === 'session' && (
@@ -205,24 +225,26 @@ export function RotaTrajectoryView({
                   type="button"
                   onClick={() => setFork({ id: selected.id, title: selectedSession?.label })}
                   className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
-                  title="Seçili oturumun altında worker aç (buradan çatalla)"
+                  title={translate('trajectory.forkTitle')}
                   data-testid="fork-here"
                 >
-                  <GitFork size={12} /> buradan çatalla
+                  <GitFork size={12} /> {translate('fork.title')}
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => onOpenSession?.(t.rootSessionId)}
                 className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
-                title="Kök oturumun sohbetini aç"
+                title={translate('trajectory.rootChatTitle')}
               >
-                <MessageSquare size={12} /> kök sohbet
+                <MessageSquare size={12} /> {translate('trajectory.rootChat')}
               </button>
             </span>
           </>
         )}
-        {loading && !t && <span className="text-[var(--color-text-dim)]">yükleniyor…</span>}
+        {loading && !t && (
+          <span className="text-[var(--color-text-dim)]">{translate('common.loading')}</span>
+        )}
         {error && <span className="text-[var(--color-danger)]">{error}</span>}
       </div>
       {t && <PhaseActions trajectory={t} phase={pickedPhase} />}
@@ -252,49 +274,52 @@ export function RotaTrajectoryView({
 // duration, tokens / cost, workers (failed), gate wait, what the plan declared
 // but never happened.
 function SummaryChips({ s }: { s: NonNullable<Trajectory['summary']> }) {
+  const { t } = useTranslation('rota')
   const chip =
     'rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]'
   return (
     <span className="flex flex-wrap items-center gap-1" data-testid="trajectory-summary">
-      <span className={chip} title="Kök oturum açılışından bitişe">
+      <span className={chip} title={t('summary.durationTitle')}>
         ⏱ {fmtDurationSec(s.durationSec)}
       </span>
       <span
         className={chip}
-        title={`Bağlı oturumların toplam tokenı${s.priced ? '' : ' (bazı modeller fiyatsız)'}`}
+        title={t('summary.tokensTitle', { unpriced: s.priced ? '' : t('summary.unpriced') })}
       >
-        {fmtTokens(s.tokens)} token
+        {fmtTokens(s.tokens)} {t('summary.token')}
         {s.costUsd > 0 ? ` · $${s.costUsd.toFixed(2)}${s.priced ? '' : '~'}` : ''}
       </span>
-      <span className={chip} title="Worker oturumları (başarısız)">
-        {s.sessions} worker{s.failedSessions ? ` · ${s.failedSessions} ✗` : ''}
+      <span className={chip} title={t('summary.workersTitle')}>
+        {t('summary.workers', { count: s.sessions })}
+        {s.failedSessions ? ` · ${s.failedSessions} ✗` : ''}
       </span>
       {s.flowRuns > 0 && (
         <span className={chip}>
-          {s.flowRuns} koşu{s.failedRuns ? ` · ${s.failedRuns} ✗` : ''}
+          {t('summary.runs', { count: s.flowRuns })}
+          {s.failedRuns ? ` · ${s.failedRuns} ✗` : ''}
         </span>
       )}
       {s.gates > 0 && (
-        <span className={chip} title="İnsan kapılarında geçen süre">
-          ⏸ {s.gates} kapı · {fmtDurationSec(s.gateWaitSec)}
+        <span className={chip} title={t('summary.gatesTitle')}>
+          ⏸ {t('summary.gates', { count: s.gates })} · {fmtDurationSec(s.gateWaitSec)}
         </span>
       )}
       {s.unannounced > 0 && (
-        <span className={chip} title="Bir faza bağlı olmadan açılan oturum / koşular">
-          {s.unannounced} plansız
+        <span className={chip} title={t('summary.unannouncedTitle')}>
+          {t('summary.unannounced', { count: s.unannounced })}
         </span>
       )}
       {s.ghostPhases && s.ghostPhases.length > 0 && (
-        <span className={chip} title="İlan edilip hiç başlamayan fazlar">
+        <span className={chip} title={t('summary.ghostPhasesTitle')}>
           ◌ {s.ghostPhases.join(', ')}
         </span>
       )}
       {s.unfiredWatchers && s.unfiredWatchers.length > 0 && (
         <span
           className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] text-[var(--color-warning)]"
-          title="İlan edilip hiç ateşlenmeyen izleyiciler"
+          title={t('summary.unfiredWatchersTitle')}
         >
-          ⚡ sessiz: {s.unfiredWatchers.join(', ')}
+          ⚡ {t('summary.silent')}: {s.unfiredWatchers.join(', ')}
         </span>
       )}
     </span>
@@ -302,14 +327,17 @@ function SummaryChips({ s }: { s: NonNullable<Trajectory['summary']> }) {
 }
 
 function PhaseProgress({ t }: { t: Trajectory }) {
+  const { t: translate } = useTranslation('rota')
   const p = trajectoryProgress(t)
-  if (p.total === 0) return <span className="text-[var(--color-text-dim)]">faz ilan edilmedi</span>
+  if (p.total === 0)
+    return <span className="text-[var(--color-text-dim)]">{translate('trajectory.noPhases')}</span>
   return (
     <span
       className="text-[var(--color-text-dim)]"
-      title={p.active ? `Aktif faz: ${p.active}` : undefined}
+      title={p.active ? translate('trajectory.activePhase', { phase: p.active }) : undefined}
     >
-      {p.done}/{p.total} faz{p.active ? ` · ${p.active}` : ''}
+      {translate('trajectory.phaseProgress', { done: p.done, total: p.total })}
+      {p.active ? ` · ${p.active}` : ''}
     </span>
   )
 }
@@ -337,6 +365,7 @@ function TrajectorySvg({
   trajectoryId,
   onPickPhase,
 }: SvgProps) {
+  const { t: translate } = useTranslation('rota')
   const { columns, lanes, nodes, edges, root, rootToCol, activeCol } = layout
   const colW = colWidth(columns.length, width)
   const svgW = LABEL_W + columns.length * colW + PAD
@@ -384,9 +413,9 @@ function TrajectorySvg({
   }
   // Lane labels: the first node bound on that lane names it.
   const laneLabel = (lane: number): string => {
-    if (lane === 0) return root ? nodeLabel(root) : 'kök'
+    if (lane === 0) return root ? nodeLabel(root) : translate('trajectory.root')
     const first = nodes.find((n) => n.lane === lane)
-    return first ? nodeLabel(first.node) : `şerit ${lane}`
+    return first ? nodeLabel(first.node) : translate('trajectory.lane', { lane })
   }
   const isSel = (sel: RotaSelection | null) =>
     !!sel && !!selected && sel.kind === selected.kind && sel.id === selected.id
@@ -397,7 +426,7 @@ function TrajectorySvg({
       height={height}
       className="select-none text-[11px]"
       role="img"
-      aria-label={`Rota ${trajectoryId} faz grafiği`}
+      aria-label={translate('trajectory.graphAria', { id: trajectoryId })}
       onClick={(e) => {
         if (e.target === e.currentTarget) onSelect(null)
       }}
@@ -436,8 +465,8 @@ function TrajectorySvg({
           >
             <title>
               {c.phase
-                ? `${phaseId(c.id)} · ${c.state}${c.profile ? ` · ${c.profile}` : ''}${c.gate ? ` · kapı ${c.gate.kind}${c.gate.value ? ` "${c.gate.value}"` : ''}` : ''}${c.optional ? ' · isteğe bağlı' : ''}${c.phase.reason ? ` · ${c.phase.reason}` : ''}`
-                : 'Bir faza bağlı olmayan düğümler'}
+                ? `${phaseId(c.id)} · ${translate(`phase.state.${c.state}`, { defaultValue: c.state })}${c.profile ? ` · ${c.profile}` : ''}${c.gate ? ` · ${translate('phase.gate')} ${c.gate.kind}${c.gate.value ? ` "${c.gate.value}"` : ''}` : ''}${c.optional ? ` · ${translate('trajectory.optional')}` : ''}${c.phase.reason ? ` · ${c.phase.reason}` : ''}`
+                : translate('trajectory.unassignedNodes')}
             </title>
             <text
               x={colX(c.index) + 8}
@@ -460,7 +489,9 @@ function TrajectorySvg({
                 {phaseGlyph(c.state)}
               </tspan>{' '}
               {c.label}
-              {c.optional && <tspan fill="var(--color-text-dim)"> (isteğe bağlı)</tspan>}
+              {c.optional && (
+                <tspan fill="var(--color-text-dim)"> ({translate('trajectory.optional')})</tspan>
+              )}
             </text>
             <text x={colX(c.index) + 8} y={36} fill="var(--color-text-dim)">
               {c.profile ?? ''}
@@ -490,7 +521,11 @@ function TrajectorySvg({
             fill={l === 0 ? 'var(--color-text)' : 'var(--color-text-dim)'}
             className={l === 0 ? 'font-medium' : ''}
           >
-            <title>{l === 0 ? `kök · ${t.rootSessionId}` : `şerit ${l}`}</title>
+            <title>
+              {l === 0
+                ? `${translate('trajectory.root')} · ${t.rootSessionId}`
+                : translate('trajectory.lane', { lane: l })}
+            </title>
             {laneLabel(l).slice(0, 20)}
           </text>
         </g>
@@ -509,7 +544,7 @@ function TrajectorySvg({
             onOpenSession?.(root.refId ?? t.rootSessionId)
           }}
         >
-          <title>{`${nodeLabel(root)} · ${root.state}${root.reason ? ` · ${root.reason}` : ''}`}</title>
+          <title>{`${nodeLabel(root)} · ${translate(`phase.state.${root.state}`, { defaultValue: root.state })}${root.reason ? ` · ${root.reason}` : ''}`}</title>
           <rect
             x={colX(0) + 4}
             y={rootY - 7}
@@ -559,7 +594,7 @@ function TrajectorySvg({
             strokeDasharray={st.dash}
             opacity={e.origin === 'declared' ? 0.5 : 0.9}
           >
-            <title>{`${e.kind}: ${e.from} → ${e.to}`}</title>
+            <title>{`${translate(`edge.${e.kind}`, { defaultValue: e.kind })}: ${e.from} → ${e.to}`}</title>
           </path>
         )
       })}
@@ -584,7 +619,7 @@ function TrajectorySvg({
               else if (run && n.refId) onOpenFlowRun?.(n.refId)
             }}
           >
-            <title>{`${n.kind} · ${nodeLabel(n)} · ${n.state}${n.origin === 'declared' ? ' · ilan' : ''}${n.reason ? ` · ${n.reason}` : ''}`}</title>
+            <title>{`${translate(`nodeKind.${n.kind}`, { defaultValue: n.kind })} · ${nodeLabel(n)} · ${translate(`phase.state.${n.state}`, { defaultValue: n.state })}${n.origin === 'declared' ? ` · ${translate('trajectory.declared')}` : ''}${n.reason ? ` · ${n.reason}` : ''}`}</title>
             <rect
               x={b.x}
               y={run ? b.y + 6 : b.y}

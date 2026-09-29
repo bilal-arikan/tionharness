@@ -34,6 +34,8 @@ import { ExternalToolsPanel } from './ExternalToolsPanel'
 import { SecretsPanel } from './SecretsPanel'
 import { SystemAgentsPanel } from './SystemAgentsPanel'
 import { DeciderPanel } from '@/features/decider'
+import { useTranslation } from 'react-i18next'
+import { i18next, resolveUILocale } from '@/i18n'
 
 interface Props {
   onError: (msg: string) => void
@@ -71,6 +73,7 @@ export function SettingsPanel({
   navOpen,
   onToggleNav,
 }: Props) {
+  const { t } = useTranslation('settings')
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
@@ -140,7 +143,12 @@ export function SettingsPanel({
       )
       setOriginal(updated)
       onSaved(updated)
-      toast.success('Saved')
+      toast.success(
+        i18next.t('common.saved', {
+          ns: 'settings',
+          lng: resolveUILocale(updated.uiLanguage, updated.language),
+        }),
+      )
     } catch (error) {
       onError((error as Error).message)
     } finally {
@@ -164,11 +172,11 @@ export function SettingsPanel({
       <CollapsibleListShell
         open={navOpen ?? true}
         onToggle={onToggleNav ?? (() => {})}
-        label="Ayarlar"
+        label={t('title')}
       >
         <aside className="th-col flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm square:w-48">
           <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Settings
+            {t('section.settings')}
           </div>
           {APP_CATS.map((c) => (
             <CatButton
@@ -180,7 +188,7 @@ export function SettingsPanel({
             />
           ))}
           <div className="px-2 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Help
+            {t('section.help')}
           </div>
           {HELP_CATS.map((c) => (
             <CatButton
@@ -225,7 +233,7 @@ export function SettingsPanel({
         ) : (
           <div className="th-column mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-4 sm:p-6 3xl:max-w-4xl">
             {!draft ? (
-              <LoadingState label="Yükleniyor…" />
+              <LoadingState label={t('common.loading')} />
             ) : (
               <NumberValidityProvider value={numberValidity}>
                 {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}

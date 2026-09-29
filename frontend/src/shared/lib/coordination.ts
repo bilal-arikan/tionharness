@@ -8,6 +8,8 @@
 // do — now silently misses every mid-level node, so route every check through
 // these helpers instead.
 
+import { sharedText } from './sharedI18n'
+
 /** The coordination fields any session-shaped object may carry. */
 export type CoordinationFields = {
   role?: string
@@ -54,12 +56,16 @@ export function isInCoordinatorTree(s?: CoordinationFields | null): boolean {
 export function coordinationLabel(s?: CoordinationFields | null): string {
   if (isSubCoordinatorSession(s)) {
     const depth = s?.coordinatorDepth ?? 0
-    return depth > 0 ? `Alt-koordinatör · seviye ${depth}` : 'Alt-koordinatör'
+    return depth > 0
+      ? sharedText('coordination.subCoordinatorLevel', { depth })
+      : sharedText('coordination.subCoordinator')
   }
-  if (isCoordinatorSession(s)) return 'Koordinatör'
+  if (isCoordinatorSession(s)) return sharedText('coordination.coordinator')
   if (isWorkerSession(s)) {
     const depth = s?.coordinatorDepth ?? 0
-    return depth > 1 ? `Worker · seviye ${depth}` : 'Worker'
+    return depth > 1
+      ? sharedText('coordination.workerLevel', { depth })
+      : sharedText('coordination.worker')
   }
   return ''
 }

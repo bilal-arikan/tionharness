@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronRight, Plus, Minus, Pencil } from 'lucide-react'
 import type { TurnStep, ContextArea } from '@/types'
 import { STEP_KIND_MAP } from '@/shared/stepKinds'
+import { useTranslation } from 'react-i18next'
 
 const HeaderIcon = STEP_KIND_MAP.context_change.Icon
 
@@ -15,11 +16,12 @@ interface Props {
 // prompt cache. Collapsed to a one-line summary; expands to the per-block
 // added/removed diff. The change fully applies on the next /refresh-context.
 export function ContextChangeCard({ step }: Props) {
+  const { t } = useTranslation('chat')
   const [open, setOpen] = useState(false)
   const areas = step.areas ?? []
   const added = step.added ?? 0
   const removed = step.removed ?? 0
-  const summary = step.text?.trim() || 'Statik bağlam değişti'
+  const summary = step.text?.trim() || t('contextChange.summary')
   return (
     <div className="my-0.5 rounded-md border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_7%,transparent)] text-xs">
       <button
@@ -52,8 +54,10 @@ export function ContextChangeCard({ step }: Props) {
             <AreaRow key={i} area={a} />
           ))}
           <div className="mt-1.5 px-1 text-[10px] text-[var(--color-text-dim)]">
-            Değişiklik bir sonraki bağlam yenilemesinde tam uygulanır —{' '}
-            <span className="font-mono">/refresh-context</span> (veya compaction / boşta kalma).
+            {t('contextChange.applyPrefix')}{' '}
+            {/* Machine command: intentionally language-independent. */}
+            {/* eslint-disable-next-line i18next/no-literal-string */}
+            <span className="font-mono">/refresh-context</span> {t('contextChange.applySuffix')}
           </div>
         </div>
       )}

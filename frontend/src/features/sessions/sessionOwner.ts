@@ -1,5 +1,6 @@
 import type { Agent, Session } from '@/types'
 import { resolveAgent, type ResolvedAgent } from '@/shared/lib/agentLookup'
+import { i18next } from '@/i18n'
 
 // Who a session row belongs to, for rendering.
 //
@@ -52,5 +53,5 @@ export function sessionRowLabel(agents: Agent[], session: Session): string {
   if (title) return title
   const owner = resolveSessionOwner(agents, session)
   if (session.kind === 'subagent' && owner) return owner.name
-  return 'Yeni sohbet'
+  return i18next.t('sidebar.newConversation', { ns: 'sessions' })
 }

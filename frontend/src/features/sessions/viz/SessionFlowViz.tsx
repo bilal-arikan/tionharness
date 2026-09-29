@@ -9,6 +9,7 @@ import { SelfHealingEvents } from './SelfHealingEvents'
 import { PromptCacheEvents } from './PromptCacheEvents'
 import { ThinkingShareChart } from './ThinkingShareChart'
 import { HookActivity } from './HookActivity'
+import { useTranslation } from 'react-i18next'
 
 // How many raw events to pull for the visualizations. Covers the whole span for
 // typical sessions; very long ones are truncated to the newest window (noted).
@@ -27,6 +28,7 @@ export function SessionFlowViz({
   agentNames: Record<string, string>
   refreshKey?: number
 }) {
+  const { t } = useTranslation('sessions')
   const [open, setOpen] = useState(() => localStorage.getItem('tionharness.flowVizOpen') === '1')
   const [events, setEvents] = useState<SessionDebugEvent[] | null>(null)
   const [hooks, setHooks] = useState<Hook[]>([])
@@ -74,94 +76,86 @@ export function SessionFlowViz({
         ) : (
           <ChevronRight size={12} className="shrink-0" />
         )}
-        <Workflow size={12} className="shrink-0" /> İş akışı görselleştirmeleri
+        <Workflow size={12} className="shrink-0" /> {t('visualization.title')}
       </button>
 
       {open && (
         <div className="mt-2">
           {loading && !events ? (
             <div className="flex items-center gap-1.5 py-2 text-[11px] text-[var(--color-text-dim)]">
-              <Loader2 size={12} className="animate-spin" /> Yükleniyor…
+              <Loader2 size={12} className="animate-spin" /> {t('common.loading')}
             </div>
           ) : events && events.length > 0 ? (
             <div className="flex flex-col gap-3">
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Araç yürütme akışı (Sankey)
+                  {t('visualization.sankey.title')}
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Ajandan araca çağrı akışı; bant kalınlığı çağrı sayısıyla orantılı, varsa hata
-                  dalı ayrılır.
+                  {t('visualization.sankey.help')}
                 </p>
                 <ToolSankey events={events} agentNames={agentNames} />
               </div>
 
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Eşzamanlılık zaman çizelgesi
+                  {t('visualization.timeline.title')}
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Ajan başına şeritte olayların zaman ekseni; şeritler arası çakışma gerçek
-                  eşzamanlılığı gösterir.
+                  {t('visualization.timeline.help')}
                 </p>
                 <ConcurrencyTimeline events={events} agentNames={agentNames} />
               </div>
 
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Self-healing olayları
+                  {t('visualization.selfHealing.title')}
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Tur kurtarmaları, mesaj dizisi onarımları, guardrail kararları ve damıtılan
-                  dersler (56-SELF-HEALING).
+                  {t('visualization.selfHealing.help')}
                 </p>
                 <SelfHealingEvents events={events} />
               </div>
 
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Prompt-cache olayları
+                  {t('visualization.promptCache.title')}
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Donmuş bağlam snapshot'ının yaşam döngüsü (dondurma, adopt, bekletilen drift, elle
-                  yenileme; 57-PROMPT-EPOCH) ve tespit edilen cache kırılımları — kırılım yalnız
-                  bilinçli adopt anlarında beklenir.
+                  {t('visualization.promptCache.help')}
                 </p>
                 <PromptCacheEvents events={events} />
               </div>
 
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Düşünme (gizli akıl yürütme) payı
+                  {t('visualization.thinking.title')}
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Çağrı başına çıktı token'ının gizli akıl yürütmeye giden tahmini oranı (API
-                  ayırmıyor → out−görünür türetimi; _Docs/38). Yüksek pay basit görevlerde
-                  ThinkingLevel'i düşürme fırsatıdır.
+                  {t('visualization.thinking.description')}
                 </p>
                 <ThinkingShareChart events={events} />
               </div>
 
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Hook / token-optimizer aktivitesi
+                  {t('visualization.hooks.title')}
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Bu oturumda ateşlenen hook'lar, hook başına atfedilmiş (rtk/sqz dahil): kaç kez,
-                  hangi araçta. Aktivite göstergesidir — byte tasarrufu değil (_Docs/17).
+                  {t('visualization.hooks.description')}
                 </p>
                 <HookActivity events={events} hooks={hooks} />
               </div>
 
               {events.length >= EVENT_LIMIT && (
                 <p className="text-[10px] text-[var(--color-text-dim)]">
-                  Not: yalnız en son {EVENT_LIMIT} olay gösteriliyor.
+                  {t('visualization.truncated', { count: EVENT_LIMIT })}
                 </p>
               )}
             </div>
           ) : (
             <p className="py-2 text-[11px] text-[var(--color-text-dim)]">
-              Görselleştirilecek olay yok.
+              {t('visualization.empty')}
             </p>
           )}
         </div>

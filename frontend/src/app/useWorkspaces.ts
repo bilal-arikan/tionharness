@@ -1,3 +1,4 @@
+import { i18next } from '@/i18n'
 // useWorkspaces owns the workspace list, the active workspace selection (mirrored
 // into the api client + localStorage) and the cross-workspace "unread activity"
 // badge set. Switch/create/delete are exposed as stable callbacks.
@@ -156,7 +157,8 @@ export function useWorkspaces(setError: (msg: string) => void) {
         const wsNew = await api.createWorkspace(data)
         // The optional `git init` is advisory: the workspace was created regardless,
         // so a failure is surfaced as a warning instead of failing the flow.
-        if (wsNew.gitInitError) toast.warning('Git deposu başlatılamadı: ' + wsNew.gitInitError)
+        if (wsNew.gitInitError)
+          toast.warning(i18next.t('shell.gitInitError', { error: wsNew.gitInitError }))
         // Re-fetch the list so the icon/color (stored in ws-settings, absent from
         // the create response) are reflected immediately; fall back to appending.
         try {
@@ -166,7 +168,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
         }
         setActiveWorkspace(wsNew.id)
         setActiveWorkspaceId(wsNew.id)
-        toast.success('Workspace oluşturuldu')
+        toast.success(i18next.t('shell.workspaceCreated'))
         return wsNew
       } catch (e) {
         setError((e as Error).message)
@@ -191,7 +193,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
     }
     setActiveWorkspace(wsNew.id)
     setActiveWorkspaceId(wsNew.id)
-    toast.success('Workspace eklendi')
+    toast.success(i18next.t('shell.workspaceAttached'))
     return wsNew
   }, [])
 
@@ -203,12 +205,16 @@ export function useWorkspaces(setError: (msg: string) => void) {
     const target = workspaces.find((w) => w.id === activeWorkspaceId)
     const last = workspaces.length <= 1
     const msg = last
-      ? `"${target?.name ?? 'Bu workspace'}" son workspace — silinince ilk kurulum ekranına dönersin. Tüm verisiyle silinsin mi?`
-      : `"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`
+      ? i18next.t('shell.deleteLastWorkspace', {
+          name: target?.name ?? i18next.t('shell.thisWorkspace'),
+        })
+      : i18next.t('shell.deleteWorkspace', {
+          name: target?.name ?? i18next.t('shell.thisWorkspace'),
+        })
     if (!confirm(msg)) return
     try {
       await api.deleteWorkspace(activeWorkspaceId)
-      toast.success('Workspace silindi')
+      toast.success(i18next.t('shell.workspaceDeleted'))
       const remaining = workspaces.filter((w) => w.id !== activeWorkspaceId)
       setWorkspaces(remaining)
       const next = remaining[0]?.id ?? null
@@ -232,12 +238,16 @@ export function useWorkspaces(setError: (msg: string) => void) {
       const target = workspaces.find((w) => w.id === id)
       const last = workspaces.length <= 1
       const msg = last
-        ? `"${target?.name ?? 'Bu workspace'}" son workspace — silinince ilk kurulum ekranına dönersin. Tüm verisiyle silinsin mi?`
-        : `"${target?.name ?? 'Bu workspace'}" ve tüm verisi kalıcı olarak silinsin mi?`
+        ? i18next.t('shell.deleteLastWorkspace', {
+            name: target?.name ?? i18next.t('shell.thisWorkspace'),
+          })
+        : i18next.t('shell.deleteWorkspace', {
+            name: target?.name ?? i18next.t('shell.thisWorkspace'),
+          })
       if (!confirm(msg)) return
       try {
         await api.deleteWorkspace(id)
-        toast.success('Workspace silindi')
+        toast.success(i18next.t('shell.workspaceDeleted'))
         const remaining = workspaces.filter((w) => w.id !== id)
         setWorkspaces(remaining)
         if (id === activeWorkspaceId) {

@@ -1,0 +1,122 @@
+{
+  "title": "Artifacts",
+  "newArtifactTitle": "New artifact",
+  "kind": {
+    "markdown": "Markdown",
+    "code": "Code",
+    "html": "HTML",
+    "text": "Text",
+    "svg": "SVG",
+    "mermaid": "Mermaid",
+    "image": "Image",
+    "video": "Video",
+    "audio": "Audio",
+    "file": "File"
+  },
+  "origin": {
+    "all": "All",
+    "chat": "Chat attachment",
+    "manual": "Manual",
+    "agent": "Agent",
+    "tool": "Tool",
+    "plan": "Plan"
+  },
+  "status": {
+    "archived": "Archived"
+  },
+  "actions": {
+    "new": "New artifact",
+    "newTitle": "Create a new artifact",
+    "edit": "Edit",
+    "content": "Content",
+    "copyContentTitle": "Copy content",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "closeEsc": "Close (Esc)",
+    "copyPath": "Copy path",
+    "openSourceChat": "Go to source chat",
+    "archive": "Archive",
+    "restore": "Restore from archive",
+    "delete": "Delete"
+  },
+  "bulk": {
+    "groupPlaceholder": "Assign group…",
+    "moveToGroupTitle": "Move selected artifacts to the “{{group}}” group",
+    "ungroupTitle": "Remove selected artifacts from their group",
+    "assign": "Assign",
+    "restoreTitle": "Restore selected artifacts from the archive",
+    "archiveTitle": "Archive selected artifacts"
+  },
+  "group": {
+    "ungrouped": "Ungrouped",
+    "expand": "Expand group",
+    "collapse": "Collapse group",
+    "expandAll": "Expand all groups",
+    "collapseAll": "Collapse all groups"
+  },
+  "editor": {
+    "titlePlaceholder": "Title",
+    "languagePlaceholder": "language (e.g. go)",
+    "groupPlaceholder": "Group (optional)",
+    "groupTitle": "This artifact's group — leave blank to keep it ungrouped",
+    "mediaReadOnly": "Media contents cannot be edited — you can only change the title.",
+    "contentPlaceholder": "Content…",
+    "saveHint": "Saving updates the content in place."
+  },
+  "list": {
+    "loading": "Loading artifacts…",
+    "noMatches": "No artifacts match the filters.",
+    "empty": "No artifacts yet. Files and documents created in a chat will appear here automatically. Create one with New, or drag and drop image, video, audio or other files here.",
+    "loadingMore": "Loading…",
+    "loadMore": "Load more ({{loaded}}/{{total}})",
+    "titleCount": "Artifacts · {{loaded}} / {{total}}",
+    "kindUpdated": "{{kind}} · {{time}}"
+  },
+  "filters": {
+    "searchPlaceholder": "Search titles…",
+    "clear": "Clear",
+    "showActive": "Return to active artifacts",
+    "showArchived": "Show archived artifacts",
+    "archiveView": "Archive view",
+    "archiveCount": "Archive ({{count}})",
+    "archive": "Archive"
+  },
+  "detail": {
+    "selectPrompt": "Select an artifact to view it."
+  },
+  "import": {
+    "importing": "Adding…",
+    "dropFiles": "Drop files — image, video, audio or any other file"
+  },
+  "view": {
+    "htmlTitle": "HTML artifact",
+    "imageAlt": "Image artifact",
+    "openDownload": "Open / download",
+    "storedFile": "File stored in the workspace",
+    "missingMedia": "Media file not found (source path is missing)."
+  },
+  "preview": {
+    "loading": "Loading…",
+    "failed": "Could not preview: {{error}}",
+    "fileTooLarge": "File is too large to preview",
+    "openFullTitle": "Open on the Artifacts screen",
+    "openFull": "Open in screen",
+    "loadFailed": "Artifact could not be loaded."
+  },
+  "confirm": {
+    "delete": "Permanently delete this artifact?",
+    "bulkDelete_one": "Permanently delete {{count}} artifact?",
+    "bulkDelete_other": "Permanently delete {{count}} artifacts?",
+    "discard": "Discard unsaved changes?"
+  },
+  "toast": {
+    "deleted": "Artifact deleted",
+    "saved": "Saved",
+    "copied": "Copied to clipboard"
+  },
+  "errors": {
+    "imageTooLarge": "The image exceeds the 20 MB limit.",
+    "importFailed": "Could not add “{{name}}”: {{error}}"
+  }
+}

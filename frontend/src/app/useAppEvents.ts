@@ -1,3 +1,4 @@
+import { i18next } from '@/i18n'
 // useAppEvents owns the app-wide SSE subscription: autonomous-event handling
 // (notifications, badges, live list refreshes, cross-window panel signals) and
 // live turn-step frames. The subscription is mounted once; a deps ref refreshed
@@ -237,7 +238,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         emitToast({
           type: 'chat',
           enabled: d.notifyEnabled.current,
-          title: e.title || 'Yanıt hazır',
+          title: e.title || i18next.t('shell.replyReady'),
           body: e.body || '',
           tag: `chat-done:${e.workspaceId ?? ''}:${sid}:${e.time}`,
           onClick: () => {

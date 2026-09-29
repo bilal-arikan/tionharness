@@ -1,0 +1,384 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "create": "Create",
+    "creating": "Creating…",
+    "loading": "Loading…",
+    "refresh": "Refresh",
+    "save": "Save",
+    "saving": "Saving…"
+  },
+  "switcher": {
+    "activeAria": "Workspace: {{name}}",
+    "select": "Select workspace",
+    "otherBusy": "A task is running in another workspace",
+    "otherActivity": "New activity in another workspace",
+    "unsavedChanges": "Unsaved changes",
+    "busy": "Task in progress",
+    "listAria": "Workspace list",
+    "switchAria": "Switch to workspace: {{name}}",
+    "unnamed": "Untitled",
+    "degradedTitle": "Workspace could not be opened",
+    "degraded": "unavailable",
+    "running": "running",
+    "completedTitle": "Completed — unseen activity",
+    "completed": "completed",
+    "favoriteRemove": "Startup workspace (remove)",
+    "favoriteAdd": "Open this workspace at startup",
+    "openWindow": "Open in a separate window",
+    "deleteViaSettings": "Delete workspace — from Settings",
+    "create": "New workspace"
+  },
+  "create": {
+    "dialogAria": "New workspace",
+    "title": "New Workspace",
+    "template": {
+      "label": "Template",
+      "agentCount_one": "{{count}} agent",
+      "agentCount_other": "{{count}} agents",
+      "flow": "flow",
+      "coordinatorCount_one": "{{count}} coordinator",
+      "coordinatorCount_other": "{{count}} coordinators",
+      "automationCount_one": "{{count}} automation",
+      "automationCount_other": "{{count}} automations"
+    },
+    "iconAndName": "Icon and name",
+    "namePlaceholder": "e.g. Customer Project",
+    "projectDir": {
+      "label": "Project directory (path)",
+      "optional": "(optional — working directory for sessions)",
+      "browse": "Browse"
+    },
+    "gitInit": {
+      "prefix": "Initialize a Git repository",
+      "command": "git init",
+      "branch": "branch",
+      "branchName": "main",
+      "ignoreFile": ".gitignore",
+      "withFile": "included",
+      "gitMissing": "Git was not found on this computer — install it and restart the app.",
+      "alreadyRepo": "This folder is already a Git repository{{branch}}.",
+      "unversioned": "The folder exists and is not under version control yet.",
+      "willCreate": "The folder does not exist — it will be created during setup."
+    },
+    "errors": {
+      "folderPicker": "The folder picker could not be opened — you can enter the path manually. ({{error}})",
+      "nameRequired": "A workspace name is required",
+      "failed": "Workspace could not be created: {{error}}"
+    }
+  },
+  "view": {
+    "title": "Workspace",
+    "tabs": {
+      "general": "General",
+      "appearance": "Appearance",
+      "project": "Project",
+      "logs": "Logs",
+      "processes": "Processes",
+      "export": "Export",
+      "recommendations": "Recommendations"
+    },
+    "savedToast": "Saved",
+    "unsaved": "Unsaved",
+    "unsavedChanges": "Unsaved changes",
+    "saved": "Saved"
+  },
+  "project": {
+    "gitTitle": "Git",
+    "init": "git init (main)",
+    "directory": {
+      "label": "Project directory (path)",
+      "hint": "This workspace's project folder. New chats start in this directory (it can be changed per session). Use an absolute path.",
+      "placeholder": "(workspace directory)",
+      "select": "Select project directory"
+    },
+    "selectFirst": "Select a project directory first.",
+    "gitMissing": "Git was not found on this computer (it is not on PATH). Install Git and restart the app.",
+    "directoryMissing": "The directory was not found. You can create the folder and start version control now:",
+    "createAndInit": "Create folder + git init (main)",
+    "notRepository": "This directory is not a Git repository. Initialize it for version control:",
+    "noBranch": "no branch",
+    "repository": "Git repository",
+    "remote": {
+      "label": "Origin remote URL",
+      "hint": "Remote repository address (for push/pull)."
+    },
+    "userNameHint": "Commit author name for this repository.",
+    "userEmailHint": "Commit author email for this repository.",
+    "saveGit": "Save Git settings"
+  },
+  "dataFolder": {
+    "label": "Workspace files folder"
+  },
+  "onboarding": {
+    "title": "Welcome to TionHarness",
+    "description": "Create a workspace to get started, or select a workspace folder you used before. All your agents, sessions, and data are stored separately inside the workspace you choose.",
+    "create": "Create Workspace",
+    "selecting": "Selecting…",
+    "selectExisting": "Select Existing Workspace",
+    "requireWorkspace": "You must create or select a workspace to continue — no default setup will be created."
+  },
+  "authGate": {
+    "title": "claude-cli sign-in required for the new workspace",
+    "description": "This workspace's claude-home has not been authorized yet. claude-cli turns cannot run until you authenticate.",
+    "authenticate": "Authenticate",
+    "providerLabel": "Workspace claude-cli"
+  },
+  "process": {
+    "title": "Processes",
+    "summary": "{{total}} processes · {{running}} running",
+    "refreshTitle": "Refresh process list",
+    "status": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "killed": "Stopped",
+      "timedOut": "Timed out"
+    },
+    "kind": {
+      "shell": "Shell",
+      "shellBackground": "Background shell",
+      "code": "Code",
+      "provider": "Provider",
+      "mcp": "MCP",
+      "hook": "Hook",
+      "external": "External tool"
+    },
+    "filters": {
+      "statusAria": "Filter by status",
+      "allStatuses": "Status: all",
+      "kindAria": "Filter by type",
+      "allKinds": "Type: all",
+      "searchPlaceholder": "Search (command/label/agent/session)…",
+      "searchAria": "Search by command, label, agent, or session",
+      "runningOnly": "Running only"
+    },
+    "loadFailed": "Processes could not be loaded: {{error}}",
+    "empty": {
+      "title": "No processes",
+      "filtered": "No processes match the filters.",
+      "workspace": "No tracked processes were found for this workspace."
+    },
+    "columns": {
+      "status": "Status",
+      "kind": "Type",
+      "command": "Command",
+      "owner": "Owner",
+      "started": "Started",
+      "duration": "Duration",
+      "exit": "Exit"
+    },
+    "parentPrefix": "parent:",
+    "openSession": "Go to this session",
+    "collapseDetails": "Collapse details",
+    "expandDetails": "Expand details",
+    "confirmStop": "Are you sure?",
+    "stop": "Stop",
+    "stopping": "Stopping…",
+    "stopTitle": "Stop this process",
+    "stopFailed": "The process could not be stopped.",
+    "noOutput": "No output is recorded for this process."
+  },
+  "export": {
+    "flow": "flow",
+    "noPrompt": "no prompt",
+    "success": "“{{name}}” was exported as a template (id: {{id}}). It is now available in the market and on the workspace creation screen.",
+    "intro": {
+      "beforeName": "Turn “",
+      "afterName": "” into a portable ",
+      "pack": "template pack",
+      "afterPack": ". Choose what to include below."
+    },
+    "secrets": "Secrets and session history are never included.",
+    "metadata": {
+      "name": "Template name",
+      "description": "Description",
+      "descriptionHint": "An automatic description is generated when left blank.",
+      "descriptionPlaceholder": "Exported from the “{{name}}” workspace.",
+      "version": "Version",
+      "versionHint": "For example, 1.0.0 — 1.0.0 is used when left blank."
+    },
+    "pickList": {
+      "selectAll": "Select all",
+      "clearAll": "Clear all"
+    },
+    "sections": {
+      "agents": {
+        "title": "Agents",
+        "empty": "This workspace has no agents — at least one agent is required to export."
+      },
+      "flows": {
+        "title": "Flows",
+        "empty": "This workspace has no flows.",
+        "note": "Agent nodes are rewritten to portable keys."
+      },
+      "skills": {
+        "title": "Workspace skills",
+        "empty": "This workspace has no workspace-specific skills (global and bundled skills are shared and are not included).",
+        "note": "SKILL.md and its attached files are embedded exactly."
+      },
+      "schedules": {
+        "title": "Schedules",
+        "empty": "This workspace has no schedules.",
+        "note": "Only schedules linked to a selected agent are exported; the others are dropped."
+      },
+      "automations": {
+        "title": "Automations",
+        "empty": "This workspace has no workspace-specific automations (built-in board defaults are created automatically for every workspace and are not included).",
+        "note": "Automations whose target agent or flow is selected are carried over; all are installed INACTIVE."
+      }
+    },
+    "files": {
+      "title": "Files",
+      "instructions": "Workspace instructions",
+      "emptySuffix": "(empty)",
+      "instructionsHint": "Contents of config/instructions.md.",
+      "prompts": "Prompts & README",
+      "defaultSuffix": "(default)",
+      "promptsHintCustom": "Only runtime prompts that differ from the default{{readme}} are included. Untouched prompts keep the current default on the target.",
+      "promptsHintEmpty": "All runtime prompts use their defaults and the README is empty — there is nothing to include.",
+      "boardColumns": "Board columns",
+      "boardColumnsHint": "Kanban column layout."
+    },
+    "preview": {
+      "title": "Preview",
+      "identityVersion": " · v{{version}} · ",
+      "excluded": "Not included",
+      "overwrite": "“{{id}}” will be overwritten if it already exists (same slug).",
+      "newId": "A new pack id will be created: “{{id}}”.",
+      "items": {
+        "agent": "Agent",
+        "flow": "Flow",
+        "schedule": "Schedule",
+        "automation": "Automation",
+        "skill": "Skill",
+        "instructions": "Instructions",
+        "prompts": "Prompt/README",
+        "boardColumn": "Board column"
+      }
+    },
+    "warnings": {
+      "title_one": "Dependency warning ({{count}})",
+      "title_other": "Dependency warnings ({{count}})",
+      "flowLabel": "Flow “{{name}}”",
+      "scheduleLabel": "Schedule “{{name}}”",
+      "automationLabel": "Automation “{{name}}”",
+      "excludedAgents": "depends on excluded agents — the export will retain dangling references: {{agents}}",
+      "excludedAgent": "depends on an excluded agent ({{agent}}) — it will not be included in the export",
+      "excludedFlow": "depends on an excluded flow — it will not be included in the export"
+    },
+    "action": {
+      "ready": "The selected content will be written to a template pack.",
+      "selectAgent": "Select at least one agent to export.",
+      "exporting": "Exporting…",
+      "export": "Export as template"
+    }
+  },
+  "recommendations": {
+    "panel": {
+      "description": "Recommendation cards appear in the bottom-right after a new workspace is created. Review the current state of every recommendation and manage the ones you have ignored here. An ignored recommendation is not shown as a card again.",
+      "refresh": "Refresh status",
+      "noCardsTitle": "There are no applicable, unignored recommendations to show right now",
+      "showCardsTitle": "Show applicable recommendations as cards in the bottom-right",
+      "showCards": "Show cards",
+      "showCardsCount_one": "Show cards ({{count}})",
+      "showCardsCount_other": "Show cards ({{count}})",
+      "state": {
+        "ignored": "Ignored",
+        "applicable": "Applicable now",
+        "notApplicable": "Not applicable"
+      },
+      "unignoreTitle": "Stop ignoring — this can be recommended again",
+      "ignoreTitle": "Ignore — do not recommend again",
+      "unignore": "Stop ignoring",
+      "ignore": "Ignore"
+    },
+    "toast": {
+      "ignoreTitle": "Ignore (do not show again)"
+    },
+    "rules": {
+      "no-agents": {
+        "title": "No agents yet",
+        "summary": "A workspace with no agents has no actor to run sessions.",
+        "desc": "This workspace is empty. Create an agent or install a ready-made template from the market.",
+        "action": "Go to Agents"
+      },
+      "workdir": {
+        "title": "Set a working directory",
+        "summary": "Without a default working directory, sessions start in the physical workspace directory.",
+        "desc": "Choose a default working directory so sessions start with that root, Git branch, and CLAUDE.md context.",
+        "action": "Open settings"
+      },
+      "cbm-add": {
+        "title": "Add the code knowledge graph",
+        "summary": "codebase-memory-mcp is installed on PATH but has not been added as an MCP server.",
+        "desc": "codebase-memory-mcp is installed but has not been added to this workspace. Add it as an MCP server for sub-millisecond, low-token code search and navigation.",
+        "action": "Add MCP"
+      },
+      "cbm-enable": {
+        "title": "Enable the code knowledge graph",
+        "summary": "The codebase-memory MCP server is added, but its workspace toggle is off.",
+        "desc": "The codebase-memory MCP server is present but disabled in this workspace. Enable it to turn on automatic indexing and codebase_workspace_search.",
+        "action": "Enable"
+      },
+      "zvec-add": {
+        "title": "Add semantic search",
+        "summary": "zvec-grep (zg) is installed on PATH but has not been added as an MCP server.",
+        "desc": "zvec-grep is installed but has not been added to this workspace. Add it as an MCP server so agents can find unfamiliar code and documents by intent while the working directory is indexed in the background.",
+        "action": "Add MCP"
+      },
+      "zvec-enable": {
+        "title": "Enable semantic search",
+        "summary": "The zvec-grep MCP server is added, but its workspace toggle is off.",
+        "desc": "The zvec-grep MCP server is present but disabled in this workspace. Enable it to add search guidance to the agent context and automatically index the working directory.",
+        "action": "Enable"
+      },
+      "token": {
+        "title": "Connect token optimization",
+        "summary": "sqz is installed, but its output-compression hook is not connected.",
+        "desc": "sqz is installed on this device but is not connected. Add it as a hook to compress tool output without losing information and save tokens.",
+        "action": "Connect sqz"
+      },
+      "shell-compress": {
+        "title": "Enable shell output compression",
+        "summary": "sqz is installed, but in-process shell output compression is inactive because no hook is connected and automatic mode is disabled.",
+        "desc": "sqz is installed, but shell output compression is inactive in this workspace. Enable it to shorten shell output losslessly with in-process sqz before it reaches the model. It does not require a hook; the hook path does not run for bridged tools.",
+        "action": "Enable"
+      },
+      "terse-mode": {
+        "title": "Enable Terse Mode",
+        "summary": "The terse prompt that condenses response style is disabled in this workspace.",
+        "desc": "Terse Mode is off. Enable it to reduce filler in agent responses while preserving technical content such as code, commands, file paths, and error text exactly, noticeably reducing output tokens.",
+        "action": "Enable"
+      },
+      "no-mcp": {
+        "title": "No MCP sources",
+        "summary": "There are no MCP servers and neither codebase-memory nor zvec-grep is pending as a more specific recommendation.",
+        "desc": "Add an MCP server to connect external data or tools, either from the market or by importing .mcp.json.",
+        "action": "Open Market"
+      },
+      "backup-off": {
+        "title": "Backups are off",
+        "summary": "Periodic zip backups are disabled across the app.",
+        "desc": "Periodic zip backups are off. Enable them to back up every workspace regularly.",
+        "action": "Backup settings"
+      },
+      "tool-update": {
+        "title": "External tool updates available",
+        "summary": "A newer release exists for an installed external tool.",
+        "published": "{{names}} has been released. ",
+        "oneClick_one": "{{count}} can be updated with one click; the others require a manual update because TionHarness does not overwrite a binary locked by a running child process.",
+        "oneClick_other": "{{count}} can be updated with one click; the others require a manual update because TionHarness does not overwrite a binary locked by a running child process.",
+        "manual": "These tools are updated manually because TionHarness does not overwrite a binary locked by a running child process; the screen provides step-by-step instructions.",
+        "action": "External tools"
+      },
+      "cli-tools": {
+        "title": "CLI tools are installed",
+        "summary": "CLI tools on PATH, such as mmdc, can be called directly from Bash.",
+        "desc": "{{tools}} is installed on this device — agents can call it directly from Bash during development.",
+        "action": "Details"
+      }
+    }
+  }
+}

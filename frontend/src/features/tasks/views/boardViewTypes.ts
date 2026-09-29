@@ -14,6 +14,7 @@ import type {
   BoardViewDef,
   TaskPriority,
 } from '@/types'
+import { i18next } from '@/i18n'
 
 // A view as the board actually runs it: groupBy/sort resolved to concrete values.
 export interface ResolvedView {
@@ -33,6 +34,7 @@ const DEFAULT_VIEW: ResolvedView = {
 // Built-in view ids are prefixed so they can never collide with a saved view's
 // id (the backend slug pattern forbids ':').
 const BUILTIN_PREFIX = 'builtin:'
+export const DEFAULT_BUILTIN_VIEW_ID = `${BUILTIN_PREFIX}all`
 
 export function isBuiltinId(id: string): boolean {
   return id.startsWith(BUILTIN_PREFIX)
@@ -40,65 +42,58 @@ export function isBuiltinId(id: string): boolean {
 
 // The always-available presets. Deliberately few: each answers one question the
 // unfiltered board answers badly once the card count grows.
-export const BUILTIN_VIEWS: BoardViewDef[] = [
-  {
-    id: `${BUILTIN_PREFIX}all`,
-    label: 'Tümü',
-    icon: '▦',
-    filter: {},
-    groupBy: 'status',
-    sort: 'updated',
-  },
-  {
-    id: `${BUILTIN_PREFIX}blocked`,
-    label: 'Bloke',
-    icon: '⛔',
-    filter: { dep: 'blocked' },
-    groupBy: 'status',
-    sort: 'deps',
-  },
-  {
-    id: `${BUILTIN_PREFIX}unassigned`,
-    label: 'Ajansız',
-    icon: '○',
-    filter: { agentIds: ['-'] },
-    groupBy: 'priority',
-    sort: 'priority',
-  },
-]
-
-export const GROUP_BY_LABELS: Record<BoardGroupBy, string> = {
-  status: 'Durum',
-  agent: 'Ajan',
-  priority: 'Öncelik',
-  tag: 'Etiket',
+export function getBuiltinViews(): BoardViewDef[] {
+  return [
+    {
+      id: DEFAULT_BUILTIN_VIEW_ID,
+      label: i18next.t('views.builtins.all', { ns: 'tasks' }),
+      icon: '▦',
+      filter: {},
+      groupBy: 'status',
+      sort: 'updated',
+    },
+    {
+      id: `${BUILTIN_PREFIX}blocked`,
+      label: i18next.t('views.builtins.blocked', { ns: 'tasks' }),
+      icon: '⛔',
+      filter: { dep: 'blocked' },
+      groupBy: 'status',
+      sort: 'deps',
+    },
+    {
+      id: `${BUILTIN_PREFIX}unassigned`,
+      label: i18next.t('views.builtins.unassigned', { ns: 'tasks' }),
+      icon: '○',
+      filter: { agentIds: ['-'] },
+      groupBy: 'priority',
+      sort: 'priority',
+    },
+  ]
 }
 
-export const SORT_LABELS: Record<BoardSort, string> = {
-  updated: 'Son güncelleme',
-  priority: 'Öncelik',
-  deps: 'Bağımlılık sırası',
-  title: 'Başlık',
+export const GROUP_BY_VALUES: BoardGroupBy[] = ['status', 'agent', 'priority', 'tag']
+export const SORT_VALUES: BoardSort[] = ['updated', 'priority', 'deps', 'title']
+
+export function groupByLabel(value: BoardGroupBy): string {
+  return i18next.t(`views.groupBy.${value}`, { ns: 'tasks' })
+}
+
+export function sortLabel(value: BoardSort): string {
+  return i18next.t(`views.sort.${value}`, { ns: 'tasks' })
 }
 
 export const PRIORITY_ORDER: Exclude<TaskPriority, ''>[] = ['critical', 'high', 'medium', 'low']
 
-export const PRIORITY_LABELS: Record<string, string> = {
-  critical: 'Kritik',
-  high: 'Yüksek',
-  medium: 'Orta',
-  low: 'Düşük',
-  '': 'Önceliksiz',
+export function priorityLabel(value: TaskPriority): string {
+  return i18next.t(value ? `priorities.${value}` : 'priorities.none', { ns: 'tasks' })
 }
 
-export const DEP_LABELS: Record<Exclude<BoardDepFilter, ''>, string> = {
-  blocked: 'Bloke (bekleyen bağımlılık)',
-  ready: 'Hazır (bağımlılıkları bitti)',
+export function dependencyFilterLabel(value: Exclude<BoardDepFilter, ''>): string {
+  return i18next.t(`filters.dependencies.${value}`, { ns: 'tasks' })
 }
 
-export const REVIEW_LABELS: Record<Exclude<BoardReviewFilter, ''>, string> = {
-  bounced: 'İncelemeden geri döndü',
-  exhausted: 'Doğrulama bütçesi doldu',
+export function reviewFilterLabel(value: Exclude<BoardReviewFilter, ''>): string {
+  return i18next.t(`filters.review.${value}`, { ns: 'tasks' })
 }
 
 // resolveView fills in the optional groupBy/sort so downstream code never has

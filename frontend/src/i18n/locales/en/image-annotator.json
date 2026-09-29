@@ -1,0 +1,16 @@
+{
+  "errors": {
+    "unsupportedType": "This image type is not supported. Choose PNG, JPEG, or WebP.",
+    "tooLargeBytes": "The image exceeds the 20 MB limit.",
+    "dimensionExceeded": "The image exceeds the 8192 px dimension limit.",
+    "pixelLimitExceeded": "The image exceeds the 40 megapixel limit.",
+    "headerInvalid": "The image header is invalid or does not match the file type.",
+    "decodeFailed": "The image could not be opened; the file may be damaged.",
+    "strokePointLimit": "A single stroke reached the 20,000 point limit.",
+    "drawingPointLimit": "The drawing reached the 200,000 point limit.",
+    "drawingStrokeLimit": "The drawing reached the 500 stroke limit.",
+    "historyLimit": "The oldest undo steps were removed.",
+    "drawingMemoryLimit": "The drawing reached the memory limit.",
+    "exportFailed": "The image could not be exported."
+  }
+}

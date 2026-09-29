@@ -1,6 +1,7 @@
 // Provider kinds (taslak) + provider instances (örnek), app-global. See
 // _Docs/71-SAGLAYICI-ORNEKLERI-PLANI.md for the backend contract this mirrors.
 import { req } from './client'
+import { localizeProviderKind } from '@/shared/lib/providerMetadata'
 
 // FieldSpec is one field of a provider kind's instance form, mirroring the
 // backend's providerFieldSpecDTO. No kind or field is hard-coded on the
@@ -130,7 +131,8 @@ interface ModelPrice {
 export type PriceTable = Record<string, Record<string, ModelPrice>>
 
 export const providerApi = {
-  listProviderKinds: () => req<ProviderKind[]>('/api/provider-kinds'),
+  listProviderKinds: async () =>
+    (await req<ProviderKind[]>('/api/provider-kinds')).map(localizeProviderKind),
   listProviders: () => req<ProviderInstance[]>('/api/providers'),
   getProvider: (id: string) => req<ProviderInstance>(`/api/providers/${encodeURIComponent(id)}`),
   upsertProvider: (input: UpsertProviderInput) =>

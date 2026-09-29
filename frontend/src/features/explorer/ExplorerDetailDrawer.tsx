@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 // modal dialog semantics — first focus on close, Escape closes, Tab cycles inside,
 // and focus returns to whatever opened it.
 export function ExplorerDetailDrawer({ open, onClose, title, children }: Props) {
+  const { t } = useTranslation('explorer')
   const dialogRef = useRef<HTMLElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
@@ -64,7 +66,7 @@ export function ExplorerDetailDrawer({ open, onClose, title, children }: Props) 
           <button
             ref={closeRef}
             onClick={onClose}
-            aria-label="Düğüm detayını kapat"
+            aria-label={t('detail.close')}
             className="rounded-md p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
           >
             <X size={16} />

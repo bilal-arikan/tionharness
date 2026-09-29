@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { MessageCircleQuestion } from 'lucide-react'
 import { Button, ScrollableCard } from '@/shared/components'
 import { ComposerCard } from './ComposerCard'
+import { useTranslation } from 'react-i18next'
 
 export interface PendingAsk {
   async?: boolean
@@ -61,6 +62,7 @@ export function AskPrompt({ ask, onAnswer }: Props) {
 
 // SingleAskPrompt is the original one-question card.
 function SingleAskPrompt({ ask, onAnswer }: Props) {
+  const { t } = useTranslation('chat')
   const [text, setText] = useState('')
 
   const submit = (value: string) => {
@@ -103,11 +105,11 @@ function SingleAskPrompt({ ask, onAnswer }: Props) {
           autoFocus={!ask.async}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Yanıtını yaz…"
+          placeholder={t('ask.answerPlaceholder')}
           className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
         />
         <Button type="submit" disabled={!text.trim()}>
-          Gönder
+          {t('ask.send')}
         </Button>
       </form>
     </ComposerCard>
@@ -127,6 +129,7 @@ function MultiAskPrompt({
   onAnswer: (text: string) => void
   autoFocus: boolean
 }) {
+  const { t } = useTranslation('chat')
   const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ''))
   const setAt = (i: number, v: string) =>
     setAnswers((prev) => prev.map((a, j) => (j === i ? v : a)))
@@ -141,7 +144,7 @@ function MultiAskPrompt({
     <ComposerCard tone="ask" className="px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
         <MessageCircleQuestion size={16} className="shrink-0 text-[var(--color-accent)]" />
-        <span>Birkaç soru ({questions.length})</span>
+        <span>{t('ask.multipleQuestions', { count: questions.length })}</span>
       </div>
 
       <form
@@ -183,7 +186,7 @@ function MultiAskPrompt({
                 autoFocus={autoFocus && i === 0}
                 value={answers[i]}
                 onChange={(e) => setAt(i, e.target.value)}
-                placeholder="Yanıtını yaz…"
+                placeholder={t('ask.answerPlaceholder')}
                 className="ml-6 min-w-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
               />
             </div>
@@ -192,7 +195,7 @@ function MultiAskPrompt({
 
         <div className="flex justify-end">
           <Button type="submit" disabled={!allAnswered}>
-            Gönder
+            {t('ask.send')}
           </Button>
         </div>
       </form>

@@ -1,6 +1,7 @@
 import { roleColor } from '@/shared/lib/palette'
 import { formatDateTime } from '@/shared/lib/intl'
 import { tokens } from '@/shared/lib/format'
+import { i18next } from '@/i18n'
 
 // ---- formatting ----
 
@@ -11,12 +12,13 @@ export const formatTokens = tokens
 
 // formatElapsed renders a running duration in seconds as "42sn" / "3d 5sn".
 export function formatElapsed(sec: number): string {
-  if (sec < 60) return `${sec}sn`
+  if (sec < 60) return i18next.t('duration.seconds', { ns: 'sessions', value: sec })
   const m = Math.floor(sec / 60)
   const s = sec % 60
-  if (m < 60) return `${m}d ${s}sn`
+  if (m < 60)
+    return i18next.t('duration.minutesSeconds', { ns: 'sessions', minutes: m, seconds: s })
   const h = Math.floor(m / 60)
-  return `${h}s ${m % 60}d`
+  return i18next.t('duration.hoursMinutes', { ns: 'sessions', hours: h, minutes: m % 60 })
 }
 
 // pctOf returns n as a whole-number percent of total (0 when total is 0).

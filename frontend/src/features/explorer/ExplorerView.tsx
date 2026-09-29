@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   ChevronsDownUp,
   ChevronsUpDown,
@@ -52,6 +53,7 @@ export function ExplorerView({
   focusNode,
   onFocusNode,
 }: Props) {
+  const { t } = useTranslation('explorer')
   const [search, setSearch] = useState('')
   // Persisted per browser: leaving the screen must not reset the packing.
   const [density, setDensity] = useStoredDensity('tionharness.explorerDensity')
@@ -122,17 +124,20 @@ export function ExplorerView({
     if (!needle || !visibleGraph) return []
     return visibleGraph.nodes.flatMap((handle) => {
       const key = refToString(handle.ref)
-      const label = key === ROOT_KEY ? 'Workspace' : displayLabel(handle)
+      const label = key === ROOT_KEY ? t('workspace') : displayLabel(handle)
       if (!label.toLowerCase().includes(needle) && !key.toLowerCase().includes(needle)) return []
       return [{ key, label, kindLabel: nodeLabelOfKind(handle.ref), selected: key === selectedKey }]
     })
-  }, [visibleGraph, search, selectedKey])
+  }, [visibleGraph, search, selectedKey, t])
 
   const selectedHandle = visibleGraph?.nodes.find(
     (handle) => refToString(handle.ref) === selectedKey,
   )
   const selectionAnnouncement = selectedHandle
-    ? `Seçili düğüm ${displayLabel(selectedHandle)} (${nodeLabelOfKind(selectedHandle.ref)}).`
+    ? t('selection.announcement', {
+        label: displayLabel(selectedHandle),
+        kind: nodeLabelOfKind(selectedHandle.ref),
+      })
     : ''
 
   // Top of the side panel: jump to the screen that owns the selected node. A
@@ -150,8 +155,8 @@ export function ExplorerView({
       {selectedCollapsed ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
       <span className="truncate">
         {selectedCollapsed
-          ? `Alt düğümleri göster · ${selectedChildCount}`
-          : `Alt düğümleri gizle · ${selectedChildCount}`}
+          ? t('selection.showChildren', { count: selectedChildCount })
+          : t('selection.hideChildren', { count: selectedChildCount })}
       </span>
     </button>
   )
@@ -168,7 +173,8 @@ export function ExplorerView({
             <ExternalLink size={14} />
           )}
           <span className="truncate">
-            {selectedTarget.label} ekranında aç{selectedTarget.id ? ` · ${selectedTarget.id}` : ''}
+            {t('selection.openScreen', { label: selectedTarget.label })}
+            {selectedTarget.id ? ` · ${selectedTarget.id}` : ''}
           </span>
         </button>
       )}
@@ -180,7 +186,7 @@ export function ExplorerView({
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-3 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
         <MapIcon size={16} className="shrink-0 text-[var(--color-accent)]" />
-        <span className="shrink-0 text-sm font-semibold">Harita</span>
+        <span className="shrink-0 text-sm font-semibold">{t('title')}</span>
 
         <ExplorerSearch
           value={search}
@@ -195,14 +201,14 @@ export function ExplorerView({
         <div className="ml-auto flex items-center gap-3 text-xs">
           {graph && (
             <span className="hidden truncate text-[var(--color-text-dim)] md:inline">
-              {graph.nodes.length} düğüm · {graph.edges.length} bağlantı
+              {t('summary', { nodes: graph.nodes.length, edges: graph.edges.length })}
             </span>
           )}
           <label
             className="hidden items-center gap-2 text-[var(--color-text-dim)] sm:flex"
-            title="Düğümlerin sıkışıklığı"
+            title={t('densityHint')}
           >
-            Yoğunluk
+            {t('density')}
             <input
               type="range"
               min={0.4}
@@ -219,16 +225,16 @@ export function ExplorerView({
             aria-haspopup="dialog"
           >
             <MessageSquare size={13} />
-            Detay
+            {t('detail.button')}
           </button>
           <button
             onClick={refresh}
             disabled={loading}
-            title="Haritayı yenile"
+            title={t('refreshHint')}
             className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">Yenile</span>
+            <span className="hidden sm:inline">{t('refresh')}</span>
           </button>
         </div>
       </header>
@@ -250,7 +256,7 @@ export function ExplorerView({
         <div
           className="relative min-h-0 min-w-0 flex-1 bg-[var(--color-bg)]"
           role="region"
-          aria-label="Workspace haritası"
+          aria-label={t('regionLabel')}
         >
           <p className="sr-only" aria-live="polite" aria-atomic="true">
             {selectionAnnouncement}
@@ -276,7 +282,7 @@ export function ExplorerView({
               role="status"
               className="absolute inset-x-0 top-3 mx-auto w-fit rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-dim)] shadow-lg"
             >
-              Harita yükleniyor…
+              {t('loading')}
             </div>
           )}
           {!loading && (deepLinkError || error) && (
@@ -284,20 +290,20 @@ export function ExplorerView({
               role="alert"
               className="absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-danger)] bg-[var(--color-surface)] px-3 py-2 text-xs shadow-lg"
             >
-              <span>{error ? `Harita yüklenemedi: ${error}` : deepLinkError}</span>
+              <span>{error ? t('loadFailed', { error }) : deepLinkError}</span>
               {error ? (
                 <button
                   onClick={refresh}
                   className="rounded border border-[var(--color-border)] px-2 py-1 font-medium hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                 >
-                  Tekrar dene
+                  {t('retry')}
                 </button>
               ) : (
                 <button
                   onClick={fallbackToRoot}
                   className="rounded border border-[var(--color-border)] px-2 py-1 font-medium hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                 >
-                  Workspace köküne dön
+                  {t('backToRoot')}
                 </button>
               )}
             </div>
@@ -316,7 +322,11 @@ export function ExplorerView({
           </div>
         </aside>
 
-        <ExplorerDetailDrawer open={detailOpen} onClose={closeDetail} title="Seçili düğüm detayı">
+        <ExplorerDetailDrawer
+          open={detailOpen}
+          onClose={closeDetail}
+          title={t('detail.selectedTitle')}
+        >
           {openSessionButton}
           <div className="flex min-h-0 flex-1 flex-col">
             <ViewPanel

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Info, X, type LucideIcon } from 'lucide-react'
 import { subscribe, dismiss, type ToastItem, type ToastTone } from './toastStore'
+import { useTranslation } from 'react-i18next'
 
 const TONE: Record<
   ToastTone,
@@ -33,6 +34,7 @@ const TONE: Record<
 }
 
 function ToastRow({ item }: { item: ToastItem }) {
+  const { t: translate } = useTranslation('sharedUi')
   useEffect(() => {
     if (!item.ttl) return
     const h = setTimeout(() => dismiss(item.id), item.ttl)
@@ -50,7 +52,7 @@ function ToastRow({ item }: { item: ToastItem }) {
       <span className="min-w-0 flex-1 break-words">{item.message}</span>
       <button
         onClick={() => dismiss(item.id)}
-        title="Kapat"
+        title={translate('actions.close')}
         className={`shrink-0 rounded p-0.5 transition ${t.btn}`}
       >
         <X size={14} />

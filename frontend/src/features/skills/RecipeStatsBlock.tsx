@@ -10,6 +10,7 @@ import type { RecipeStats } from '@/types/trajectory'
 import { Badge, toast } from '@/shared/components'
 import { fmtTime } from '@/features/schedules/timeUtils'
 import { fmtDurationSec, fmtTokens } from '@/features/rota/trajectoryFormat'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   slug: string
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Props) {
+  const { t } = useTranslation('skills')
   const [rows, setRows] = useState<RecipeStats[] | null>(null)
   const [openProposals, setOpenProposals] = useState<number>(0)
   const [lastPass, setLastPass] = useState<string>('')
@@ -51,14 +53,24 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
       .then((s) => {
         if (cancelled || !s.ran) return
         setLastPass(
-          `${fmtTime(s.state.lastAt)} · ${s.state.trigger === 'manual' ? 'elle' : s.state.trigger === 'failed' ? 'başarısız koşu' : 'eşik'} · ${s.state.proposals} öneri${s.state.skipped ? ` · atlandı: ${s.state.skipped}` : ''}`,
+          t('stats.lastPass', {
+            time: fmtTime(s.state.lastAt),
+            trigger:
+              s.state.trigger === 'manual'
+                ? t('stats.triggerManual')
+                : s.state.trigger === 'failed'
+                  ? t('stats.triggerFailed')
+                  : t('stats.triggerThreshold'),
+            proposals: s.state.proposals,
+            skipped: s.state.skipped ? t('stats.skippedReason', { reason: s.state.skipped }) : '',
+          }),
         )
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [slug, nonce])
+  }, [slug, nonce, t])
   const optimize = async () => {
     setOptimizing(true)
     try {
@@ -66,9 +78,13 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
       setOptimizerSession(r.sessionId ?? null)
       if (r.ran)
         toast.info(
-          `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi${r.applied ? `, ${r.applied} oto-uygulandı` : ''})`,
+          t('stats.optimizerResult', {
+            proposals: r.proposals.length,
+            dropped: r.dropped,
+            applied: r.applied ? t('stats.applied', { count: r.applied }) : '',
+          }),
         )
-      else toast.warning(`Optimizer çalışmadı: ${r.skipped ?? '—'}`)
+      else toast.warning(t('stats.optimizerSkipped', { reason: r.skipped ?? '—' }))
       setNonce((n) => n + 1)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -80,16 +96,16 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
   return (
     <div className="mt-2 text-xs" data-testid="recipe-stats">
       <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className="font-medium text-[var(--color-text-dim)]">Rota istatistikleri</span>
+        <span className="font-medium text-[var(--color-text-dim)]">{t('stats.title')}</span>
         {optimizerSession && onOpenSession && (
           <button
             type="button"
             onClick={() => onOpenSession(optimizerSession)}
             className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] hover:bg-[var(--color-surface-2)]"
-            title="Optimizer ile konuşmayı sohbette aç"
+            title={t('stats.openSessionHint')}
             data-testid="optimizer-open-session"
           >
-            Optimizer oturumu
+            {t('stats.optimizerSession')}
           </button>
         )}
         <button
@@ -97,21 +113,25 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
           onClick={optimize}
           disabled={optimizing}
           className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-40"
-          title="Reçete optimizer'ı şimdi çalıştır: koşu istatistiklerinden ölçülü değişiklik önerileri üretir (recipe-opt kanalı); hiçbir şeyi kendisi uygulamaz"
+          title={t('stats.optimizeHint')}
           data-testid="recipe-optimize"
         >
           {optimizing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-          Şimdi optimize et
+          {t('stats.optimizeNow')}
         </button>
         {openProposals > 0 && (
           <Badge tone="accent" className="normal-case">
-            ✦ {openProposals} açık öneri · İçgörü ▸ recipe-opt
+            {t('stats.openProposalChannel', { count: openProposals })}
           </Badge>
         )}
-        {lastPass && <span className="text-[var(--color-text-dim)]">son geçiş: {lastPass}</span>}
+        {lastPass && (
+          <span className="text-[var(--color-text-dim)]">
+            {t('stats.lastPassLabel')}: {lastPass}
+          </span>
+        )}
       </div>
       {rows.length === 0 ? (
-        <p className="text-[var(--color-text-dim)]">Bu reçeteyle henüz rota koşmadı.</p>
+        <p className="text-[var(--color-text-dim)]">{t('stats.empty')}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {rows.map((r) => (
@@ -119,18 +139,28 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
               key={r.templateRef}
               className="flex flex-wrap items-center gap-2 rounded border border-[var(--color-border)] px-2 py-1"
             >
-              <span className="font-mono">{r.version ? `v${r.version}` : 'sürümsüz'}</span>
-              <Badge tone="muted">{r.runs} koşu</Badge>
-              {r.done > 0 && <Badge tone="success">{r.done} bitti</Badge>}
-              {r.failed > 0 && <Badge tone="danger">{r.failed} başarısız</Badge>}
-              {r.abandoned > 0 && <Badge tone="muted">{r.abandoned} terk</Badge>}
-              {r.live > 0 && <Badge tone="accent">{r.live} canlı</Badge>}
+              <span className="font-mono">
+                {r.version ? `v${r.version}` : t('stats.unversioned')}
+              </span>
+              <Badge tone="muted">{t('stats.runs', { count: r.runs })}</Badge>
+              {r.done > 0 && <Badge tone="success">{t('stats.done', { count: r.done })}</Badge>}
+              {r.failed > 0 && (
+                <Badge tone="danger">{t('stats.failed', { count: r.failed })}</Badge>
+              )}
+              {r.abandoned > 0 && (
+                <Badge tone="muted">{t('stats.abandoned', { count: r.abandoned })}</Badge>
+              )}
+              {r.live > 0 && <Badge tone="accent">{t('stats.live', { count: r.live })}</Badge>}
               {r.summarized > 0 && (
                 <span className="text-[var(--color-text-dim)]">
-                  ort {fmtDurationSec(r.avgDurationSec)} · {fmtTokens(r.avgTokens)} token
-                  {r.avgCostUsd > 0 ? ` · $${r.avgCostUsd.toFixed(2)}${r.priced ? '' : '~'}` : ''}
-                  {' · '}
-                  {r.avgSessions.toFixed(1)} worker
+                  {[
+                    t('stats.averageDuration', { duration: fmtDurationSec(r.avgDurationSec) }),
+                    t('stats.averageTokens', { tokens: fmtTokens(r.avgTokens) }),
+                    r.avgCostUsd > 0 ? `$${r.avgCostUsd.toFixed(2)}${r.priced ? '' : '~'}` : null,
+                    t('stats.workerCount', { value: r.avgSessions.toFixed(1) }),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               )}
               {r.unfiredWatchers &&
@@ -138,9 +168,9 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
                   <span
                     key={w}
                     className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] text-[var(--color-warning)]"
-                    title={`İzleyici ${n}/${r.summarized} koşuda ateşlenmedi`}
+                    title={t('stats.watcherMissedHint', { count: n, total: r.summarized })}
                   >
-                    ⚡ {w} {n}/{r.summarized} sessiz
+                    ⚡ {w} {n}/{r.summarized} {t('stats.silent')}
                   </span>
                 ))}
               {r.ghostPhases &&
@@ -148,9 +178,9 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
                   <span
                     key={p}
                     className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]"
-                    title={`Faz ${n}/${r.summarized} koşuda hiç başlamadı`}
+                    title={t('stats.ghostPhaseHint', { count: n, total: r.summarized })}
                   >
-                    ◌ {p} {n}/{r.summarized} hayalet
+                    {t('stats.ghostLabel', { phase: p, count: n, total: r.summarized })}
                   </span>
                 ))}
               {r.latestId && onOpenTrajectory && (
@@ -158,9 +188,9 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
                   type="button"
                   onClick={() => onOpenTrajectory(r.latestId!)}
                   className="ml-auto text-[var(--color-accent)] hover:underline"
-                  title="Son rotayı Rota ekranında aç"
+                  title={t('stats.openLatestHint')}
                 >
-                  son: {r.latestId}
+                  {t('stats.latest')}: {r.latestId}
                 </button>
               )}
             </li>

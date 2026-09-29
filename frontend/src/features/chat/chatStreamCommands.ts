@@ -4,6 +4,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { api } from '@/api'
 import type { Message, SlashCommand } from '@/types'
+import { i18next } from '@/i18n'
 
 export interface CommandContext {
   activeSessionId: string | null
@@ -112,46 +113,50 @@ export function buildChatCommands({
     {
       name: 'compact',
       icon: '🗜',
-      description: "Claude/Codex CLI'nın native bağlam sıkıştırmasını çalıştır",
+      description: i18next.t('commands.compact', { ns: 'chat' }),
       run: () => summarize('compact'),
     },
     {
       name: 'compact-custom',
       icon: '🗜',
-      description: "Eski mesajları TionHarness rolling summary'sine katla",
+      description: i18next.t('commands.compactCustom', { ns: 'chat' }),
       run: () => summarize('compact-custom'),
     },
     {
       name: 'refresh-context',
       icon: '🔄',
-      description:
-        "Donmuş bağlam snapshot'ını yenile — araç/skill/talimat değişiklikleri sonraki turda görünür",
+      description: i18next.t('commands.refreshContext', { ns: 'chat' }),
       run: () => summarize('refresh-context'),
     },
     {
       name: 'handoff',
       icon: '↪',
-      description: 'Context reset — temiz pencerede devam et',
+      description: i18next.t('commands.handoff', { ns: 'chat' }),
       run: () => handoff(),
     },
     {
       name: 'rewind',
       icon: '⟲',
-      description: "Sohbeti bir checkpoint'e geri sar — mesajları geri al",
+      description: i18next.t('commands.rewind', { ns: 'chat' }),
       run: () => openRewind(),
     },
     {
       name: 'tools',
       icon: '🔌',
-      description: 'Kullanılabilir araçları listele',
+      description: i18next.t('commands.tools', { ns: 'chat' }),
       run: () => summarize('tools'),
     },
     {
       name: 'board',
       icon: '🗂',
-      description: 'Görev panosunu özetle',
+      description: i18next.t('commands.board', { ns: 'chat' }),
       run: () => summarize('board'),
     },
-    { name: 'flows', icon: '🔀', description: 'Akışları özetle', run: () => summarize('flows') },
+    {
+      name: 'flows',
+      icon: '🔀',
+      description: i18next.t('commands.flows', { ns: 'chat' }),
+      run: () => summarize('flows'),
+    },
   ]
 }

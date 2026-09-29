@@ -5,6 +5,7 @@
 // reverted (git remains the source of truth for code). The removed prompt text is
 // handed back to the caller so it can be dropped into the composer for a re-try.
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RotateCcw } from 'lucide-react'
 import type { Message } from '@/types'
 import { Button, ModalOverlay } from '@/shared/components'
@@ -26,6 +27,7 @@ function clip(s: string, n = 140): string {
 }
 
 export function RewindDialog({ messages, paging, onRewind, onClose }: Props) {
+  const { t } = useTranslation('chatStatus')
   const [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -62,23 +64,22 @@ export function RewindDialog({ messages, paging, onRewind, onClose }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Sohbeti geri sar"
+        aria-label={t('rewind.dialogLabel')}
         data-testid="rewind-modal"
         className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-lg)]"
       >
         <h2 className="mb-1 flex items-center gap-2 text-base font-semibold">
-          <RotateCcw size={16} /> Sohbeti geri sar
+          <RotateCcw size={16} /> {t('rewind.title')}
         </h2>
         <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          Bir prompt seç — o prompt ve sonrasındaki tüm mesajlar silinir, sohbet o checkpoint'e
-          döner. <b>Dosya değişiklikleri geri alınmaz</b> (kod için git kullan). Silinen prompt,
-          düzenleyip yeniden göndermen için mesaj kutusuna geri konur.
+          {t('rewind.descriptionBefore')} <b>{t('rewind.filesUnchanged')}</b>{' '}
+          {t('rewind.descriptionAfter')}
         </p>
 
         <TranscriptPaging state={paging} edge="newer" />
         {checkpoints.length === 0 ? (
           <div className="rounded-lg border border-[var(--color-border)] p-4 text-sm text-[var(--color-text-dim)]">
-            Bu oturumda geri sarılacak bir kullanıcı mesajı yok.
+            {t('rewind.empty')}
           </div>
         ) : (
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
@@ -95,13 +96,13 @@ export function RewindDialog({ messages, paging, onRewind, onClose }: Props) {
               >
                 <div className="mb-0.5 flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-[var(--color-text-dim)]">
-                    {paging ? 'Message' : 'Prompt'} #{c.n}
+                    {paging ? t('rewind.message') : t('rewind.prompt')} #{c.n}
                   </span>
                   <span className="text-xs text-[var(--color-text-dim)]">
-                    {c.removed} mesaj silinir
+                    {t('rewind.removed', { count: c.removed })}
                   </span>
                 </div>
-                <div className="text-sm">{clip(c.text) || <i>(boş mesaj)</i>}</div>
+                <div className="text-sm">{clip(c.text) || <i>{t('rewind.emptyMessage')}</i>}</div>
               </button>
             ))}
           </div>
@@ -110,14 +111,14 @@ export function RewindDialog({ messages, paging, onRewind, onClose }: Props) {
         <TranscriptPaging state={paging} edge="older" />
         <div className="mt-4 flex items-center justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            İptal
+            {t('rewind.cancel')}
           </Button>
           <Button
             variant="danger"
             onClick={confirm}
             disabled={busy || !checkpoints.some((checkpoint) => checkpoint.id === selected)}
           >
-            {busy ? 'Geri sarılıyor…' : 'Geri sar'}
+            {busy ? t('rewind.working') : t('rewind.confirm')}
           </Button>
         </div>
       </div>

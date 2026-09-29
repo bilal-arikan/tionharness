@@ -1,6 +1,7 @@
 import { ArrowRight, RotateCcw } from 'lucide-react'
 import type { AgentToolEntry, AgentToolTier } from '@/types'
 import { AgentTierBadge, AgentTierSelector } from '@/features/tools/VisibilityControls'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   tool: AgentToolEntry
@@ -18,6 +19,7 @@ interface Props {
 // overridden tools get a row — that is the whole point of the screen, the user
 // sees the diff instead of scrolling 140 unchanged tools.
 export function AgentToolOverrideRow({ tool, tier, busy, onSelect, onReset }: Props) {
+  const { t } = useTranslation('agents')
   return (
     <li
       data-testid="agent-tool-override"
@@ -39,7 +41,7 @@ export function AgentToolOverrideRow({ tool, tier, busy, onSelect, onReset }: Pr
           data-testid="agent-tool-override-reset"
           onClick={onReset}
           disabled={busy}
-          title={`Varsayılana dön (${tool.defaultVisibility})`}
+          title={t('tools.resetTool', { tier: tool.defaultVisibility })}
           className="rounded p-1 text-[var(--color-text-dim)] transition hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-40"
         >
           <RotateCcw size={13} />

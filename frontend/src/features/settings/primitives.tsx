@@ -7,6 +7,7 @@ import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { NumberValidityCtx } from './numberValidity'
 import type { NumberValidity } from './numberValidity'
+import { useTranslation } from 'react-i18next'
 
 // Category keys: the app-global sections plus the per-workspace section.
 export type Cat =
@@ -98,6 +99,7 @@ export function NumberField({
   step?: number
   disabled?: boolean
 }) {
+  const { t } = useTranslation('settings')
   const id = useId()
   const validity = useContext(NumberValidityCtx)
   const report = validity?.report
@@ -126,20 +128,20 @@ export function NumberField({
     }
     const trimmed = raw.trim()
     if (trimmed === '') {
-      reject('Boş bırakılamaz — bir değer gir.')
+      reject(t('validation.requiredNumber'))
       return
     }
     const n = Number(trimmed)
     if (!Number.isFinite(n)) {
-      reject('Geçerli bir sayı değil.')
+      reject(t('validation.invalidNumber'))
       return
     }
     if (min !== undefined && n < min) {
-      reject(`En az ${min} olabilir.`)
+      reject(t('validation.minimum', { min }))
       return
     }
     if (max !== undefined && n > max) {
-      reject(`En çok ${max} olabilir.`)
+      reject(t('validation.maximum', { max }))
       return
     }
     setError(null)
@@ -318,6 +320,7 @@ export function CatButton({
   onClick: () => void
   dirty: boolean
 }) {
+  const { t } = useTranslation('settings')
   return (
     <button
       onClick={onClick}
@@ -330,7 +333,10 @@ export function CatButton({
       <c.icon size={16} className="shrink-0" />
       <span className="flex-1 truncate">{c.label}</span>
       {dirty && (
-        <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]"
+          title={t('common.unsaved')}
+        />
       )}
     </button>
   )
@@ -340,6 +346,7 @@ export function CatButton({
 // + note) with a button to copy the source folder path. Used inside the
 // expandable command cards on the Komutlar screen.
 export function PromptDetails({ p, dir }: { p: PromptInfo; dir: string }) {
+  const { t } = useTranslation('settings')
   return (
     <>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -353,7 +360,7 @@ export function PromptDetails({ p, dir }: { p: PromptInfo; dir: string }) {
       {p.system && (
         <div className="mb-2">
           <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            System
+            {t('promptDetails.system')}
           </div>
           <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">
             {p.system}
@@ -363,7 +370,7 @@ export function PromptDetails({ p, dir }: { p: PromptInfo; dir: string }) {
       {p.user && (
         <div className="mb-2">
           <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            User turn
+            {t('promptDetails.userTurn')}
           </div>
           <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">
             {p.user}

@@ -1,27 +1,27 @@
+import { useTranslation } from 'react-i18next'
 import { Toggle } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function GeneralPanel({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Applies to all workspaces after saving.
-      </p>
+      <p className="text-xs text-[var(--color-text-dim)]">{t('shared.appliesAll')}</p>
       <Toggle
-        label="Keep screen awake"
-        hint="Prevent the screen from sleeping while the app is open. Applies to all workspaces after saving."
+        label={t('general.keepAwake.label')}
+        hint={t('general.keepAwake.hint')}
         checked={draft.keepAwake}
         onChange={(value) => set('keepAwake', value)}
       />
       <Toggle
-        label="Generate titles automatically"
-        hint="Name new conversations and tasks automatically."
+        label={t('general.autoTitle.label')}
+        hint={t('general.autoTitle.hint')}
         checked={draft.autoTitleEnabled}
         onChange={(value) => set('autoTitleEnabled', value)}
       />
       <Toggle
-        label="Tag sessions automatically"
-        hint="Add tags for errors, goals, completion and archival. Manual and agent-applied tags remain available."
+        label={t('general.autoTag.label')}
+        hint={t('general.autoTag.hint')}
         checked={draft.autoTagSessions}
         onChange={(v) => set('autoTagSessions', v)}
       />

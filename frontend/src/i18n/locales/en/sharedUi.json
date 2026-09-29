@@ -1,0 +1,179 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "copied": "Copied to clipboard",
+    "copy": "Copy to clipboard",
+    "copyCode": "Copy code",
+    "expand": "Expand",
+    "fullscreen": "Full screen",
+    "info": "Information",
+    "refresh": "Refresh",
+    "yes": "Yes"
+  },
+  "agents": {
+    "archived": "(archived)",
+    "deleted": "deleted",
+    "empty": "No agents",
+    "select": "Select agent"
+  },
+  "archive": {
+    "backToActive": "Back to active list",
+    "backToList": "Back to list",
+    "count_one": "{{count}} archived {{noun}}{{restoreHint}}",
+    "count_other": "{{count}} archived {{noun}}{{restoreHint}}",
+    "empty": "No archived {{noun}}.",
+    "label": "Archive",
+    "show": "Show archived items"
+  },
+  "commandPalette": {
+    "label": "Command palette",
+    "noMatches": "No matches",
+    "search": "Search commands…"
+  },
+  "copyPath": {
+    "manualPrompt": "Copy the path (Ctrl+C, Enter):",
+    "title": "Copy path"
+  },
+  "diff": {
+    "lines_one": "{{formattedCount}} line",
+    "lines_other": "{{formattedCount}} lines",
+    "loadRemaining_one": "load the remaining {{formattedCount}} line",
+    "loadRemaining_other": "load the remaining {{formattedCount}} lines",
+    "showUnchanged_one": "⋯ show {{formattedCount}} unchanged line",
+    "showUnchanged_other": "⋯ show {{formattedCount}} unchanged lines",
+    "showingFirst_one": "Showing the first {{formattedCount}} line ·",
+    "showingFirst_other": "Showing the first {{formattedCount}} lines ·"
+  },
+  "emoji": {
+    "noResults": "No results",
+    "option": "Select {{emoji}}",
+    "search": "Search emoji…",
+    "select": "Select emoji",
+    "useInitials": "No emoji — use initials (Aa)"
+  },
+  "errorBoundary": {
+    "description": "An unexpected interface error occurred. The error was recorded and is available on the Logs screen. Reload the page to continue.",
+    "reload": "Reload page",
+    "retry": "Try again",
+    "title": "Something went wrong"
+  },
+  "folderPicker": {
+    "noSubfolders": "No subfolders",
+    "parent": "Parent folder",
+    "selectThis": "Select this folder",
+    "thisComputer": "This computer",
+    "title": "Select folder"
+  },
+  "gallery": {
+    "empty": "gallery · no images found",
+    "image": "Image {{number}}"
+  },
+  "htmlPreview": {
+    "empty": "html-preview · no source found",
+    "frameTitle": "HTML preview",
+    "invalidSource": "invalid source path",
+    "loadFailed": "Could not load html-preview: {{error}}",
+    "tab": "Tab {{number}}"
+  },
+  "lightbox": {
+    "close": "Close (Esc)",
+    "next": "Next (→)",
+    "previous": "Previous (←)",
+    "reset": "Reset (0)",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "list": {
+    "hide": "Hide list",
+    "openPanel": "Open {{label}} panel",
+    "resize": "Resize",
+    "show": "Show list",
+    "togglePanel": "Toggle list panel"
+  },
+  "mermaid": {
+    "diagram": "Diagram",
+    "invalidSyntax": "· (invalid syntax)",
+    "rendering": "· rendering…",
+    "showDiagram": "Show diagram",
+    "showSource": "Show source",
+    "source": "Source"
+  },
+  "promptEditor": {
+    "edit": "Edit",
+    "emptyPreview": "There is no content to preview.",
+    "exitFullscreen": "Exit full screen",
+    "exitFullscreenTitle": "Exit full screen (Esc)",
+    "fullscreenEditor": "Full-screen editor",
+    "markdownPreview": "Markdown preview",
+    "preview": "Preview",
+    "split": "Split view",
+    "splitTitle": "Split (edit + preview)"
+  },
+  "provider": {
+    "custom": "Custom…",
+    "deletedInstance": "(deleted instance)",
+    "disabledSuffix": " (disabled)",
+    "model": "Model",
+    "modelName": "model name",
+    "orphaned": "⚠ The provider instance connected to this agent (\"{{providerInstanceId}}\") was deleted. The agent cannot run in its current state. Select and save a new provider instance above.",
+    "provider": "Provider",
+    "selectFromList": "Select from list",
+    "selectModel": "Select a model…"
+  },
+  "seedDefault": {
+    "confirm": "Delete the edits?",
+    "default": "Default",
+    "edited": "edited",
+    "editedTitle": "This file differs from the default, so TionHarness updates are no longer applied automatically. Restore the default to resume updates; local changes will be deleted.",
+    "restoreTitle": "Restore the content shipped with TionHarness. Local edits will be deleted and automatic updates will resume.",
+    "restored": "{{label}} restored to default"
+  },
+  "selection": {
+    "all": "All",
+    "clear": "Clear selection (Esc)",
+    "filteredOut_one": "(+{{count}} outside the filter)",
+    "filteredOut_other": "(+{{count}} outside the filter)",
+    "remove": "Clear selection",
+    "selectVisible": "Select all visible items",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected"
+  },
+  "states": {
+    "loading": "Loading…"
+  },
+  "tags": {
+    "add": "Add tag…",
+    "remove": "Remove {{tag}} tag"
+  },
+  "workflow": {
+    "advanced": "Advanced / optional",
+    "details": {
+      "invalidPhases": "⚠ Invalid phase block: {{error}}",
+      "maxTurns": "Turn limit: {{maxTurns}}",
+      "pattern": "Pattern: {{pattern}}",
+      "phases": "Phases: {{phases}}",
+      "skill": "Skill: {{slug}}",
+      "skillVersion": "Skill: {{slug}} (v{{version}})",
+      "stopCondition": "Stop condition: {{condition}}",
+      "workers": "Recommended workers: {{workers}}"
+    },
+    "emptyAfter": "Add a skill from the Skills screen.",
+    "emptyBefore": "No saved recipes. To create one, use",
+    "free": "Free-form (no recipe)",
+    "help": "A saved orchestration recipe that is layered onto the coordinator prompt. It describes the order in which workers start and how their results are combined.\n\nEach recipe is a skill file (kind: coordinator-workflow). Open its contents with the book button in its row. With Free-form selected, the coordinator decides how to proceed.",
+    "label": "Workflow",
+    "loading": "Loading recipes…",
+    "openInSkills": "Open \"{{name}}\" in the Skills screen",
+    "openSkill": "Open {{name}} skill",
+    "patterns": {
+      "adversarial": "Adversarial validation — one worker produces and another tries to disprove it",
+      "classify": "Classify and route — label the input first, then send it to the relevant profile",
+      "fanout": "Fan-out and synthesis — workers run in parallel and the coordinator combines the results",
+      "generateFilter": "Generate and filter — produce many candidates, then eliminate them",
+      "loop": "Loop until complete — repeat rounds until the stop condition is met",
+      "tournament": "Tournament — eliminate candidates through pairwise comparisons"
+    },
+    "whatDoesItDo": "What does {{name}} do?"
+  }
+}

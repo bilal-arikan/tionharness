@@ -4,6 +4,8 @@
 // finished. It surfaces the agent's reason, a live countdown to the wake, and a
 // "Durdur" control that disarms the wake (POST /api/chat/wake/cancel).
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { AlarmClock, Square } from 'lucide-react'
 import { serverNow } from '@/shared/lib/serverClock'
 import { ComposerCard } from './ComposerCard'
@@ -23,19 +25,22 @@ interface Props {
 }
 
 // remainingLabel renders the seconds left until fireAt as a compact "~Xs" / "~Xm Ys".
-function remainingLabel(fireAt: number, nowSec: number): string | null {
+function remainingLabel(t: TFunction<'chatStatus'>, fireAt: number, nowSec: number): string | null {
   if (fireAt <= 0) return null
   const left = fireAt - nowSec
-  if (left <= 0) return 'birazdan'
-  if (left < 60) return `~${left}sn`
+  if (left <= 0) return t('wake.soon')
+  if (left < 60) return t('wake.seconds', { seconds: left })
   const m = Math.floor(left / 60)
   const s = left % 60
-  return s ? `~${m}dk ${s}sn` : `~${m}dk`
+  return s
+    ? t('wake.minutesSeconds', { minutes: m, seconds: s })
+    : t('wake.minutes', { minutes: m })
 }
 
 // WakeWaitBanner shows the "waiting to auto-resume" state for a session with a
 // pending self-wake, plus a Durdur control.
 export function WakeWaitBanner({ reason, fireAt, onCancel, hideCancel }: Props) {
+  const { t } = useTranslation('chatStatus')
   // Tick once a second so the countdown stays live without a parent re-render.
   const [now, setNow] = useState(() => serverNow())
   useEffect(() => {
@@ -43,19 +48,25 @@ export function WakeWaitBanner({ reason, fireAt, onCancel, hideCancel }: Props) 
     return () => clearInterval(t)
   }, [])
 
-  const left = remainingLabel(fireAt, now)
+  const left = remainingLabel(t, fireAt, now)
   return (
     <ComposerCard tone="wake" className="flex items-center gap-2 px-3 py-2 text-sm">
       <AlarmClock size={15} className="shrink-0 animate-pulse text-[var(--color-warning)]" />
       <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
-        <span className="font-medium text-[var(--color-warning)]">Otomatik devam bekleniyor</span>
-        {left && <span className="text-[var(--color-text-dim)]"> · {left}</span>}
-        {reason && <span className="text-[var(--color-text-dim)]"> — {reason}</span>}
+        <span className="font-medium text-[var(--color-warning)]">{t('wake.waiting')}</span>
+        {left && (
+          <span className="text-[var(--color-text-dim)]">
+            {t('wake.countdownSuffix', { value: left })}
+          </span>
+        )}
+        {reason && (
+          <span className="text-[var(--color-text-dim)]">{t('wake.reasonSuffix', { reason })}</span>
+        )}
       </span>
       {!hideCancel && (
-        <button onClick={onCancel} title="Otomatik uyandırmayı durdur" className={BTN_STOP_COMPACT}>
+        <button onClick={onCancel} title={t('wake.stopTitle')} className={BTN_STOP_COMPACT}>
           <Square size={13} />
-          Durdur
+          {t('wake.stop')}
         </button>
       )}
     </ComposerCard>

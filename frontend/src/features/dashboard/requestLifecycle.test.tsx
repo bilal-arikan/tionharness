@@ -40,8 +40,8 @@ it('cancels the previous dashboard request when the range changes and on unmount
   expect(firstSignal.aborted).toBe(false)
 
   await act(async () => {
-    const range = [...container.querySelectorAll('button')].find(
-      (button) => button.textContent === '30g',
+    const range = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.startsWith('30'),
     )!
     range.click()
   })

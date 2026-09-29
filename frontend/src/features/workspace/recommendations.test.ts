@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ZVEC_GREP_SERVER_NAME, ZVEC_GREP_TOOL } from '@/shared/lib/zvecGrep'
+import { setLocale } from '@/i18n'
 
 // The rules only *reference* the api modules inside their `act` callbacks, but
 // importing recommendations.ts pulls them in, so stub both to keep this a pure
@@ -47,7 +48,8 @@ function healthyCtx(over: Partial<RecContext> = {}): RecContext {
 
 const keysOf = (ctx: RecContext) => runRules(ctx).map((r) => r.key)
 
-beforeEach(() => {
+beforeEach(async () => {
+  await setLocale('tr')
   createMCPServer.mockReset()
   updateWorkspaceSettings.mockReset()
   createHook.mockReset()
@@ -68,6 +70,17 @@ describe('runRules — baseline', () => {
       expect(r.meta.title.trim(), `title for ${r.meta.key}`).not.toBe('')
       expect(r.meta.summary.trim(), `summary for ${r.meta.key}`).not.toBe('')
     }
+  })
+
+  it('resolves rule copy from the active UI locale without freezing at import time', async () => {
+    const rule = RULES.find((r) => r.meta.key === 'no-agents')!
+    expect(rule.meta.title).toBe('Henüz ajan yok')
+
+    await setLocale('en')
+    expect(rule.meta.title).toBe('No agents yet')
+    expect(runRules(healthyCtx({ agentsCount: 0 })).find((r) => r.key === 'no-agents')?.desc).toBe(
+      'This workspace is empty. Create an agent or install a ready-made template from the market.',
+    )
   })
 })
 

@@ -36,6 +36,7 @@ import {
   isWorkerSession,
   type CoordinationFields,
 } from '@/shared/lib/coordination'
+import { useTranslation } from 'react-i18next'
 
 export interface ChatViewProps {
   chat: ReturnType<typeof useChatStream>
@@ -139,6 +140,7 @@ export function ChatView({
   onOpenAgent,
   onAgentChange,
 }: ChatViewProps) {
+  const { t } = useTranslation('chat')
   // Floating composer overlay: the chat bottom stack (composer + ask/todo/pending/
   // wake banners) is absolutely positioned OVER the transcript so message bubbles
   // scroll UNDER its transparent-topped gradient. We measure the stack's live
@@ -164,7 +166,7 @@ export function ChatView({
       transcriptPaging?.hasNewer
         ? (transcriptPaging.summary?.todo ?? null)
         : (latestTodos(messages) ?? transcriptPaging?.summary?.todo ?? null),
-    [messages, transcriptPaging?.hasNewer, transcriptPaging?.summary],
+    [messages, transcriptPaging],
   )
 
   // The rendered transcript hides the runtime's <coordination-guard> corrective
@@ -399,7 +401,7 @@ export function ChatView({
                 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-text-dim)] shadow-[var(--shadow-sm)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
               >
                 <History size={13} />
-                Koşu geçmişini aç
+                {t('chatView.openRunHistory')}
               </button>
             </div>
           )}
@@ -448,10 +450,10 @@ export function ChatView({
             <div className="flex justify-center pb-1">
               <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
                 {chat.activeTyping
-                  ? 'Başka bir pencere yazıyor…'
+                  ? t('chatView.anotherWindowTyping')
                   : chat.activeAsk
-                    ? `${chat.activePresence} pencerede açık — ilk cevaplayan geçerli`
-                    : `Bu oturum ${chat.activePresence} pencerede açık`}
+                    ? t('chatView.windowsOpenAsk', { count: chat.activePresence })
+                    : t('chatView.windowsOpen', { count: chat.activePresence })}
               </span>
             </div>
           )}

@@ -1,6 +1,7 @@
 import { Bug, X } from 'lucide-react'
 import { ModalOverlay, PaneHeader } from '@/shared/components'
 import { SessionDebugCard } from './SessionDebugCard'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   sessionId: string
@@ -18,12 +19,13 @@ interface Props {
 // its own overlay opened from the chat header's "Debug" button. It reuses
 // SessionDebugCard in alwaysOpen mode (no inner fold; the modal supplies chrome).
 export function SessionDebugModal({ sessionId, title, agentNames, onClose }: Props) {
+  const { t } = useTranslation('sessions')
   return (
     <ModalOverlay onClose={onClose} padding="p-6">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Oturum debug"
+        aria-label={t('debug.dialogLabel')}
         data-testid="session-debug-modal"
         className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
         onClick={(e) => e.stopPropagation()}
@@ -33,14 +35,15 @@ export function SessionDebugModal({ sessionId, title, agentNames, onClose }: Pro
             <>
               <Bug size={16} className="shrink-0 text-[var(--color-text-dim)]" />
               <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
-                Debug / Gözlemlenebilirlik{title ? ` — ${title}` : ''}
+                {t('debug.title')}
+                {title ? ` — ${title}` : ''}
               </h2>
             </>
           }
           right={
             <button
               onClick={onClose}
-              aria-label="Kapat"
+              aria-label={t('actions.close')}
               className="shrink-0 rounded-md p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
               <X size={16} />

@@ -2,10 +2,11 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '@/types'
 import { ALL_SESSION_CHIPS } from './sessionKindMeta'
 import { SessionsSidebar } from './SessionsSidebar'
+import { i18next } from '@/i18n'
 
 const reactTestEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT: boolean
@@ -13,6 +14,10 @@ const reactTestEnvironment = globalThis as typeof globalThis & {
 reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: ReturnType<typeof createRoot>[] = []
+
+beforeEach(async () => {
+  await i18next.changeLanguage('tr')
+})
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount())

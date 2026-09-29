@@ -50,9 +50,7 @@ describe('LessonsTab save gate', () => {
   })
 
   const saveButton = () =>
-    Array.from(container.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Kaydet'),
-    ) as HTMLButtonElement
+    container.querySelector<HTMLButtonElement>('[data-testid="lessons-save"]')!
 
   const numberInput = (index: number) =>
     container.querySelectorAll<HTMLInputElement>('input[type="number"]')[index]
@@ -79,7 +77,7 @@ describe('LessonsTab save gate', () => {
     // Reject an out-of-range value: it must not reach the draft, and it must
     // surface inline.
     type(numberInput(0), '999')
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('En çok 50')
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('50')
     expect(saveButton().disabled).toBe(true)
 
     // Editing a *different* field makes the draft dirty — this is exactly the

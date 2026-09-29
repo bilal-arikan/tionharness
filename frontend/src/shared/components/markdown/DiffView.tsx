@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { parseDiff, foldableRanges, diffRows } from '@/shared/lib/diff'
 import { useVirtualRows } from '@/shared/hooks/useVirtualRows'
 import { count } from '@/shared/lib/format'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   text: string
@@ -78,6 +79,7 @@ function DiffInline({
   added: number
   removed: number
 }) {
+  const { t } = useTranslation('sharedUi')
   const [uncapped, setUncapped] = useState(false)
   const capped = !uncapped && lines.length > INLINE_CAP
   const shown = capped ? INLINE_PREVIEW : lines.length
@@ -89,7 +91,7 @@ function DiffInline({
       extra={
         capped ? (
           <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)]">
-            {count(lines.length)} satır
+            {t('diff.lines', { count: lines.length, formattedCount: count(lines.length) })}
           </span>
         ) : undefined
       }
@@ -111,9 +113,12 @@ function DiffInline({
           onClick={() => setUncapped(true)}
           className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-left text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
         >
-          İlk {count(INLINE_PREVIEW)} satır gösteriliyor ·{' '}
+          {t('diff.showingFirst', { count: INLINE_PREVIEW, formattedCount: count(INLINE_PREVIEW) })}{' '}
           <span className="font-medium">
-            kalan {count(lines.length - INLINE_PREVIEW)} satırı da yükle
+            {t('diff.loadRemaining', {
+              count: lines.length - INLINE_PREVIEW,
+              formattedCount: count(lines.length - INLINE_PREVIEW),
+            })}
           </span>
         </button>
       )}
@@ -136,7 +141,10 @@ function Frame({
     <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--color-border)]">
       <div className="flex shrink-0 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs">
         <span className="text-[var(--color-success)]">+{added}</span>
-        <span className="text-[var(--color-danger)]">−{removed}</span>
+        <span className="text-[var(--color-danger)]">
+          {'−'}
+          {removed}
+        </span>
         {extra}
       </div>
       {children}
@@ -156,6 +164,7 @@ function DiffPanel({
   added: number
   removed: number
 }) {
+  const { t } = useTranslation('sharedUi')
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
   const [uncapped, setUncapped] = useState(false)
 
@@ -184,7 +193,7 @@ function DiffPanel({
       removed={removed}
       extra={
         <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)]">
-          {count(lines.length)} satır
+          {t('diff.lines', { count: lines.length, formattedCount: count(lines.length) })}
         </span>
       }
     >
@@ -208,7 +217,10 @@ function DiffPanel({
                     style={{ height: ROW_H }}
                     className="flex w-full items-center px-3 text-left text-[11px] leading-none text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
                   >
-                    ⋯ {count(row.count)} değişmeyen satır — göster
+                    {t('diff.showUnchanged', {
+                      count: row.count,
+                      formattedCount: count(row.count),
+                    })}
                   </button>
                 )
               }
@@ -234,9 +246,12 @@ function DiffPanel({
           onClick={() => setUncapped(true)}
           className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-left text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
         >
-          İlk {count(CAP_PREVIEW)} satır gösteriliyor ·{' '}
+          {t('diff.showingFirst', { count: CAP_PREVIEW, formattedCount: count(CAP_PREVIEW) })}{' '}
           <span className="font-medium">
-            kalan {count(lines.length - CAP_PREVIEW)} satırı da yükle
+            {t('diff.loadRemaining', {
+              count: lines.length - CAP_PREVIEW,
+              formattedCount: count(lines.length - CAP_PREVIEW),
+            })}
           </span>
         </button>
       )}

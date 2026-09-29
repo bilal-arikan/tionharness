@@ -2,6 +2,7 @@
 // decisions that matter — which phase is alarming, when to keep polling, which
 // actions are legal — are testable without a DOM.
 import type { SearchIndexPhase, SearchIndexStatus } from '@/types'
+import { sharedText } from './sharedI18n'
 
 /** How a phase is rendered: label, and the CSS variable carrying its colour. */
 export interface PhaseLook {
@@ -17,11 +18,36 @@ export interface PhaseLook {
  * letting the client infer it.
  */
 const PHASE_LOOK: Record<SearchIndexPhase, PhaseLook> = {
-  ready: { label: 'hazır', tone: 'var(--color-success)' },
-  indexing: { label: 'indeksleniyor…', tone: 'var(--color-accent)' },
-  stale: { label: 'bayat', tone: 'var(--color-warning)' },
-  failed: { label: 'başarısız', tone: 'var(--color-danger)' },
-  missing: { label: 'yok', tone: 'var(--color-text-dim)' },
+  ready: {
+    get label() {
+      return sharedText('searchIndex.ready')
+    },
+    tone: 'var(--color-success)',
+  },
+  indexing: {
+    get label() {
+      return sharedText('searchIndex.indexing')
+    },
+    tone: 'var(--color-accent)',
+  },
+  stale: {
+    get label() {
+      return sharedText('searchIndex.stale')
+    },
+    tone: 'var(--color-warning)',
+  },
+  failed: {
+    get label() {
+      return sharedText('searchIndex.failed')
+    },
+    tone: 'var(--color-danger)',
+  },
+  missing: {
+    get label() {
+      return sharedText('searchIndex.missing')
+    },
+    tone: 'var(--color-text-dim)',
+  },
 }
 
 /**

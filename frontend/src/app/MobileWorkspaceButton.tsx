@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import type { Workspace } from '@/types'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
@@ -29,6 +30,7 @@ export function MobileWorkspaceButton({
   onSwitch,
   onCreate,
 }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
@@ -53,7 +55,11 @@ export function MobileWorkspaceButton({
         data-testid="mnav-workspace-switcher"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={active?.name ? `Workspace: ${active.name}` : 'Workspace seç'}
+        aria-label={
+          active?.name
+            ? t('shell.workspaceNamed', { name: active.name })
+            : t('shell.chooseWorkspace')
+        }
         className="relative flex h-full min-w-[3.75rem] flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-[10px] leading-none text-[var(--color-text-dim)]"
       >
         <span
@@ -66,13 +72,13 @@ export function MobileWorkspaceButton({
         >
           {active?.icon || '⬡'}
         </span>
-        <span className="max-w-[4.5rem] truncate">{active?.name || 'Workspace'}</span>
+        <span className="max-w-[4.5rem] truncate">{active?.name || t('navigation.workspace')}</span>
         {(hasUnread || hasOtherBusy) && (
           <span
             className={`absolute right-2 top-1 h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] ${
               hasOtherBusy ? 'animate-pulse' : ''
             }`}
-            title={hasOtherBusy ? 'Başka workspace’te işlem sürüyor' : 'Yeni etkinlik'}
+            title={hasOtherBusy ? t('shell.otherWorkspaceBusy') : t('shell.newActivity')}
           />
         )}
       </button>
@@ -80,7 +86,7 @@ export function MobileWorkspaceButton({
       {open && (
         <div
           role="listbox"
-          aria-label="Workspace listesi"
+          aria-label={t('shell.workspaceList')}
           data-testid="mnav-workspace-menu"
           className="absolute bottom-full left-0 z-50 mb-2 max-h-[60vh] w-60 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl"
         >
@@ -110,28 +116,28 @@ export function MobileWorkspaceButton({
               >
                 {w.icon || '⬡'}
               </span>
-              <span className="flex-1 truncate">{w.name || 'İsimsiz'}</span>
+              <span className="flex-1 truncate">{w.name || t('shell.untitled')}</span>
               {/* Explicit run state (green pulse "çalışıyor" wins over the settled
                   "tamamlandı" unread state), mirroring the desktop switcher. */}
               {busyIds?.has(w.id) ? (
                 <span
                   className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-success)]"
-                  title="İşlem sürüyor"
+                  title={t('shell.busy')}
                 >
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
                   </span>
-                  çalışıyor
+                  {t('shell.running')}
                 </span>
               ) : (
                 unreadIds?.has(w.id) && (
                   <span
                     className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-accent)]"
-                    title="Tamamlandı — görülmemiş etkinlik"
+                    title={t('shell.unseenCompletion')}
                   >
                     <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />
-                    tamamlandı
+                    {t('shell.completed')}
                   </span>
                 )
               )}
@@ -145,7 +151,7 @@ export function MobileWorkspaceButton({
             data-testid="mnav-workspace-create"
             className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
           >
-            <span>+</span> Yeni workspace
+            <span>+</span> {t('shell.newWorkspace')}
           </button>
         </div>
       )}

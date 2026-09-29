@@ -46,6 +46,7 @@ interface Props {
 }
 
 import { AlertTriangle, ArrowUp, CornerDownRight, Hourglass, Loader, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { ComposerCard } from './ComposerCard'
 
 // Kinds the tray does not render. A dispatched message is already on its way to the
@@ -67,6 +68,7 @@ export function PendingTray({
   turnRunning = false,
   onClear,
 }: Props) {
+  const { t } = useTranslation('chatStatus')
   // Filter BEFORE the empty check: a tray whose only item is the dispatched head
   // must render nothing at all, not an empty card with the "Bekleyenler" header.
   const visible = items.filter((it) => !hiddenInTray(it))
@@ -78,15 +80,15 @@ export function PendingTray({
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
           {visible.some((it) => it.kind === 'failed')
-            ? 'Bekleyenler — başlatılamayan mesaj var'
-            : 'Bekleyenler — işleme alınmadan silebilirsin'}
+            ? t('pending.headerFailed')
+            : t('pending.header')}
         </span>
         {onClear && queueCount > 1 && (
           <button
             onClick={onClear}
             className="text-[10px] font-medium text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
           >
-            Kuyruğu temizle ({queueCount})
+            {t('pending.clearQueue', { count: queueCount })}
           </button>
         )}
       </div>
@@ -103,10 +105,10 @@ export function PendingTray({
             >
               <span
                 className="inline-flex shrink-0 items-center gap-1 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-dim)]"
-                title="Oturum şu an bu turla meşgul; bekleyenler bittiğinde sırayla çalışacak"
+                title={t('pending.currentTitle')}
               >
                 <Loader size={11} />
-                Şu an
+                {t('pending.current')}
               </span>
               <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
                 {it.text}
@@ -126,15 +128,15 @@ export function PendingTray({
             >
               <span
                 className="inline-flex shrink-0 items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-danger)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-danger)]"
-                title="Bu mesaj için tur başlatılamadı; metin kaybolmasın diye burada tutuluyor"
+                title={t('pending.failedTitle')}
               >
                 <AlertTriangle size={11} />
-                Gönderilemedi
+                {t('pending.failed')}
               </span>
               <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
               <button
                 onClick={() => onRemove(it.id)}
-                title="Kapat"
+                title={t('pending.dismiss')}
                 data-testid={`pending-remove-${it.id}`}
                 className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
               >
@@ -154,14 +156,10 @@ export function PendingTray({
                   ? 'bg-[color-mix(in_srgb,var(--color-warning)_20%,transparent)] text-[var(--color-warning)]'
                   : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
               }`}
-              title={
-                it.kind === 'steer'
-                  ? 'Canlı yönlendirme (birazdan gönderilecek)'
-                  : 'Sıradaki mesaj (tur bitince gönderilecek)'
-              }
+              title={it.kind === 'steer' ? t('pending.steerTitle') : t('pending.queueTitle')}
             >
               {it.kind === 'steer' ? <CornerDownRight size={11} /> : <Hourglass size={11} />}
-              {it.kind === 'steer' ? 'Yönlendir' : `Sırada #${pos}`}
+              {it.kind === 'steer' ? t('pending.steer') : t('pending.position', { position: pos })}
             </span>
             <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
             {it.kind === 'queue' && onSteerNow && (
@@ -170,10 +168,10 @@ export function PendingTray({
                 disabled={!canSteer}
                 title={
                   canSteer
-                    ? 'Guide the current task with this queued message'
+                    ? t('pending.steerCurrent')
                     : turnRunning
-                      ? 'Live guidance is unavailable for this turn. Your message remains queued.'
-                      : 'No running turn to guide. Your message remains queued.'
+                      ? t('pending.steerUnavailable')
+                      : t('pending.steerNoTurn')
                 }
                 data-testid={`pending-steer-${it.id}`}
                 className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-warning)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[var(--color-text-dim)]"
@@ -184,7 +182,7 @@ export function PendingTray({
             {it.kind === 'queue' && onSendNext && pos > 1 && (
               <button
                 onClick={() => onSendNext(it.id)}
-                title="Öne al (sıradaki tur bunu çalıştırsın)"
+                title={t('pending.promote')}
                 className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
               >
                 <ArrowUp size={14} />
@@ -192,7 +190,7 @@ export function PendingTray({
             )}
             <button
               onClick={() => onRemove(it.id)}
-              title="Sil (işleme alınmadan)"
+              title={t('pending.remove')}
               className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
             >
               <X size={14} />

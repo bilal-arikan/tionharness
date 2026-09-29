@@ -189,7 +189,7 @@ describe('SystemAgentsPanel', () => {
     ])
     const { container, header } = await renderPanel()
 
-    expect(header.textContent).toContain('1 agents')
+    expect(header.textContent).toContain('1 agent')
     expect(container.textContent).not.toContain('One central profile.')
     const refresh = header.querySelector<HTMLButtonElement>('[aria-label="Refresh library"]')!
     await act(async () => refresh.click())
@@ -331,7 +331,11 @@ describe('SystemAgentsPanel bulk edit', () => {
   it('selects every visible agent from the bar, including custom profiles', async () => {
     const { container } = await renderPanel()
     await clickRow(container, 'SYS2', { ctrlKey: true })
-    await click(buttonByText(container, 'Tümü'))
+    const selectAll = [...container.querySelectorAll('button')]
+      .filter((button) => button.textContent?.trim() === 'Tümü')
+      .at(-1)
+    if (!selectAll) throw new Error('selection-bar select-all button not found')
+    await click(selectAll)
 
     expect(container.textContent).toContain('4 seçili')
   })

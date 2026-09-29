@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/shared/components/ModalOverlay'
 import type { ViewRef } from '@/types'
 import { ViewPanel } from './ViewPanel'
@@ -15,6 +16,8 @@ interface Props {
   disabled?: boolean
 }
 
+const SUMMARY_GLYPH = String.fromCharCode(0x25f1)
+
 // ViewButton is the "◱ Özet" trigger that opens the projection drawer for one
 // entity. It owns the open/closed state so a host screen only has to say WHICH
 // entity it is showing.
@@ -26,6 +29,7 @@ interface Props {
 // The drawer is right-anchored (a side sheet, not a centered dialog): the point
 // is to read the projection against the screen behind it, not to replace it.
 export function ViewButton({ target, className = '', compact, label, disabled }: Props) {
+  const { t } = useTranslation('view')
   const [open, setOpen] = useState(false)
 
   return (
@@ -34,11 +38,11 @@ export function ViewButton({ target, className = '', compact, label, disabled }:
         type="button"
         onClick={() => setOpen(true)}
         disabled={disabled}
-        title="Bu ekranın ajana verilen kompakt özeti (get_view ile aynı çıktı)"
+        title={t('button.hint')}
         className={`flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       >
-        <span className="leading-none">◱</span>
-        {!compact && (label ?? 'Özet')}
+        <span className="leading-none">{SUMMARY_GLYPH}</span>
+        {!compact && (label ?? t('title'))}
       </button>
       {open && (
         <ModalOverlay onClose={() => setOpen(false)} padding="p-0" className="!justify-end">

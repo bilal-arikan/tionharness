@@ -8,6 +8,7 @@ import { clearSessionState } from '@/shared/hooks/useSessionState'
 import { bumpSignal } from '@/shared/lib/refreshSignals'
 import { SIGNAL_SKILLS } from '@/app/eventToRefreshSignals'
 import { SkillsPanel } from './SkillsPanel'
+import { setLocale } from '@/i18n'
 
 const apiMock = vi.hoisted(() => ({
   listSkills: vi.fn(),
@@ -60,7 +61,8 @@ function button(container: HTMLElement, text: string) {
   return match
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await setLocale('tr')
   clearSessionState('skills.activeSlug')
   vi.clearAllMocks()
   apiMock.listSkills.mockResolvedValue([editedSkill])
@@ -74,6 +76,15 @@ afterEach(() => {
 })
 
 describe('SkillsPanel shipped skill state', () => {
+  it('renders skill chrome in English when the UI locale is English', async () => {
+    await setLocale('en')
+    const { container } = renderPanel()
+    await flush()
+
+    expect(container.textContent).toContain('Restrict')
+    expect(container.textContent).toContain('Global')
+  })
+
   it('reloads the catalog and selected detail after a skills change signal', async () => {
     renderPanel()
     await flush()

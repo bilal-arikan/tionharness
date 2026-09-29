@@ -1,4 +1,5 @@
 import type { FindingSummary } from './insightHelpers'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   summary: FindingSummary
@@ -8,9 +9,10 @@ interface Props {
 // SummaryHeader is the triage cockpit's at-a-glance strip: clickable stat chips
 // that double as one-tap filters.
 export function SummaryHeader({ summary, onPick }: Props) {
+  const { t } = useTranslation('insight')
   const chips: { label: string; value: number; danger?: boolean; onClick: () => void }[] = [
-    { label: 'Toplam', value: summary.total, onClick: () => onPick({}) },
-    { label: 'Açık', value: summary.open, onClick: () => onPick({}) },
+    { label: t('summary.total'), value: summary.total, onClick: () => onPick({}) },
+    { label: t('summary.open'), value: summary.open, onClick: () => onPick({}) },
     { label: 'app-fix', value: summary.appFix, onClick: () => onPick({ channel: 'app-fix' }) },
     {
       label: 'workspace-opt',
@@ -22,9 +24,9 @@ export function SummaryHeader({ summary, onPick }: Props) {
       value: summary.recipeOpt,
       onClick: () => onPick({ channel: 'recipe-opt' }),
     },
-    { label: 'yüksek', value: summary.high, onClick: () => onPick({ severity: 'high' }) },
+    { label: t('severity.high'), value: summary.high, onClick: () => onPick({ severity: 'high' }) },
     {
-      label: '⚠ regresyon',
+      label: `⚠ ${t('filters.regression')}`,
       value: summary.regressed,
       danger: true,
       onClick: () => onPick({ regressedOnly: true }),

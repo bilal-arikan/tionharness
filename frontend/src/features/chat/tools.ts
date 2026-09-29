@@ -5,6 +5,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { stripShellHost } from '@/shared/lib/commandProgram'
 import { toolIcon } from '@/shared/lib/toolIcons'
+import { i18next } from '@/i18n'
 
 export interface ToolMeta {
   label: string
@@ -73,7 +74,7 @@ function itemLabel(item: unknown): string | null {
 function summarizeArray(arr: unknown[]): string {
   if (arr.length === 0) return ''
   const labels = arr.map(itemLabel).filter((x): x is string => !!x)
-  if (labels.length === 0) return `${arr.length} öğe`
+  if (labels.length === 0) return i18next.t('tools.items', { ns: 'chatStatus', count: arr.length })
   const shown = labels.slice(0, 3).join(', ')
   return labels.length > 3 ? `${shown} +${labels.length - 3}` : shown
 }

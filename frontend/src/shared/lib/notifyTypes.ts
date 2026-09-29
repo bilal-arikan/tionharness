@@ -10,6 +10,8 @@
 // sync when adding a notifiable type — that is exactly what stops the settings
 // screen from drifting out of sync with what the app actually notifies.
 
+import { sharedText } from './sharedI18n'
+
 // Which sound cue a type plays. `done` = the rising "reply ready" chime;
 // `ask` = the attention cue for a turn blocked on the user; `permission` = the
 // distinct cue for a tool-approval prompt specifically (see notifyBus.playCue's
@@ -32,107 +34,37 @@ export interface NotifyType {
   cue: NotifyCue
 }
 
+function notifyType(type: string, view: string | null, cue: NotifyCue): NotifyType {
+  return {
+    type,
+    get label() {
+      return sharedText(`notifications.${type}.label`)
+    },
+    get hint() {
+      return sharedText(`notifications.${type}.hint`)
+    },
+    view,
+    cue,
+  }
+}
+
 export const NOTIFY_TYPES: NotifyType[] = [
-  {
-    type: 'chat',
-    label: 'Sohbet yanıtı',
-    hint: 'Asistan yanıtı tamamlandı (yanıt-hazır bildirimi + sesi).',
-    view: 'chat',
-    cue: 'done',
-  },
-  {
-    type: 'prompt',
-    label: 'Onay / soru',
-    hint: 'Ajan bir onay, izin ya da soru ile senden yanıt bekliyor.',
-    view: 'chat',
-    cue: 'ask',
-  },
-  {
-    type: 'schedule',
-    label: 'Zamanlamalar',
-    hint: 'Zamanlanmış prompt çalıştı / başarısız oldu.',
-    view: 'schedules',
-    cue: null,
-  },
-  {
-    type: 'flow',
-    label: 'Akışlar',
-    hint: 'Akış (flow) çalışması tamamlandı / başarısız oldu.',
-    view: 'flows',
-    cue: null,
-  },
-  {
-    type: 'spawned',
-    label: 'Spawn',
-    hint: 'Alt-oturum (spawn) çalışması tamamlandı / başarısız oldu.',
-    view: 'chat',
-    cue: null,
-  },
-  {
-    type: 'worker',
-    label: 'Worker',
-    hint: 'Koordinatör worker durumu değişti.',
-    view: 'chat',
-    cue: null,
-  },
-  {
-    type: 'coordination',
-    label: 'Koordinasyon',
-    hint: 'Koordinatör tur limiti gibi koordinasyon uyarıları.',
-    view: null,
-    cue: null,
-  },
-  {
-    // Frontend-only (workspace stream, useWorkspaceSignals): trajectory
-    // start / end and the other Rota-screen facts surfaced as toasts.
-    type: 'rota',
-    label: 'Rota',
-    hint: 'Bir rota başladı, bitti, başarısız oldu veya insan yanıtı bekliyor.',
-    view: 'rota',
-    cue: null,
-  },
-  {
-    type: 'automation',
-    label: 'Otomasyonlar',
-    hint: 'Etiket/pano otomasyonu tetiklendi.',
-    view: null,
-    cue: null,
-  },
-  {
-    type: 'artifact',
-    label: 'Artifacts',
-    hint: 'Artifact oluşturuldu / güncellendi.',
-    view: 'artifacts',
-    cue: null,
-  },
-  {
-    type: 'board',
-    label: 'Görevler (pano)',
-    hint: 'Kanban görevi oluşturuldu / taşındı / güncellendi / silindi.',
-    view: 'board',
-    cue: null,
-  },
-  {
-    type: 'agent',
-    label: 'Ajan bildirimi',
-    hint: 'Ajanın notify aracıyla gönderdiği genel bildirim.',
-    view: null,
-    cue: null,
-  },
-  {
-    type: 'anomaly',
-    label: 'Anomaliler',
-    hint: 'Oturum uyarısı: düşük cache-isabet, sık kırılım, araç hatası vb.',
-    view: null,
-    cue: null,
-  },
-  {
-    type: 'agent-model-changed',
-    label: 'Model değişimi',
-    hint: 'Bir ajanın modeli değiştirildi. Prompt cache soğuyacak.',
-    view: 'agents',
-    cue: null,
-  },
+  notifyType('chat', 'chat', 'done'),
+  notifyType('prompt', 'chat', 'ask'),
+  notifyType('schedule', 'schedules', null),
+  notifyType('flow', 'flows', null),
+  notifyType('spawned', 'chat', null),
+  notifyType('worker', 'chat', null),
+  notifyType('coordination', null, null),
+  // Frontend-only (workspace stream, useWorkspaceSignals): trajectory start/end
+  // and the other Rota-screen facts surfaced as toasts.
+  notifyType('rota', 'rota', null),
+  notifyType('automation', null, null),
+  notifyType('artifact', 'artifacts', null),
+  notifyType('board', 'board', null),
+  notifyType('agent', null, null),
+  notifyType('anomaly', null, null),
+  notifyType('agent-model-changed', 'agents', null),
 ]
 
 const byType = new Map(NOTIFY_TYPES.map((t) => [t.type, t]))

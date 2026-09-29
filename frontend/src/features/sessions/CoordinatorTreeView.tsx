@@ -16,6 +16,7 @@ import { api } from '@/api'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 import type { CoordinatorTree, CoordinatorTreeNode } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   sessionId: string
@@ -42,6 +43,7 @@ function formatUSD(v: number): string {
 // level: the branch a sub-coordinator is running — and most of the tree's cost —
 // is simply invisible. This is the view that shows the actual shape.
 export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: Props) {
+  const { t } = useTranslation('sessions')
   const [tree, setTree] = useState<CoordinatorTree | null>(null)
   const [open, setOpen] = useState(() => localStorage.getItem('tionharness.coordTreeOpen') === '1')
   // An open section fetches on mount, so it starts in the loading state.
@@ -108,13 +110,13 @@ export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: 
         ) : (
           <ChevronRight size={12} className="shrink-0" />
         )}
-        <GitBranch size={12} className="shrink-0" /> Koordinatör ağacı
+        <GitBranch size={12} className="shrink-0" /> {t('coordinator.tree.title')}
         {loading && <Loader2 size={11} className="animate-spin" />}
         {/* Visible even while collapsed — a failure deep in a branch is precisely
             what the user would never expand to discover. */}
         {unhealthy.length > 0 && (
           <span
-            title={`${unhealthy.length} oturumda hata/takılma`}
+            title={t('coordinator.tree.unhealthy', { count: unhealthy.length })}
             className="flex items-center gap-0.5 rounded px-1 text-[var(--color-danger)] normal-case tracking-normal"
           >
             <AlertTriangle size={11} className="shrink-0" /> {unhealthy.length}
@@ -122,7 +124,8 @@ export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: 
         )}
         {open && meaningful && (
           <span className="ml-auto normal-case tracking-normal text-[var(--color-text-dim)]">
-            {nodes.length} oturum · {formatUSD(tree?.totalCostUSD ?? 0)}
+            {t('coordinator.tree.sessionCount', { count: nodes.length })} ·{' '}
+            {formatUSD(tree?.totalCostUSD ?? 0)}
           </span>
         )}
       </button>
@@ -131,7 +134,7 @@ export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: 
         <div className="mt-1.5">
           {!meaningful ? (
             <p className="text-[10px] text-[var(--color-text-dim)]">
-              Bu oturum henüz bir koordinatör ağacının parçası değil.
+              {t('coordinator.tree.empty')}
             </p>
           ) : (
             <>
@@ -148,15 +151,17 @@ export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: 
               {/* The whole point of the rollup: per-session billing hides what a
                   fan-out actually cost, because the spend sits in descendants. */}
               <div className="mt-1.5 flex items-center justify-between border-t border-[var(--color-border)] pt-1.5 text-[10px] text-[var(--color-text-dim)]">
-                <span>Ağaç toplamı</span>
+                <span>{t('coordinator.tree.total')}</span>
                 <span className="font-medium text-[var(--color-text)]">
                   {formatUSD(tree?.totalCostUSD ?? 0)}
-                  {tree?.estimated && <span className="ml-1 opacity-60">(tahmini)</span>}
+                  {tree?.estimated && (
+                    <span className="ml-1 opacity-60">({t('common.estimated')})</span>
+                  )}
                 </span>
               </div>
               {!!tree?.totalSavingsUSD && (
                 <div className="flex items-center justify-between text-[10px] text-[var(--color-text-dim)]">
-                  <span>Prompt-cache tasarrufu</span>
+                  <span>{t('coordinator.tree.cacheSavings')}</span>
                   <span className="text-[var(--color-success)]">
                     {formatUSD(tree.totalSavingsUSD)}
                   </span>
@@ -182,6 +187,7 @@ function TreeRow({
   isSelf: boolean
   onSelectSession?: (id: string) => void
 }) {
+  const { t } = useTranslation('sessions')
   const clickable = !!onSelectSession && !isSelf
   const stuck = node.health === 'stuck'
   const errored = node.health === 'error'
@@ -195,11 +201,11 @@ function TreeRow({
         ? 'text-[var(--color-accent)]'
         : 'text-[var(--color-text)]'
   const healthTitle = halted
-    ? 'Durduruldu — hayalet spawn; otomatik turlar durdu, devam ettirilmesi gerekiyor'
+    ? t('coordinator.tree.health.halted')
     : stuck
-      ? 'Takıldı — otonom turlar reddediliyor, müdahale gerekiyor'
+      ? t('coordinator.tree.health.stuck')
       : errored
-        ? 'Son turu hata ile bitti'
+        ? t('coordinator.tree.health.errored')
         : ''
   const body = (
     <span className="flex w-full items-center gap-1.5">
@@ -230,7 +236,7 @@ function TreeRow({
         <Inbox
           size={10}
           className="shrink-0 text-[var(--color-warning)]"
-          aria-label="Bekleyen mesaj"
+          aria-label={t('coordinator.pendingMessage')}
         />
       )}
       <span className="ml-auto shrink-0 text-[9px] text-[var(--color-text-dim)]">
@@ -241,8 +247,8 @@ function TreeRow({
   const title = [
     `${node.title || node.sessionId}`,
     healthTitle,
-    node.reportPending ? 'Koordinatörüne raporunu henüz kapatmadı' : '',
-    node.running && node.queued ? 'Bekleyen mesaj: bu tur bitince teslim edilecek' : '',
+    node.reportPending ? t('coordinator.tree.reportPending') : '',
+    node.running && node.queued ? t('coordinator.tree.queuedMessage') : '',
   ]
     .filter(Boolean)
     .join(' — ')

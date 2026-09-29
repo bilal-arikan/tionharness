@@ -76,7 +76,7 @@ export function SessionDetailPanel({
   onRerun,
   onOpenDebug,
 }: Props) {
-  const { t } = useTranslation()
+  const { t } = useTranslation('sessions')
   // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
   // is on the LEFT edge and the drag direction is inverted (drag left = wider).
   const { width, startDrag } = useResizableSidebar({
@@ -336,14 +336,14 @@ export function SessionDetailPanel({
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-              Oturum bilgisi
+              {t('detail.title')}
             </span>
             {/* Machine-written transcripts (insight scans, inbox, run logs) take
                 no new user turns, so the composer is hidden. Say so here, or the
                 missing composer looks like a bug. */}
             {info && !isWritableSessionKind(info.kind) && (
               <Badge tone="muted" className="shrink-0">
-                Salt okunur
+                {t('detail.readOnly')}
               </Badge>
             )}
           </div>
@@ -351,14 +351,14 @@ export function SessionDetailPanel({
             <button
               onClick={() => setLocalRefresh((n) => n + 1)}
               disabled={loading}
-              title="Yenile"
+              title={t('actions.refresh')}
               className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-40"
             >
               <span className={`inline-block ${loading ? 'animate-spin' : ''}`}>↻</span>
             </button>
             <button
               onClick={onClose}
-              title="Paneli kapat"
+              title={t('detail.closePanel')}
               className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
             >
               ✕
@@ -367,9 +367,11 @@ export function SessionDetailPanel({
         </div>
 
         {loading && !info ? (
-          <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>
+          <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">{t('common.loading')}</p>
         ) : !info ? (
-          <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">Bilgi yok.</p>
+          <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">
+            {t('common.noInformation')}
+          </p>
         ) : (
           <div className="flex flex-col gap-5 px-4 py-4">
             {/* Title + status */}
@@ -404,7 +406,7 @@ export function SessionDetailPanel({
             {/* Tags — free-form labels (also drive tag-triggered automations) */}
             <section>
               <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-                <span>Etiketler</span>
+                <span>{t('detail.tags')}</span>
               </div>
               <TagEditor
                 tags={info.tags ?? []}
@@ -416,7 +418,7 @@ export function SessionDetailPanel({
                     setLocalRefresh((n) => n + 1) // reload on failure to resync
                   }
                 }}
-                placeholder="Etiket ekle (otomasyon tetikleyicisi olabilir)…"
+                placeholder={t('detail.tagsPlaceholder')}
               />
             </section>
 
@@ -434,7 +436,7 @@ export function SessionDetailPanel({
                 ) : (
                   <ChevronRight size={12} className="shrink-0" />
                 )}
-                <span>Özet</span>
+                <span>{t('detail.summary')}</span>
               </button>
               {summaryOpen && (
                 <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
@@ -444,18 +446,18 @@ export function SessionDetailPanel({
             </section>
 
             {/* Meta */}
-            <Section title="Genel">
-              <Row label="Başlama" value={formatDate(info.createdAt)} />
-              <Row label="Son etkinlik" value={formatDate(info.updatedAt)} />
+            <Section title={t('detail.general')}>
+              <Row label={t('detail.started')} value={formatDate(info.createdAt)} />
+              <Row label={t('detail.lastActivity')} value={formatDate(info.updatedAt)} />
               {/* Prompt-cache warmth: how long the cached prefix stays warm after
                 the last turn (1h Anthropic ephemeral TTL / prompt epoch). */}
               <div className="flex items-center justify-between py-0.5 text-xs">
-                <span className="text-[var(--color-text-dim)]">Prompt cache</span>
+                <span className="text-[var(--color-text-dim)]">{t('detail.promptCache')}</span>
                 <CacheWarmthBadge updatedAt={info.updatedAt} nowSec={nowTick} />
               </div>
               {info.model && (
                 <div className="flex items-center justify-between py-0.5 text-xs">
-                  <span className="text-[var(--color-text-dim)]">Model</span>
+                  <span className="text-[var(--color-text-dim)]">{t('detail.model')}</span>
                   <span
                     className="rounded bg-[var(--color-surface-2)] px-1.5 py-px font-mono text-[var(--color-text-dim)]"
                     title={info.model}
@@ -465,15 +467,18 @@ export function SessionDetailPanel({
                 </div>
               )}
               <Row
-                label="Boyut"
-                value={`${formatBytes(info.sizeBytes)} · ${info.fileCount} dosya`}
+                label={t('detail.size')}
+                value={t('detail.sizeValue', {
+                  size: formatBytes(info.sizeBytes),
+                  count: info.fileCount,
+                })}
               />
-              <Row label="Mesaj sayısı" value={String(info.messageCount)} />
+              <Row label={t('detail.messageCount')} value={String(info.messageCount)} />
               {/* Only rendered when the working directory actually has one — an
                   absent row means "no instruction file", which is the honest
                   reading of an omitted field. */}
               {info.instructionFile && (
-                <Row label={t('session.instructionFile')} value={info.instructionFile} />
+                <Row label={t('detail.instructionFile')} value={info.instructionFile} />
               )}
             </Section>
 
@@ -504,14 +509,14 @@ export function SessionDetailPanel({
 
             {/* Actions / tools. AI title generation moved next to the title's edit
               control (SessionTitleBlock); "Bağlam" lives in the chat header. */}
-            <Section title="Araçlar">
+            <Section title={t('detail.tools')}>
               <div className="flex flex-col gap-1.5">
                 {onOpenDebug && (
-                  <ActionBtn icon={Bug} label="Debug / gözlemlenebilirlik" onClick={onOpenDebug} />
+                  <ActionBtn icon={Bug} label={t('debug.title')} onClick={onOpenDebug} />
                 )}
                 <ActionBtn
                   icon={info.pinned ? PinOff : Pin}
-                  label={pinning ? '…' : info.pinned ? 'Sabitlemeyi kaldır' : 'Üste sabitle'}
+                  label={pinning ? '…' : info.pinned ? t('actions.unpin') : t('actions.pin')}
                   onClick={handlePinToggle}
                   disabled={pinning}
                   busy={pinning}
@@ -519,7 +524,11 @@ export function SessionDetailPanel({
                 <ActionBtn
                   icon={info.state === 'archived' ? ArchiveRestore : Archive}
                   label={
-                    archiving ? '…' : info.state === 'archived' ? 'Arşivden kaldır' : 'Arşivle'
+                    archiving
+                      ? '…'
+                      : info.state === 'archived'
+                        ? t('actions.unarchive')
+                        : t('actions.archive')
                   }
                   onClick={handleArchiveToggle}
                   disabled={archiving}
@@ -527,10 +536,16 @@ export function SessionDetailPanel({
                 />
                 <ActionBtn
                   icon={Trash2}
-                  label="Oturumu sil"
+                  label={t('actions.deleteSession')}
                   danger
                   onClick={() => {
-                    if (confirm(`"${info.title || 'Bu oturum'}" silinsin mi?`))
+                    if (
+                      confirm(
+                        t('actions.confirmDelete', {
+                          title: info.title || t('actions.thisSession'),
+                        }),
+                      )
+                    )
                       onDeleteSession(sessionId)
                   }}
                 />

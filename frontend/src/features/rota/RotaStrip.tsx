@@ -4,8 +4,9 @@
 // zoomed on that trajectory. Live: the shared lane stream bumps the revision
 // and the graph is re-read (useTrajectory).
 import type { Session } from '@/types'
+import { useTranslation } from 'react-i18next'
 import { isInCoordinatorTree } from '@/shared/lib/coordination'
-import { STATUS_LABEL, STATUS_TONE } from './trajectoryStatus'
+import { STATUS_TONE, trajectoryStatusLabel } from './trajectoryStatus'
 import { Badge } from '@/shared/components'
 import { phaseGlyph, phaseId, trajectoryProgress } from './trajectoryLayout'
 import { rootOf, useTrajectory } from './useTrajectory'
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function RotaStrip({ session, onOpenTrajectory }: Props) {
+  const { t: translate } = useTranslation('rota')
   const inTree = isInCoordinatorTree(session)
   const root = inTree ? rootOf(session) : ''
   const { trajectory: t } = useTrajectory({ rootSessionId: root || null })
@@ -29,12 +31,16 @@ export function RotaStrip({ session, onOpenTrajectory }: Props) {
       type="button"
       onClick={() => onOpenTrajectory(t.id)}
       className="flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-text)]"
-      title={`Rota ${t.id} · ${t.templateRef || 'plansız'} · rev ${t.revision} · Rota ekranında aç`}
+      title={translate('strip.openTitle', {
+        id: t.id,
+        template: t.templateRef || translate('common.unplanned'),
+        revision: t.revision,
+      })}
       data-testid="rota-strip"
     >
       <span className="text-[var(--color-accent)]">◈</span>
       {phases.length === 0 ? (
-        <span className="truncate">rota · faz ilan edilmedi</span>
+        <span className="truncate">{translate('strip.noPhases')}</span>
       ) : (
         <span className="flex min-w-0 items-center gap-1 overflow-hidden">
           {phases.map((p, i) => (
@@ -50,7 +56,12 @@ export function RotaStrip({ session, onOpenTrajectory }: Props) {
                         ? 'text-[var(--color-danger)]'
                         : ''
                 }
-                title={`${phaseId(p.id)} · ${p.state}${p.profile ? ` · ${p.profile}` : ''}${mine === p.id ? ' · bu oturum burada' : ''}`}
+                title={translate('strip.phaseTitle', {
+                  phase: phaseId(p.id),
+                  state: translate(`phase.state.${p.state}`, { defaultValue: p.state }),
+                  profile: p.profile ? ` · ${p.profile}` : '',
+                  current: mine === p.id ? ` · ${translate('strip.currentSessionHere')}` : '',
+                })}
               >
                 {p.label || phaseId(p.id)} {phaseGlyph(p.state)}
                 {mine === p.id && <span className="ml-0.5 opacity-70">◂</span>}
@@ -59,7 +70,7 @@ export function RotaStrip({ session, onOpenTrajectory }: Props) {
           ))}
         </span>
       )}
-      <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+      <Badge tone={STATUS_TONE[t.status]}>{trajectoryStatusLabel(t.status)}</Badge>
       {progress.total > 0 && (
         <span className="hidden sm:inline">
           {progress.done}/{progress.total}

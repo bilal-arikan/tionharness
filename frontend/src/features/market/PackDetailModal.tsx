@@ -1,11 +1,12 @@
-import { Download, Check, KeyRound, ArrowUpCircle } from 'lucide-react'
+import { Download, Check, KeyRound, ArrowUpCircle, X } from 'lucide-react'
 import type { Pack, Secret } from '@/types'
 import type { PriceTable } from '@/api/providers'
 import type { PreviewItem } from '@/api/ingest'
 import { Button, ModalOverlay } from '@/shared/components'
-import { INSTALL_LABEL, updateAvailable } from './marketHelpers'
+import { installLabelKey, updateAvailable } from './marketHelpers'
 import { KindBadge, PackMeta, SourceRefPreview } from './previewParts'
 import { PackPreview } from './PackPreview'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   selected: Pack
@@ -40,6 +41,7 @@ export function PackDetailModal({
   isInstalled,
   install,
 }: Props) {
+  const { t } = useTranslation('market')
   return (
     <ModalOverlay onClose={onClose}>
       <div
@@ -56,16 +58,20 @@ export function PackDetailModal({
               <div className="text-sm font-semibold">{selected.name}</div>
               <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]">
                 <KindBadge kind={selected.kind} />
-                {selected.author && <span>· {selected.author}</span>}
-                {selected.version && <span>· v{selected.version}</span>}
+                {selected.author && <span>{t('detail.author', { author: selected.author })}</span>}
+                {selected.version && (
+                  <span>{t('detail.versionWithSeparator', { version: selected.version })}</span>
+                )}
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
+            title={t('actions.close')}
+            aria-label={t('actions.close')}
             className="text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
           >
-            ✕
+            <X size={16} />
           </button>
         </header>
 
@@ -75,7 +81,7 @@ export function PackDetailModal({
           {selected.kind === 'provider' && (
             <div className="mt-3">
               <label className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                API anahtarı (sırlardan)
+                {t('detail.apiKeyFromSecrets')}
               </label>
               <div className="mt-1 flex items-center gap-2">
                 <select
@@ -85,7 +91,7 @@ export function PackDetailModal({
                   className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-xs"
                 >
                   <option value="">
-                    {secrets.length ? '🔑 Sırdan seç… (opsiyonel)' : 'Sır yok — önce ekle'}
+                    {secrets.length ? t('detail.chooseSecret') : t('detail.noSecrets')}
                   </option>
                   {secrets.map((s) => (
                     <option key={s.name} value={s.name}>
@@ -98,14 +104,14 @@ export function PackDetailModal({
                     onClick={onManageSecrets}
                     className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)]"
                   >
-                    <KeyRound size={12} /> Sırlar →
+                    <KeyRound size={12} /> {t('detail.secrets')}
                   </button>
                 )}
               </div>
               <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
                 {pickedSecret
-                  ? `🔑 "${pickedSecret}" kullanılacak`
-                  : "Anahtarsız da kurulabilir; sonra Ayarlar → Sağlayıcılar'dan girilebilir."}
+                  ? t('detail.secretWillBeUsed', { name: pickedSecret })
+                  : t('detail.keyOptionalHint')}
               </p>
             </div>
           )}
@@ -119,12 +125,15 @@ export function PackDetailModal({
             // avoid duplicates.
             const blocked = here && selected.kind !== 'provider' && !canUpdate
             const label = canUpdate
-              ? `Güncelle (v${selected.installedVersion}→v${selected.version})`
+              ? t('grid.updateVersion', {
+                  from: selected.installedVersion,
+                  to: selected.version,
+                })
               : blocked
-                ? 'Zaten kurulu'
+                ? t('status.alreadyInstalled')
                 : here && selected.kind === 'provider'
-                  ? 'Güncelle'
-                  : INSTALL_LABEL[selected.kind]
+                  ? t('actions.update')
+                  : t(installLabelKey(selected.kind))
             return (
               <div
                 data-testid="market-pack-install"

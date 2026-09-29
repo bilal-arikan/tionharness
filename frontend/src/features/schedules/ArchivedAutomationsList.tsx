@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArchiveRestore } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Automation } from '@/types'
 import { ArchiveViewBanner, LoadingState, toast } from '@/shared/components'
 import { relativeTime } from '@/shared/lib/time'
-
-// Trigger kind → short Turkish label for the archived-rule rows.
-const TRIGGER_LABEL: Record<string, string> = {
-  tag: 'Etiket',
-  board: 'Pano',
-  token: 'Token',
-  phase: 'Rota fazı',
-  trajectory_end: 'Rota sonu',
-}
 
 interface Props {
   agents: Agent[]
@@ -25,6 +17,7 @@ interface Props {
 // were archived (by hand or by the curator). They never fire while archived; each
 // row restores its rule back into its lane with its configuration and ledger.
 export function ArchivedAutomationsList({ agents, onError, onRestored }: Props) {
+  const { t } = useTranslation('schedules')
   const [rows, setRows] = useState<Automation[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -44,7 +37,7 @@ export function ArchivedAutomationsList({ agents, onError, onRestored }: Props) 
     try {
       await api.setArchived('automations', a.id, false)
       setRows((prev) => prev.filter((x) => x.id !== a.id))
-      toast.success('Otomasyon arşivden çıkarıldı')
+      toast.success(t('archive.restored'))
       onRestored()
     } catch (e) {
       onError((e as Error).message)
@@ -60,11 +53,11 @@ export function ArchivedAutomationsList({ agents, onError, onRestored }: Props) 
       <ArchiveViewBanner
         testId="automations-archive-banner"
         count={rows.length}
-        noun="otomasyon"
-        restoreHint="arşivdeyken ateşlenmez; geri almak için “Arşivden çıkar”a bas."
+        noun={t('archive.noun')}
+        restoreHint={t('archive.restoreHint')}
       />
       {loading ? (
-        <LoadingState label="Arşiv yükleniyor…" className="flex-1" />
+        <LoadingState label={t('archive.loading')} className="flex-1" />
       ) : (
         <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
           {rows.map((a) => (
@@ -77,7 +70,9 @@ export function ArchivedAutomationsList({ agents, onError, onRestored }: Props) 
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{a.name || a.id}</div>
                 <div className="truncate text-xs text-[var(--color-text-dim)]">
-                  {TRIGGER_LABEL[a.triggerKind ?? 'tag'] ?? a.triggerKind}
+                  {t(`triggerKinds.${a.triggerKind ?? 'tag'}`, {
+                    defaultValue: a.triggerKind ?? 'tag',
+                  })}
                   {a.targetAgentId ? ` · → ${agentName(a.targetAgentId)}` : ''}
                   {a.updatedAt ? ` · ${relativeTime(a.updatedAt)}` : ''}
                 </div>
@@ -89,7 +84,7 @@ export function ArchivedAutomationsList({ agents, onError, onRestored }: Props) 
                 onClick={() => restore(a)}
                 className="flex flex-shrink-0 items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
               >
-                <ArchiveRestore size={13} /> Arşivden çıkar
+                <ArchiveRestore size={13} /> {t('archive.restore')}
               </button>
             </li>
           ))}

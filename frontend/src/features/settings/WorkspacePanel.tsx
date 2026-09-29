@@ -7,6 +7,7 @@ import { CodexPluginsSection } from './CodexPluginsSection'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { formatDate } from '@/shared/lib/intl'
 import { WorkspaceDataFolder } from '@/features/workspace/WorkspaceDataFolder'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   ws: WorkspaceSettings
@@ -15,22 +16,23 @@ interface Props {
 }
 
 export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
+  const { t } = useTranslation('settings')
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Bu ayarlar yalnızca <span className="font-medium text-[var(--color-text)]">{ws.name}</span>{' '}
-        workspace'ine özeldir. Her ajanın sağlayıcı ve modeli kendi ayarında net olarak belirtilir;
-        yeni ajanlar mevcut ilk ajanın kurulumunu miras alır.
+        {t('workspace.introPrefix')}{' '}
+        <span className="font-medium text-[var(--color-text)]">{ws.name}</span>{' '}
+        {t('workspace.introSuffix')}
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
-          { label: 'Ajan', value: ws.agentCount },
-          { label: 'Oturum', value: ws.sessionCount },
-          { label: 'Görev', value: ws.taskCount },
+          { label: t('workspace.stats.agents'), value: ws.agentCount },
+          { label: t('workspace.stats.sessions'), value: ws.sessionCount },
+          { label: t('workspace.stats.tasks'), value: ws.taskCount },
           {
-            label: 'Oluşturma',
+            label: t('workspace.stats.created'),
             value: formatDate(new Date(ws.createdAt * 1000), { dateStyle: 'short' }),
           },
         ].map((s) => (
@@ -49,54 +51,54 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       <WorkspaceDataFolder path={ws.dataDir} />
 
       <div className="flex items-end gap-3">
-        <Field label="Workspace adı">
+        <Field label={t('workspace.name')}>
           <input
             value={ws.name}
             onChange={(e) => setWsField('name', e.target.value)}
             className={inputCls}
           />
         </Field>
-        <Field label="İkon (emoji)">
+        <Field label={t('workspace.icon')}>
           <EmojiField value={ws.icon} onChange={(e) => setWsField('icon', e)} clearLabel="⬡" />
         </Field>
       </div>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Yanıt stili
+        {t('workspace.responseStyle')}
       </div>
       <Toggle
-        label="Terse mod (caveman)"
-        hint="Açıkken bu workspace'teki her ajanın statik system promptuna sıkıştırılmış-yanıt talimatı eklenir: dolgu sözcükler, nezaket kalıpları ve hedging düşer; kod, komut, dosya yolu ve hata metinleri harfi harfine korunur. Güvenlik uyarıları ve geri alınamaz işlem onayları bilerek uzun yazılır. Metin düzenlenebilir bir workspace promptudur (Promptlar ▸ 'Terse (caveman) yanıt stili'), yani kuralları kendine göre değiştirebilirsin. Statik prefix'te olduğu için prompt-cache penceresi başına bir kez ödenir. Değişiklik açık oturumlara /refresh-context veya yeni oturumla yansır."
+        label={t('workspace.terseLabel')}
+        hint={t('workspace.terseHint')}
         checked={ws.terseMode}
         onChange={(v) => setWsField('terseMode', v)}
       />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Kod bilgi-grafiği (codebase-memory)
+        {t('workspace.codebaseMemoryTitle')}
       </div>
       <Toggle
-        label="codebase-memory yeteneği"
-        hint="Bu workspace'te bir codebase-memory MCP sunucusu varsa: ajanın bağlamına 'kod bilgi-grafiği mevcut' ipucu eklenir, sunucu workspace'e özel izole bir indeks store'a yönlendirilir (indeksler karışmaz), session çalışma dizini otomatik indekslenir ve codebase_workspace_search (workspace-geneli arama) aracı sunulur. Kapalı = tamamen devre dışı (sunucu kendi varsayılan store'unu kullanır)."
+        label={t('workspace.codebaseMemoryLabel')}
+        hint={t('workspace.codebaseMemoryHint')}
         checked={ws.codebaseMemoryEnabled}
         onChange={(v) => setWsField('codebaseMemoryEnabled', v)}
       />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Anlamsal arama (zvec-grep)
+        {t('workspace.zvecTitle')}
       </div>
       <Toggle
-        label="zvec-grep yeteneği"
-        hint="Bu workspace'te bir zvec-grep MCP sunucusu varsa: ajanın bağlamına 'anlamsal workspace araması mevcut' bloğu eklenir (zvec_grep_search ne zaman Grep yerine kullanılır, mutlak root kuralı), araç ajan allowlist'inden muaf tutulur ve oturumun çalışma dizini indeksi yoksa arka planda indekslenir — indeks git reposunun köküne .zvec-grep/ olarak yazılır, .git/info/exclude'a eklenir ve yerel local/potion-code-16m-v2 modeliyle kurulur. Kapalı = bu entegrasyon devre dışı; MCP sunucusu ekliyse araçları yine listelenir."
+        label={t('workspace.zvecLabel')}
+        hint={t('workspace.zvecHint')}
         checked={ws.zvecGrepEnabled}
         onChange={(v) => setWsField('zvecGrepEnabled', v)}
       />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Codex plugin desteği
+        {t('workspace.codexPluginsTitle')}
       </div>
       <Toggle
-        label="Codex plugin'leri"
-        hint="Açıkken bu workspace'in codex-cli turlarında yapılandırılmış marketplace'ler ve plugin'ler kullanılır: her turun config.toml'una [marketplaces]/[plugins] anahtarları yazılır ve her kalıcı sohbet evine bir kez kurulur (ilk turda ~1 sn, sonrakiler bedava). Yardımcı çağrılar (başlık, özet, içgörü) tek kullanımlık evde koştuğu için plugin kurulmaz. Kapalı = hiçbir anahtar yazılmaz ve hiçbir şey kurulmaz (plugin öncesi davranışın aynısı). TionHarness kendi marketplace'i ile gelmez; aşağıdan kendi kaynağını ekleyebilir veya makinendeki Codex plugin'lerini kopyalayabilirsin."
+        label={t('workspace.codexPluginsLabel')}
+        hint={t('workspace.codexPluginsHint')}
         checked={ws.codexPluginsEnabled}
         onChange={(v) => setWsField('codexPluginsEnabled', v)}
       />
@@ -110,22 +112,19 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       )}
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Prompt cache — donmuş bağlam (prompt epoch)
+        {t('workspace.promptEpochTitle')}
       </div>
       <Toggle
-        label="Prompt epoch (donmuş bağlam snapshot'ı)"
-        hint="Açıkken bir oturumun statik sistem promptu + araç şemaları oturum başında dondurulur; oturum ortası değişiklikler (skill kurulumu, ayar/talimat düzenlemesi, MCP araç listesi değişimi) prompt cache'i kırmaz — compaction, uzun boşluk, model değişimi veya /refresh-context anında devreye girer. Ajan bu arada 'snapshot eski' notu görür; kapatılan araçlar yürütmede zaten anında engellenir. Kapalı = her tur canlı derlenir (her değişiklik cache'i kırar)."
+        label={t('workspace.promptEpochLabel')}
+        hint={t('workspace.promptEpochHint')}
         checked={ws.promptEpochEnabled}
         onChange={(v) => setWsField('promptEpochEnabled', v)}
       />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Shell çıktısı sıkıştırma (sqz)
+        {t('workspace.sqzTitle')}
       </div>
-      <Field
-        label="Büyük shell çıktısını sqz ile sıkıştır"
-        hint="Ajanın shell (Bash/PowerShell) komut çıktısı, modele dönmeden önce yerel 'sqz compress' ile in-process kısaltılır (kayıpsız n-gram; canlı UI ham kalır, yalnız modele giden sonuç küçülür). sqz'in PreToolUse hook'u yalnız native 'Bash' adını tanıdığı ve TionHarness shell'i bridged araçla koşturduğu için hook yolu çalışmaz — bu ayar onun yerine geçer. Otomatik = sqz hook bağlıysa açık; Açık = hook olmasa da açık (sqz binary gerekir); Kapalı = devre dışı."
-      >
+      <Field label={t('workspace.sqzLabel')} hint={t('workspace.sqzHint')}>
         <select
           value={ws.shellOutputCompression || ''}
           onChange={(e) =>
@@ -133,44 +132,39 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
           }
           className={inputCls}
         >
-          <option value="">Otomatik (sqz hook varsa)</option>
-          <option value="on">Açık (zorla)</option>
-          <option value="off">Kapalı</option>
+          <option value="">{t('workspace.sqzAuto')}</option>
+          <option value="on">{t('workspace.forceOn')}</option>
+          <option value="off">{t('workspace.off')}</option>
         </select>
       </Field>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Shell komutu yeniden yazma (rtk)
+        {t('workspace.rtkTitle')}
       </div>
-      <Field
-        label="Test/build komutlarını rtk ile çalıştır"
-        hint="sqz'nin tamamlayıcısı, karşı uçta: sqz çıktıyı sonradan sıkıştırır, rtk komutu ÖNCEDEN değiştirip daha az çıktı üretmesini sağlar. Yalnız ölçülmüş kazanç veren aileler (go/cargo/npm/pytest/jest… test-build-lint koşucuları + git status/log) yeniden yazılır; git diff ve cat kapsam DIŞI (ölçümde sqz daha iyi, rtk read ham çıktıdan büyük). rtk ÖZET döndürür — geçen testler düşer, hatalar dosya:satır ile korunur. Komut başarısız olursa ajana 'bu bir özet' notu eklenir. Otomatik = rtk hook bağlıysa açık; Açık = hook olmasa da açık (rtk binary gerekir); Kapalı = devre dışı."
-      >
+      <Field label={t('workspace.rtkLabel')} hint={t('workspace.rtkHint')}>
         <select
           value={ws.shellCommandRewrite || ''}
           onChange={(e) => setWsField('shellCommandRewrite', e.target.value as '' | 'on' | 'off')}
           className={inputCls}
         >
-          <option value="">Otomatik (rtk hook varsa)</option>
-          <option value="on">Açık (zorla)</option>
-          <option value="off">Kapalı</option>
+          <option value="">{t('workspace.rtkAuto')}</option>
+          <option value="on">{t('workspace.forceOn')}</option>
+          <option value="off">{t('workspace.off')}</option>
         </select>
       </Field>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Sil
+        {t('common.delete')}
       </div>
 
       {onDeleteWorkspace && (
         <div className="mt-2 flex items-center justify-between rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-3 py-2">
-          <span className="text-xs text-[var(--color-text-dim)]">
-            Bu workspace'i ve tüm verisini kalıcı olarak sil.
-          </span>
+          <span className="text-xs text-[var(--color-text-dim)]">{t('workspace.deleteHint')}</span>
           <button
             onClick={onDeleteWorkspace}
             className="rounded border border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] px-3 py-1 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
           >
-            Workspace'i sil
+            {t('workspace.delete')}
           </button>
         </div>
       )}

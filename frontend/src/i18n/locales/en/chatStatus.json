@@ -1,0 +1,176 @@
+{
+  "optimizer": {
+    "degradedTitle": "{{kind}}: the command FAILED and the text above is a {{kind}} summary, not raw output. Test/build errors are preserved, but setup errors (a broken go.mod or missing toolchain) may collapse into a meaningless summary. Run the same command again with no_compress to see the real cause.",
+    "command": "Executed: {{command}}",
+    "deduplicatedTitle": "{{kind}}: this output is identical to output already seen in this session, so it was replaced with a \"§ref:…§\" marker. The command completed successfully and the output was not lost.",
+    "measuredTitle": "{{kind}}: {{input}} → {{output}} tokens ({{percent}}% saved) — shortened output entered the context; it was not truncated",
+    "optimizedTitle": "{{kind}}: the command ran through a token optimizer",
+    "degradedBadge": "summary — not raw",
+    "deduplicatedBadge": "duplicate",
+    "savingBadge": "−{{percent}}%"
+  },
+  "pending": {
+    "headerFailed": "Waiting — one message could not start",
+    "header": "Waiting — you can remove messages before they are processed",
+    "clearQueue_one": "Clear queue ({{count}})",
+    "clearQueue_other": "Clear queue ({{count}})",
+    "currentTitle": "The session is busy with this turn; waiting messages will run in order afterward",
+    "current": "Now",
+    "failedTitle": "A turn could not be started for this message; it is kept here so the text is not lost",
+    "failed": "Not sent",
+    "dismiss": "Dismiss",
+    "steerTitle": "Live guidance (will be sent shortly)",
+    "queueTitle": "Next message (will be sent when the turn ends)",
+    "steer": "Guide",
+    "position": "Queued #{{position}}",
+    "steerCurrent": "Guide the current task with this queued message",
+    "steerUnavailable": "Live guidance is unavailable for this turn. Your message remains queued.",
+    "steerNoTurn": "No running turn to guide. Your message remains queued.",
+    "promote": "Move up (run this in the next turn)",
+    "remove": "Remove before processing"
+  },
+  "permission": {
+    "risk": {
+      "exec": "run a command",
+      "execDecider": "risky command — the decision model recommends asking",
+      "write": "change files or state",
+      "default": "perform an action"
+    },
+    "intro": "The agent wants to run",
+    "defaultTool": "a tool",
+    "question": "({{risk}}). Do you allow it?",
+    "allowOnce": "Allow once",
+    "alwaysAllow": "Always allow",
+    "deny": "Deny"
+  },
+  "plan": {
+    "question": "The agent is proposing a plan. Do you approve it?",
+    "approve": "Approve plan",
+    "reject": "Reject"
+  },
+  "recovery": { "fallback": "Recovery" },
+  "rewind": {
+    "confirmTitle": "Delete this message and everything after it, then rewind the chat here",
+    "confirm": "Rewind",
+    "cancel": "Cancel",
+    "buttonTitle": "Rewind here (delete this message and everything after it)",
+    "buttonLabel": "Rewind here",
+    "dialogLabel": "Rewind chat",
+    "title": "Rewind chat",
+    "descriptionBefore": "Choose a prompt — that prompt and all messages after it will be deleted, and the chat will return to that checkpoint.",
+    "filesUnchanged": "File changes will not be reverted",
+    "descriptionAfter": "(use git for code). The deleted prompt will be restored to the message box so you can edit and send it again.",
+    "empty": "There are no user messages to rewind to in this session.",
+    "message": "Message",
+    "prompt": "Prompt",
+    "removed_one": "{{count}} message will be deleted",
+    "removed_other": "{{count}} messages will be deleted",
+    "emptyMessage": "(empty message)",
+    "working": "Rewinding…"
+  },
+  "sessionStart": {
+    "title": "Start settings",
+    "dismissTitle": "Hide for this session",
+    "dismissLabel": "Close the start panel",
+    "coordinatorOn": "Coordinator mode is on — this session manages parallel workers",
+    "coordinatorOff": "Turn on coordinator mode (manage parallel workers)",
+    "disable": "Turn off",
+    "enable": "Turn on",
+    "workflow": "Workflow",
+    "workflowLabel": "What is a workflow?",
+    "footerBefore": "This panel closes when you send the first message. These settings apply only to this session and can be changed later in the",
+    "coordination": "Coordination",
+    "footerAfter": "section of the session panel."
+  },
+  "steps": {
+    "guidance": "Guidance:",
+    "subagent": "Subagent",
+    "error": "error",
+    "count_one": "{{count}} step",
+    "count_other": "{{count}} steps",
+    "result": "Result",
+    "truncated": "… (truncated)",
+    "thought": "Thought",
+    "thinking": "Thinking",
+    "todo": "Task List",
+    "tool": "Tool",
+    "running": "running…",
+    "parallel_one": "{{count}} parallel tool call (in one request)",
+    "parallel_other": "{{count}} parallel tool calls (in one request)"
+  },
+  "taskNotification": {
+    "status": { "completed": "completed", "failed": "failed", "killed": "stopped" },
+    "collapse": "Collapse worker result",
+    "expand": "Expand worker result",
+    "openSession": "Open {{name}} worker session",
+    "model": "model",
+    "none": "none",
+    "notification": "Worker notification",
+    "toolCount_one": "{{count}} tool",
+    "toolCount_other": "{{count}} tools"
+  },
+  "todos": {
+    "title": "Task List",
+    "dismiss": "Dismiss completed task list"
+  },
+  "transcript": {
+    "loading": "Loading…",
+    "earlier": "Load earlier messages",
+    "newer": "Load newer messages",
+    "latest": "Jump to latest"
+  },
+  "tts": {
+    "title": "Read-aloud volume: {{percent}}% (shared across all chats)",
+    "label": "Read-aloud volume"
+  },
+  "wake": {
+    "soon": "shortly",
+    "seconds": "~{{seconds}}s",
+    "minutes": "~{{minutes}}m",
+    "minutesSeconds": "~{{minutes}}m {{seconds}}s",
+    "countdownSuffix": " · {{value}}",
+    "reasonSuffix": " — {{reason}}",
+    "waiting": "Waiting to resume automatically",
+    "stopTitle": "Stop automatic wake-up",
+    "stop": "Stop"
+  },
+  "workdir": {
+    "fallback": "Directory",
+    "current": "Working directory: {{path}}",
+    "select": "Choose a working directory",
+    "heading": "Working directory",
+    "resetTitle": "Reset to the workspace default",
+    "reset": "Reset",
+    "parent": "Parent folder",
+    "computer": "This PC",
+    "loading": "Loading…",
+    "empty": "No subfolders",
+    "use": "Use this folder"
+  },
+  "workerStatus": {
+    "worker": "Worker is running",
+    "session": "Session is running",
+    "turn": "— turn in progress",
+    "stopTitle": "Stop this session's running turn",
+    "stop": "Stop"
+  },
+  "workerWait": {
+    "running_one": "{{count}} worker is running",
+    "running_other": "{{count}} workers are running",
+    "waiting": "— waiting for results",
+    "done": " · {{done}}/{{total}} done",
+    "openSession": "{{name}} — open worker session",
+    "model": "model",
+    "seconds": "{{seconds}}s",
+    "minutes": "{{minutes}}m",
+    "minutesSeconds": "{{minutes}}m {{seconds}}s"
+  },
+  "tools": {
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items"
+  },
+  "stream": {
+    "guidanceQueued": "Live guidance is unavailable for this turn. Your message was queued.",
+    "guidanceRemainsQueued": "Live guidance is unavailable for this turn. Your message remains queued."
+  }
+}

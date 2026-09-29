@@ -12,6 +12,8 @@ import { RegistryManager } from './RegistryManager'
 import { KIND_NAV, emptyExisting, packTargetKey, type ExistingKeys } from './marketHelpers'
 import { MarketGrid } from './MarketGrid'
 import { PackDetailModal } from './PackDetailModal'
+import { useTranslation } from 'react-i18next'
+import { packKindPluralKey } from './marketHelpers'
 
 interface Props {
   onError: (msg: string) => void
@@ -24,6 +26,7 @@ interface Props {
 }
 
 export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
+  const { t } = useTranslation('market')
   const [packs, setPacks] = useState<Pack[]>([])
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.marketListOpen')
   const [tab, setTab] = useState<PackKind>(KIND_NAV[0].key)
@@ -63,9 +66,9 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
       api
         .listMarket()
         .then(setPacks)
-        .catch((e) => onError(e instanceof Error ? e.message : 'Market yüklenemedi'))
+        .catch((e) => onError(e instanceof Error ? e.message : t('errors.loadFailed')))
         .finally(() => setLoading(false)),
-    [onError],
+    [onError, t],
   )
 
   const loadSecrets = useCallback(
@@ -169,10 +172,10 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         setPickedSecret(name)
         setApiKey(value)
       } catch (e) {
-        onError(e instanceof Error ? e.message : 'Sır çözülemedi')
+        onError(e instanceof Error ? e.message : t('errors.secretRevealFailed'))
       }
     },
-    [onError],
+    [onError, t],
   )
 
   const visible = useMemo(() => {
@@ -211,10 +214,10 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
       try {
         setSelected(await api.getPack(pack.id))
       } catch (e) {
-        onError(e instanceof Error ? e.message : 'Paket açılamadı')
+        onError(e instanceof Error ? e.message : t('errors.packOpenFailed'))
       }
     },
-    [onError],
+    [onError, t],
   )
 
   const reload = useCallback(async () => {
@@ -238,7 +241,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         if (pack.sourceRef?.url) {
           const res = await api.ingestInstall({ source: 'github', url: pack.sourceRef.url })
           setInstalled((prev) => new Set(prev).add(pack.id))
-          toast.success(res.message || 'Kuruldu')
+          toast.success(res.message || t('status.installed'))
           await loadExisting()
           onInstalled?.('skill')
           return
@@ -247,17 +250,17 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         if (pack.kind === 'provider' && apiKey.trim()) body.apiKey = apiKey.trim()
         const res = await api.installPack(pack.id, body)
         setInstalled((prev) => new Set(prev).add(pack.id))
-        toast.success(res.message || 'Kuruldu')
+        toast.success(res.message || t('status.installed'))
         await loadExisting() // re-mark the catalog (this pack is now installed)
         await load() // refresh installedVersion decoration (ledger updated)
         onInstalled?.(pack.kind) // let the host refresh its matching collection
       } catch (e) {
-        onError(e instanceof Error ? e.message : 'Kurulum başarısız')
+        onError(e instanceof Error ? e.message : t('errors.installFailed'))
       } finally {
         setBusy(false)
       }
     },
-    [onError, apiKey, loadExisting, load, onInstalled],
+    [onError, apiKey, loadExisting, load, onInstalled, t],
   )
 
   return (
@@ -269,13 +272,13 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         widthKey="tionharness.marketListWidth"
         defaultWidth={200}
         minWidth={160}
-        label="Kategoriler"
+        label={t('categories')}
         testId="market-list-toggle"
       >
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           <div className="flex items-center px-2 py-1">
             <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-              Kategoriler
+              {t('categories')}
             </span>
           </div>
           {KIND_NAV.map((k) => {
@@ -295,7 +298,9 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
                 }`}
               >
                 <Icon size={16} strokeWidth={2} className="shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-left">{k.label}</span>
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {t(packKindPluralKey(k.key))}
+                </span>
                 <span className="text-[10px] text-[var(--color-text-dim)]">{count}</span>
               </button>
             )
@@ -306,18 +311,18 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
           <button
             data-testid="market-import"
             onClick={() => setImporting(true)}
-            title="GitHub repo / plugin veya yerel klasörden içe aktar (skill / agent / komut / MCP)"
+            title={t('actions.importTitle')}
             className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
           >
-            <Download size={16} className="shrink-0" /> İçe Aktar
+            <Download size={16} className="shrink-0" /> {t('actions.import')}
           </button>
           <button
             data-testid="market-registries"
             onClick={() => setManagingRegistries(true)}
-            title="Uzak kaynakları yönet (registry ekle/çıkar)"
+            title={t('actions.sourcesTitle')}
             className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
           >
-            <Server size={16} className="shrink-0" /> Kaynaklar
+            <Server size={16} className="shrink-0" /> {t('actions.sources')}
           </button>
         </div>
       </ListPane>
@@ -328,37 +333,39 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
           <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={toggleList}
-              title={listOpen ? 'Listeyi gizle' : 'Listeyi göster'}
-              aria-label="Kategori panelini aç/kapat"
+              title={listOpen ? t('actions.hideList') : t('actions.showList')}
+              aria-label={t('actions.toggleCategories')}
               data-testid="pane-list-toggle"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
             >
               <Menu size={18} />
             </button>
             <Store size={18} className="text-[var(--color-accent)]" />
-            <h2 className="text-sm font-semibold">Market</h2>
-            <span className="text-xs text-[var(--color-text-dim)]">{visible.length} paket</span>
+            <h2 className="text-sm font-semibold">{t('title')}</h2>
+            <span className="text-xs text-[var(--color-text-dim)]">
+              {t('packCount', { count: visible.length })}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <input
               data-testid="market-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ara…"
+              placeholder={t('actions.searchPlaceholder')}
               className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
             />
             <button
               onClick={reload}
               disabled={busy}
-              title="Uzak kaynakları yenile + katalogu tara"
+              title={t('actions.refreshTitle')}
               className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
             >
-              <RefreshCw size={13} className={busy ? 'animate-spin' : ''} /> Yenile
+              <RefreshCw size={13} className={busy ? 'animate-spin' : ''} /> {t('actions.refresh')}
             </button>
           </div>
         </header>
 
-        {loading && <LoadingState label="Market yükleniyor…" />}
+        {loading && <LoadingState label={t('loading')} />}
         {!loading && (
           <MarketGrid
             visible={visible}

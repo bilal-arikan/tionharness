@@ -1,0 +1,33 @@
+{
+  "title": "Summary",
+  "button": {
+    "hint": "The compact summary given to the agent for this screen (the same output as get_view)"
+  },
+  "back": "Back",
+  "close": "Close",
+  "refresh": "Refresh",
+  "loading": "Loading…",
+  "level": {
+    "tiny": "Tiny",
+    "card": "Card",
+    "full": "Full"
+  },
+  "sourceVersion": "Source version: {{source}}",
+  "asOf": "as of",
+  "tokenEstimateHint": "Approximate token cost (characters/4)",
+  "tokenEstimate_one": "~{{count}} token",
+  "tokenEstimate_other": "~{{count}} tokens",
+  "item": "item",
+  "elided_one": "{{count}} {{unit}} was hidden — raise the level or open a link to see more.",
+  "elided_other": "{{count}} {{unit}} were hidden — raise the level or open a link to see more.",
+  "sendToAgent": "Send to agent",
+  "copy": {
+    "button": "Copy",
+    "done": "Copied to clipboard",
+    "sameLevels": "Copied to clipboard (all three levels contain the same content)",
+    "levels_one": "{{count}} distinct level copied to the clipboard",
+    "levels_other": "{{count}} distinct levels copied to the clipboard",
+    "tokenCount_one": "~{{count}} token",
+    "tokenCount_other": "~{{count}} tokens"
+  }
+}

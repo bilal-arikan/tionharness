@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, LayoutGrid, Trash2, X } from 'lucide-react'
 import type { AppliedEntity, InsightFinding } from '@/types'
 import { ModalOverlay, PaneHeader } from '@/shared/components'
@@ -44,6 +45,7 @@ export function FindingModal({
   onOpenSession,
   focusApplied,
 }: Props) {
+  const { t } = useTranslation('insight')
   const [entityType, setEntityType] = useState(f.appliedEntity?.entityType ?? '')
   const [entityId, setEntityId] = useState(f.appliedEntity?.entityId ?? '')
   const evidence: AppliedEntity | undefined =
@@ -74,7 +76,11 @@ export function FindingModal({
             </>
           }
           right={
-            <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-surface-2)]">
+            <button
+              onClick={onClose}
+              className="rounded p-1 hover:bg-[var(--color-surface-2)]"
+              aria-label={t('actions.close')}
+            >
               <X className="h-4 w-4" />
             </button>
           }
@@ -85,7 +91,7 @@ export function FindingModal({
           {f.rootCause && (
             <div>
               <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
-                Kök neden
+                {t('finding.rootCause')}
               </div>
               <p className="leading-snug">{f.rootCause}</p>
             </div>
@@ -93,7 +99,7 @@ export function FindingModal({
           {f.proposedFix && (
             <div>
               <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
-                Önerilen çözüm
+                {t('finding.proposedFix')}
               </div>
               <p className="leading-snug">{f.proposedFix}</p>
             </div>
@@ -101,7 +107,7 @@ export function FindingModal({
           {f.proposal && (
             <div data-testid="finding-proposal">
               <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
-                Reçete önerisi
+                {t('finding.recipeProposal')}
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
@@ -109,37 +115,37 @@ export function FindingModal({
                 </code>
                 {f.proposal.target && (
                   <span>
-                    hedef <code>{f.proposal.target}</code>
+                    {t('finding.target')} <code>{f.proposal.target}</code>
                   </span>
                 )}
                 {f.proposal.value && (
                   <span>
-                    değer <code>{f.proposal.value}</code>
+                    {t('finding.value')} <code>{f.proposal.value}</code>
                   </span>
                 )}
                 {f.proposal.removes && (
                   <span className="text-[var(--color-warning)]">
-                    kaldırır <code>{f.proposal.removes}</code>
+                    {t('finding.removes')} <code>{f.proposal.removes}</code>
                   </span>
                 )}
                 <span className="text-[var(--color-text-dim)]">
-                  reçete {f.proposal.slug}
+                  {t('finding.recipe')} {f.proposal.slug}
                   {f.proposal.version ? `@${f.proposal.version}` : ''}
                 </span>
               </div>
               <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                Kanıt: {f.proposal.evidence}
+                {t('finding.evidence')}: {f.proposal.evidence}
               </p>
               <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                Öneri uygulanmaz; reçeteyi Beceriler ekranından sen düzenlersin. Uyguladıysan
-                bulguyu <code>applied</code> olarak kapat (kanıt: skill/{f.proposal.slug}).
+                {t('finding.recipeHintBefore')} <code>applied</code>{' '}
+                {t('finding.recipeHintAfter', { slug: f.proposal.slug })}
               </p>
             </div>
           )}
           {f.filePointer && (
             <div>
               <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
-                Dosya (öneri)
+                {t('finding.fileSuggestion')}
               </div>
               <code className="text-xs">{f.filePointer}</code>
             </div>
@@ -147,7 +153,7 @@ export function FindingModal({
           {f.evidenceSessionIds && f.evidenceSessionIds.length > 0 && (
             <div>
               <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
-                Kanıt oturumları
+                {t('finding.evidenceSessions')}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {f.evidenceSessionIds.map((sid) => (
@@ -155,7 +161,7 @@ export function FindingModal({
                     key={sid}
                     onClick={() => onOpenSession(sid)}
                     className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
-                    title="Oturum transkriptine git"
+                    title={t('finding.openTranscript')}
                   >
                     {sid}
                   </button>
@@ -175,20 +181,17 @@ export function FindingModal({
           }`}
         >
           <div className="text-xs font-semibold text-[var(--color-text-dim)]">
-            Uygulama kanıtı (
-            <span className="font-normal">
-              &quot;Uygulandı&quot; için zorunlu — otomatik doğrulama buna bakar
-            </span>
-            )
+            {t('finding.applicationEvidence')} (
+            <span className="font-normal">{t('finding.applicationEvidenceRequired')}</span>)
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
               className={fieldCls}
               value={entityType}
               onChange={(e) => setEntityType(e.target.value)}
-              title="Değiştirdiğin varlık türü"
+              title={t('finding.entityTypeTitle')}
             >
-              <option value="">Varlık türü…</option>
+              <option value="">{t('finding.entityTypePlaceholder')}</option>
               {ENTITY_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
@@ -200,14 +203,13 @@ export function FindingModal({
               className={`${fieldCls} min-w-52 flex-1`}
               value={entityId}
               onChange={(e) => setEntityId(e.target.value)}
-              placeholder="Varlık id'si (ör. tionharness-tool-discovery)"
+              placeholder={t('finding.entityIdPlaceholder')}
               autoFocus={focusApplied}
             />
           </div>
           {!evidence && (
             <div className="text-[11px] text-[var(--color-text-dim)]">
-              Varlık türü ve id'si dolmadan &quot;Uygulandı&quot; işaretlenemez: kanıtsız
-              &quot;uygulandı&quot; doğrulanamaz bir iddiadır.
+              {t('finding.missingEvidence')}
             </div>
           )}
         </div>
@@ -218,27 +220,27 @@ export function FindingModal({
             onClick={() => act('accepted')}
             className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)]"
           >
-            <Check className="h-3.5 w-3.5" /> Kabul
+            <Check className="h-3.5 w-3.5" /> {t('actions.accept')}
           </button>
           <button
             onClick={() => evidence && act('applied', evidence)}
             disabled={!evidence}
-            title={evidence ? undefined : 'Önce uygulama kanıtını (varlık türü + id) gir'}
+            title={evidence ? undefined : t('finding.enterEvidenceFirst')}
             className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
           >
-            Uygulandı
+            {t('actions.applied')}
           </button>
           <button
             onClick={() => act('verified')}
             className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
           >
-            Doğrulandı
+            {t('actions.verified')}
           </button>
           <button
             onClick={() => act('dismissed')}
             className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
           >
-            Yoksay
+            {t('actions.dismiss')}
           </button>
           <button
             onClick={() => {
@@ -247,18 +249,18 @@ export function FindingModal({
             }}
             className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
           >
-            <LayoutGrid className="h-3.5 w-3.5" /> Karta ekle
+            <LayoutGrid className="h-3.5 w-3.5" /> {t('actions.addToCard')}
           </button>
           <button
             onClick={() => {
-              if (confirm('Bu bulgu silinsin mi?')) {
+              if (confirm(t('finding.deleteConfirm'))) {
                 onDelete(f.id)
                 onClose()
               }
             }}
             className="ml-auto flex items-center gap-1 rounded-md px-3 py-1 text-sm text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Sil
+            <Trash2 className="h-3.5 w-3.5" /> {t('actions.delete')}
           </button>
         </div>
       </div>

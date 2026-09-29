@@ -9,6 +9,7 @@
 // live tail extended so a turn that is streaming right now is not drawn as an
 // idle gap (its message is only persisted when the turn ends).
 import type { ActivitySpan } from '@/types'
+import { i18next } from '@/i18n'
 
 // Segments closer together than this are one block: below it the gap cannot be
 // drawn as anything but noise, whatever the zoom.
@@ -72,12 +73,17 @@ export function formatSegments(segments: readonly ActivitySpan[], barStart: numb
   if (segments.length === 0) return ''
   const work = segments.reduce((sum, s) => sum + (s.end - s.start), 0)
   const idle = segmentGaps(segments, barStart).reduce((sum, g) => sum + (g.end - g.start), 0)
-  return `${segments.length} oturuş · ${fmtDur(work)} çalışma · ${fmtDur(idle)} boşluk`
+  return i18next.t('canvas.segmentSummary', {
+    ns: 'rota',
+    count: segments.length,
+    work: fmtDur(work),
+    idle: fmtDur(idle),
+  })
 }
 
 function fmtDur(sec: number): string {
   const m = Math.round(sec / 60)
-  if (m < 60) return `${m} dk`
+  if (m < 60) return i18next.t('duration.minutes', { ns: 'rota', count: m })
   const h = Math.floor(m / 60)
-  return `${h} sa ${m % 60} dk`
+  return i18next.t('duration.hoursMinutes', { ns: 'rota', hours: h, minutes: m % 60 })
 }

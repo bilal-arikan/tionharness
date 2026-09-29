@@ -3,6 +3,7 @@ import { tokens as fmtTok } from '@/shared/lib/format'
 import { ArrowRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { STEP_KIND_MAP } from '@/shared/stepKinds'
+import { useTranslation } from 'react-i18next'
 
 const HeaderIcon = STEP_KIND_MAP.compaction.Icon
 
@@ -12,27 +13,9 @@ interface Props {
 
 // Human label per compaction trigger. An unknown value is rendered verbatim
 // rather than hidden, so a new backend trigger shows up instead of vanishing.
-const TRIGGER_LABEL: Record<string, string> = {
-  auto: 'bütçe eşiği',
-  manual: 'manuel',
-  reactive: 'taşma kurtarması',
-  prune: 'araç çıktısı budaması',
-}
-
-const SOURCE_LABEL: Record<string, string> = {
-  tionharness: 'TionHarness',
-  'cli-native': 'CLI yerel',
-}
-
 const PROVIDER_LABEL: Record<string, string> = {
   'claude-cli': 'Claude CLI',
   'codex-cli': 'Codex CLI',
-}
-
-const SESSION_ACTION_LABEL: Record<string, string> = {
-  resume: 'oturumu sürdür',
-  'native-compact': 'yerel sıkıştırma',
-  'restart-summary': 'özetle yeniden başlat',
 }
 
 // CompactionCard reports that the session's history was folded into the rolling
@@ -41,14 +24,15 @@ const SESSION_ACTION_LABEL: Record<string, string> = {
 // step carries them; traces persisted before those fields existed only have
 // `text`, so the card falls back to that headline instead of rendering empty.
 export function CompactionCard({ step }: Props) {
+  const { t } = useTranslation('chat')
   const [open, setOpen] = useState(false)
   const { foldedMsgs, beforeTokens, afterTokens, trigger, source, provider, sessionAction } = step
   const fallback = step.text?.trim()
   const headline = step.running
-    ? 'CLI bağlamı sıkıştırılıyor…'
+    ? t('compaction.running')
     : foldedMsgs
-      ? `Bağlam sıkıştırıldı — ${foldedMsgs} mesaj özete katlandı`
-      : (fallback ?? 'Bağlam sıkıştırıldı')
+      ? t('compaction.folded', { count: foldedMsgs })
+      : (fallback ?? t('compaction.complete'))
   // Expandable only when there is something beyond the collapsed row: the
   // original headline (when structural fields produced their own), trigger or
   // provenance/action metadata.
@@ -67,12 +51,12 @@ export function CompactionCard({ step }: Props) {
         <span className="min-w-0 flex-1 truncate font-medium">{headline}</span>
         {shrink && (
           <span
-            title="Katlama öncesi → sonrası bağlam büyüklüğü"
+            title={t('compaction.contextSize')}
             className="flex shrink-0 items-center gap-1 font-mono text-[10px] opacity-80"
           >
             {fmtTok(beforeTokens!)}
             <ArrowRight size={10} />
-            {fmtTok(afterTokens!)} tok
+            {t('common.tokenShort', { count: fmtTok(afterTokens!) })}
           </span>
         )}
       </button>
@@ -81,24 +65,33 @@ export function CompactionCard({ step }: Props) {
           {detail && <p>{detail}</p>}
           {trigger && (
             <p className={detail ? 'mt-1.5' : undefined}>
-              Tetikleyici: <span className="font-mono">{TRIGGER_LABEL[trigger] ?? trigger}</span>
+              {t('compaction.trigger')}:{' '}
+              <span className="font-mono">
+                {t(`compaction.triggerValue.${trigger}`, { defaultValue: trigger })}
+              </span>
             </p>
           )}
           {source && (
             <p className={detail || trigger ? 'mt-1.5' : undefined}>
-              Kaynak: <span className="font-mono">{SOURCE_LABEL[source] ?? source}</span>
+              {t('compaction.source')}:{' '}
+              <span className="font-mono">
+                {t(`compaction.sourceValue.${source}`, { defaultValue: source })}
+              </span>
             </p>
           )}
           {provider && (
             <p className={detail || trigger || source ? 'mt-1.5' : undefined}>
-              Sağlayıcı: <span className="font-mono">{PROVIDER_LABEL[provider] ?? provider}</span>
+              {t('compaction.provider')}:{' '}
+              <span className="font-mono">{PROVIDER_LABEL[provider] ?? provider}</span>
             </p>
           )}
           {sessionAction && (
             <p className={detail || trigger || source || provider ? 'mt-1.5' : undefined}>
-              Oturum işlemi:{' '}
+              {t('compaction.sessionAction')}:{' '}
               <span className="font-mono">
-                {SESSION_ACTION_LABEL[sessionAction] ?? sessionAction}
+                {t(`compaction.sessionActionValue.${sessionAction}`, {
+                  defaultValue: sessionAction,
+                })}
               </span>
             </p>
           )}

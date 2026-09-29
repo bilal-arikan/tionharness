@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { fileTextURL } from '@/shared/lib/attachments'
+import { useTranslation } from 'react-i18next'
+
+const INVALID_SOURCE = '__invalid_source__'
 
 interface Props {
   code: string
@@ -58,13 +61,14 @@ function pushItem(items: PreviewItem[], it: RawItem) {
 // reach the parent DOM, cookies, or the workspace API — the same isolation the
 // artifact HTML viewer uses. Multiple `items` render as switchable tabs.
 export function HtmlPreview({ code }: Props) {
+  const { t } = useTranslation('sharedUi')
   const { title, items } = useMemo(() => parse(code), [code])
   const [active, setActive] = useState(0)
 
   if (items.length === 0) {
     return (
       <div className="my-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-dim)]">
-        html-preview · kaynak bulunamadı
+        {t('htmlPreview.empty')}
       </div>
     )
   }
@@ -94,7 +98,7 @@ export function HtmlPreview({ code }: Props) {
                       : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]')
                   }
                 >
-                  {it.label || `Sekme ${i + 1}`}
+                  {it.label || t('htmlPreview.tab', { number: i + 1 })}
                 </button>
               ))}
             </div>
@@ -108,14 +112,15 @@ export function HtmlPreview({ code }: Props) {
 
 // HtmlFrame fetches one file's text and renders it inside a sandboxed iframe.
 function HtmlFrame({ src }: { src: string }) {
+  const { t } = useTranslation('sharedUi')
   const url = fileTextURL(src)
   const [html, setHtml] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(() => (url ? null : 'geçersiz kaynak yolu'))
+  const [error, setError] = useState<string | null>(() => (url ? null : INVALID_SOURCE))
 
   // A new source drops the previous document before the fetch below lands.
   useKeyedReset(src, () => {
     setHtml(null)
-    setError(url ? null : 'geçersiz kaynak yolu')
+    setError(url ? null : INVALID_SOURCE)
   })
   useEffect(() => {
     if (!url) return
@@ -139,14 +144,16 @@ function HtmlFrame({ src }: { src: string }) {
   if (error) {
     return (
       <div className="bg-[var(--color-bg)] p-3 text-xs text-[var(--color-danger)]">
-        html-preview yüklenemedi: {error}
+        {t('htmlPreview.loadFailed', {
+          error: error === INVALID_SOURCE ? t('htmlPreview.invalidSource') : error,
+        })}
       </div>
     )
   }
   if (html === null) {
     return (
       <div className="bg-[var(--color-bg)] p-3 text-xs text-[var(--color-text-dim)]">
-        yükleniyor…
+        {t('states.loading')}
       </div>
     )
   }
@@ -154,7 +161,7 @@ function HtmlFrame({ src }: { src: string }) {
     <iframe
       sandbox="allow-scripts"
       srcDoc={html}
-      title="HTML preview"
+      title={t('htmlPreview.frameTitle')}
       className="h-[440px] w-full border-0 bg-white"
     />
   )

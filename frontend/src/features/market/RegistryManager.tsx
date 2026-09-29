@@ -4,6 +4,7 @@ import type { Registry } from '@/types'
 import type { ConnectorInfo } from '@/api/market'
 import { api } from '@/api'
 import { Button, ModalOverlay, toast } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onClose: () => void
@@ -15,6 +16,7 @@ interface Props {
 // add a new one by URL, remove one, or refresh all. A registry serves a
 // harnessregistry/v1 index (registry.json) listing downloadable packs.
 export function RegistryManager({ onClose, onChanged }: Props) {
+  const { t } = useTranslation('market')
   const [registries, setRegistries] = useState<Registry[]>([])
   const [connectors, setConnectors] = useState<ConnectorInfo[]>([])
   const [name, setName] = useState('')
@@ -47,7 +49,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
 
   const add = useCallback(async () => {
     if (!url.trim()) {
-      setErr('Registry URL gerekli (registry.json adresine işaret etmeli).')
+      setErr(t('registry.urlRequired'))
       return
     }
     setBusy(true)
@@ -57,13 +59,13 @@ export function RegistryManager({ onClose, onChanged }: Props) {
       setName('')
       setUrl('')
       onChanged()
-      toast.success('Registry eklendi')
+      toast.success(t('registry.added'))
     } catch (e) {
       setErr((e as Error).message)
     } finally {
       setBusy(false)
     }
-  }, [name, url, onChanged])
+  }, [name, url, onChanged, t])
 
   const remove = useCallback(
     async (u: string) => {
@@ -72,14 +74,14 @@ export function RegistryManager({ onClose, onChanged }: Props) {
       try {
         setRegistries(await api.removeRegistry(u))
         onChanged()
-        toast.success('Registry silindi')
+        toast.success(t('registry.removed'))
       } catch (e) {
         setErr((e as Error).message)
       } finally {
         setBusy(false)
       }
     },
-    [onChanged],
+    [onChanged, t],
   )
 
   const refresh = useCallback(async () => {
@@ -105,7 +107,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Market kaynakları"
+        aria-label={t('registry.title')}
         data-testid="market-registries-modal"
         className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -115,19 +117,21 @@ export function RegistryManager({ onClose, onChanged }: Props) {
             <Server size={18} className="text-[var(--color-accent)]" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">Market Kaynakları</h2>
+            <h2 className="text-sm font-semibold text-[var(--color-text)]">
+              {t('registry.title')}
+            </h2>
             <p className="text-xs text-[var(--color-text-dim)]">
-              Uzak registry'lerden paket çek. Her kaynak bir <code>registry.json</code>{' '}
-              (harnessregistry/v1) sunar.
+              {t('registry.descriptionBefore')} <code>registry.json</code>{' '}
+              {t('registry.descriptionAfter')}
             </p>
           </div>
           <button
             onClick={refresh}
             disabled={busy}
-            title="Tüm kaynakları yenile"
+            title={t('registry.refreshAllTitle')}
             className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
           >
-            <RefreshCw size={13} className={busy ? 'animate-spin' : ''} /> Yenile
+            <RefreshCw size={13} className={busy ? 'animate-spin' : ''} /> {t('actions.refresh')}
           </button>
         </div>
 
@@ -136,7 +140,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
           {connectors.length > 0 && (
             <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-dim)]">
-                <Sparkles size={13} /> Skill arama kaynakları
+                <Sparkles size={13} /> {t('registry.connectorSources')}
               </div>
               <div className="space-y-1.5">
                 {connectors.map((c) => (
@@ -155,8 +159,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
                 ))}
               </div>
               <p className="text-[10px] text-[var(--color-text-dim)]">
-                Bu siteler binlerce skill barındırır. Market'teki <strong>arama çubuğundan</strong>{' '}
-                arayıp sonuçları kur (kurulumda GitHub'dan ingest edilir).
+                {t('registry.connectorHint')}
               </p>
             </div>
           )}
@@ -165,7 +168,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
           <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">
-                Registry URL
+                {t('registry.urlLabel')}
               </span>
               <input
                 data-testid="registry-url"
@@ -180,11 +183,11 @@ export function RegistryManager({ onClose, onChanged }: Props) {
                 data-testid="registry-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ad (opsiyonel)"
+                placeholder={t('registry.namePlaceholder')}
                 className={`${inputCls} flex-1`}
               />
               <Button data-testid="registry-add" onClick={add} disabled={busy}>
-                <Plus size={14} /> Ekle
+                <Plus size={14} /> {t('actions.add')}
               </Button>
             </div>
           </div>
@@ -198,7 +201,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
           {/* List */}
           {registries.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--color-text-dim)]">
-              Henüz kaynak yok. Yukarıdan bir registry URL'si ekle.
+              {t('registry.empty')}
             </p>
           ) : (
             <ul className="space-y-2">
@@ -216,7 +219,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
                   <button
                     onClick={() => void remove(r.url)}
                     disabled={busy}
-                    title="Kaynağı kaldır"
+                    title={t('registry.removeTitle')}
                     className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
                   >
                     <Trash2 size={13} />
@@ -232,7 +235,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
             onClick={onClose}
             className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
           >
-            Kapat
+            {t('actions.close')}
           </button>
         </div>
       </div>

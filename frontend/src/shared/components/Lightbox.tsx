@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { X, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export interface LightboxImage {
   src: string
@@ -30,6 +31,7 @@ const clamp = (v: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, v))
 // close. Shared by inline chat images, attachment previews, image artifacts and
 // the mermaid Expand view so they all behave the same.
 export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, children }: Props) {
+  const { t } = useTranslation('sharedUi')
   const [scale, setScale] = useState(1)
   const [tx, setTx] = useState(0)
   const [ty, setTy] = useState(0)
@@ -203,19 +205,29 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
           {gallery ? `${cur + 1} / ${gallery.length}${alt ? ` · ${alt}` : ''}` : title}
         </span>
         <div className="flex items-center gap-1">
-          <button type="button" className={btn} title="Uzaklaştır" onClick={() => zoomBy(1 / 1.25)}>
+          <button
+            type="button"
+            className={btn}
+            title={t('lightbox.zoomOut')}
+            onClick={() => zoomBy(1 / 1.25)}
+          >
             <ZoomOut size={16} />
           </button>
           <span className="w-12 text-center text-xs tabular-nums text-white/70">
             {Math.round(scale * 100)}%
           </span>
-          <button type="button" className={btn} title="Yakınlaştır" onClick={() => zoomBy(1.25)}>
+          <button
+            type="button"
+            className={btn}
+            title={t('lightbox.zoomIn')}
+            onClick={() => zoomBy(1.25)}
+          >
             <ZoomIn size={16} />
           </button>
-          <button type="button" className={btn} title="Sıfırla (0)" onClick={reset}>
+          <button type="button" className={btn} title={t('lightbox.reset')} onClick={reset}>
             <Maximize2 size={16} />
           </button>
-          <button type="button" className={btn} title="Kapat (Esc)" onClick={onClose}>
+          <button type="button" className={btn} title={t('lightbox.close')} onClick={onClose}>
             <X size={16} />
           </button>
         </div>
@@ -264,7 +276,7 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
           <>
             <button
               type="button"
-              title="Önceki (←)"
+              title={t('lightbox.previous')}
               onClick={(e) => {
                 e.stopPropagation()
                 go(-1)
@@ -275,7 +287,7 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
             </button>
             <button
               type="button"
-              title="Sonraki (→)"
+              title={t('lightbox.next')}
               onClick={(e) => {
                 e.stopPropagation()
                 go(1)

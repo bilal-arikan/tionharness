@@ -1,0 +1,210 @@
+{
+  "actions": {
+    "archive": "Arşivle",
+    "cancel": "İptal",
+    "close": "Kapat",
+    "create": "+ Oluştur",
+    "delete": "Sil",
+    "processing": "İşleniyor…",
+    "remove": "Kaldır",
+    "rename": "Yeniden adlandır",
+    "restore": "Geri al",
+    "restoreFromArchive": "Arşivden geri al",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…",
+    "undo": "Geri al"
+  },
+  "artifacts": {
+    "dropHint": "ya da dosya sürükle-bırak",
+    "empty": "Henüz artifact yok",
+    "linkExisting": "Var olan",
+    "noMatch": "Eşleşme yok",
+    "removeReference": "Referansı kaldır",
+    "searchPlaceholder": "Artifact ara…",
+    "uploadError": "\"{{name}}\" eklenemedi: {{error}}",
+    "uploading": "Yükleniyor…"
+  },
+  "board": {
+    "addTask": "+ Görev",
+    "archiveNoun": "görev",
+    "archiveRestoreHint": "bir kartı geri almak için “Geri al”e bas.",
+    "archiveTitle": "Görevler — Arşiv",
+    "backToActiveBoard": "Aktif panoya dön",
+    "backToBoard": "Panoya dön",
+    "bulkAssignPlaceholder": "Ajan ata…",
+    "bulkAssignTitle": "Seçili görevlere ajan ata",
+    "bulkDeleteConfirm_one": "{{count}} görev silinsin mi?",
+    "bulkDeleteConfirm_other": "{{count}} görev silinsin mi?",
+    "bulkMovePlaceholder": "Sütuna taşı…",
+    "bulkMoveTitle": "Seçili görevleri sütuna taşı",
+    "columnAriaLabel_one": "{{column}} sütunu, {{count}} görev",
+    "columnAriaLabel_other": "{{column}} sütunu, {{count}} görev",
+    "columns": "Sütunlar",
+    "dropFileOnCard": "Dosya eklemek için bir görev kartının üzerine bırakın",
+    "editColumns": "Sütunları düzenle",
+    "emptyFiltered": "Bu filtreyle eşleşen görev yok.",
+    "loading": "Görevler yükleniyor…",
+    "movedOutsideFilter": "\"{{title}}\" filtre dışında kaldı",
+    "movedToColumn": "\"{{title}}\", {{column}} sütununa taşındı",
+    "title": "Görevler"
+  },
+  "boardStates": {
+    "done": "Bitti",
+    "failed": "Başarısız",
+    "in_progress": "Devam Eden",
+    "iptal": "İptal",
+    "pbi": "PBI",
+    "review": "İnceleme",
+    "todo": "Yapılacak"
+  },
+  "card": {
+    "ariaLabel": "{{title}}{{idPart}}, {{column}} sütunu, {{position}}/{{count}}. Taşımak için sol veya sağ ok tuşunu kullanın.",
+    "attachmentCount_one": "{{count}} ek (artifact)",
+    "attachmentCount_other": "{{count}} ek (artifact)",
+    "dependenciesComplete": "Tüm bağımlılıklar tamamlandı",
+    "flowFallback": "Akış",
+    "generatingTitle": "başlık üretiliyor…",
+    "idPart": ", görev kimliği {{id}}",
+    "restoreTitle": "Arşivden çıkar (panoya geri al)",
+    "unmetDependencies_one": "{{count}} bağımlılık tamamlanmadı",
+    "unmetDependencies_other": "{{count}} bağımlılık tamamlanmadı"
+  },
+  "columns": {
+    "add": "+ Sütun Ekle",
+    "chooseColor": "Renk seç",
+    "customColor": "Özel renk",
+    "delete": "Sütunu sil",
+    "deleteBlockedTasks_one": "{{count}} görev bu sütunda — önce taşıyın",
+    "deleteBlockedTasks_other": "{{count}} görev bu sütunda — önce taşıyın",
+    "deleteLastBlocked": "Son sütun silinemez",
+    "dragToReorder": "Sürükleyerek yeniden sırala",
+    "editorTitle": "Sütun Düzenleyici",
+    "errors": {
+      "duplicateKey": "Yinelenen sütun anahtarı: \"{{key}}\"",
+      "emptyLabel": "Sütun etiketi boş bırakılamaz.",
+      "invalidKey": "\"{{label}}\" için geçersiz anahtar: \"{{key}}\" (sadece küçük harf, rakam, alt çizgi)",
+      "minimumOne": "En az bir sütun gereklidir."
+    },
+    "keyLabel": "anahtar:",
+    "keyPlaceholder": "ornek_anahtar",
+    "moveDown": "Aşağı taşı",
+    "moveUp": "Yukarı taşı",
+    "namePlaceholder": "Sütun adı",
+    "newColumn": "Yeni Sütun",
+    "removeColor": "Rengi kaldır"
+  },
+  "dependencies": {
+    "empty": "Başka görev yok."
+  },
+  "derivedColumns": {
+    "deletedAgent": "(silinmiş ajan) {{id}}",
+    "unassigned": "Atanmamış",
+    "untagged": "Etiketsiz"
+  },
+  "filters": {
+    "activeCount_one": "{{count}} filtre",
+    "activeCount_other": "{{count}} filtre",
+    "agent": "Ajan",
+    "clear": "Temizle",
+    "clearAll": "Tüm filtreleri temizle",
+    "column": "Sütun",
+    "dependencies": {
+      "blocked": "Bloke (bekleyen bağımlılık)",
+      "ready": "Hazır (bağımlılıkları bitti)"
+    },
+    "dependency": "Bağımlılık",
+    "noOptions": "Seçenek yok",
+    "noTags": "Hiçbir görevde etiket yok",
+    "priority": "Öncelik",
+    "review": {
+      "bounced": "İncelemeden geri döndü",
+      "exhausted": "Doğrulama bütçesi doldu"
+    },
+    "reviewLabel": "Doğrulama",
+    "searchPlaceholder": "ara…  /",
+    "tag": "Etiket",
+    "unassigned": "Atanmamış"
+  },
+  "form": {
+    "assignee": "Ajan (atanan)",
+    "assigneePlaceholder": "Ajan seç (opsiyonel)",
+    "attachments": "Ekler — Artifact referansları",
+    "confirmDelete": "\"{{title}}\" silinsin mi?",
+    "copyId": "ID'yi kopyala",
+    "dependencies": "Bağımlılıklar — önce tamamlanması gereken görevler",
+    "description": "Açıklama",
+    "errors": {
+      "titleOrDescriptionRequired": "Başlık veya açıklama gerekli"
+    },
+    "flow": "Akış (opsiyonel)",
+    "generateTitle": "AI ile başlığı açıklamadan üret",
+    "noFlow": "Akış yok",
+    "priority": "Öncelik",
+    "status": "Durum (kolon)",
+    "tagPlaceholder": "+ etiket",
+    "tags": "Etiketler",
+    "titlePlaceholder": "Başlık (boşsa açıklamadan üretilir)",
+    "toasts": {
+      "archived": "Görev arşivlendi",
+      "copied": "Panoya kopyalandı",
+      "created": "Görev oluşturuldu",
+      "deleted": "Görev silindi",
+      "restored": "Görev arşivden geri alındı",
+      "updated": "Görev güncellendi"
+    }
+  },
+  "priorities": {
+    "critical": "Kritik",
+    "high": "Yüksek",
+    "low": "Düşük",
+    "medium": "Orta",
+    "none": "Önceliksiz"
+  },
+  "reviewGate": {
+    "exhaustedDescription": "Yeni bir inceleme turu açmak yakınsamıyor. Kartı geçen kısma daralt ve reddedilen kısmı yeni bir karta taşı, ya da karar için kullanıcıya sor.",
+    "exhaustedHeading": "Doğrulama bütçesi doldu ({{label}})",
+    "exhaustedTitle_one": "Doğrulama bütçesi doldu: bu kart incelemeden {{count}} kez geri döndü (bütçe {{budget}}). Yeni bir reviewer turu yerine kartı daralt veya karar ver.",
+    "exhaustedTitle_other": "Doğrulama bütçesi doldu: bu kart incelemeden {{count}} kez geri döndü (bütçe {{budget}}). Yeni bir reviewer turu yerine kartı daralt veya karar ver.",
+    "warningDescription": "Kapsam sözleşmesini gözden geçir: kapsam dışı bir bulgu kartı bloklamamalı, yeni kart olarak açılmalı.",
+    "warningHeading_one": "İncelemeden {{count}} kez geri döndü ({{label}})",
+    "warningHeading_other": "İncelemeden {{count}} kez geri döndü ({{label}})",
+    "warningTitle_one": "Bu kart incelemeden {{count}} kez geri döndü (bütçe {{budget}}).",
+    "warningTitle_other": "Bu kart incelemeden {{count}} kez geri döndü (bütçe {{budget}})."
+  },
+  "taskCount_one": "{{count}} görev",
+  "taskCount_other": "{{count}} görev",
+  "views": {
+    "builtinSection": "Hazır",
+    "builtins": {
+      "all": "Tümü",
+      "blocked": "Bloke",
+      "unassigned": "Ajansız"
+    },
+    "deleteConfirm": "\"{{label}}\" görünümü silinsin mi?",
+    "emptySaved": "Henüz kayıtlı görünüm yok — filtreleyip “Kaydet”e basın.",
+    "errors": {
+      "cannotOverwriteBuiltin": "Hazır görünümlerin üzerine yazılamaz — \"Yeni olarak kaydet\" kullanın",
+      "emptyName": "Görünüm adı boş olamaz"
+    },
+    "groupBy": {
+      "agent": "Ajan",
+      "priority": "Öncelik",
+      "status": "Durum",
+      "tag": "Etiket"
+    },
+    "groupByTitle": "Sütunları neye göre böl",
+    "namePrompt": "Görünüm adı",
+    "newNamePrompt": "Yeni görünüm adı",
+    "overwriteConfirm": "Bu görünümün üzerine yazılsın mı?\n\nTamam = üzerine yaz · İptal = yeni olarak kaydet",
+    "revert": "Görünümün kayıtlı haline dön",
+    "savedSection": "Kayıtlı",
+    "sort": {
+      "deps": "Bağımlılık sırası",
+      "priority": "Öncelik",
+      "title": "Başlık",
+      "updated": "Son güncelleme"
+    },
+    "sortTitle": "Sütun içi sıralama",
+    "unsavedChanges": "Kaydedilmemiş değişiklik"
+  }
+}

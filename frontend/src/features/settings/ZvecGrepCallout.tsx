@@ -11,6 +11,7 @@ import {
   ZVEC_GREP_SERVER_NAME,
   isZvecGrepServer,
 } from '@/shared/lib/zvecGrep'
+import { Trans, useTranslation } from 'react-i18next'
 
 interface Props {
   tool: ExternalToolStatus
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function ZvecGrepCallout({ tool, servers, onServersChanged, onError }: Props) {
+  const { t } = useTranslation('settings')
   const [busy, setBusy] = useState(false)
   // Matched by the backend's own rule, so a server the user added by hand under
   // another name still reads as wired.
@@ -49,19 +51,15 @@ export function ZvecGrepCallout({ tool, servers, onServersChanged, onError }: Pr
       data-testid="zvec-callout"
       className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]"
     >
-      <span className="font-medium text-[var(--color-text)]">🔎 zvec-grep entegrasyonu:</span> Bir{' '}
-      <code>zvec-grep</code> MCP sunucusu eklendiğinde TionHarness ajanın bağlamına{' '}
-      <span className="font-medium text-[var(--color-text)]">
-        "anlamsal workspace araması mevcut"
-      </span>{' '}
-      bloğunu ekler (<code>zvec_grep_search</code> ne zaman Grep yerine kullanılır, mutlak{' '}
-      <code>root</code> kuralı), eksik <code>root</code> argümanını çalışma dizininden doldurur,
-      aracı ajan allowlist'inden muaf tutar ve oturumun çalışma dizinini — indeksi yoksa —{' '}
-      <span className="font-medium text-[var(--color-text)]">arka planda indeksler</span>: indeks
-      git reposunun köküne <code>.zvec-grep/</code> olarak yazılır, <code>.git/info/exclude</code>
-      'a eklenir ve yerel <code>local/potion-code-16m-v2</code> modeliyle kurulur. Bu sistem{' '}
-      <span className="font-medium text-[var(--color-text)]">Ayarlar ▸ Bu Workspace</span> altından
-      açılıp kapatılabilir.
+      <span className="font-medium text-[var(--color-text)]">🔎 {t('zvec.title')}:</span>{' '}
+      <Trans
+        i18nKey="zvec.description"
+        ns="settings"
+        components={{
+          code: <code />,
+          strong: <span className="font-medium text-[var(--color-text)]" />,
+        }}
+      />
       <div className="mt-2 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
         <button
           type="button"
@@ -75,20 +73,20 @@ export function ZvecGrepCallout({ tool, servers, onServersChanged, onError }: Pr
           }`}
           title={
             !tool.found
-              ? 'Önce zg PATH’te bulunmalı (yukarıda "kurulu" görünmeli)'
+              ? t('zvec.installFirst')
               : server
-                ? 'MCP sunucusunu kaldır'
-                : 'MCP sunucusunu otomatik ekle (zg server --stdio)'
+                ? t('zvec.removeTitle')
+                : t('zvec.addTitle')
           }
         >
-          {busy ? '…' : server ? 'MCP’yi kaldır' : 'MCP’yi otomatik ekle'}
+          {busy ? '…' : server ? t('zvec.remove') : t('zvec.add')}
         </button>
         <span className="text-[11px] text-[var(--color-text-dim)]">
           {!tool.found
-            ? 'zg PATH’te bulunamadı.'
+            ? t('zvec.notFound')
             : server
-              ? `MCP sunucusu ekli (${server.name}) — ajanlar kullanabilir.`
-              : 'MCP sunucusu ekli değil.'}
+              ? t('zvec.connected', { name: server.name })
+              : t('zvec.notConnected')}
         </span>
       </div>
     </div>

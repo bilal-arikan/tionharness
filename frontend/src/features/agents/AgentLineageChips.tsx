@@ -1,6 +1,7 @@
 import { ChevronRight, Lock } from 'lucide-react'
 import type { Agent } from '@/types'
 import { resolveColor } from '@/shared/lib/avatar'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   /** Ancestors ROOT FIRST (see lineageOf). */
@@ -16,13 +17,14 @@ interface Props {
 // carries its colour dot (the same colour the roster stripes use) and a lock
 // glyph when it is a built-in, so the reader sees where the chain is anchored.
 export function AgentLineageChips({ lineage, self, onSelectAgent }: Props) {
+  const { t } = useTranslation('agents')
   if (lineage.length === 0) return null
   return (
     <div
       data-testid="agent-lineage-chips"
       className="flex min-w-0 flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]"
     >
-      <span className="mr-0.5 shrink-0">Kalıtım:</span>
+      <span className="mr-0.5 shrink-0">{t('lineage.label')}</span>
       {lineage.map((ancestor) => (
         <span key={ancestor.id} className="flex items-center gap-1">
           <button
@@ -30,7 +32,7 @@ export function AgentLineageChips({ lineage, self, onSelectAgent }: Props) {
             data-testid="agent-lineage-chip"
             data-agent-id={ancestor.id}
             onClick={() => onSelectAgent?.(ancestor.id)}
-            title={`${ancestor.name} ayarlarına git`}
+            title={t('lineage.openAncestor', { name: ancestor.name })}
             className="flex max-w-[12rem] items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 hover:border-[var(--color-accent)] hover:text-[var(--color-text)]"
           >
             <span

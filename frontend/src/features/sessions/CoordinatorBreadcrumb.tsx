@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { api } from '@/api'
 import type { CoordinatorAncestor } from '@/types'
 import { ComposerCard } from '@/features/chat/ComposerCard'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   sessionId: string
@@ -24,6 +25,7 @@ interface Props {
 //
 // Renders nothing for a root coordinator or an ordinary session (empty chain).
 export function CoordinatorBreadcrumb({ sessionId, onSelectSession, floating }: Props) {
+  const { t } = useTranslation('sessions')
   const [chain, setChain] = useState<CoordinatorAncestor[]>([])
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export function CoordinatorBreadcrumb({ sessionId, onSelectSession, floating }: 
   const inner = (
     <>
       <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <ArrowLeft size={12} /> Üst zincir
+        <ArrowLeft size={12} /> {t('coordinator.ancestorChain')}
       </div>
       <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
         {chain.map((a, i) => (
@@ -58,11 +60,13 @@ export function CoordinatorBreadcrumb({ sessionId, onSelectSession, floating }: 
               <button
                 type="button"
                 onClick={() => onSelectSession(a.sessionId)}
-                title={`${a.title || a.sessionId} oturumunu aç`}
+                title={t('coordinator.openSession', { title: a.title || a.sessionId })}
                 className="rounded-md border border-[var(--color-border)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
               >
                 {a.agentName}
-                <span className="ml-1 opacity-60">s{a.depth}</span>
+                <span className="ml-1 opacity-60">
+                  {t('coordinator.depth', { depth: a.depth })}
+                </span>
               </button>
             ) : (
               <span className="text-[10px] text-[var(--color-text-dim)]">{a.agentName}</span>
@@ -71,7 +75,7 @@ export function CoordinatorBreadcrumb({ sessionId, onSelectSession, floating }: 
         ))}
         <ChevronRight size={11} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="rounded-md bg-[var(--color-accent)]/10 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">
-          bu oturum
+          {t('coordinator.thisSession')}
         </span>
       </div>
     </>

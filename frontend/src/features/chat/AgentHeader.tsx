@@ -1,5 +1,6 @@
 import type { AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
+import { useTranslation } from 'react-i18next'
 
 // AgentHeader is the small avatar + name line atop an assistant bubble, telling
 // the user which agent produced (or is producing) the turn. Renders nothing when
@@ -18,6 +19,7 @@ export function AgentHeader({
   agent?: AgentLike
   onOpenAgent?: (id: string) => void
 }) {
+  const { t } = useTranslation('chat')
   if (!agent) return null
   if (!onOpenAgent)
     return <AgentIdentity agent={agent} size="sm" subtitle="model" className="mb-1.5" />
@@ -25,7 +27,7 @@ export function AgentHeader({
     <button
       type="button"
       onClick={() => onOpenAgent(agent.id)}
-      title="Ajan ayarlarını aç"
+      title={t('agentHeader.openSettings')}
       className="-mx-1 mb-1.5 flex min-w-0 rounded px-1 py-0.5 text-left transition hover:bg-[var(--color-surface-2)]"
     >
       <AgentIdentity agent={agent} size="sm" subtitle="model" />

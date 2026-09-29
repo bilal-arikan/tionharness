@@ -11,6 +11,7 @@ import {
   Pin,
   PinOff,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
@@ -56,6 +57,7 @@ export function AutomationCard({
   onEdit,
   onSpawnTags,
 }: Props) {
+  const { t } = useTranslation('schedules')
   const flow = flows.find((f) => f.id === a.flowId)
   const flowIcon = normalizeAvatar(flow?.emoji)
   const owner = agents.find((x) => x.id === a.targetAgentId)
@@ -94,12 +96,12 @@ export function AutomationCard({
             type="button"
             role="switch"
             aria-checked={a.enabled}
-            aria-label={a.enabled ? 'Etkin' : 'Pasif'}
+            aria-label={a.enabled ? t('common.enabled') : t('common.disabled')}
             onClick={onToggle}
             className={`h-4 w-8 rounded-full transition ${
               a.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
             }`}
-            title={a.enabled ? 'Etkin' : 'Pasif'}
+            title={a.enabled ? t('common.enabled') : t('common.disabled')}
           >
             <span
               className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${a.enabled ? 'translate-x-4' : ''}`}
@@ -108,14 +110,14 @@ export function AutomationCard({
           {isTargetlessRule ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
-              title="Hedefsiz pano aksiyonu — LLM çağrısı yapılmaz"
+              title={t('automationCard.targetlessBoardAction')}
             >
               {a.boardAction === 'archive' ? <Archive size={15} /> : <MoveRight size={15} />}
             </span>
           ) : a.flowId ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-              title="Akış tabanlı otomasyon"
+              title={t('automationCard.flowBased')}
             >
               {flowIcon ? (
                 <span className="text-base leading-none">{flowIcon}</span>
@@ -137,28 +139,30 @@ export function AutomationCard({
             {isBoardKind ? (
               <span
                 className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title="Pano (kart) tetikleyicili otomasyon"
+                title={t('automationCard.boardTriggered')}
               >
                 <LayoutGrid size={11} />
                 {opLabel}
                 {(a.boardFromState || a.boardToState) && (
                   <span className="opacity-80">
-                    ({a.boardFromState ? colLabel(a.boardFromState) : '∗'} →{' '}
-                    {a.boardToState ? colLabel(a.boardToState) : '∗'})
+                    {t('automationCard.boardTransition', {
+                      from: a.boardFromState ? colLabel(a.boardFromState) : t('common.wildcard'),
+                      to: a.boardToState ? colLabel(a.boardToState) : t('common.wildcard'),
+                    })}
                   </span>
                 )}
                 {a.boardAction === 'archive' && (
                   <span
                     className="flex items-center gap-0.5 opacity-80"
-                    title="Kartı arşivler (LLM yok)"
+                    title={t('automationCard.archivesCard')}
                   >
-                    <Archive size={10} /> arşiv
+                    <Archive size={10} /> {t('common.archive')}
                   </span>
                 )}
                 {a.boardAction === 'move' && (
                   <span
                     className="flex items-center gap-0.5 opacity-80"
-                    title="Kartı hedef sütuna taşır (LLM yok)"
+                    title={t('automationCard.movesCard')}
                   >
                     <MoveRight size={10} /> {colLabel(a.boardMoveToState)}
                   </span>
@@ -167,29 +171,49 @@ export function AutomationCard({
             ) : isTokenKind ? (
               <span
                 className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title="Token tetikleyicili otomasyon — kümülatif harcama eşiği geçince çalışır"
+                title={t('automationCard.tokenTriggered')}
               >
                 <Zap size={11} />
-                {a.tokenScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
-                {count(a.tokenThreshold ?? 0)} token
+                {t('automationCard.tokenSummary', {
+                  scope: a.tokenScope === 'workspace' ? t('common.workspace') : t('common.session'),
+                  count: count(a.tokenThreshold ?? 0),
+                })}
               </span>
             ) : kind === 'phase' ? (
               <span
                 className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title="Rota fazı tetikleyicili otomasyon — ilan edilmiş bir faz bitince/başlayınca çalışır"
+                title={t('automationCard.phaseTriggered')}
               >
                 <Waypoints size={11} />
-                faz {a.trajPhase || '∗'} · {a.trajEvent === 'enter' ? 'başlayınca' : 'bitince'}
-                {a.trajRecipe && <span className="opacity-80">· {a.trajRecipe}</span>}
+                {t('automationCard.phaseSummary', {
+                  phase: a.trajPhase || t('common.wildcard'),
+                  event:
+                    a.trajEvent === 'enter'
+                      ? t('automationCard.onEnter')
+                      : t('automationCard.onExit'),
+                })}
+                {a.trajRecipe && (
+                  <span className="opacity-80">
+                    {t('common.dotValue', { value: a.trajRecipe })}
+                  </span>
+                )}
               </span>
             ) : kind === 'trajectory_end' ? (
               <span
                 className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title="Rota sonu tetikleyicili otomasyon — rota terminal duruma gelince çalışır"
+                title={t('automationCard.trajectoryEndTriggered')}
               >
                 <Flag size={11} />
-                rota sonu · {a.trajStatus || 'her bitiş'}
-                {a.trajRecipe && <span className="opacity-80">· {a.trajRecipe}</span>}
+                {t('automationCard.trajectoryEndSummary', {
+                  status: a.trajStatus
+                    ? t(`meta.trajectoryStatuses.${a.trajStatus}`)
+                    : t('meta.trajectoryStatuses.any'),
+                })}
+                {a.trajRecipe && (
+                  <span className="opacity-80">
+                    {t('common.dotValue', { value: a.trajRecipe })}
+                  </span>
+                )}
               </span>
             ) : (
               <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
@@ -199,33 +223,33 @@ export function AutomationCard({
             {a.pinned && (
               <span
                 className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]"
-                title="Sabitlendi: küratörün otomatik geçişlerinden muaf"
+                title={t('automationCard.pinnedTitle')}
               >
-                📌 sabit
+                📌 {t('automationCard.pinned')}
               </span>
             )}
             {isBoardKind && a.boardExclusive && (
               <span
                 className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[11px] text-[var(--color-text)]"
-                title="Tek sahip: eşleşen kart değişiminde yalnız bu otomasyon çalışır, diğer eşleşmeler bastırılır."
+                title={t('automationCard.exclusiveTitle')}
               >
-                🔒 tek sahip
+                🔒 {t('fields.board.exclusive')}
               </span>
             )}
             {isBoardKind && (a.boardPriority ?? 0) !== 0 && (
               <span
                 className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
-                title="Aynı kart değişimini yakalayan otomasyonlar arasındaki ateşleme sırası (küçük olan önce)."
+                title={t('automationCard.priorityTitle')}
               >
-                sıra {a.boardPriority}
+                {t('automationCard.priority', { priority: a.boardPriority })}
               </span>
             )}
             {showContinue && (
               <span
                 className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]"
-                title="Aynı oturumu sürdürür — ajan her tetikte önceki konuşmayı görür (geçmiş-farkında)."
+                title={t('automationCard.continueTitle')}
               >
-                🧵 sürdür
+                🧵 {t('automationCard.continue')}
               </span>
             )}
           </div>
@@ -235,7 +259,11 @@ export function AutomationCard({
             </div>
           )}
           <div className="truncate text-xs text-[var(--color-text-dim)]">
-            → {a.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? a.flowId}` : (owner?.name ?? '—')}
+            {t('common.targetArrow', {
+              target: a.flowId
+                ? `${flowIcon ?? '🔀'} ${flow?.name ?? a.flowId}`
+                : (owner?.name ?? t('common.none')),
+            })}
           </div>
           <div
             className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]"
@@ -247,64 +275,78 @@ export function AutomationCard({
 
         {/* Edit (+ counter reset when maxed); deleting lives inside the popup. */}
         <div className="flex shrink-0 flex-col items-center gap-1.5">
-          <CardAction icon={Pencil} label="Düzenle" onClick={onEdit} entityId={a.id} />
-          <CardAction icon={Archive} label="Arşivle" onClick={onArchive} entityId={a.id} />
+          <CardAction icon={Pencil} label={t('common.edit')} onClick={onEdit} entityId={a.id} />
+          <CardAction
+            icon={Archive}
+            label={t('common.archive')}
+            onClick={onArchive}
+            entityId={a.id}
+          />
           {onPin && (
             <CardAction
               icon={a.pinned ? PinOff : Pin}
-              label={a.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle (küratörden muaf)'}
+              label={a.pinned ? t('automationCard.unpin') : t('automationCard.pin')}
               onClick={onPin}
               entityId={a.id}
             />
           )}
           {maxed && (
-            <CardAction icon={RotateCcw} label="Sayacı sıfırla" onClick={onReset} entityId={a.id} />
+            <CardAction
+              icon={RotateCcw}
+              label={t('automationCard.resetCounter')}
+              onClick={onReset}
+              entityId={a.id}
+            />
           )}
         </div>
       </div>
 
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-[var(--color-text-dim)]">
         <span className={maxed ? 'text-[var(--color-danger)]' : ''}>
-          İter: {a.iterationCount}
+          {t('automationCard.iterations')}: {a.iterationCount}
           {a.maxIterations > 0 ? ` / ${a.maxIterations}` : ' / ∞'}
-          {maxed && ' (doldu)'}
+          {maxed && ` (${t('automationCard.maxed')})`}
         </span>
-        <span>Bekleme: {a.cooldownSec}s</span>
-        <span>Son: {fmtTime(a.lastFiredAt)}</span>
+        <span>{t('automationCard.cooldownSecondsValue', { seconds: a.cooldownSec })}</span>
+        <span>
+          {t('automationCard.last')}: {fmtTime(a.lastFiredAt)}
+        </span>
         {a.expiresAt ? (
           <span className={expired ? 'text-[var(--color-danger)]' : ''}>
-            Son tarih: {fmtTime(a.expiresAt)}
-            {expired && ' (doldu)'}
+            {t('common.expiresAt')}: {fmtTime(a.expiresAt)}
+            {expired && ` (${t('common.expired')})`}
           </span>
         ) : null}
       </div>
       {a.lastError && (
-        <div className="mt-0.5 text-[11px] text-[var(--color-danger)]">Hata: {a.lastError}</div>
+        <div className="mt-0.5 text-[11px] text-[var(--color-danger)]">
+          {t('common.error')}: {a.lastError}
+        </div>
       )}
       {/* Fire ledger (R5): every attempt with its outcome / skip reason. */}
       <AutomationFires automationId={a.id} refreshKey={a.lastFiredAt} />
 
       {isBoardKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-          Pano tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).
+          {t('automationCard.boardNoLoop')}
         </div>
       ) : isTokenKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-          Token tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).
+          {t('automationCard.tokenNoLoop')}
         </div>
       ) : a.flowId ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-          Akış tabanlı — kendini döngülemez (spawn etiketleri yok sayılır).
+          {t('automationCard.flowNoLoop')}
         </div>
       ) : (
         <div className="mt-1">
           <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-            Spawn etiketleri
+            {t('automationCard.spawnTags')}
           </span>
           <TagEditor
             tags={a.spawnTags ?? [a.triggerTag]}
             onChange={onSpawnTags}
-            placeholder="loop kırmak için boş bırak"
+            placeholder={t('automationCard.spawnTagsPlaceholder')}
             className="py-1"
           />
         </div>

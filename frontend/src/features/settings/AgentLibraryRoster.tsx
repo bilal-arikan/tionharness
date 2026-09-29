@@ -1,4 +1,5 @@
 import { Search, Layers, Bot, Workflow, Users, CornerDownRight } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { CatalogAgent, CatalogWorkspace } from '@/api/agentCatalog'
 import type { Agent } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
@@ -34,6 +35,7 @@ export function AgentLibraryRoster({
   setWorkspace,
   selection,
 }: Props) {
+  const { t } = useTranslation('settingsMain')
   const catalog = useCatalog()
   const ids = rows.map((row) => row.agent.id)
   return (
@@ -42,8 +44,8 @@ export function AgentLibraryRoster({
         <label className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[var(--color-text-dim)]">
           <Search size={15} />
           <input
-            aria-label="Search agents"
-            placeholder="Search name, model or workspace…"
+            aria-label={t('agentRoster.searchLabel')}
+            placeholder={t('agentRoster.searchPlaceholder')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="min-w-0 flex-1 bg-transparent text-xs outline-none"
@@ -52,10 +54,10 @@ export function AgentLibraryRoster({
         <div className="grid grid-cols-4 gap-1 rounded-lg bg-[var(--color-surface-2)] p-1">
           {(
             [
-              ['all', 'All', Layers],
-              ['custom', 'Custom', Bot],
-              ['services', 'Services', Workflow],
-              ['workers', 'Workers', Users],
+              ['all', t('agentRoster.kinds.all'), Layers],
+              ['custom', t('agentRoster.kinds.custom'), Bot],
+              ['services', t('agentRoster.kinds.services'), Workflow],
+              ['workers', t('agentRoster.kinds.workers'), Users],
             ] as const
           ).map(([value, label, Icon]) => (
             <button
@@ -70,13 +72,13 @@ export function AgentLibraryRoster({
           ))}
         </div>
         <select
-          aria-label="Filter by workspace"
+          aria-label={t('agentRoster.workspaceFilter')}
           value={workspace}
           onChange={(event) => setWorkspace(event.target.value)}
           className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs"
         >
-          <option value="">All workspaces</option>
-          <option value="unassigned">Unassigned</option>
+          <option value="">{t('agentRoster.allWorkspaces')}</option>
+          <option value="unassigned">{t('agentRoster.unassigned')}</option>
           {workspaces.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.name}
@@ -108,25 +110,29 @@ export function AgentLibraryRoster({
                 subtitle={[
                   resolveModelLabel(catalog, agent.provider, agent.model),
                   assignments.length === 0
-                    ? 'Unassigned'
-                    : `${assignments.length} workspace${assignments.length === 1 ? '' : 's'}`,
+                    ? t('agentRoster.unassigned')
+                    : t('agentRoster.workspaceCount', { count: assignments.length }),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
                 trailing={
                   <span className="flex shrink-0 flex-col items-end gap-0.5 text-[10px] text-[var(--color-text-dim)]">
                     <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
-                      {agent.locked ? 'Built-in' : agent.system ? 'Role' : 'Custom'}
+                      {agent.locked
+                        ? t('agentRoster.badges.builtIn')
+                        : agent.system
+                          ? t('agentRoster.badges.role')
+                          : t('agentRoster.badges.custom')}
                     </span>
-                    {agent.disabled && <span>Disabled</span>}
+                    {agent.disabled && <span>{t('agentRoster.badges.disabled')}</span>}
                   </span>
                 }
               />
               {parentName && (
                 <span
                   className="ml-7 mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-[var(--color-text-dim)]"
-                  title={`Inherits from ${parentName}`}
-                  aria-label={`Inherits from ${parentName}`}
+                  title={t('agentRoster.inherits', { name: parentName })}
+                  aria-label={t('agentRoster.inherits', { name: parentName })}
                 >
                   <CornerDownRight size={11} className="shrink-0 text-[var(--color-accent)]" />
                   <span className="truncate">{parentName}</span>
@@ -137,7 +143,7 @@ export function AgentLibraryRoster({
         })}
         {rows.length === 0 && (
           <div className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-xs text-[var(--color-text-dim)]">
-            No agents match these filters.
+            {t('agentRoster.empty')}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@
 // manual) LLM-free pass archived and what it only suggests, with a "run now"
 // button. Nothing here deletes; archived entities are restorable.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Brush, Loader2, X } from 'lucide-react'
 import { api } from '@/api'
 import { Badge, ModalOverlay } from '@/shared/components'
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function CuratorPanel({ onClose, onError, onChanged }: Props) {
+  const { t } = useTranslation('schedules')
   const [report, setReport] = useState<CuratorReport | null>(null)
   const [state, setState] = useState<'loading' | 'none' | 'ready'>('loading')
   const [running, setRunning] = useState(false)
@@ -61,41 +63,40 @@ export function CuratorPanel({ onClose, onError, onChanged }: Props) {
       >
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
           <Brush size={16} className="opacity-70" />
-          <span className="text-sm font-semibold">Küratör</span>
-          <span className="text-xs text-[var(--color-text-dim)]">
-            haftalık, boşta tetiklenir · yalnız arşivler, asla silmez · sabitlenenler muaf
-          </span>
+          <span className="text-sm font-semibold">{t('curator.title')}</span>
+          <span className="text-xs text-[var(--color-text-dim)]">{t('curator.description')}</span>
           <button
             type="button"
             onClick={onClose}
             className="ml-auto rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
-            aria-label="Kapat"
+            aria-label={t('common.close')}
           >
             <X size={16} />
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-xs">
           {state === 'loading' ? (
-            <span className="text-[var(--color-text-dim)]">Yükleniyor…</span>
+            <span className="text-[var(--color-text-dim)]">{t('common.loading')}</span>
           ) : report ? (
             <>
               <span>
-                Son geçiş: {fmtTime(report.at)} ·{' '}
-                {report.trigger === 'weekly' ? 'haftalık' : 'elle'}
-                {report.idle ? '' : ' · workspace meşguldü'}
+                {t('curator.lastRun', {
+                  time: fmtTime(report.at),
+                  trigger: t(
+                    `curator.triggers.${report.trigger === 'weekly' ? 'weekly' : 'manual'}`,
+                  ),
+                })}
+                {report.idle ? '' : ` · ${t('curator.workspaceBusy')}`}
               </span>
               <Badge tone={report.archived > 0 ? 'warning' : 'muted'}>
-                {report.archived} arşivlendi
+                {t('curator.archivedCount', { count: report.archived })}
               </Badge>
               <Badge tone={report.suggestions > 0 ? 'accent' : 'muted'}>
-                {report.suggestions} öneri
+                {t('curator.suggestionCount', { count: report.suggestions })}
               </Badge>
             </>
           ) : (
-            <span className="text-[var(--color-text-dim)]">
-              Küratör bu workspace'te henüz çalışmadı. İlk geçiş, bir hafta boşta kalınca ya da
-              aşağıdan elle.
-            </span>
+            <span className="text-[var(--color-text-dim)]">{t('curator.neverRun')}</span>
           )}
           <span className="ml-auto flex items-center gap-1.5">
             <button
@@ -103,29 +104,27 @@ export function CuratorPanel({ onClose, onError, onChanged }: Props) {
               disabled={running}
               onClick={() => run(false)}
               className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-40"
-              title="Yalnız öneri üret; hiçbir şeyi arşivleme"
+              title={t('curator.dryRunTitle')}
               data-testid="curator-dry-run"
             >
-              Kuru çalıştır
+              {t('curator.dryRun')}
             </button>
             <button
               type="button"
               disabled={running}
               onClick={() => run(true)}
               className="flex items-center gap-1 rounded-lg border border-[var(--color-accent)] px-2.5 py-1 text-[var(--color-accent)] disabled:opacity-40"
-              title="Ajan yapımı tükenmiş / süresi dolmuş kuralları arşivle, kalanını öner"
+              title={t('curator.runTitle')}
               data-testid="curator-run"
             >
               {running ? <Loader2 size={12} className="animate-spin" /> : <Brush size={12} />}
-              Şimdi çalıştır
+              {t('curator.runNow')}
             </button>
           </span>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-4 py-3 text-xs">
           {report && report.actions.length === 0 && (
-            <p className="text-[var(--color-text-dim)]">
-              Temiz: ne arşivlenecek ne önerilecek bir şey var.
-            </p>
+            <p className="text-[var(--color-text-dim)]">{t('curator.clean')}</p>
           )}
           {report && report.actions.length > 0 && (
             <ul className="flex flex-col gap-1.5">
@@ -141,9 +140,12 @@ export function CuratorPanel({ onClose, onError, onChanged }: Props) {
 }
 
 function CuratorRow({ action: a }: { action: CuratorAction }) {
+  const { t } = useTranslation('schedules')
   return (
     <li className="flex flex-wrap items-center gap-2 rounded border border-[var(--color-border)] px-2.5 py-1.5">
-      <Badge tone={a.applied ? 'warning' : 'accent'}>{a.applied ? 'arşivlendi' : 'öneri'}</Badge>
+      <Badge tone={a.applied ? 'warning' : 'accent'}>
+        {a.applied ? t('curator.archived') : t('curator.suggestion')}
+      </Badge>
       <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
         {CURATOR_ENTITY_LABEL[a.entity] ?? a.entity}
       </span>
@@ -151,9 +153,16 @@ function CuratorRow({ action: a }: { action: CuratorAction }) {
       <span className="text-[var(--color-text-dim)]">
         {CURATOR_REASON_LABEL[a.reason] ?? a.reason}
       </span>
-      {a.detail && <span className="text-[var(--color-text-dim)]">· {a.detail}</span>}
+      {a.detail && (
+        <span className="text-[var(--color-text-dim)]">
+          {t('common.dotValue', { value: a.detail })}
+        </span>
+      )}
       {a.evidence && (
-        <span className="ml-auto text-[10px] text-[var(--color-text-dim)]" title="Kanıt">
+        <span
+          className="ml-auto text-[10px] text-[var(--color-text-dim)]"
+          title={t('curator.evidence')}
+        >
           {a.evidence}
         </span>
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/api'
 import type { CatalogEntry } from '@/types'
+import { sharedText } from './sharedI18n'
 
 // Re-exported so every consumer keeps importing labels from '@/shared/lib/catalog'.
 // The implementations live in modelLabel.ts (no api import → unit-testable in the
@@ -48,27 +49,27 @@ function thinkingInfoForModel(
   return { tiers: m?.thinkingTiers ?? null, cls: m?.thinkingClass ?? '' }
 }
 
-// thinkingTierDisabledReason returns a short Turkish explanation for why a tier
+// thinkingTierDisabledReason returns a short explanation for why a tier
 // is inactive on a model of the given class. Called only for tiers the model
 // does NOT support (absent from thinkingTiers); the class decides the wording.
 function thinkingTierDisabledReason(cls: string, tier: string): string {
   // "off" is only missing on the effort class when reasoning cannot stop (GLM-5.3).
   if ((cls === 'always-on' || cls === 'effort') && tier === 'off')
-    return 'Bu model her zaman düşünür — kapatılamaz'
+    return sharedText('thinking.alwaysOn')
   // The effort class (DeepSeek V4.x, GLM-5.3) has three real levels — low/high/
   // max — and folds the in-between tiers onto the nearest one.
   if (cls === 'effort')
     return tier === 'medium'
-      ? 'Bu modelde "Yüksek"e (high) düşer'
-      : 'Bu modelde "Maks"a (max) düşer'
+      ? sharedText('thinking.fallsBackHigh')
+      : sharedText('thinking.fallsBackMax')
   // On the reasoning classes the only upper tier a model can be missing is
   // "ultra": the Messages API effort enum stops at "max", so it lands on max
   // rather than on the legacy high clamp.
   if (tier === 'ultra' && (cls === 'adaptive' || cls === 'always-on' || cls === 'alias'))
-    return 'Bu sağlayıcıda "Maks"a (max) düşer — effort değeri ultra taşımıyor'
+    return sharedText('thinking.providerFallsBackMax')
   if (tier === 'xhigh' || tier === 'max' || tier === 'ultra')
-    return 'Bu modelde "Yüksek"e (high) düşer'
-  return 'Bu model bu seviyeyi desteklemez'
+    return sharedText('thinking.fallsBackHigh')
+  return sharedText('thinking.unsupported')
 }
 
 // thinkingOptionsForModel is the shared provider-aware enablement rule used by

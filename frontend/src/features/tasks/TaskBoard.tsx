@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { api, getActiveWorkspace } from '@/api'
@@ -38,17 +39,11 @@ import { filterTasks, parseDeps, sortTasks, topoLevels } from './views/filterTas
 import { DROP_REFUSED_REASON, columnKeysOf, deriveColumns, dropPatch } from './views/deriveColumns'
 import { consumePendingBoardChanges } from './boardChangeHighlights'
 import { pickableAgents } from '@/shared/components/agents/pickableAgents'
-
-// Fallback columns used until workspace settings are loaded.
-const DEFAULT_COLUMNS: BoardColumnDef[] = [
-  { key: 'pbi', label: 'PBI', color: '' },
-  { key: 'todo', label: 'Yapılacak', color: '' },
-  { key: 'in_progress', label: 'Devam Eden', color: '' },
-  { key: 'review', label: 'İnceleme', color: '' },
-  { key: 'done', label: 'Bitti', color: '' },
-  { key: 'failed', label: 'Başarısız', color: '' },
-  { key: 'iptal', label: 'İptal', color: '' },
-]
+import {
+  canonicalizeBoardColumns,
+  fallbackBoardColumns,
+  localizeBoardColumns,
+} from './boardColumns'
 
 // Preserve custom colors while upgrading legacy built-in green/yellow values to
 // semantic tokens that remain readable in both theme modes.
@@ -76,9 +71,11 @@ interface Props {
 const BOARD_SEARCH_SETTLE_MS = 150
 
 export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) {
+  const { t } = useTranslation('tasks')
   const [tasks, setTasks] = useState<Task[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
-  const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
+  const [columns, setColumns] = useState<BoardColumnDef[]>(fallbackBoardColumns)
+  const visibleColumns = useMemo(() => localizeBoardColumns(columns), [columns])
   // User-created saved views, pulled from workspace settings alongside columns.
   const [savedViews, setSavedViews] = useState<BoardViewDef[]>([])
   const [dragId, setDragId] = useState<string | null>(null)
@@ -244,8 +241,9 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
   })
 
   const saveColumns = async (cols: BoardColumnDef[]) => {
-    const updated = await api.updateWorkspaceSettings({ boardColumns: cols })
-    setColumns(updated.boardColumns ?? cols)
+    const persisted = canonicalizeBoardColumns(cols, columns)
+    const updated = await api.updateWorkspaceSettings({ boardColumns: persisted })
+    setColumns(updated.boardColumns ?? persisted)
     setEditorOpen(false)
     // Tell the Network screen so its live-mode column anchors can refresh
     // immediately (without waiting for an autonomous task event).
@@ -301,7 +299,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
         // dropped image shows on the card without waiting for the next reload.
         if (a.kind === 'image') newImages.push(a)
       } catch (e) {
-        onError(`"${file.name}" eklenemedi: ${(e as Error).message}`)
+        onError(t('artifacts.uploadError', { name: file.name, error: (e as Error).message }))
       }
     }
     if (newIds.length === 0) return
@@ -390,8 +388,8 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
   // configured column set verbatim. Derived from the filtered list so an axis
   // does not sprout columns for cards the filter excluded.
   const derivedColumns = useMemo(
-    () => deriveColumns(groupBy, visible, agents, columns),
-    [groupBy, visible, agents, columns],
+    () => deriveColumns(groupBy, visible, agents, visibleColumns),
+    [groupBy, visible, agents, visibleColumns],
   )
 
   // Topo levels only matter for the dependency sort, and are computed over the
@@ -425,7 +423,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
     const flowById = new Map(flows.map((f) => [f.id, f]))
     // Dependency chips colour by the STATUS column of the blocker, whatever the
     // current grouping axis is — so this reads `columns`, not derivedColumns.
-    const colorByState = new Map(columns.map((c) => [c.key, c.color ?? null]))
+    const colorByState = new Map(visibleColumns.map((c) => [c.key, c.color ?? null]))
     const imageById = new Map(images.map((a) => [a.id, a]))
 
     const m = new Map<string, TaskCardMeta>()
@@ -450,7 +448,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
       })
     }
     return m
-  }, [tasks, agents, flows, columns, images])
+  }, [tasks, agents, flows, visibleColumns, images])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk move/assign/delete.
   // The ordered id list mirrors the on-screen render order (column by column,
@@ -519,7 +517,10 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
       filter,
     ).some((t) => t.id === task.id)
     if (!stillVisible) {
-      showHint(`"${task.title}" filtre dışında kaldı`, () => void applyPatch(task, before))
+      showHint(
+        t('board.movedOutsideFilter', { title: task.title }),
+        () => void applyPatch(task, before),
+      )
     } else if (announce) {
       showHint(announce)
     }
@@ -538,7 +539,11 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
     const nextIdx = idx + direction
     if (nextIdx < 0 || nextIdx >= keys.length) return
     const nextCol = derivedColumns[nextIdx]
-    handleDrop(task, nextCol.key, `"${task.title}", ${nextCol.label} sütununa taşındı`)
+    handleDrop(
+      task,
+      nextCol.key,
+      t('board.movedToColumn', { title: task.title, column: nextCol.label }),
+    )
   })!
 
   const bulkMove = async (boardState: string) => {
@@ -571,7 +576,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
   const bulkDelete = async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
-    if (!confirm(`${ids.length} görev silinsin mi?`)) return
+    if (!confirm(t('board.bulkDeleteConfirm', { count: ids.length }))) return
     setTasks((prev) => prev.filter((t) => !sel.selected.has(t.id)))
     sel.clear()
     try {
@@ -624,7 +629,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
       {/* Left: column editor panel */}
       {editorOpen && (
         <BoardColumnEditor
-          columns={columns}
+          columns={visibleColumns}
           taskCountByColumn={taskCountByColumn}
           onSave={saveColumns}
           onClose={() => setEditorOpen(false)}
@@ -635,7 +640,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
         {/* Top bar: title + board actions. Column editing only makes sense on the
             status axis — the other axes derive their columns from the data. */}
         <PaneHeader
-          title={showArchived ? 'Görevler — Arşiv' : 'Görevler'}
+          title={showArchived ? t('board.archiveTitle') : t('board.title')}
           right={
             <>
               {/* The board's projection — the same bytes an agent gets from
@@ -648,27 +653,27 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
                   sel.clear()
                   setShowArchived((v) => !v)
                 }}
-                backLabel="Panoya dön"
-                backTitle="Aktif panoya dön"
+                backLabel={t('board.backToBoard')}
+                backTitle={t('board.backToActiveBoard')}
               />
               {!showArchived && groupBy === 'status' && (
                 <button
                   data-testid="task-board-columns-editor"
                   onClick={() => setEditorOpen((v) => !v)}
-                  title="Sütunları düzenle"
+                  title={t('board.editColumns')}
                   className={`flex-shrink-0 rounded border px-2 py-1 text-xs transition ${
                     editorOpen
                       ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
                       : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
                   }`}
                 >
-                  ⊞ Sütunlar
+                  ⊞ {t('board.columns')}
                 </button>
               )}
               {!showArchived && (
                 <div data-testid="task-create-submit">
                   <Button onClick={() => setModal({ mode: 'create', taskId: null })}>
-                    + Görev
+                    {t('board.addTask')}
                   </Button>
                 </div>
               )}
@@ -681,7 +686,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
           tasks={tasks}
           visibleCount={visible.length}
           agents={agents}
-          boardColumns={columns}
+          boardColumns={visibleColumns}
         />
 
         {hint && (
@@ -699,7 +704,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
                 }}
                 className="flex-shrink-0 rounded border border-[var(--color-accent)] px-1.5 py-0.5 text-[var(--color-accent)]"
               >
-                Geri al
+                {t('actions.undo')}
               </button>
             )}
             <button
@@ -714,18 +719,18 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
         {showArchived && !loading && (
           <ArchiveViewBanner
             count={tasks.length}
-            noun="görev"
-            restoreHint="bir kartı geri almak için “Geri al”e bas."
+            noun={t('board.archiveNoun')}
+            restoreHint={t('board.archiveRestoreHint')}
           />
         )}
 
         {/* Board. Hidden (not unmounted) during the first load so column widths and
             scroll position are already settled when the cards appear. */}
-        {loading && <LoadingState label="Görevler yükleniyor…" className="flex-1" />}
+        {loading && <LoadingState label={t('board.loading')} className="flex-1" />}
         <div className={`flex flex-1 gap-3 overflow-x-auto p-4 ${loading ? 'hidden' : ''}`}>
           {derivedColumns.length === 0 && (
             <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
-              Bu filtreyle eşleşen görev yok.
+              {t('board.emptyFiltered')}
             </div>
           )}
           {derivedColumns.map((col, colIdx) => {
@@ -740,12 +745,12 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
                   // has no task to attach to — say so instead of silently
                   // discarding it.
                   if (Array.from(e.dataTransfer.types).includes('Files')) {
-                    showHint('Dosya eklemek için bir görev kartının üzerine bırakın')
+                    showHint(t('board.dropFileOnCard'))
                     setDragId(null)
                     return
                   }
-                  const t = tasks.find((x) => x.id === dragId)
-                  if (t) handleDrop(t, col.key)
+                  const draggedTask = tasks.find((x) => x.id === dragId)
+                  if (draggedTask) handleDrop(draggedTask, col.key)
                   setDragId(null)
                 }}
                 className="th-col flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)] max-sm:w-[78vw] 3xl:w-80"
@@ -753,7 +758,10 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
                 <div
                   role="heading"
                   aria-level={3}
-                  aria-label={`${col.label} sütunu, ${colTasks.length} görev`}
+                  aria-label={t('board.columnAriaLabel', {
+                    column: col.label,
+                    count: colTasks.length,
+                  })}
                   className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide"
                   style={
                     col.color
@@ -824,11 +832,11 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
           <select
             value=""
             onChange={(e) => bulkMove(e.target.value)}
-            title="Seçili görevleri sütuna taşı"
+            title={t('board.bulkMoveTitle')}
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
           >
-            <option value="">↦ Sütuna taşı…</option>
-            {columns.map((c) => (
+            <option value="">↦ {t('board.bulkMovePlaceholder')}</option>
+            {visibleColumns.map((c) => (
               <option key={c.key} value={c.key}>
                 {c.label}
               </option>
@@ -837,10 +845,10 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
           <select
             value=""
             onChange={(e) => bulkAssign(e.target.value)}
-            title="Seçili görevlere ajan ata"
+            title={t('board.bulkAssignTitle')}
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
           >
-            <option value="">⊕ Ajan ata…</option>
+            <option value="">⊕ {t('board.bulkAssignPlaceholder')}</option>
             {pickableAgents(agents).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -852,15 +860,15 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
               icon={<ArchiveRestore size={13} />}
               onClick={() => bulkArchive(false)}
             >
-              Geri al
+              {t('actions.restore')}
             </SelectionBarButton>
           ) : (
             <SelectionBarButton icon={<Archive size={13} />} onClick={() => bulkArchive(true)}>
-              Arşivle
+              {t('actions.archive')}
             </SelectionBarButton>
           )}
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
-            Sil
+            {t('actions.delete')}
           </SelectionBarButton>
         </SelectionBar>
       </div>
@@ -871,9 +879,9 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
           task={modalTask ?? undefined}
           agents={agents}
           flows={flows}
-          columns={columns}
+          columns={visibleColumns}
           tasks={tasks}
-          defaultBoardState={columns[0]?.key}
+          defaultBoardState={visibleColumns[0]?.key}
           onClose={closeModal}
           onSaved={onSaved}
           onReplaceTemp={onReplaceTemp}

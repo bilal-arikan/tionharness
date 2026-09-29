@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { FolderOpen, GitBranch, CornerLeftUp, RotateCcw, Check, Folder } from 'lucide-react'
 import { api } from '@/api'
@@ -20,6 +21,7 @@ function basename(p: string): string {
 // effect on the next message. Self-contained: it reads/writes the cwd via the
 // session API using the sessionId prop.
 export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
+  const { t } = useTranslation('chatStatus')
   const [info, setInfo] = useState<WorkdirInfo | null>(null)
   const [open, setOpen] = useState(false)
   const [browse, setBrowse] = useState<BrowseResp | null>(null)
@@ -80,7 +82,7 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
     }
   }
 
-  const label = info?.effective ? basename(info.effective) : 'Dizin'
+  const label = info?.effective ? basename(info.effective) : t('workdir.fallback')
   const isOverride = !!info?.dir
 
   return (
@@ -91,8 +93,8 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
         disabled={!sessionId}
         title={
           info?.effective
-            ? `Çalışma dizini: ${info.effective}${info.branch ? ` (${info.branch})` : ''}`
-            : 'Çalışma dizini seç'
+            ? `${t('workdir.current', { path: info.effective })}${info.branch ? ` (${info.branch})` : ''}`
+            : t('workdir.select')
         }
         className={`flex max-w-[220px] items-center gap-1 rounded-xl border px-2.5 py-3 text-sm transition disabled:opacity-30 ${
           isOverride
@@ -120,16 +122,16 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
         <div className="absolute bottom-full left-0 mb-2 w-80 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 shadow-xl">
           <div className="mb-1 flex items-center justify-between px-1">
             <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-              Çalışma dizini
+              {t('workdir.heading')}
             </span>
             {info?.dir && (
               <button
                 onClick={() => apply('')}
                 disabled={busy}
-                title="Workspace varsayılanına sıfırla"
+                title={t('workdir.resetTitle')}
                 className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
               >
-                <RotateCcw size={11} /> Sıfırla
+                <RotateCcw size={11} /> {t('workdir.reset')}
               </button>
             )}
           </div>
@@ -139,23 +141,27 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
             <button
               onClick={() => navigate(browse?.parent ?? '')}
               disabled={busy || !browse?.path}
-              title="Üst klasör"
+              title={t('workdir.parent')}
               className="rounded-md p-1 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-30"
             >
               <CornerLeftUp size={14} />
             </button>
             <span className="truncate text-xs text-[var(--color-text)]" title={browse?.path}>
-              {browse?.path || 'Bu bilgisayar'}
+              {browse?.path || t('workdir.computer')}
             </span>
           </div>
 
           {/* Subdirectory list. */}
           <div className="max-h-56 overflow-y-auto rounded-lg border border-[var(--color-border)]">
             {busy && (
-              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Yükleniyor…</div>
+              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">
+                {t('workdir.loading')}
+              </div>
             )}
             {!busy && (browse?.entries.length ?? 0) === 0 && (
-              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Alt klasör yok</div>
+              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">
+                {t('workdir.empty')}
+              </div>
             )}
             {!busy &&
               browse?.entries.map((e) => (
@@ -177,7 +183,7 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
             size="lg"
             className="mt-2 w-full"
           >
-            <Check size={14} /> Bu klasörü kullan
+            <Check size={14} /> {t('workdir.use')}
           </Button>
         </div>
       )}

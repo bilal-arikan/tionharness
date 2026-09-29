@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import type { FleetFinding } from '@/types'
@@ -7,6 +8,7 @@ import { SeverityBadge, RegressedBadge } from './insightBadges'
 // FleetTab shows the fleet-wide app-fix backlog: the same TionHarness bug surfacing
 // across workspaces, deduped into one row with combined weight + origins.
 export function FleetTab({ onError }: { onError: (msg: string) => void }) {
+  const { t } = useTranslation('insight')
   const [rows, setRows] = useState<FleetFinding[]>([])
   // Loading starts true: the mount fetch below is already in flight on the first
   // paint. run lands results through callbacks only, so the effect can call it;
@@ -34,14 +36,13 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--color-text-dim)]">
-          Tüm workspace'lerin app-fix bulguları, kanonik imzayla birleştirilmiş.
-        </p>
+        <p className="text-sm text-[var(--color-text-dim)]">{t('fleet.description')}</p>
         <button
           onClick={load}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />{' '}
+          {t('actions.refresh')}
         </button>
       </div>
       <div className="space-y-2">
@@ -55,11 +56,11 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
             </div>
             {f.proposedFix && (
               <p className="mt-1 text-sm">
-                <span className="font-medium">Öneri:</span> {f.proposedFix}
+                <span className="font-medium">{t('fleet.suggestion')}:</span> {f.proposedFix}
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1">
-              <span className="text-xs text-[var(--color-text-dim)]">Workspace:</span>
+              <span className="text-xs text-[var(--color-text-dim)]">{t('fleet.workspace')}:</span>
               {f.workspaces.map((w) => (
                 <span
                   key={w}
@@ -72,7 +73,7 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
           </div>
         ))}
         {rows.length === 0 && !loading && (
-          <div className="text-sm text-[var(--color-text-dim)]">Fleet app-fix bulgusu yok.</div>
+          <div className="text-sm text-[var(--color-text-dim)]">{t('fleet.empty')}</div>
         )}
       </div>
     </div>

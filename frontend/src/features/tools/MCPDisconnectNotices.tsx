@@ -25,7 +25,7 @@ export function MCPDisconnectNotices({
           data-server={n.server}
           className="flex items-start gap-2 rounded border border-[var(--color-danger)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
         >
-          <span aria-hidden="true">⚠️</span>
+          <span aria-hidden="true">{t('mcpDisconnect.warningIcon')}</span>
           <div className="min-w-0 flex-1">
             <div className="font-medium">
               {n.scoped

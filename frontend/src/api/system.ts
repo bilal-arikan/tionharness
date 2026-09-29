@@ -24,6 +24,7 @@ import type {
   WorkspaceArchives,
 } from '@/types'
 import { req } from './client'
+import { localizeCatalogEntry } from '@/shared/lib/providerMetadata'
 
 // subscribeEvents opens the global autonomous-event SSE feed via EventSource
 // (which reconnects automatically on drop). `onEvent` receives notification
@@ -245,7 +246,7 @@ export const systemApi = {
     }),
 
   // Provider/model catalog (for agent + settings pickers).
-  getCatalog: () => req<CatalogEntry[]>('/api/catalog'),
+  getCatalog: async () => (await req<CatalogEntry[]>('/api/catalog')).map(localizeCatalogEntry),
 
   // Built-in runtime prompts (read-only) + the source folder that holds them.
   getPrompts: () => req<PromptsResponse>('/api/prompts'),

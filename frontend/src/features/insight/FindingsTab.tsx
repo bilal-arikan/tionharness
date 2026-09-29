@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { LayoutGrid, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import type { AppliedEntity, InsightFinding, InsightLens } from '@/types'
@@ -21,16 +22,10 @@ interface Props {
 
 // Fixed lifecycle columns (a finding with an empty/triaged status buckets into
 // "Yeni"). Moving a card between columns = changing its status.
-const COLUMNS: { key: string; label: string }[] = [
-  { key: 'new', label: 'Yeni' },
-  { key: 'accepted', label: 'Kabul' },
-  { key: 'applied', label: 'Uygulandı' },
-  { key: 'verified', label: 'Doğrulandı' },
-  { key: 'dismissed', label: 'Yoksayıldı' },
-]
+const COLUMN_KEYS = ['new', 'accepted', 'applied', 'verified', 'dismissed'] as const
 const bucketOf = (status: string) => {
   const s = status || 'new'
-  return COLUMNS.some((c) => c.key === s) ? s : 'new'
+  return COLUMN_KEYS.some((key) => key === s) ? s : 'new'
 }
 
 const SEV2PRI: Record<string, string> = {
@@ -57,6 +52,8 @@ function cardBody(f: InsightFinding): string {
 // lifecycle columns, drag or bulk-move to change status, click a card for the
 // detail popup, multi-select (Ctrl/Shift) for bulk status / board-card / delete.
 export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, onNote }: Props) {
+  const { t } = useTranslation('insight')
+  const columns = COLUMN_KEYS.map((key) => ({ key, label: t(`status.${key}`) }))
   const [filter, setFilter] = useState<FindingFilter>({})
   const [modalId, setModalId] = useState<string | null>(null)
   // Set when the modal was opened to collect "applied" evidence (drag onto that
@@ -71,7 +68,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
   // Cards per column, priority-sorted; plus the flat ordered id list for Shift-range.
   const byColumn = useMemo(() => {
     const m: Record<string, InsightFinding[]> = {}
-    for (const c of COLUMNS) m[c.key] = []
+    for (const c of columns) m[c.key] = []
     for (const f of filtered) m[bucketOf(f.status)].push(f)
     for (const k of Object.keys(m)) {
       m[k].sort(
@@ -79,10 +76,10 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
       )
     }
     return m
-  }, [filtered])
+  }, [filtered, columns])
   const orderedIds = useMemo(
-    () => COLUMNS.flatMap((c) => byColumn[c.key].map((f) => f.id)),
-    [byColumn],
+    () => columns.flatMap((c) => byColumn[c.key].map((f) => f.id)),
+    [byColumn, columns],
   )
 
   const setStatus = async (id: string, status: string, evidence?: AppliedEntity) => {
@@ -110,7 +107,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
         priority: (SEV2PRI[f.severity ?? ''] ?? undefined) as never,
         tags: ['insight', f.channel],
       })
-      onNote(`Karta eklendi: ${f.title.slice(0, 60)}`)
+      onNote(t('findings.addedToCard', { title: f.title.slice(0, 60) }))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -121,9 +118,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
     // "applied" needs per-finding evidence, which a bulk move cannot supply —
     // firing it anyway would just collect N silent 400s.
     if (status === 'applied') {
-      onError(
-        '"Uygulandı" toplu işaretlenemez: her bulgu için ayrı uygulama kanıtı (varlık türü + id) gerekir. Kartı açıp tek tek işaretle.',
-      )
+      onError(t('findings.bulkAppliedError'))
       return
     }
     const ids = [...sel.selected]
@@ -133,7 +128,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
   }
   const bulkDelete = async () => {
     const ids = [...sel.selected]
-    if (ids.length === 0 || !confirm(`${ids.length} bulgu silinsin mi?`)) return
+    if (ids.length === 0 || !confirm(t('findings.bulkDeleteConfirm', { count: ids.length }))) return
     sel.clear()
     await Promise.all(ids.map((id) => api.deleteInsightFinding(id).catch(() => {})))
     reload()
@@ -159,7 +154,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
 
       {/* Kanban */}
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
-        {COLUMNS.map((col) => {
+        {columns.map((col) => {
           const cards = byColumn[col.key]
           return (
             <div
@@ -172,7 +167,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
                   if (col.key === 'applied') {
                     setModalId(dragId)
                     setAskApplied(true)
-                    onNote('"Uygulandı" için uygulama kanıtı gerekiyor: varlık türü + id gir.')
+                    onNote(t('findings.appliedEvidenceNeeded'))
                   } else {
                     void setStatus(dragId, col.key)
                   }
@@ -230,9 +225,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
 
       {filtered.length === 0 && (
         <div className="mt-2 text-sm text-[var(--color-text-dim)]">
-          {findings.length === 0
-            ? 'Henüz bulgu yok. Bir tarama başlat.'
-            : 'Filtreyle eşleşen bulgu yok.'}
+          {findings.length === 0 ? t('findings.empty') : t('findings.noFilterMatch')}
         </div>
       )}
 
@@ -244,21 +237,21 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
         <select
           value=""
           onChange={(e) => bulkStatus(e.target.value)}
-          title="Seçili bulguların statüsünü değiştir"
+          title={t('findings.changeSelectedStatus')}
           className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
         >
-          <option value="">↦ Statü…</option>
-          {COLUMNS.map((c) => (
+          <option value="">↦ {t('findings.statusPlaceholder')}</option>
+          {columns.map((c) => (
             <option key={c.key} value={c.key}>
               {c.label}
             </option>
           ))}
         </select>
         <SelectionBarButton icon={<LayoutGrid size={13} />} onClick={bulkCard}>
-          Karta ekle
+          {t('actions.addToCard')}
         </SelectionBarButton>
         <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
-          Sil
+          {t('actions.delete')}
         </SelectionBarButton>
       </SelectionBar>
 

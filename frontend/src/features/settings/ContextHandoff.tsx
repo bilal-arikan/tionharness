@@ -1,30 +1,29 @@
+import { useTranslation } from 'react-i18next'
 import { Toggle, NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function ContextHandoff({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Resume long autonomous tasks in a fresh context. Manual handoff remains available
-        independently.
-      </p>
+      <p className="text-xs text-[var(--color-text-dim)]">{t('contextHandoff.description')}</p>
       <Toggle
-        label="Automatic context handoff"
-        hint="Start a fresh session when an autonomous turn reaches the context limit. Manual chat is unaffected."
+        label={t('contextHandoff.auto.label')}
+        hint={t('contextHandoff.auto.hint')}
         checked={draft.handoffAuto}
         onChange={(v) => set('handoffAuto', v)}
       />
       <NumberField
-        label="Maximum handoff chain"
-        hint="Maximum consecutive resets before falling back to regular compaction."
+        label={t('contextHandoff.maxChain.label')}
+        hint={t('contextHandoff.maxChain.hint')}
         min={1}
         max={100}
         value={draft.handoffMaxChain || 20}
         onChange={(v) => set('handoffMaxChain', v)}
       />
       <Toggle
-        label="Write a handoff file"
-        hint="Also write .tionharness/handoff.md in the working directory."
+        label={t('contextHandoff.writeFile.label')}
+        hint={t('contextHandoff.writeFile.hint')}
         checked={draft.handoffWriteFile}
         onChange={(v) => set('handoffWriteFile', v)}
       />

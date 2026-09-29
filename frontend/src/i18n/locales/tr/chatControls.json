@@ -1,0 +1,196 @@
+{
+  "common": {
+    "close": "Kapat",
+    "loading": "Yükleniyor…"
+  },
+  "agentSelect": {
+    "targetAgent": "Hedef ajan: {{name}}",
+    "messageTarget": "Mesajın gönderileceği ajan: {{name}}",
+    "selectAgent": "Ajan seç",
+    "sendMessage": "Mesajı gönder",
+    "noAgents": "Ajan yok"
+  },
+  "autocomplete": {
+    "agents": "Ajanlar (referans)",
+    "artifacts": "Artifactlar",
+    "commands": "Komutlar",
+    "untitled": "İsimsiz",
+    "artifactKinds": {
+      "markdown": "Markdown",
+      "code": "Kod",
+      "html": "HTML",
+      "text": "Metin",
+      "svg": "SVG",
+      "mermaid": "Mermaid",
+      "image": "Görsel",
+      "video": "Video",
+      "audio": "Ses",
+      "file": "Dosya"
+    }
+  },
+  "btw": {
+    "title": "Btw — yan soru",
+    "notSaved": "geçmişe yazılmaz",
+    "descriptionBefore": "Ajan bu soruyu mevcut konuşmanın tam bağlamıyla yanıtlar, ama soru ve cevap sohbet geçmişine",
+    "descriptionEmphasis": "eklenmez",
+    "descriptionAfter": "ve ana görev kesilmez. Yan sohbette araç kullanımı yoktur (komut çalıştıramaz, dosya düzenleyemez).",
+    "placeholder": "Yan soru yaz — Enter ile sor",
+    "questionLabel": "Yan soru",
+    "asking": "Soruluyor…",
+    "ask": "Sor"
+  },
+  "mic": {
+    "server": "sunucu",
+    "browser": "tarayıcı",
+    "recognitionError": "Ses tanıma hatası: {{error}}",
+    "transcribing": "Yazıya çevriliyor…",
+    "finishRecording": "Kaydı bitir ({{language}} · {{engine}})",
+    "stopListening": "Dinlemeyi durdur ({{language}})",
+    "voiceType": "Sesle yaz ({{language}} · {{engine}}) — dili Ayarlar'dan değiştir",
+    "stopRecording": "Kaydı durdur",
+    "voiceTypeLabel": "Sesle yaz",
+    "microphoneUnavailable": "mikrofon erişimi yok (güvenli bağlam gerekir)",
+    "errors": {
+      "aborted": "tanıma iptal edildi",
+      "audioCapture": "ses girişi kullanılamıyor",
+      "badGrammar": "konuşma dilbilgisi geçersiz",
+      "languageNotSupported": "bu dil desteklenmiyor",
+      "network": "ağ hatası oluştu",
+      "noSpeech": "konuşma algılanmadı",
+      "notAllowed": "mikrofon erişimi reddedildi",
+      "serviceNotAllowed": "ses tanıma hizmeti kullanılamıyor"
+    }
+  },
+  "send": {
+    "send": "Gönder",
+    "stop": "Durdur",
+    "stopAutoWake": "Otomatik uyandırmayı durdur",
+    "afterTurn": "Bu tur bitince gönder",
+    "queue": "Sıraya",
+    "interruptTitle": "Turu kes ve hemen gönder (Ctrl/Cmd+Enter)",
+    "interrupt": "Kes",
+    "steerTitle": "Geçerli görevi durdurmadan yönlendir",
+    "steerUnavailable": "Bu tur için canlı yönlendirme kullanılamıyor. Bunun yerine Sıraya'yı kullan.",
+    "steer": "Yönlendir",
+    "stopGeneration": "Üretimi durdur"
+  },
+  "picker": {
+    "thinking": {
+      "auto": { "label": "Oto", "hint": "Ajanın kendi ayarı" },
+      "off": { "label": "Kapalı", "hint": "Düşünme yok" },
+      "low": { "label": "Düşük", "hint": "Kısa akıl yürütme" },
+      "medium": { "label": "Orta", "hint": "Dengeli" },
+      "high": { "label": "Yüksek", "hint": "Derin akıl yürütme" },
+      "xhigh": {
+        "label": "Çok yüksek",
+        "hint": "effort xhigh — kodlama/ajan işleri (güncel modeller)"
+      },
+      "max": { "label": "Maks", "hint": "effort max — en zor işler (güncel modeller)" },
+      "ultra": { "label": "Ultra", "hint": "effort ultra — Codex GPT-5 ailesi" }
+    },
+    "permission": {
+      "default": { "label": "Oto", "hint": "Ajanın kendi izin ayarı" },
+      "readOnly": { "label": "Salt-okunur", "hint": "Yazma/komut engellenir" },
+      "ask": { "label": "Sor", "hint": "Yazma/komut için onay iste" },
+      "auto": { "label": "Otomatik", "hint": "Tüm araçlar onaysız" }
+    }
+  },
+  "sttLanguages": {
+    "turkish": "Türkçe",
+    "englishUs": "İngilizce (ABD)",
+    "german": "Almanca",
+    "spanish": "İspanyolca",
+    "french": "Fransızca",
+    "italian": "İtalyanca",
+    "russian": "Rusça",
+    "arabic": "Arapça"
+  },
+  "tools": {
+    "title": "Araçlar",
+    "readOnly": "salt bilgi",
+    "readOnlyAgent": "{{name}} · salt bilgi",
+    "searchPlaceholder": "Ara…",
+    "searchLabel": "Araç ara",
+    "tabs": {
+      "inContext": "Bağlamda",
+      "onDemand": "Talep üzerine"
+    },
+    "descriptions": {
+      "inContext": "Bu araçların tam şeması her turda modele gönderilir — anında çağırabilir.",
+      "onDemand": "Bu araçların şeması turda gönderilmez; ajan gerektiğinde tool_search / activate_tools ile yükler. {{hiddenCount}} tanesi Gizli tier'da: katalogda tek tek listelenmez, bağlamda yalnız tool_search ile bulunabileceklerini belirten not durur.",
+      "servers": "Workspace’teki (özel dâhil) tüm MCP sunucuları ve araçlarının bağlama girip girmediği: yeşil = promptta, sarı/gri = değil (sebebi rozetin üstünde). 🔗 = şu an açık canlı bağlantı. Satıra tıklayıp o sunucunun araçlarını açabilirsin; arama kutusu açık satırları süzer. Ayarlar Araçlar ekranından değiştirilir."
+    },
+    "empty": {
+      "inContext": "Bu ajana her tur şeması gönderilen araç yok.",
+      "onDemand": "Talep üzerine yüklenebilecek araç yok — tüm araçlar zaten bağlamda.",
+      "noSearchMatch": "Aramayla eşleşen araç yok.",
+      "noServers": "Bu workspace'te tanımlı MCP sunucusu yok."
+    },
+    "blocked": "Yasaklı ({{value}})",
+    "mcpDisabled": "Bu ajanda MCP kapalı — MCP sunucularının araçları sunulmuyor.",
+    "categories": {
+      "builtin": "yerleşik",
+      "files": "Dosya ve Kabuk",
+      "search": "Arama ve Web",
+      "agents": "Ajanlar ve Oturumlar",
+      "automation": "Otomasyon",
+      "interaction": "Etkileşim",
+      "artifacts": "Artifactlar",
+      "skillsMcp": "Skill ve MCP",
+      "config": "Yapılandırma",
+      "diagnostics": "Tanılama",
+      "other": "Diğer"
+    },
+    "visibility": {
+      "full": {
+        "label": "Tam",
+        "hint": "Tam şema her tur ajana gönderilir (en yüksek token maliyeti)."
+      },
+      "summary": {
+        "label": "Özet",
+        "hint": "Katalogda isim + kısa özet görünür; tam şema gerektiğinde talep üzerine yüklenir."
+      },
+      "nameOnly": {
+        "label": "İsim",
+        "hint": "Katalogda yalnız isim görünür; şema tool_search/activate_tools ile yüklenir."
+      },
+      "hidden": {
+        "label": "Gizli",
+        "hint": "Katalogda hiç listelenmez; yalnızca tool_search ile keşfedilir ve aktive edilince çağrılabilir."
+      }
+    },
+    "serverStatus": {
+      "inContext": {
+        "label": "bağlamda",
+        "hint": "Bu sunucunun araçları ajanın promptunda — çağırabilir."
+      },
+      "hiddenOnly": {
+        "label": "katalog dışı",
+        "hint": "Araçları Gizli tier'da: katalogda tek tek listelenmez; bağlamda yalnız daha fazla aracın tool_search ile bulunabileceğini belirten not durur. Aktive edilince normal çağrılır."
+      },
+      "disabled": {
+        "label": "kapalı",
+        "hint": "Sunucu bu workspace'te devre dışı — Araçlar ekranından açılabilir."
+      },
+      "agentMcpOff": {
+        "label": "ajanda MCP kapalı",
+        "hint": "Sunucu etkin ama bu ajanın MCP anahtarı kapalı — hiçbir MCP aracı sunulmuyor."
+      },
+      "noTools": {
+        "label": "araç yok",
+        "hint": "Sunucu etkin ama araç gelmiyor: bağlantı kurulamamış ya da tüm araçları yasaklı olabilir."
+      }
+    },
+    "server": {
+      "scoped": "oturum-özel",
+      "live": "{{live}}/{{total}} canlı bağlantı",
+      "liveWithTimeout": "{{live}}/{{total}} canlı bağlantı — {{seconds}}sn boşta kalırsa kapanır",
+      "activeHint": "Bu sunucudan her tur TAM şeması gönderilen araç sayısı",
+      "activeCount": "aktif {{value}}",
+      "catalogHint": "Katalogda isim/özet olarak duran, activate_tools ile açılabilen araç sayısı",
+      "catalogCount": "katalog {{value}}",
+      "hiddenHint": "Katalogda tek tek listelenmeyen araç sayısı; bağlamda yalnız tool_search ile bulunabilecekleri notu durur ({{value}} araç için her turda yaklaşık {{tokens}} token tasarruf).",
+      "hiddenCount": "gizli {{value}}"
+    }
+  }
+}

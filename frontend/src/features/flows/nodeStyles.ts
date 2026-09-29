@@ -21,6 +21,7 @@ import {
 import type { Agent, FlowNodeType } from '@/types'
 import { avatarForeground } from '@/shared/lib/avatar'
 import type { NodeStatus } from './flowGraph'
+import { i18next } from '@/i18n'
 
 // useIsEndNode reports whether a node is terminal (has no outgoing edge), so the
 // canvas can tint it like an "end" of the flow. Reads edges from the React Flow
@@ -78,23 +79,26 @@ export const NODE_ICONS: Record<FlowNodeType, LucideIcon> = {
 }
 
 const CHROME: Record<string, NodeChrome> = {
-  agent: { accent: 'var(--color-accent)', label: 'Ajan', Icon: NODE_ICONS.agent },
-  branch: { accent: '#d97706', label: 'Dallanma', Icon: NODE_ICONS.branch },
-  parallel: { accent: '#7c3aed', label: 'Paralel', Icon: NODE_ICONS.parallel },
-  delay: { accent: '#0891b2', label: 'Bekle', Icon: NODE_ICONS.delay },
-  transform: { accent: '#059669', label: 'Birleştir', Icon: NODE_ICONS.transform },
-  loop: { accent: '#db2777', label: 'Döngü', Icon: NODE_ICONS.loop },
-  'await-input': { accent: '#eab308', label: 'Girdi Bekle', Icon: NODE_ICONS['await-input'] },
-  subflow: { accent: '#6366f1', label: 'Alt-Akış', Icon: NODE_ICONS.subflow },
-  start: { accent: '#22c55e', label: 'Başlangıç', Icon: NODE_ICONS.start },
-  end: { accent: '#3b82f6', label: 'Bitiş', Icon: NODE_ICONS.end },
-  spawn: { accent: '#c026d3', label: 'Spawn (Async)', Icon: NODE_ICONS.spawn },
-  join: { accent: '#0d9488', label: 'Join (Bariyer)', Icon: NODE_ICONS.join },
-  coordinator: { accent: '#ea580c', label: 'Koordinatör', Icon: NODE_ICONS.coordinator },
+  agent: { accent: 'var(--color-accent)', label: '', Icon: NODE_ICONS.agent },
+  branch: { accent: '#d97706', label: '', Icon: NODE_ICONS.branch },
+  parallel: { accent: '#7c3aed', label: '', Icon: NODE_ICONS.parallel },
+  delay: { accent: '#0891b2', label: '', Icon: NODE_ICONS.delay },
+  transform: { accent: '#059669', label: '', Icon: NODE_ICONS.transform },
+  loop: { accent: '#db2777', label: '', Icon: NODE_ICONS.loop },
+  'await-input': { accent: '#eab308', label: '', Icon: NODE_ICONS['await-input'] },
+  subflow: { accent: '#6366f1', label: '', Icon: NODE_ICONS.subflow },
+  start: { accent: '#22c55e', label: '', Icon: NODE_ICONS.start },
+  end: { accent: '#3b82f6', label: '', Icon: NODE_ICONS.end },
+  spawn: { accent: '#c026d3', label: '', Icon: NODE_ICONS.spawn },
+  join: { accent: '#0d9488', label: '', Icon: NODE_ICONS.join },
+  coordinator: { accent: '#ea580c', label: '', Icon: NODE_ICONS.coordinator },
 }
 
 export function chromeFor(type: string): NodeChrome {
-  return CHROME[type] ?? { accent: 'var(--color-border)', label: type, Icon: Circle }
+  const chrome = CHROME[type]
+  return chrome
+    ? { ...chrome, label: i18next.t(`nodeTypes.${type}`, { ns: 'flows' }) }
+    : { accent: 'var(--color-border)', label: type, Icon: Circle }
 }
 
 export function nodeHeaderForeground(accent: string): string {

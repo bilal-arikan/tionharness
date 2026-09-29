@@ -1,0 +1,259 @@
+{
+  "api": {
+    "agents": {
+      "builtInDelete": "Built-in agents cannot be deleted. To change one, create an inherited copy with \"Customize\"."
+    },
+    "http": {
+      "backendUnavailable": "Server unavailable (HTTP {{status}}). The TionHarness backend is not responding — make sure the development server (go run ./cmd/tionharness, 127.0.0.1:8090) is running.",
+      "serverError": "Server error (HTTP 500). Something went wrong during the operation; check the Logs screen for details.",
+      "timeout": "Request timed out (HTTP 408). The server did not respond in time. Try again.",
+      "tooManyRequests": "Too many requests (HTTP 429). Please wait a moment and try again.",
+      "notFound": "Not found (HTTP 404). The requested record may have been deleted or the address may be invalid.",
+      "forbidden": "Permission denied (HTTP {{status}}). You do not have permission for this operation.",
+      "badRequest": "Invalid request (HTTP 400). The server did not accept the submitted data.",
+      "unexpected": "Unexpected server response (HTTP {{status}})."
+    },
+    "network": {
+      "connectionFailed": "Could not connect to the server. Check your network connection and whether the backend is running."
+    },
+    "sharedAgent": {
+      "confirm": "Save changes to \"{{agentName}}\"?\n\nThis shared agent affects these workspaces:\n{{workspaces}}\n\nThe central profile will be updated for all of them.",
+      "cancelled": "Changes were not saved. Shared-agent update cancelled."
+    }
+  },
+  "attachments": {
+    "image": "Image",
+    "text": "Text",
+    "code": "Code",
+    "document": "Document",
+    "archive": "Archive",
+    "audio": "Audio",
+    "video": "Video",
+    "file": "File"
+  },
+  "agents": {
+    "deleted": "Deleted agent"
+  },
+  "clipboard": {
+    "copyPrompt": "Copy this text (Ctrl+C, Enter):"
+  },
+  "coordination": {
+    "subCoordinator": "Sub-coordinator",
+    "subCoordinatorLevel": "Sub-coordinator · level {{depth}}",
+    "coordinator": "Coordinator",
+    "worker": "Worker",
+    "workerLevel": "Worker · level {{depth}}"
+  },
+  "emoji": {
+    "smileys": "Faces",
+    "people": "People",
+    "nature": "Nature",
+    "objects": "Objects",
+    "symbols": "Symbols"
+  },
+  "model": {
+    "unspecified": "(model not specified)"
+  },
+  "notifications": {
+    "chat": {
+      "label": "Chat reply",
+      "hint": "An assistant reply completed (reply-ready notification and sound)."
+    },
+    "prompt": {
+      "label": "Approval / question",
+      "hint": "An agent is waiting for your response to an approval, permission request, or question."
+    },
+    "schedule": {
+      "label": "Schedules",
+      "hint": "A scheduled prompt ran or failed."
+    },
+    "flow": {
+      "label": "Flows",
+      "hint": "A flow run completed or failed."
+    },
+    "spawned": {
+      "label": "Spawn",
+      "hint": "A spawned session completed or failed."
+    },
+    "worker": {
+      "label": "Worker",
+      "hint": "A coordinator worker changed state."
+    },
+    "coordination": {
+      "label": "Coordination",
+      "hint": "Coordination warnings such as a coordinator turn limit."
+    },
+    "rota": {
+      "label": "Route",
+      "hint": "A route started, completed, failed, or is waiting for a human response."
+    },
+    "automation": {
+      "label": "Automations",
+      "hint": "A label or board automation was triggered."
+    },
+    "artifact": {
+      "label": "Artifacts",
+      "hint": "An artifact was created or updated."
+    },
+    "board": {
+      "label": "Tasks (board)",
+      "hint": "A Kanban task was created, moved, updated, or deleted."
+    },
+    "agent": {
+      "label": "Agent notification",
+      "hint": "A general notification sent by an agent with the notify tool."
+    },
+    "anomaly": {
+      "label": "Anomalies",
+      "hint": "A session warning such as a low cache hit rate, frequent breaks, or a tool error."
+    },
+    "agent-model-changed": {
+      "label": "Model change",
+      "hint": "An agent's model changed. Its prompt cache will cool down."
+    }
+  },
+  "searchIndex": {
+    "ready": "ready",
+    "indexing": "indexing…",
+    "stale": "stale",
+    "failed": "failed",
+    "missing": "missing"
+  },
+  "sessionOrigin": {
+    "triggeredBy": " · triggered by {{id}}",
+    "automation": {
+      "text": "Automation {{id}} triggered",
+      "title": "This session was opened by an automation{{entity}}{{via}}"
+    },
+    "schedule": {
+      "text": "Scheduler {{id}} started",
+      "title": "This session was opened by a scheduled run{{entity}}"
+    },
+    "flow": {
+      "run": "run {{id}}",
+      "node": "node {{id}}",
+      "text": "Flow {{id}}{{details}}",
+      "title": "This session belongs to a flow run{{entity}}{{details}}{{via}}"
+    },
+    "coordinator": {
+      "text": "Coordinator {{id}} opened",
+      "title": "This session was opened as a coordinator worker{{root}}",
+      "root": " · root {{id}}"
+    },
+    "subagent": {
+      "text": "Subagent · {{source}}",
+      "parentTurn": "parent turn",
+      "title": "This session was opened by a run_subagent call"
+    },
+    "handoff": {
+      "text": "Handoff{{target}}",
+      "title": "This session was handed off from the previous session through a context reset"
+    },
+    "spawn": {
+      "text": "Session {{id}} started",
+      "title": "This session was started from another session with spawn_session"
+    },
+    "insight": {
+      "text": "Insight run{{run}}",
+      "title": "This session belongs to an insight run"
+    },
+    "unknown": "Origin: {{kind}}"
+  },
+  "theme": {
+    "violet": "Violet",
+    "blue": "Blue",
+    "emerald": "Emerald",
+    "rose": "Rose",
+    "amber": "Amber",
+    "nord": "Nord",
+    "cyan": "Cyan",
+    "lime": "Lime",
+    "orange": "Orange",
+    "fuchsia": "Fuchsia"
+  },
+  "thinking": {
+    "alwaysOn": "This model always thinks — it cannot be turned off",
+    "fallsBackHigh": "Falls back to High for this model",
+    "fallsBackMax": "Falls back to Max for this model",
+    "providerFallsBackMax": "Falls back to Max for this provider — its effort value does not support ultra",
+    "unsupported": "This model does not support this level"
+  },
+  "stepKinds": {
+    "text": {
+      "label": "Text",
+      "description": "Intermediate narrative text produced by the model between tool calls."
+    },
+    "thinking": {
+      "label": "Thinking",
+      "description": "The model's reasoning content, when provided by the provider."
+    },
+    "tool": {
+      "label": "Tool",
+      "description": "A single tool call with its input and result. Edit and Write output is shown as a diff."
+    },
+    "delta": {
+      "label": "Stream fragment",
+      "description": "A live text fragment received while a reply is generated token by token. Temporary; the full text is written to the message."
+    },
+    "ask": {
+      "label": "Question",
+      "description": "The ask_user tool asks the user a question and waits for an answer, suspending the turn. Temporary; once answered, the tool step becomes permanent."
+    },
+    "permission": {
+      "label": "Permission approval",
+      "description": "A permission gate in ask mode waits for user approval before a write or command tool runs. Temporary; after the decision, the tool runs or records a permission_denied error. Used by both the native and claude-cli permission-prompt paths."
+    },
+    "plan": {
+      "label": "Plan approval",
+      "description": "Plan approval for claude-cli: the agent presents its plan with ExitPlanMode and waits for the user. Approval continues the turn; rejection lets the model revise the plan. Used only in ask and read-only modes; autonomous turns approve it automatically."
+    },
+    "todo": {
+      "label": "Task list",
+      "description": "The todo_write tool's working checklist, rendered as a first-class card."
+    },
+    "recovery": {
+      "label": "Recovery",
+      "description": "The loop left the happy path, for example by reaching its iteration limit. Reason contains a machine label."
+    },
+    "error": {
+      "label": "Error",
+      "description": "A turn-level error such as a provider failure, budget overrun, or cancellation, separate from a tool error marked with tool+isError."
+    },
+    "steer": {
+      "label": "Steering",
+      "description": "User guidance added live to a running turn, displayed separately from the model."
+    },
+    "tool_delta": {
+      "label": "Tool output stream",
+      "description": "Kept only for reading old persisted sessions. New tool output fragments use the generic Append contract."
+    },
+    "tombstone": {
+      "label": "Retraction",
+      "description": "Removes a live step whose final card cannot arrive because of cancellation or panic. Ref identifies the target step. The tombstone itself is not rendered."
+    },
+    "diff": {
+      "label": "File change",
+      "description": "A file change made with Write or Edit, shown with its path, added and removed line counts, and an expandable unified diff."
+    },
+    "hook": {
+      "label": "Hook",
+      "description": "A user-defined PreToolUse or PostToolUse hook ran around a tool call. It may change input or output, approve automatically, add context, or block the call. Reason carries the machine decision. Available only on the native anthropic/minimax path."
+    },
+    "context_change": {
+      "label": "Context change",
+      "description": "The session's frozen static context changed during the session. To preserve the prompt cache, the cached prefix still contains the session-start snapshot. Changed blocks appear as a diff, and the change is fully applied on the next context refresh."
+    },
+    "cache_break": {
+      "label": "Cache break",
+      "description": "This turn lost the session's warm prompt-cache prefix and paid for it again from cold. Cards are shown for model, system prompt, or tool schema changes; normal TTL cooling after a long idle period does not create a card."
+    },
+    "compaction": {
+      "label": "Context compaction",
+      "description": "Session history was folded into a rolling summary to stay within the context budget. The card shows the message count, context sizes, trigger, source, and CLI session operation. Raw messages leave model context but remain unchanged on disk."
+    },
+    "subagent": {
+      "label": "Subagent",
+      "description": "An isolated subagent started with run_subagent performs a task in its own clean context and returns only its final result. Expanding the card shows the subagent's nested trace. Multiple calls in one turn run in parallel."
+    }
+  }
+}

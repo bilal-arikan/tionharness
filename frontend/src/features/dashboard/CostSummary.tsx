@@ -1,6 +1,7 @@
 import type { CostBlock, DeltaStat } from '@/types'
 import { DeltaBadge } from './charts'
 import { fmtUsd } from './chartFormat'
+import { useTranslation } from 'react-i18next'
 
 // CostSummary is the money row a CEO reads first: what today cost, month-to-date,
 // the daily burn rate (with its period delta) and a naive month-end projection.
@@ -10,32 +11,33 @@ import { fmtUsd } from './chartFormat'
 // equivalent-API estimate) is shown once as a footnote rather than on every tile,
 // so the "~" prefix stays legible where it matters.
 export function CostSummary({ cost, costDelta }: { cost: CostBlock; costDelta: DeltaStat }) {
+  const { t } = useTranslation('dashboard')
   const tiles = [
-    { label: 'Bugün', value: fmtUsd(cost.today, cost.estimated) },
-    { label: 'Bu ay', value: fmtUsd(cost.month, cost.estimated) },
+    { label: t('cost.today'), value: fmtUsd(cost.today, cost.estimated) },
+    { label: t('cost.thisMonth'), value: fmtUsd(cost.month, cost.estimated) },
     {
-      label: 'Günlük ort. (burn)',
+      label: t('cost.dailyBurn'),
       value: fmtUsd(cost.burnRate, cost.estimated),
       // Up is the bad direction for spend, so the badge inverts its colours.
       delta: costDelta,
     },
     {
-      label: 'Ay sonu tahmini',
+      label: t('cost.monthEndProjection'),
       value: fmtUsd(cost.projectedMonth, cost.estimated),
-      hint: 'bu tempoyla',
+      hint: t('cost.atThisRate'),
     },
   ]
 
   return (
     <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="mb-2 flex items-baseline gap-2">
-        <span className="text-sm font-medium">💰 Maliyet</span>
+        <span className="text-sm font-medium">💰 {t('cost.title')}</span>
         {cost.coolingWaste > 0 && (
           <span
             className="text-[11px] text-[var(--color-text-dim)]"
-            title="Zamanında yanıtla önlenebilecek prompt-cache soğuma israfı"
+            title={t('cost.coolingWasteHint')}
           >
-            · bu aralıkta {fmtUsd(cost.coolingWaste, cost.estimated)} önlenebilir cache israfı
+            {t('cost.coolingWaste', { value: fmtUsd(cost.coolingWaste, cost.estimated) })}
           </span>
         )}
       </div>
@@ -57,10 +59,7 @@ export function CostSummary({ cost, costDelta }: { cost: CostBlock; costDelta: D
         ))}
       </div>
       {cost.estimated && (
-        <p className="mt-2 text-[10px] text-[var(--color-text-dim)]">
-          ~ işareti: abonelik sağlayıcıları (ör. claude-cli) gerçek fatura yerine eşdeğer-API
-          tahminiyle fiyatlanır.
-        </p>
+        <p className="mt-2 text-[10px] text-[var(--color-text-dim)]">{t('cost.estimatedNote')}</p>
       )}
     </section>
   )

@@ -1,6 +1,7 @@
 import { ArrowUp, Compass, ListPlus, Scissors, Square } from 'lucide-react'
 import { ActionButton } from './ActionButton'
 import { BTN_DANGER, BTN_PRIMARY, BTN_QUEUE, BTN_WARNING } from './buttonStyles'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // Turn lifecycle: `streaming` = a turn is in flight; `waiting` = the turn ended
@@ -54,13 +55,14 @@ export function SendActions({
   onInterrupt,
   onSteer,
 }: Props) {
+  const { t } = useTranslation('chatControls')
   const sendBtn = (
     <ActionButton
       onClick={onSend}
       disabled={disabled || !hasContent || anyUploading}
       testId="composer-send"
       icon={ArrowUp}
-      label="Gönder"
+      label={t('send.send')}
       className={BTN_PRIMARY}
     />
   )
@@ -71,10 +73,10 @@ export function SendActions({
     ) : (
       <ActionButton
         onClick={onCancelWait}
-        title="Otomatik uyandırmayı durdur"
+        title={t('send.stopAutoWake')}
         testId="composer-stop"
         icon={Square}
-        label="Durdur"
+        label={t('send.stop')}
         className={BTN_DANGER}
       />
     )
@@ -96,32 +98,28 @@ export function SendActions({
         <ActionButton
           onClick={onQueue}
           disabled={anyUploading}
-          title="Bu tur bitince gönder"
+          title={t('send.afterTurn')}
           testId="composer-queue"
           icon={ListPlus}
-          label="Sıraya"
+          label={t('send.queue')}
           className={BTN_QUEUE}
         />
         <ActionButton
           onClick={onInterrupt}
           disabled={anyUploading}
-          title="Turu kes ve hemen gönder (Ctrl/Cmd+Enter)"
+          title={t('send.interruptTitle')}
           testId="composer-interrupt"
           icon={Scissors}
-          label="Kes"
+          label={t('send.interrupt')}
           className={BTN_WARNING}
         />
         <ActionButton
           onClick={onSteer}
           disabled={!hasText || !canSteer}
-          title={
-            canSteer
-              ? 'Guide the current task without stopping it'
-              : 'Live guidance is unavailable for this turn. Use Queue instead.'
-          }
+          title={canSteer ? t('send.steerTitle') : t('send.steerUnavailable')}
           testId="composer-steer"
           icon={Compass}
-          label="Yönlendir"
+          label={t('send.steer')}
           className={BTN_PRIMARY}
         />
       </div>
@@ -132,10 +130,10 @@ export function SendActions({
   return (
     <ActionButton
       onClick={onStop}
-      title="Üretimi durdur"
+      title={t('send.stopGeneration')}
       testId="composer-stop"
       icon={Square}
-      label="Durdur"
+      label={t('send.stop')}
       className={BTN_DANGER}
     />
   )

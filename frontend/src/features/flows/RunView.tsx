@@ -12,8 +12,9 @@ import { ViewButton } from '@/features/view/ViewButton'
 import { FlowCanvas } from './FlowCanvas'
 import { RunNodeInspector } from './RunNodeInspector'
 import type { ChildProgress } from './runTree'
-import { STATUS_LABEL, statusColor } from './runStatus'
+import { statusLabel, statusColor } from './runStatus'
 import { formatDateTime } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   run: FlowRun
@@ -90,6 +91,7 @@ export function RunView({
   childProgress,
   onDescend,
 }: Props) {
+  const { t } = useTranslation('flows')
   const st = useMemo(() => safeParseState(run.state), [run.state])
   // Await-input composer state (only used while the run is waiting).
   const [awaitInput, setAwaitInput] = useState('')
@@ -291,10 +293,10 @@ export function RunView({
                 {normalizeAvatar(flow?.emoji) && (
                   <span className="mr-1 leading-none">{normalizeAvatar(flow?.emoji)}</span>
                 )}
-                {flow?.name ?? '（silinmiş akış）'}
+                {flow?.name ?? t('flow.deletedName')}
               </span>
               <span className={`text-xs ${statusColor(run.status)}`}>
-                {STATUS_LABEL[run.status] ?? run.status}
+                {statusLabel(run.status)}
               </span>
               <span className="ml-auto text-xs text-[var(--color-text-dim)]">
                 {formatDateTime(new Date(run.createdAt * 1000), {
@@ -310,15 +312,11 @@ export function RunView({
                   type="button"
                   onClick={() => onRerun(run)}
                   disabled={rerunning || run.status === 'running' || !flow}
-                  title={
-                    !flow
-                      ? 'Akış silinmiş — tekrar çalıştırılamaz'
-                      : 'Bu koşuyu aynı girdiyle tekrar çalıştır'
-                  }
+                  title={!flow ? t('header.rerunDeleted') : t('header.rerunTitle')}
                   className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RotateCcw size={13} className={rerunning ? 'animate-spin' : ''} />
-                  {rerunning ? 'Çalışıyor…' : 'Tekrar çalıştır'}
+                  {rerunning ? t('actions.running') : t('actions.rerun')}
                 </button>
               )}
             </div>
@@ -327,7 +325,7 @@ export function RunView({
             <div
               className={`${hideSummary ? '' : 'mt-1 '}truncate text-xs text-[var(--color-text-dim)]`}
             >
-              Girdi: {run.input}
+              {t('run.input')}: {run.input}
             </div>
           )}
           {run.error && (
@@ -345,7 +343,7 @@ export function RunView({
           then reflects the run advancing. */}
       {run.status === 'waiting' && (
         <div className="flex items-center gap-2 border-b border-[color:var(--color-warning)] bg-[color:color-mix(in_srgb,var(--color-warning)_10%,var(--color-surface))] p-3">
-          <span className="shrink-0 text-xs text-[var(--color-warning)]">⏳ Girdi bekleniyor</span>
+          <span className="shrink-0 text-xs text-[var(--color-warning)]">{t('run.waiting')}</span>
           <input
             value={awaitInput}
             onChange={(e) => setAwaitInput(e.target.value)}
@@ -355,7 +353,7 @@ export function RunView({
                 void deliverInput()
               }
             }}
-            placeholder="Akışa gönderilecek girdi…"
+            placeholder={t('run.inputPlaceholder')}
             autoFocus
             className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none"
           />
@@ -365,7 +363,7 @@ export function RunView({
             className="flex shrink-0 items-center gap-1.5 rounded-md bg-[var(--color-warning)] px-3 py-1.5 text-xs font-medium text-[var(--color-bg)] transition hover:opacity-90 disabled:opacity-50"
           >
             {delivering ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            Gönder
+            {t('actions.send')}
           </button>
         </div>
       )}
@@ -404,12 +402,14 @@ export function RunView({
           onClick={toggleTrace}
           aria-expanded={traceOpen}
           className="flex flex-shrink-0 items-center gap-1 px-4 py-2 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-          title={traceOpen ? 'Adım izini gizle' : 'Adım izini göster'}
+          title={traceOpen ? t('run.traceHide') : t('run.traceShow')}
         >
           {traceOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-          <span>{selectedNode ? 'Node görünümü' : 'Adım izi'}</span>
+          <span>{selectedNode ? t('run.traceNode') : t('run.trace')}</span>
           <span className="ml-auto opacity-70">
-            {selectedNode ? selectedNode.title || selectedNode.id : `${traceCount} adım`}
+            {selectedNode
+              ? selectedNode.title || selectedNode.id
+              : t('run.stepCount', { count: traceCount })}
           </span>
         </button>
         {traceOpen && selectedNode ? (
@@ -433,7 +433,7 @@ export function RunView({
                   girdi reads inline with the steps instead of a top header row. */}
               {inputInTrace && run.input && (
                 <li className="rounded border-l-2 border-[var(--color-accent)] bg-[var(--color-surface-2)] p-2 text-sm">
-                  <div className="mb-1 text-xs text-[var(--color-text-dim)]">Girdi</div>
+                  <div className="mb-1 text-xs text-[var(--color-text-dim)]">{t('run.input')}</div>
                   <div className="whitespace-pre-wrap">{run.input}</div>
                 </li>
               )}
@@ -458,14 +458,14 @@ export function RunView({
                   <div className="text-xs text-[var(--color-accent)]">
                     {traceCount + 1}. [{runningNode.type}] {runningNode.title} —{' '}
                     {runningNode.phase === 'progress' && runningNode.output
-                      ? `${runningNode.output} tamamlandı…`
-                      : 'çalışıyor…'}
+                      ? t('run.progressCompleted', { progress: runningNode.output })
+                      : t('run.running')}
                   </div>
                 </li>
               )}
               {traceCount === 0 && !runningNode && (
                 <li className="text-xs italic text-[var(--color-text-dim)]">
-                  {run.status === 'running' ? 'Henüz adım tamamlanmadı…' : 'Adım izi yok.'}
+                  {run.status === 'running' ? t('run.traceNoneCompleted') : t('run.traceEmpty')}
                 </li>
               )}
             </ol>

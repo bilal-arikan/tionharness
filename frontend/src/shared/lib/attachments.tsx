@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { Attachment, AttachmentKind } from '@/types'
 import { getActiveWorkspace } from '@/api/client'
+import { sharedText } from './sharedI18n'
 
 interface IconMeta {
   Icon: ComponentType<{ size?: number; className?: string }>
@@ -21,15 +22,63 @@ interface IconMeta {
 }
 
 const KIND_META: Record<AttachmentKind, IconMeta> = {
-  image: { Icon: FileImage, label: 'Görsel', tint: 'text-[var(--color-accent)]' },
-  text: { Icon: FileText, label: 'Metin', tint: 'text-[var(--color-text-dim)]' },
-  code: { Icon: FileCode, label: 'Kod', tint: 'text-[var(--color-success)]' },
+  image: {
+    Icon: FileImage,
+    get label() {
+      return sharedText('attachments.image')
+    },
+    tint: 'text-[var(--color-accent)]',
+  },
+  text: {
+    Icon: FileText,
+    get label() {
+      return sharedText('attachments.text')
+    },
+    tint: 'text-[var(--color-text-dim)]',
+  },
+  code: {
+    Icon: FileCode,
+    get label() {
+      return sharedText('attachments.code')
+    },
+    tint: 'text-[var(--color-success)]',
+  },
   pdf: { Icon: FileText, label: 'PDF', tint: 'text-[var(--color-danger)]' },
-  office: { Icon: FileText, label: 'Belge', tint: 'text-[var(--color-accent)]' },
-  archive: { Icon: FileArchive, label: 'Arşiv', tint: 'text-[var(--color-warning)]' },
-  audio: { Icon: FileAudio, label: 'Ses', tint: 'text-[var(--color-accent)]' },
-  video: { Icon: FileVideo, label: 'Video', tint: 'text-[var(--color-accent)]' },
-  file: { Icon: FileIcon, label: 'Dosya', tint: 'text-[var(--color-text-dim)]' },
+  office: {
+    Icon: FileText,
+    get label() {
+      return sharedText('attachments.document')
+    },
+    tint: 'text-[var(--color-accent)]',
+  },
+  archive: {
+    Icon: FileArchive,
+    get label() {
+      return sharedText('attachments.archive')
+    },
+    tint: 'text-[var(--color-warning)]',
+  },
+  audio: {
+    Icon: FileAudio,
+    get label() {
+      return sharedText('attachments.audio')
+    },
+    tint: 'text-[var(--color-accent)]',
+  },
+  video: {
+    Icon: FileVideo,
+    get label() {
+      return sharedText('attachments.video')
+    },
+    tint: 'text-[var(--color-accent)]',
+  },
+  file: {
+    Icon: FileIcon,
+    get label() {
+      return sharedText('attachments.file')
+    },
+    tint: 'text-[var(--color-text-dim)]',
+  },
 }
 
 export function attachmentMeta(kind: AttachmentKind): IconMeta {

@@ -1,5 +1,6 @@
 import type { View } from '@/app/NavRail'
 import { VIEW_TITLE } from '@/app/viewRegistry'
+import { i18next } from '@/i18n'
 import type { ViewRef } from '@/types'
 
 // Where a map node "lives": the screen that owns the entity and, when that
@@ -24,7 +25,14 @@ const CATEGORY_VIEW: Record<string, View> = {
 }
 
 function target(view: View, id: string | null = null): ExplorerTarget {
-  return { view, id, label: VIEW_TITLE[view] }
+  return {
+    view,
+    id,
+    label: i18next.t(`screen.${view}`, {
+      ns: 'explorer',
+      defaultValue: VIEW_TITLE[view],
+    }),
+  }
 }
 
 export function screenForRef(ref: ViewRef): ExplorerTarget | null {

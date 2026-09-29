@@ -6,6 +6,7 @@ import { useServerStt } from './useServerStt'
 import { playMicStart, playMicStop } from '@/shared/lib/sounds'
 import { initServerStt, resolveSttEngine } from '@/shared/lib/stt'
 import { sttLang, onSttLangChange, sttLangLabel } from './sttLanguages'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // Disabled while there is no active session (nothing to dictate into).
@@ -15,12 +16,24 @@ interface Props {
   onTranscript: (text: string) => void
 }
 
+const SPEECH_ERROR_KEYS: Record<string, string> = {
+  aborted: 'aborted',
+  'audio-capture': 'audioCapture',
+  'bad-grammar': 'badGrammar',
+  'language-not-supported': 'languageNotSupported',
+  network: 'network',
+  'no-speech': 'noSpeech',
+  'not-allowed': 'notAllowed',
+  'service-not-allowed': 'serviceNotAllowed',
+}
+
 // MicButton adds voice dictation to the composer with two engines: the browser
 // Web Speech API (streaming, interim preview) or the server whisper.cpp engine
 // (record → upload → transcribe on stop; works in WebView2 / thin clients). The
 // engine is auto-selected (server when installed) and configurable in Settings ▸
 // Ses. Language is chosen there too and surfaced only in the button tooltip.
 export function MicButton({ disabled, onTranscript }: Props) {
+  const { t } = useTranslation('chatControls')
   const [lang, setLang] = useState(sttLang)
   // Bumped once the server STT status resolves so the engine choice re-evaluates.
   const [, setReady] = useState(0)
@@ -74,16 +87,21 @@ export function MicButton({ disabled, onTranscript }: Props) {
     else start(lang)
   }
 
-  const engineLabel = useServer ? 'sunucu' : 'tarayıcı'
+  const engineLabel = useServer ? t('mic.server') : t('mic.browser')
+  const localizedError = error
+    ? SPEECH_ERROR_KEYS[error]
+      ? t(`mic.errors.${SPEECH_ERROR_KEYS[error]}`)
+      : error
+    : ''
   const title = error
-    ? `Ses tanıma hatası: ${error}`
+    ? t('mic.recognitionError', { error: localizedError })
     : transcribing
-      ? 'Yazıya çevriliyor…'
+      ? t('mic.transcribing')
       : listening
         ? useServer
-          ? `Kaydı bitir (${sttLangLabel(lang)} · sunucu)`
-          : `Dinlemeyi durdur (${sttLangLabel(lang)})`
-        : `Sesle yaz (${sttLangLabel(lang)} · ${engineLabel}) — dili Ayarlar'dan değiştir`
+          ? t('mic.finishRecording', { language: sttLangLabel(lang), engine: engineLabel })
+          : t('mic.stopListening', { language: sttLangLabel(lang) })
+        : t('mic.voiceType', { language: sttLangLabel(lang), engine: engineLabel })
 
   return (
     <div className="relative flex items-center">
@@ -99,7 +117,7 @@ export function MicButton({ disabled, onTranscript }: Props) {
         onClick={toggle}
         disabled={disabled || transcribing}
         title={title}
-        aria-label={listening ? 'Kaydı durdur' : 'Sesle yaz'}
+        aria-label={listening ? t('mic.stopRecording') : t('mic.voiceTypeLabel')}
         aria-pressed={listening}
         data-testid="composer-mic"
         className={`${BTN_ICON} ${

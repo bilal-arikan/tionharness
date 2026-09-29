@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { PanelLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // Screen title shown in the header (e.g. "Ajanlar"). Optional: omit it when
@@ -47,11 +48,12 @@ export function PaneHeader({
   secondary,
   secondaryAlwaysWrap,
 }: Props) {
+  const { t } = useTranslation('sharedUi')
   const hamburger = onToggleList && (
     <button
       onClick={onToggleList}
-      title={listOpen ? 'Listeyi gizle' : 'Listeyi göster'}
-      aria-label="Liste panelini aç/kapat"
+      title={listOpen ? t('list.hide') : t('list.show')}
+      aria-label={t('list.togglePanel')}
       aria-pressed={listOpen}
       data-testid="pane-list-toggle"
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${

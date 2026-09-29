@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // Other nodes in the flow, for the {{node.<id>}} entries. Ignored in 'seed' context.
@@ -20,6 +21,7 @@ const BUBBLE_W = 320
 // overflow-scroll ancestor (e.g. the node-editor modal body). The balloon flips
 // above/below the button depending on where it sits in the viewport.
 export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) {
+  const { t } = useTranslation('flows')
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number; placement: 'top' | 'bottom' } | null>(
@@ -27,18 +29,18 @@ export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) 
   )
 
   const nodeVars: { name: string; desc: string }[] = [
-    { name: '{{input}}', desc: 'Akışın girdisi (RunFlow input)' },
-    { name: '{{last}}', desc: 'En son çalışan node’un çıktısı' },
-    { name: '{{date}}', desc: 'Geçerli tarih (2026-07-04)' },
-    { name: '{{time}}', desc: 'Geçerli saat (23:43)' },
-    { name: '{{datetime}}', desc: 'Tarih + saat' },
+    { name: '{{input}}', desc: t('vars.input') },
+    { name: '{{last}}', desc: t('vars.last') },
+    { name: '{{date}}', desc: t('vars.date') },
+    { name: '{{time}}', desc: t('vars.time') },
+    { name: '{{datetime}}', desc: t('vars.datetime') },
   ]
   // The run input is the seed value (bound to {{input}} in nodes); {{last}}/{{node.<id>}}
   // have no prior output at seed time, so only date/time are offered here.
   const seedVars: { name: string; desc: string }[] = [
-    { name: '{{date}}', desc: 'Geçerli tarih (2026-07-04)' },
-    { name: '{{time}}', desc: 'Geçerli saat (23:43)' },
-    { name: '{{datetime}}', desc: 'Tarih + saat' },
+    { name: '{{date}}', desc: t('vars.date') },
+    { name: '{{time}}', desc: t('vars.time') },
+    { name: '{{datetime}}', desc: t('vars.datetime') },
   ]
   const statics = context === 'seed' ? seedVars : nodeVars
   const showNodeRefs = context === 'node' && nodeRefs.length > 0
@@ -82,7 +84,7 @@ export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) 
       type="button"
       onClick={() => insert(name)}
       className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-2)]"
-      title="Alana ekle"
+      title={t('actions.insertIntoField')}
     >
       <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
         {name}
@@ -100,8 +102,8 @@ export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) 
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${open ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'}`}
-        title="Kullanılabilir değişkenler"
-        aria-label="Kullanılabilir değişkenler"
+        title={t('vars.title')}
+        aria-label={t('vars.title')}
       >
         <Info size={13} />
       </button>
@@ -120,17 +122,11 @@ export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) 
               }
             >
               <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">
-                {context === 'seed'
-                  ? 'Değişkenler (tıkla → ekle)'
-                  : 'Node’lar arası değişkenler (tıkla → ekle)'}
+                {context === 'seed' ? t('vars.seedTitle') : t('vars.nodeTitle')}
               </div>
               {context === 'seed' && (
                 <div className="mb-1 px-1 text-[11px] text-[var(--color-text-dim)]">
-                  Buraya yazdığın metin akışta{' '}
-                  <code className="rounded bg-[var(--color-accent-soft)] px-1 font-mono text-[var(--color-accent)]">
-                    {'{{input}}'}
-                  </code>{' '}
-                  olur.
+                  {t('vars.seedIntro')}
                 </div>
               )}
               <div className="max-h-64 overflow-y-auto">
@@ -138,7 +134,7 @@ export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) 
                 {showNodeRefs && (
                   <div className="mt-1 border-t border-[var(--color-border)] pt-1">
                     <div className="mb-0.5 px-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-                      Belirli node çıktısı
+                      {t('vars.nodeOutput')}
                     </div>
                     {nodeRefs.map((n) => row(`{{node.${n.id}}}`, n.title || n.id, true))}
                   </div>

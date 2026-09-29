@@ -16,6 +16,7 @@ import { AgentLibraryRoster } from './AgentLibraryRoster'
 import { agentKind, type AgentKind } from './agentLibrary'
 import { AgentWorkspaceAssignments } from './AgentWorkspaceAssignments'
 import { CreateCatalogAgent } from './CreateCatalogAgent'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onError: (message: string) => void
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function SystemAgentsPanel({ onError, headerTarget }: Props) {
+  const { t } = useTranslation('settings')
   const agentsTick = useRefreshTrigger(SIGNAL_AGENTS)
   const { data, loading, error, refresh } = useAsync(agentCatalogApi.listAgentCatalog, [agentsTick])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -89,15 +91,17 @@ export function SystemAgentsPanel({ onError, headerTarget }: Props) {
     })
     return id
   }
-  if (loading && !data) return <LoadingState label="Loading agent library…" />
+  if (loading && !data) return <LoadingState label={t('systemAgents.loading')} />
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="system-agents-panel">
       {headerTarget &&
         createPortal(
           <>
-            <span className="text-xs text-[var(--color-text-dim)]">{agents.length} agents</span>
+            <span className="text-xs text-[var(--color-text-dim)]">
+              {t('systemAgents.agentCount', { count: agents.length })}
+            </span>
             <button
-              aria-label="Refresh library"
+              aria-label={t('systemAgents.refresh')}
               data-testid="system-agents-refresh"
               onClick={refresh}
               disabled={loading}
@@ -111,7 +115,7 @@ export function SystemAgentsPanel({ onError, headerTarget }: Props) {
               className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white"
             >
               {createOpen ? <X size={14} /> : <Plus size={14} />}
-              {createOpen ? 'Close new agent' : 'New agent'}
+              {createOpen ? t('systemAgents.closeNew') : t('systemAgents.newAgent')}
             </button>
           </>,
           headerTarget,
@@ -183,9 +187,7 @@ export function SystemAgentsPanel({ onError, headerTarget }: Props) {
                       ? undefined
                       : () => {
                           if (
-                            confirm(
-                              `Delete "${selectedAgent.name}" from the library and all assigned workspaces?\n\nChat history is kept. Scheduled work using this agent will no longer run.`,
-                            )
+                            confirm(t('systemAgents.deleteConfirm', { name: selectedAgent.name }))
                           )
                             void action(async () => {
                               await agentCatalogApi.deleteCatalogAgent(selectedAgent.id)
@@ -196,7 +198,9 @@ export function SystemAgentsPanel({ onError, headerTarget }: Props) {
                   onRestoreDefault={
                     selectedAgent.locked || selectedAgent.parentId
                       ? () => {
-                          if (confirm(`Reset all custom settings for "${selectedAgent.name}"?`))
+                          if (
+                            confirm(t('systemAgents.restoreConfirm', { name: selectedAgent.name }))
+                          )
                             void action(() => agentCatalogApi.restoreCatalogAgent(selectedAgent.id))
                         }
                       : undefined
@@ -228,7 +232,7 @@ export function SystemAgentsPanel({ onError, headerTarget }: Props) {
             </>
           ) : (
             <div className="p-10 text-center text-sm text-[var(--color-text-dim)]">
-              Select an agent to edit its profile and workspace assignments.
+              {t('systemAgents.selectAgent')}
             </div>
           )}
         </div>

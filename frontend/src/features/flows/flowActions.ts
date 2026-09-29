@@ -3,11 +3,17 @@ import type { Edge } from '@xyflow/react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
 import type { EdgeStyle } from './FlowCanvas'
-import type { FlowTemplate } from './flowTemplates'
-import { reactFlowToGraph, ensureStartNode, type FlowRFNode } from './flowGraph'
+import {
+  flowTemplateCompanions,
+  flowTemplateGraph,
+  flowTemplateName,
+  type FlowTemplate,
+} from './flowTemplates'
+import { reactFlowToGraph, ensureStartNode, defaultNodeTitle, type FlowRFNode } from './flowGraph'
 import type { Agent, Flow, FlowRun } from '@/types'
 import type { MultiSelect } from '@/shared/hooks/useMultiSelect'
 import type { FlowsTab } from './flowsPanelShared'
+import { i18next } from '@/i18n'
 
 // Dependencies the flow-level actions (CRUD / save / run) need from FlowsPanel.
 interface FlowActionsDeps {
@@ -68,17 +74,17 @@ export function createFlowActions({
   onError,
 }: FlowActionsDeps) {
   const createFlow = async () => {
-    const n = prompt('Akış adı:')
+    const n = prompt(i18next.t('flow.namePrompt', { ns: 'flows' }))
     if (!n) return
     try {
       // Seed with the required start node so a fresh flow is valid out of the box.
       const f = await api.createFlow(n, {
         start: 'start',
-        nodes: [{ id: 'start', type: 'start', title: 'Başlangıç', next: '' }],
+        nodes: [{ id: 'start', type: 'start', title: defaultNodeTitle('start'), next: '' }],
       })
       setFlows((prev) => [f, ...prev])
       selectFlow(f)
-      toast.success('Akış oluşturuldu')
+      toast.success(i18next.t('flow.created', { ns: 'flows' }))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -91,7 +97,7 @@ export function createFlowActions({
   const instantiateTemplate = async (t: FlowTemplate) => {
     const defaultAgent = agents[0]?.id
     if (!defaultAgent) {
-      onError('Şablondan akış oluşturmak için önce en az bir ajan oluşturun.')
+      onError(i18next.t('flow.templateNeedsAgent', { ns: 'flows' }))
       return
     }
     try {
@@ -100,14 +106,15 @@ export function createFlowActions({
       // graph's spawn nodes, so the instantiated flow is runnable out of the box.
       const created: Flow[] = []
       const companionIds: string[] = []
-      for (const c of t.companions ?? []) {
+      for (const c of flowTemplateCompanions(t) ?? []) {
         const cf = await api.createFlow(c.name, ensureStartNode(c.graph))
         created.push(cf)
         companionIds.push(cf.id)
       }
+      const templateGraph = flowTemplateGraph(t)
       const graph = ensureStartNode({
-        ...t.graph,
-        nodes: t.graph.nodes.map((n) => {
+        ...templateGraph,
+        nodes: templateGraph.nodes.map((n) => {
           if (n.type === 'agent' && !n.agentId) return { ...n, agentId: defaultAgent }
           if (n.type === 'spawn' && n.spawnFlows) {
             return {
@@ -121,11 +128,11 @@ export function createFlowActions({
           return n
         }),
       })
-      const f = await api.createFlow(t.name, graph)
+      const f = await api.createFlow(flowTemplateName(t), graph)
       setFlows((prev) => [f, ...created, ...prev])
       setTab('flows')
       selectFlow(f)
-      toast.success('Akış oluşturuldu')
+      toast.success(i18next.t('flow.created', { ns: 'flows' }))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -141,7 +148,7 @@ export function createFlowActions({
       const f = await api.updateFlow(selectedId, name, graph)
       setFlows((prev) => prev.map((x) => (x.id === f.id ? f : x)))
       onError('') // clear
-      toast.success('Akış kaydedildi')
+      toast.success(i18next.t('flow.saved', { ns: 'flows' }))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -161,12 +168,12 @@ export function createFlowActions({
   }
 
   const removeFlow = async (f: Flow) => {
-    if (!confirm(`"${f.name}" akışı silinsin mi?`)) return
+    if (!confirm(i18next.t('flow.deleteConfirm', { ns: 'flows', name: f.name }))) return
     try {
       await api.deleteFlow(f.id)
       if (selectedId === f.id) setSelectedId(null)
       loadFlows()
-      toast.success('Akış silindi')
+      toast.success(i18next.t('flow.deleted', { ns: 'flows' }))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -185,13 +192,13 @@ export function createFlowActions({
   const bulkDelete = async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
-    if (!confirm(`${ids.length} akış silinsin mi?`)) return
+    if (!confirm(i18next.t('flow.deleteManyConfirm', { ns: 'flows', count: ids.length }))) return
     if (selectedId && sel.selected.has(selectedId)) setSelectedId(null)
     sel.clear()
     try {
       await Promise.all(ids.map((id) => api.deleteFlow(id)))
       loadFlows()
-      toast.success(`${ids.length} akış silindi`)
+      toast.success(i18next.t('flow.deletedMany', { ns: 'flows', count: ids.length }))
     } catch (e) {
       onError((e as Error).message)
     }

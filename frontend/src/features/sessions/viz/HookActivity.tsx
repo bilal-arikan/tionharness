@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { Hook, SessionDebugEvent } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 // HookActivity summarizes a session's tool/lifecycle HOOK firings from the debug
 // journal (type=hook events, each carrying the firing hook's id). Its first
@@ -80,15 +81,13 @@ function buildGroups(events: SessionDebugEvent[], hooks: Hook[]): HookGroup[] {
 }
 
 export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; hooks: Hook[] }) {
+  const { t } = useTranslation('sessions')
   const groups = useMemo(() => buildGroups(events, hooks), [events, hooks])
   const hasOptimizer = groups.some((g) => g.kind === 'rtk' || g.kind === 'sqz')
 
   if (groups.length === 0) {
     return (
-      <p className="text-[10px] text-[var(--color-text-dim)]">
-        Bu oturumda (native turlarda) hook ateşlemesi yok. Not: claude-cli turlarında hook'lar CLI
-        içinde çalışır ve buraya işlenmez.
-      </p>
+      <p className="text-[10px] text-[var(--color-text-dim)]">{t('visualization.hooks.empty')}</p>
     )
   }
 
@@ -106,15 +105,21 @@ export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; h
               <span className={`shrink-0 rounded px-1.5 py-px font-medium ${meta.cls}`}>
                 {meta.label}
               </span>
-              <span className="text-[var(--color-text-dim)]">{g.hookId || 'atıfsız'}</span>
-              <span className="text-[var(--color-text)]">{g.fired} ateşleme</span>
+              <span className="text-[var(--color-text-dim)]">
+                {g.hookId || t('visualization.hooks.unattributed')}
+              </span>
+              <span className="text-[var(--color-text)]">
+                {t('visualization.hooks.firings', { count: g.fired })}
+              </span>
               {tools.length > 0 && (
                 <span className="text-[var(--color-text-dim)]">
                   · {tools.map(([t, n]) => `${t}×${n}`).join(' ')}
                 </span>
               )}
               {g.errors > 0 && (
-                <span className="text-[var(--color-danger)]">· {g.errors} hata</span>
+                <span className="text-[var(--color-danger)]">
+                  · {t('visualization.hooks.errors', { count: g.errors })}
+                </span>
               )}
             </li>
           )
@@ -122,9 +127,9 @@ export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; h
       </ul>
       <p className="mt-1.5 text-[10px] text-[var(--color-text-dim)]">
         {hasOptimizer
-          ? 'rtk/sqz komutu yeniden yazarak çıktıyı küçültür; TionHarness sıkışmamış boyutu görmediği için burada byte tasarrufu değil, yalnız aktivite gösterilir.'
-          : "Token-optimizer (rtk/sqz) hook'u bu oturumda ateşlenmedi."}{' '}
-        Yalnız native turlar sayılır (claude-cli turları CLI içinde çalışır).
+          ? t('visualization.hooks.optimizerHelp')
+          : t('visualization.hooks.optimizerInactive')}{' '}
+        {t('visualization.hooks.nativeOnly')}
       </p>
     </div>
   )

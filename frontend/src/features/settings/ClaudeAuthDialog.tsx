@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, ExternalLink, Globe, Loader2 } from 'lucide-react'
 import { api } from '@/api'
 import { workspaceApi } from '@/api/workspaces'
@@ -25,6 +26,7 @@ export function ClaudeAuthDialog({
   onClose,
   onLoggedIn,
 }: Props) {
+  const { t } = useTranslation('settingsMain')
   const remote = isRemoteAccess()
   const startOAuth = () =>
     providerId ? api.startClaudeOAuth(providerId) : workspaceApi.startClaudeOAuth()
@@ -56,7 +58,7 @@ export function ClaudeAuthDialog({
           setFlowId('')
           onLoggedIn()
         } else if (result.status === 'error' || result.status === 'unknown') {
-          setError(result.detail || 'Giriş tamamlanamadı')
+          setError(result.detail || t('auth.loginFailed'))
           setFlowId('')
         }
       } catch {
@@ -67,7 +69,7 @@ export function ClaudeAuthDialog({
       active = false
       clearInterval(timer)
     }
-  }, [done, flowId, mode, onLoggedIn, providerId])
+  }, [done, flowId, mode, onLoggedIn, providerId, t])
 
   const start = async () => {
     setBusy(true)
@@ -87,7 +89,7 @@ export function ClaudeAuthDialog({
   const complete = async () => {
     const value = code.trim()
     if (!value) {
-      setError('Tarayıcıdaki kodu yapıştır')
+      setError(t('auth.claude.pasteCode'))
       return
     }
     setBusy(true)
@@ -108,26 +110,25 @@ export function ClaudeAuthDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="claude-cli kimlik doğrulama"
+        aria-label={t('auth.claude.title')}
         data-testid="claude-auth-modal"
         className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold">claude-cli kimlik doğrulama</h2>
+        <h2 className="mb-1 text-base font-semibold">{t('auth.claude.title')}</h2>
         <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          <span className="font-medium text-[var(--color-text)]">{providerLabel}</span> örneğinin
-          izole config dizinine Max/Pro hesabınla giriş yap.
+          {t('auth.claude.description', { provider: providerLabel })}
           {isLoggedIn && (
-            <span className="ml-1 text-[var(--color-success)]">✓ Giriş yapılmış.</span>
+            <span className="ml-1 text-[var(--color-success)]">✓ {t('auth.loggedIn')}</span>
           )}
         </p>
 
         {done ? (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-[var(--color-success)]/40 px-4 py-6 text-center">
             <Check size={28} className="text-[var(--color-success)]" />
-            <p className="text-sm font-medium">Giriş başarılı</p>
+            <p className="text-sm font-medium">{t('auth.success')}</p>
             <Button onClick={onClose} size="lg" className="mt-2">
-              Kapat
+              {t('shared.close')}
             </Button>
           </div>
         ) : (
@@ -137,39 +138,38 @@ export function ClaudeAuthDialog({
                 onClick={() => setMode('auto')}
                 className={`flex-1 rounded-md px-2 py-1 ${mode === 'auto' ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'}`}
               >
-                Otomatik (önerilen)
+                {t('auth.claude.auto')}
               </button>
               <button
                 onClick={() => setMode('manual')}
                 className={`flex-1 rounded-md px-2 py-1 ${mode === 'manual' ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'}`}
               >
-                Elle kod
+                {t('auth.claude.manual')}
               </button>
             </div>
 
             {mode === 'auto' && remote && (
               <p className="rounded-lg border border-[var(--color-warning)]/40 px-3 py-2 text-xs text-[var(--color-text-dim)]">
-                Otomatik giriş yalnız tarayıcı ve sunucu aynı makinedeyken çalışır. Uzaktan erişimde
-                “Elle kod” modunu kullan.
+                {t('auth.claude.remoteWarning')}
               </p>
             )}
 
             {!authUrl ? (
               <Button onClick={start} size="lg" disabled={busy}>
                 {busy ? <Loader2 size={15} className="animate-spin" /> : <Globe size={15} />}
-                {busy ? 'Bağlantı alınıyor…' : 'Giriş başlat (tarayıcıyı aç)'}
+                {busy ? t('auth.connecting') : t('auth.startBrowser')}
               </Button>
             ) : mode === 'auto' ? (
               <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-3 text-xs text-[var(--color-text-dim)]">
                 <Loader2 size={14} className="animate-spin text-[var(--color-accent)]" />
-                <span className="flex-1">Tarayıcıda giriş yapmanı bekliyorum.</span>
+                <span className="flex-1">{t('auth.claude.waiting')}</span>
                 <a
                   href={authUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-[var(--color-accent)]"
                 >
-                  <ExternalLink size={12} /> Tekrar aç
+                  <ExternalLink size={12} /> {t('auth.reopen')}
                 </a>
               </div>
             ) : (
@@ -180,20 +180,20 @@ export function ClaudeAuthDialog({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-[var(--color-accent)]"
                 >
-                  <ExternalLink size={12} /> Giriş sayfasını tekrar aç
+                  <ExternalLink size={12} /> {t('auth.claude.reopenLogin')}
                 </a>
                 <input
                   autoFocus
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
                   onKeyDown={(event) => event.key === 'Enter' && complete()}
-                  placeholder="kod#state"
+                  placeholder={t('auth.claude.codePlaceholder')}
                   className={`${inputCls} w-full font-mono`}
                   data-testid="claude-oauth-code-input"
                 />
                 <Button onClick={complete} size="lg" disabled={busy} className="w-full">
                   {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-                  {busy ? 'Doğrulanıyor…' : 'Girişi tamamla'}
+                  {busy ? t('auth.verifying') : t('auth.complete')}
                 </Button>
               </div>
             )}

@@ -11,7 +11,11 @@ export function heatmapMove(index: number, key: string, length: number): number 
 }
 
 export function commitCountLabel(count: number): string {
-  return `${count} commit`
+  return i18next.t('commits.count', {
+    ns: 'dashboard',
+    count,
+    value: formatCount(count),
+  })
 }
 
 export interface HeatmapTooltipState {
@@ -51,3 +55,5 @@ export function heatmapTooltipReducer(
 export function isHeatmapTooltipVisible(state: HeatmapTooltipState, index: number): boolean {
   return state.dismissed !== index && (state.focused === index || state.hovered === index)
 }
+import { i18next } from '@/i18n'
+import { count as formatCount } from '@/shared/lib/format'

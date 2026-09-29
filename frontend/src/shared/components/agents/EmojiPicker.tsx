@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { EMOJI_CATEGORIES, searchEmojis, type EmojiEntry } from '@/shared/lib/emojiData'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   /** Currently selected emoji (empty string = none / auto initials). */
@@ -17,6 +18,7 @@ interface Props {
 // it relative to the trigger button; this component handles outside-click and
 // Escape dismissal, category tabs, and search.
 export function EmojiPicker({ value, onSelect, onClose }: Props) {
+  const { t } = useTranslation('sharedUi')
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState(EMOJI_CATEGORIES[0].id)
   // Dismiss on outside-click (the popover is always open while mounted).
@@ -55,7 +57,7 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
           data-testid="emoji-search-input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Emoji ara…"
+          placeholder={t('emoji.search')}
           className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
         />
       </div>
@@ -85,7 +87,9 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
       {/* Emoji grid */}
       <div className="max-h-52 overflow-y-auto p-2">
         {emojis.length === 0 ? (
-          <p className="py-6 text-center text-xs text-[var(--color-text-dim)]">Sonuç yok</p>
+          <p className="py-6 text-center text-xs text-[var(--color-text-dim)]">
+            {t('emoji.noResults')}
+          </p>
         ) : (
           <div className="grid grid-cols-8 gap-0.5">
             {emojis.map((e) => (
@@ -94,7 +98,7 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
                 data-testid="emoji-pick"
                 data-emoji={e.char}
                 onClick={() => onSelect(e.char)}
-                title={e.keywords}
+                title={t('emoji.option', { emoji: e.char })}
                 className={`flex h-8 w-8 items-center justify-center rounded text-lg hover:bg-[var(--color-surface-2)] ${
                   value === e.char ? 'ring-1 ring-[var(--color-accent)]' : ''
                 }`}
@@ -117,7 +121,7 @@ export function EmojiPicker({ value, onSelect, onClose }: Props) {
               : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
           }`}
         >
-          Emoji yok — baş harf kullan (Aa)
+          {t('emoji.useInitials')}
         </button>
       </div>
     </div>

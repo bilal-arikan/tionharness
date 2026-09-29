@@ -1,8 +1,9 @@
 import { Radio, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { avatarForeground } from '@/shared/lib/avatar'
 import {
   countActiveExplorerFacets,
-  SESSION_KIND_LABEL,
+  sessionKindLabel,
   toggleValue,
   type ExplorerFacets,
   type ExplorerFilter,
@@ -42,14 +43,15 @@ export function ExplorerFilters({
   visibleCount,
   totalCount,
 }: Props) {
+  const { t } = useTranslation('explorer')
   const active = countActiveExplorerFacets(filter)
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-border)] py-2 text-xs max-md:px-3 md:px-6"
       role="group"
-      aria-label="Harita filtreleri"
+      aria-label={t('filters.label')}
     >
-      <span className="text-[var(--color-text-dim)]">katmanlar:</span>
+      <span className="text-[var(--color-text-dim)]">{t('filters.layers')}:</span>
       {buckets.map((bucket) => {
         const on = !filter.hiddenBuckets.includes(bucket.key)
         return (
@@ -82,15 +84,16 @@ export function ExplorerFilters({
         onClick={() => onChange({ ...filter, liveOnly: !filter.liveOnly })}
         aria-pressed={filter.liveOnly}
         className={filter.liveOnly ? chipOn : chipOff}
-        title="Yalnız şu an çalışan oturumlar"
+        title={t('filters.liveHint')}
       >
         <Radio size={11} />
-        Canlı{liveCount > 0 ? ` · ${liveCount}` : ''}
+        {t('filters.live')}
+        {liveCount > 0 ? ` · ${liveCount}` : ''}
       </button>
 
       {facets.kinds.length > 0 && (
         <>
-          <span className="text-[var(--color-text-dim)]">tür:</span>
+          <span className="text-[var(--color-text-dim)]">{t('filters.kind')}:</span>
           {facets.kinds.map((kind) => (
             <button
               key={kind}
@@ -98,7 +101,7 @@ export function ExplorerFilters({
               aria-pressed={filter.kinds.includes(kind)}
               className={filter.kinds.includes(kind) ? chipOn : chipOff}
             >
-              {SESSION_KIND_LABEL[kind] ?? kind}
+              {sessionKindLabel(kind)}
             </button>
           ))}
         </>
@@ -106,7 +109,7 @@ export function ExplorerFilters({
 
       {facets.agents.length > 0 && (
         <label className="flex items-center gap-1 text-[var(--color-text-dim)]">
-          ajan:
+          {t('filters.agent')}:
           <select
             value={filter.agentIds[0] ?? ''}
             onChange={(e) =>
@@ -114,7 +117,7 @@ export function ExplorerFilters({
             }
             className="rounded-md border border-[var(--color-border)] bg-transparent px-1 py-0.5 text-xs text-[var(--color-text)]"
           >
-            <option value="">tümü</option>
+            <option value="">{t('filters.all')}</option>
             {facets.agents.map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.label}
@@ -126,7 +129,7 @@ export function ExplorerFilters({
 
       {facets.tags.length > 0 && (
         <>
-          <span className="text-[var(--color-text-dim)]">etiket:</span>
+          <span className="text-[var(--color-text-dim)]">{t('filters.tag')}:</span>
           {facets.tags.map((tag) => (
             <button
               key={tag}
@@ -141,7 +144,7 @@ export function ExplorerFilters({
       )}
 
       <span className="ml-auto text-[var(--color-text-dim)]">
-        {visibleCount}/{totalCount} düğüm
+        {t('filters.nodeCount', { visible: visibleCount, total: totalCount })}
       </span>
       {active > 0 && (
         <button
@@ -149,7 +152,7 @@ export function ExplorerFilters({
           className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
         >
           <X size={11} />
-          {active} filtre · temizle
+          {t('filters.clear', { count: active })}
         </button>
       )}
     </div>

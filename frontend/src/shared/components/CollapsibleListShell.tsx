@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { PanelLeftOpen } from 'lucide-react'
 import { Backdrop } from './Backdrop'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // Open state from useCollapsibleList: on md+ whether the docked column shows
@@ -26,6 +27,7 @@ interface Props {
 // animate; on md+ it is unmounted while collapsed and re-enters with
 // `.th-pane-enter` (styles/layout.css).
 export function CollapsibleListShell({ open, onToggle, children, label, testId }: Props) {
+  const { t } = useTranslation('sharedUi')
   return (
     <>
       {/* Narrow-only dim backdrop while the drawer is open. */}
@@ -36,8 +38,8 @@ export function CollapsibleListShell({ open, onToggle, children, label, testId }
         <button
           type="button"
           onClick={onToggle}
-          title={`${label} panelini aç`}
-          aria-label={`${label} panelini aç`}
+          title={t('list.openPanel', { label })}
+          aria-label={t('list.openPanel', { label })}
           data-testid={testId ? `${testId}-rail` : undefined}
           className="th-rail hidden h-full w-9 shrink-0 flex-col items-center gap-3 border-r border-[var(--color-border)] bg-[var(--color-surface)] pt-3 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] md:flex"
         >

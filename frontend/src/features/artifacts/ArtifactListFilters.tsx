@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { Archive, Search, X } from 'lucide-react'
 import type { OriginFilter } from './artifactGrouping'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   query: string
@@ -12,14 +13,7 @@ interface Props {
   archivedCount: number
 }
 
-const ORIGIN_FACETS: ReadonlyArray<readonly [OriginFilter, string]> = [
-  ['all', 'Tümü'],
-  ['chat', 'Sohbet eki'],
-  ['manual', 'Manuel'],
-  ['agent', 'Ajan'],
-  ['tool', 'Tool'],
-  ['plan', 'Plan'],
-]
+const ORIGIN_FACETS: OriginFilter[] = ['all', 'chat', 'manual', 'agent', 'tool', 'plan']
 
 // ArtifactListFilters is the list column's filter strip: title search + origin
 // facet + the archived-view toggle. Presentational — every filter is owned by
@@ -33,6 +27,7 @@ export function ArtifactListFilters({
   setShowArchived,
   archivedCount,
 }: Props) {
+  const { t } = useTranslation('artifacts')
   return (
     <div className="flex flex-col gap-2 border-b border-[var(--color-border)] px-3 py-2">
       <div className="relative">
@@ -44,13 +39,13 @@ export function ArtifactListFilters({
           data-testid="artifacts-search-input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Başlıkta ara…"
+          placeholder={t('filters.searchPlaceholder')}
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-7 pr-7 text-xs outline-none focus:border-[var(--color-accent)]"
         />
         {query && (
           <button
             onClick={() => setQuery('')}
-            title="Temizle"
+            title={t('filters.clear')}
             className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
           >
             <X size={13} />
@@ -58,7 +53,7 @@ export function ArtifactListFilters({
         )}
       </div>
       <div className="flex flex-wrap gap-1">
-        {ORIGIN_FACETS.map(([val, label]) => (
+        {ORIGIN_FACETS.map((val) => (
           <button
             key={val}
             data-testid="artifacts-filter"
@@ -70,7 +65,7 @@ export function ArtifactListFilters({
                 : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
             }`}
           >
-            {label}
+            {t(`origin.${val}`)}
           </button>
         ))}
       </div>
@@ -80,7 +75,7 @@ export function ArtifactListFilters({
           data-testid="artifacts-archived-toggle"
           data-active={showArchived}
           onClick={() => setShowArchived((v) => !v)}
-          title={showArchived ? 'Aktif artifactlara dön' : 'Arşivlenen artifactları göster'}
+          title={showArchived ? t('filters.showActive') : t('filters.showArchived')}
           className={`flex items-center gap-1.5 self-start rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
             showArchived
               ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
@@ -89,10 +84,10 @@ export function ArtifactListFilters({
         >
           <Archive size={12} />
           {showArchived
-            ? 'Arşiv görünümü'
+            ? t('filters.archiveView')
             : archivedCount > 0
-              ? `Arşiv (${archivedCount})`
-              : 'Archive'}
+              ? t('filters.archiveCount', { count: archivedCount })
+              : t('filters.archive')}
         </button>
       }
     </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GitBranch, FolderGit2, Check, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
@@ -20,6 +21,7 @@ interface Props {
 // `git init` when it is not yet a repo, and repo-local settings (origin remote,
 // commit identity) when it is.
 export function ProjectPanel({ path, onSelectPath, onError }: Props) {
+  const { t } = useTranslation('workspace')
   const [info, setInfo] = useState<GitInfo | null>(null)
   // A chosen path is probed from the first paint, so it starts loading.
   const [loading, setLoading] = useState(() => path.trim() !== '')
@@ -96,21 +98,18 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
   return (
     <div className="space-y-5">
       {/* Project path */}
-      <Field
-        label="Proje dizini (path)"
-        hint="Bu workspace'in proje klasörü. Yeni sohbetler bu dizinden başlar (oturum bazında değiştirilebilir). Mutlak yol."
-      >
+      <Field label={t('project.directory.label')} hint={t('project.directory.hint')}>
         <div className="flex items-center gap-2">
           <input
             value={path}
             onChange={(e) => onSelectPath(e.target.value)}
-            placeholder="(workspace dizini)"
+            placeholder={t('project.directory.placeholder')}
             className={`${inputCls} flex-1`}
           />
           <FolderPickerButton
             startPath={path || ''}
             onSelect={onSelectPath}
-            title="Proje dizinini seç"
+            title={t('project.directory.select')}
           />
         </div>
       </Field>
@@ -119,74 +118,71 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
       <div className="border-t border-[var(--color-border)] pt-4">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <FolderGit2 size={15} className="text-[var(--color-accent)]" /> Git
+            <FolderGit2 size={15} className="text-[var(--color-accent)]" /> {t('project.gitTitle')}
           </h3>
           {path && (
             <button
               onClick={() => load(path)}
               disabled={loading}
-              title="Yenile"
+              title={t('actions.refresh')}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-40"
             >
-              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Yenile
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />{' '}
+              {t('actions.refresh')}
             </button>
           )}
         </div>
 
         {!path ? (
-          <p className="text-xs text-[var(--color-text-dim)]">Önce bir proje dizini seç.</p>
+          <p className="text-xs text-[var(--color-text-dim)]">{t('project.selectFirst')}</p>
         ) : loading && !info ? (
-          <p className="text-xs text-[var(--color-text-dim)]">Yükleniyor…</p>
+          <p className="text-xs text-[var(--color-text-dim)]">{t('actions.loading')}</p>
         ) : info && !info.gitInstalled ? (
           // Checked before the path branches: no git binary means no git action on
           // ANY path, so offering `git init` here could only fail. Say the real cause.
-          <p className="text-xs text-[var(--color-danger)]">
-            Bu bilgisayarda git bulunamadı (PATH'te yok). Git'i kurup uygulamayı yeniden başlat.
-          </p>
+          <p className="text-xs text-[var(--color-danger)]">{t('project.gitMissing')}</p>
         ) : info && !info.exists ? (
           <div className="space-y-3">
-            <p className="text-xs text-[var(--color-danger)]">
-              Dizin bulunamadı. Klasörü şimdi oluşturup sürüm kontrolünü başlatabilirsin:
-            </p>
+            <p className="text-xs text-[var(--color-danger)]">{t('project.directoryMissing')}</p>
             <Button onClick={() => doInit(true)} disabled={saving} size="lg">
-              <GitBranch size={14} /> Klasörü oluştur + git init (main)
+              <GitBranch size={14} /> {t('project.createAndInit')}
             </Button>
           </div>
         ) : info && !info.isGitRepo ? (
           <div className="space-y-3">
-            <p className="text-xs text-[var(--color-text-dim)]">
-              Bu dizin bir git deposu değil. Sürüm kontrolü için başlat:
-            </p>
+            <p className="text-xs text-[var(--color-text-dim)]">{t('project.notRepository')}</p>
             <Button onClick={() => doInit()} disabled={saving} size="lg">
-              <GitBranch size={14} /> git init (main)
+              <GitBranch size={14} /> {t('project.init')}
             </Button>
           </div>
         ) : info && info.isGitRepo ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm">
               <span className="flex items-center gap-1 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-xs">
-                <GitBranch size={12} /> {info.branch || '(dal yok)'}
+                <GitBranch size={12} /> {info.branch || t('project.noBranch')}
               </span>
-              <span className="text-xs text-[var(--color-text-dim)]">Git deposu</span>
+              <span className="text-xs text-[var(--color-text-dim)]">
+                {t('project.repository')}
+              </span>
             </div>
 
-            <Field label="Origin remote URL" hint="Uzak depo adresi (push/pull için).">
+            <Field label={t('project.remote.label')} hint={t('project.remote.hint')}>
               <input
                 value={remote}
                 onChange={(e) => setRemote(e.target.value)}
-                placeholder="https://github.com/kullanici/repo.git"
+                placeholder="https://github.com/user/repo.git"
                 className={inputCls}
               />
             </Field>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="user.name" hint="Bu repodaki commit yazarı adı.">
+              <Field label="user.name" hint={t('project.userNameHint')}>
                 <input
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
                   className={inputCls}
                 />
               </Field>
-              <Field label="user.email" hint="Bu repodaki commit yazarı e-postası.">
+              <Field label="user.email" hint={t('project.userEmailHint')}>
                 <input
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
@@ -195,7 +191,7 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
               </Field>
             </div>
             <Button onClick={saveGit} disabled={saving} size="lg">
-              <Check size={14} /> Git ayarlarını kaydet
+              <Check size={14} /> {t('project.saveGit')}
             </Button>
           </div>
         ) : null}

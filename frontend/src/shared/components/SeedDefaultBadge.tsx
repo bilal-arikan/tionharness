@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Lock, RotateCcw } from 'lucide-react'
 import type { SeedDefaultState } from '@/types'
 import { toast } from './toastStore'
+import { useTranslation } from 'react-i18next'
 
 // SeedDefaultBadge marks a shipped file the user has edited — and ONLY that case.
 // 'default' and 'tuned' both keep auto-updating (the refresh compares bodies
@@ -9,14 +10,15 @@ import { toast } from './toastStore'
 // saying nothing actionable. The one fact worth a pixel is "this file no longer
 // receives updates".
 export function SeedDefaultBadge({ state }: { state?: SeedDefaultState }) {
+  const { t } = useTranslation('sharedUi')
   if (state !== 'edited') return null
   return (
     <span
-      title="Bu dosya varsayılandan farklı — TionHarness güncellemeleri buraya artık otomatik gelmez. 'Varsayılan' ile geri döndürebilirsin (yerel değişiklikler silinir)."
+      title={t('seedDefault.editedTitle')}
       className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-warning)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--color-warning)_35%,transparent)]"
     >
       <Lock className="h-3 w-3" />
-      düzenlendi
+      {t('seedDefault.edited')}
     </span>
   )
 }
@@ -39,6 +41,7 @@ interface RestoreProps {
 // Render it only where a shipped default EXISTS (defaultState set); restoring
 // something with no default is a 404 the user should never be able to trigger.
 export function RestoreDefaultButton({ label, onRestore, onDone, onError }: RestoreProps) {
+  const { t } = useTranslation('sharedUi')
   const [armed, setArmed] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -46,7 +49,7 @@ export function RestoreDefaultButton({ label, onRestore, onDone, onError }: Rest
     setBusy(true)
     try {
       await onRestore()
-      toast.success(`${label} varsayılana döndürüldü`)
+      toast.success(t('seedDefault.restored', { label }))
       onDone()
     } catch (e) {
       onError((e as Error).message)
@@ -59,19 +62,19 @@ export function RestoreDefaultButton({ label, onRestore, onDone, onError }: Rest
   if (armed) {
     return (
       <span className="flex shrink-0 items-center gap-1 text-xs">
-        <span className="text-[var(--color-text-dim)]">Düzenlemeler silinsin mi?</span>
+        <span className="text-[var(--color-text-dim)]">{t('seedDefault.confirm')}</span>
         <button
           onClick={run}
           disabled={busy}
           className="rounded px-2 py-1 text-[var(--color-danger)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
         >
-          {busy ? '…' : 'Evet'}
+          {busy ? '…' : t('actions.yes')}
         </button>
         <button
           onClick={() => setArmed(false)}
           className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
         >
-          Vazgeç
+          {t('actions.cancel')}
         </button>
       </span>
     )
@@ -79,10 +82,10 @@ export function RestoreDefaultButton({ label, onRestore, onDone, onError }: Rest
   return (
     <button
       onClick={() => setArmed(true)}
-      title="TionHarness ile gelen varsayılan içeriğe döndür (yerel düzenlemeler silinir). Döndürülen dosya yeniden otomatik güncellenmeye başlar."
+      title={t('seedDefault.restoreTitle')}
       className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs hover:bg-[var(--color-surface-2)]"
     >
-      <RotateCcw className="h-3.5 w-3.5" /> Varsayılan
+      <RotateCcw className="h-3.5 w-3.5" /> {t('seedDefault.default')}
     </button>
   )
 }

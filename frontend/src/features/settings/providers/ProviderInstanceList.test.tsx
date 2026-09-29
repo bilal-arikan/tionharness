@@ -2,12 +2,17 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderInstance } from '@/api/providers'
 import { ProviderInstanceList } from './ProviderInstanceList'
+import { i18next } from '@/i18n'
 
 let root: Root | undefined
 let host: HTMLDivElement | undefined
+
+beforeEach(async () => {
+  await i18next.changeLanguage('tr')
+})
 
 afterEach(() => {
   if (root) act(() => root!.unmount())

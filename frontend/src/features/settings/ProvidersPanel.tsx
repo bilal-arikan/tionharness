@@ -9,6 +9,7 @@ import { ProviderInstanceForm } from './providers/ProviderInstanceForm'
 import { ProviderInstanceList, type ProviderAuthView } from './providers/ProviderInstanceList'
 import { useProviderInstances } from './providers/useProviderInstances'
 import { DeciderProviders } from '@/features/decider'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // onOpenDecider switches to the Decision authorities screen.
@@ -16,27 +17,33 @@ interface Props {
 }
 
 function ProviderInstances() {
+  const { t } = useTranslation('settings')
   const { kinds, instances, loading, error, upsert, remove } = useProviderInstances()
   const [editing, setEditing] = useState<ProviderInstance | null>(null)
   const [adding, setAdding] = useState(false)
   const [authById, setAuthById] = useState<Record<string, ProviderAuthView | undefined>>({})
   const [authInstance, setAuthInstance] = useState<ProviderInstance | null>(null)
 
-  const refreshAuth = useCallback(async (instance: ProviderInstance) => {
-    setAuthById((current) => ({ ...current, [instance.id]: 'pending' }))
-    try {
-      const status = await api.getAuth(instance.id)
-      if (status.kind !== instance.kindId) {
-        throw new Error(`Beklenen sağlayıcı türü ${instance.kindId}, gelen ${status.kind}`)
+  const refreshAuth = useCallback(
+    async (instance: ProviderInstance) => {
+      setAuthById((current) => ({ ...current, [instance.id]: 'pending' }))
+      try {
+        const status = await api.getAuth(instance.id)
+        if (status.kind !== instance.kindId) {
+          throw new Error(
+            t('providers.authKindMismatch', { expected: instance.kindId, actual: status.kind }),
+          )
+        }
+        setAuthById((current) => ({ ...current, [instance.id]: status }))
+      } catch (caught) {
+        setAuthById((current) => ({
+          ...current,
+          [instance.id]: { error: (caught as Error).message },
+        }))
       }
-      setAuthById((current) => ({ ...current, [instance.id]: status }))
-    } catch (caught) {
-      setAuthById((current) => ({
-        ...current,
-        [instance.id]: { error: (caught as Error).message },
-      }))
-    }
-  }, [])
+    },
+    [t],
+  )
 
   useEffect(() => {
     for (const instance of instances) {
@@ -46,7 +53,7 @@ function ProviderInstances() {
     }
   }, [instances, refreshAuth])
 
-  if (loading) return <p className="text-xs text-[var(--color-text-dim)]">Yükleniyor…</p>
+  if (loading) return <p className="text-xs text-[var(--color-text-dim)]">{t('common.loading')}</p>
   if (error) return <p className="text-xs text-[var(--color-danger)]">{error}</p>
 
   const cancel = () => {
@@ -55,20 +62,13 @@ function ProviderInstances() {
   }
 
   const handleDelete = async (instance: ProviderInstance) => {
-    if (
-      !confirm(
-        `"${instance.label || instance.id}" sağlayıcı örneğini silmek istediğine emin misin?`,
-      )
-    )
-      return
+    if (!confirm(t('providers.deleteConfirm', { label: instance.label || instance.id }))) return
     try {
       const result = await remove(instance.id)
       if (result.affectedAgents.length > 0) {
-        toast.warning(
-          `Sağlayıcı silindi, ancak ${result.affectedAgents.length} ajan hâlâ bu örneğe bağlıydı. Bu ajanları yeniden yapılandır.`,
-        )
+        toast.warning(t('providers.deletedWithAgents', { count: result.affectedAgents.length }))
       } else {
-        toast.success('Sağlayıcı örneği silindi')
+        toast.success(t('providers.deleted'))
       }
       if (editing?.id === instance.id) cancel()
     } catch (caught) {
@@ -112,7 +112,7 @@ function ProviderInstances() {
           onCancel={cancel}
           onSave={async (input) => {
             await upsert(input)
-            toast.success(editing ? 'Sağlayıcı örneği güncellendi' : 'Sağlayıcı örneği eklendi')
+            toast.success(editing ? t('providers.updated') : t('providers.added'))
             cancel()
           }}
         />
@@ -125,7 +125,7 @@ function ProviderInstances() {
           }}
           className="rounded border border-dashed border-[var(--color-border)] px-3 py-1.5 text-xs hover:border-[var(--color-accent)]"
         >
-          + Yeni sağlayıcı örneği
+          {t('providers.add')}
         </button>
       )}
 
@@ -145,15 +145,13 @@ function ProviderInstances() {
 }
 
 export function ProvidersPanel({ onOpenDecider }: Props) {
+  const { t } = useTranslation('settings')
   return (
     <>
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <Boxes size={13} className="text-[var(--color-accent)]" /> Sağlayıcı örnekleri
+        <Boxes size={13} className="text-[var(--color-accent)]" /> {t('providers.title')}
       </div>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        Her sağlayıcı örneği kendi yapılandırmasını ve CLI girişini taşır. Değişiklikler anında
-        kaydedilir.
-      </p>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">{t('providers.description')}</p>
       <ProviderInstances />
       {/* Decision providers (internal/decider): answer typed questions only,
           so they live in their own list and never reach a model picker. */}

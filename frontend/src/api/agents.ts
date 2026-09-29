@@ -9,6 +9,7 @@ import type {
   AgentContextPreview,
 } from '@/types'
 import { req } from './client'
+import { sharedText } from '@/shared/lib/sharedI18n'
 
 export const agentApi = {
   // Default roster excludes archives. Deleted authors remain flagged; callers
@@ -60,10 +61,7 @@ export const agentApi = {
       return await req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' })
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('built-in agent cannot be deleted')) {
-        throw new Error(
-          'Yerleşik ajan silinemez. Değiştirmek için "Özelleştir" ile kalıtım alan bir kopya oluşturun.',
-          { cause: error },
-        )
+        throw new Error(sharedText('api.agents.builtInDelete'), { cause: error })
       }
       throw error
     }

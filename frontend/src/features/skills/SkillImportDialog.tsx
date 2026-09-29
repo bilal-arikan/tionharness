@@ -11,6 +11,7 @@ import {
 import { api } from '@/api'
 import type { Discovered, IngestInstallResult, IngestKind } from '@/api/ingest'
 import { Button, ModalOverlay } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onClose: () => void
@@ -20,16 +21,6 @@ interface Props {
 
 type Source = 'local' | 'github'
 type Step = 'locate' | 'select' | 'done'
-
-const KIND_LABEL: Record<IngestKind, string> = {
-  skill: 'Skills',
-  agent: 'Agents',
-  flow: 'Flows',
-  provider: 'Providers',
-  workspace: 'Workspaces',
-  mcp: 'MCP araçları',
-  hook: "Hook'lar",
-}
 
 // deriveGroup suggests a Skills-UI group label from the scanned location so imported
 // skills default to a namespace of their own (e.g. "owner/repo" or a GitHub tree URL
@@ -54,6 +45,7 @@ function deriveGroup(location: string): string {
 // the same authority the market uses. Nested resources are preserved; unsupported
 // features are stripped with a warning.
 export function SkillImportDialog({ onClose, onImported }: Props) {
+  const { t } = useTranslation('skills')
   const [step, setStep] = useState<Step>('locate')
   const [source, setSource] = useState<Source>('github')
   const [location, setLocation] = useState('')
@@ -82,9 +74,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
 
   const doScan = async () => {
     if (!location.trim()) {
-      setErr(
-        source === 'github' ? 'GitHub URL’si / owner/repo gerekli.' : 'Yerel klasör yolu gerekli.',
-      )
+      setErr(source === 'github' ? t('import.githubRequired') : t('import.localPathRequired'))
       return
     }
     setBusy(true)
@@ -122,7 +112,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
 
   const doImport = async () => {
     if (selected.size === 0) {
-      setErr('En az bir öğe seç.')
+      setErr(t('import.selectAtLeastOne'))
       return
     }
     setBusy(true)
@@ -156,7 +146,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="İçe aktar"
+        aria-label={t('import.ariaLabel')}
         data-testid="skill-import-modal"
         className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -166,13 +156,8 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
             <Download size={18} className="text-[var(--color-accent)]" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">
-              GitHub / klasörden içe aktar
-            </h2>
-            <p className="text-xs text-[var(--color-text-dim)]">
-              Repo, plugin veya yerel klasör — skill, agent, komut ve MCP araçları keşfedilir.
-              Nested kaynaklar korunur, uyumsuz özellikler ayıklanır.
-            </p>
+            <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('import.title')}</h2>
+            <p className="text-xs text-[var(--color-text-dim)]">{t('import.subtitle')}</p>
           </div>
         </div>
 
@@ -193,7 +178,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                     }`}
                   >
                     {s === 'github' ? <Globe size={15} /> : <FolderInput size={15} />}
-                    {s === 'github' ? 'GitHub' : 'Yerel klasör'}
+                    {s === 'github' ? 'GitHub' : t('import.localFolder')}
                   </button>
                 ))}
               </div>
@@ -201,8 +186,8 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">
                   {source === 'github'
-                    ? 'GitHub URL / owner/repo'
-                    : 'Yerel klasör yolu (ağaç taranır)'}
+                    ? t('import.githubLocationLabel')
+                    : t('import.localLocationLabel')}
                 </span>
                 <input
                   data-testid="import-location"
@@ -211,14 +196,15 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                   onKeyDown={(e) => e.key === 'Enter' && void doScan()}
                   placeholder={
                     source === 'github'
-                      ? 'owner/repo  ·  github.com/owner/repo/tree/main/skills'
-                      : 'C:\\path\\to\\repo'
+                      ? t('import.githubLocationPlaceholder')
+                      : t('import.localLocationPlaceholder')
                   }
                   className={`${inputCls} font-mono`}
                 />
                 {source === 'github' && (
                   <span className="mt-1 block text-[10px] text-[var(--color-text-dim)]">
-                    Bir repo, plugin, <code>skills/</code> klasörü ya da tek skill klasörü olabilir.
+                    {t('import.githubHintBefore')} <code>skills/</code>{' '}
+                    {t('import.githubHintAfter')}
                   </span>
                 )}
               </label>
@@ -230,9 +216,9 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
             <>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-[var(--color-text)]">
-                  {items.length} öğe bulundu
+                  {t('import.itemsFound', { count: items.length })}
                   <span className="ml-2 text-xs font-normal text-[var(--color-text-dim)]">
-                    {selected.size} seçili
+                    {t('import.selectedCount', { count: selected.size })}
                   </span>
                 </p>
                 <div className="flex gap-2 text-xs">
@@ -240,13 +226,13 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                     onClick={selectAll}
                     className="text-[var(--color-accent)] hover:underline"
                   >
-                    Tümü
+                    {t('actions.all')}
                   </button>
                   <button
                     onClick={selectNone}
                     className="text-[var(--color-text-dim)] hover:underline"
                   >
-                    Hiçbiri
+                    {t('actions.none')}
                   </button>
                 </div>
               </div>
@@ -268,7 +254,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                 {groups.map(([kind, list]) => (
                   <div key={kind}>
                     <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                      {KIND_LABEL[kind]} ({list.length})
+                      {t(`import.kinds.${kind}`)} ({list.length})
                     </div>
                     <div className="space-y-1">
                       {list.map((it) => (
@@ -293,12 +279,12 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                               </code>
                               {it.exists && (
                                 <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[9px] uppercase text-[var(--color-text-dim)]">
-                                  zaten var
+                                  {t('import.alreadyExists')}
                                 </span>
                               )}
                               {it.files.length > 0 && (
                                 <span className="text-[10px] text-[var(--color-text-dim)]">
-                                  +{it.files.length} dosya
+                                  +{t('import.files', { count: it.files.length })}
                                 </span>
                               )}
                               {it.warnings && it.warnings.length > 0 && (
@@ -323,7 +309,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
               <div className="flex gap-3">
                 <label className="block flex-1">
                   <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">
-                    Grup (opsiyonel)
+                    {t('import.groupLabel')}
                   </span>
                   <input
                     data-testid="import-group"
@@ -332,7 +318,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                       setGroup(e.target.value)
                       setGroupTouched(true)
                     }}
-                    placeholder="Skills ekranında ayrı başlık altında toplanır"
+                    placeholder={t('import.groupPlaceholder')}
                     className={inputCls}
                   />
                 </label>
@@ -343,24 +329,21 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                     checked={shared}
                     onChange={(e) => setShared(e.target.checked)}
                   />
-                  <span
-                    className="text-sm text-[var(--color-text)]"
-                    title="Skill'leri tüm ajanlara on-demand sun"
-                  >
-                    Paylaşımlı
+                  <span className="text-sm text-[var(--color-text)]" title={t('import.sharedHint')}>
+                    {t('import.shared')}
                   </span>
                 </label>
               </div>
 
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">
-                  Slug öneki (opsiyonel)
+                  {t('import.slugPrefixLabel')}
                 </span>
                 <input
                   data-testid="import-slug-prefix"
                   value={slugPrefix}
                   onChange={(e) => setSlugPrefix(e.target.value)}
-                  placeholder="ör. caveman → caveman-commit"
+                  placeholder={t('import.slugPrefixPlaceholder')}
                   className={`${inputCls} font-mono`}
                 />
               </label>
@@ -371,10 +354,11 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
           {step === 'done' && result && (
             <div data-testid="import-result" className="space-y-3">
               <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-success)]">
-                <CheckCircle2 size={16} /> {result.installed.length} öğe içe aktarıldı
+                <CheckCircle2 size={16} />{' '}
+                {t('import.importedCount', { count: result.installed.length })}
                 {result.skipped.length > 0 && (
                   <span className="text-[var(--color-text-dim)]">
-                    · {result.skipped.length} atlandı
+                    {t('import.skippedSuffix', { count: result.skipped.length })}
                   </span>
                 )}
               </p>
@@ -396,11 +380,13 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
 
               {result.skipped.length > 0 && (
                 <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-xs">
-                  <p className="mb-1 font-medium text-[var(--color-text-dim)]">Atlananlar</p>
+                  <p className="mb-1 font-medium text-[var(--color-text-dim)]">
+                    {t('import.skippedTitle')}
+                  </p>
                   <ul className="space-y-0.5">
                     {result.skipped.map((s, i) => (
                       <li key={i} className="text-[var(--color-text-dim)]">
-                        <code>{s.slug}</code> — {s.reason}
+                        <code>{s.slug}</code> {t('import.reasonSeparator')} {s.reason}
                       </li>
                     ))}
                   </ul>
@@ -410,7 +396,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
               {result.warnings.length > 0 && (
                 <div className="text-xs text-[var(--color-warning)]">
                   <p className="mb-1 flex items-center gap-1.5 font-medium">
-                    <AlertTriangle size={13} /> Uyarılar
+                    <AlertTriangle size={13} /> {t('import.warnings')}
                   </p>
                   <ul className="list-disc space-y-0.5 pl-5">
                     {result.warnings.map((w, i) => (
@@ -439,7 +425,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                 }}
                 className="flex items-center gap-1 rounded px-2 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
               >
-                <ChevronLeft size={14} /> Geri
+                <ChevronLeft size={14} /> {t('actions.back')}
               </button>
             )}
           </div>
@@ -448,11 +434,11 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
               onClick={onClose}
               className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
             >
-              {step === 'done' ? 'Kapat' : 'İptal'}
+              {step === 'done' ? t('actions.close') : t('actions.cancel')}
             </button>
             {step === 'locate' && (
               <Button data-testid="import-scan" onClick={doScan} disabled={busy}>
-                <Search size={14} /> {busy ? 'Taranıyor…' : 'Tara'}
+                <Search size={14} /> {busy ? t('import.scanning') : t('import.scan')}
               </Button>
             )}
             {step === 'select' && (
@@ -461,7 +447,10 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                 onClick={doImport}
                 disabled={busy || selected.size === 0}
               >
-                <Download size={14} /> {busy ? 'İçe aktarılıyor…' : `İçe aktar (${selected.size})`}
+                <Download size={14} />{' '}
+                {busy
+                  ? t('actions.importing')
+                  : t('import.importSelected', { count: selected.size })}
               </Button>
             )}
           </div>

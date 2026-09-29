@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { agentCatalogApi } from '@/api/agentCatalog'
 import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
 import { useCatalog, thinkingOptionsForModel } from '@/shared/lib/catalog'
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function CreateCatalogAgent({ open, onClose, onCreated }: Props) {
+  const { t } = useTranslation('settingsMain')
   const [name, setName] = useState('')
   const [provider, setProvider] = useState('claude-cli')
   const [instance, setInstance] = useState('claude-cli')
@@ -49,11 +51,9 @@ export function CreateCatalogAgent({ open, onClose, onCreated }: Props) {
         }}
         className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
       >
-        <p className="text-xs text-[var(--color-text-dim)]">
-          Create a central profile, then assign it to your workspaces.
-        </p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('createAgent.description')}</p>
         <label className="block text-xs">
-          Name
+          {t('createAgent.name')}
           <input
             autoFocus
             required
@@ -73,7 +73,7 @@ export function CreateCatalogAgent({ open, onClose, onCreated }: Props) {
           }}
         />
         <label className="block text-xs">
-          Reasoning
+          {t('createAgent.reasoning')}
           <select
             value={level}
             onChange={(event) => setLevel(event.target.value)}
@@ -96,7 +96,7 @@ export function CreateCatalogAgent({ open, onClose, onCreated }: Props) {
           disabled={pending || !name.trim()}
           className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
         >
-          {pending ? 'Creating…' : 'Create agent'}
+          {pending ? t('createAgent.creating') : t('createAgent.submit')}
         </button>
       </form>
     </div>

@@ -15,6 +15,7 @@ import {
   runTreeBreadcrumb,
   type ChildProgressMap,
 } from './runTree'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // The run the surrounding screen selected. Kept as the entry point of the tree;
@@ -38,6 +39,7 @@ const TREE_POLL_MS = 3000
 // It exists as a wrapper rather than as changes inside RunView so RunView keeps
 // rendering exactly one run; this decides WHICH.
 export function RunTreeView({ run, flows, agents, onRerun, rerunning, onResumed }: Props) {
+  const { t } = useTranslation('flows')
   const rootRunId = flowRunRootOf(run)
   const [treeRuns, setTreeRuns] = useState<FlowRun[]>([])
   const [viewRunId, setViewRunId] = useState(run.id)
@@ -149,7 +151,7 @@ export function RunTreeView({ run, flows, agents, onRerun, rerunning, onResumed 
                       : 'transition hover:text-[var(--color-accent)]'
                   }
                 >
-                  {flows.find((f) => f.id === r.flowId)?.name ?? '（silinmiş akış）'}
+                  {flows.find((f) => f.id === r.flowId)?.name ?? t('flow.deletedName')}
                 </button>
               </span>
             ))}

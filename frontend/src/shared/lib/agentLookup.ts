@@ -1,4 +1,6 @@
 import type { Agent } from '@/types'
+import { i18next } from '@/i18n'
+import { sharedText } from './sharedI18n'
 
 // A session outlives the agent that owned it, so any view that renders history
 // can be handed an agent id that is deleted — or, for a store written before the
@@ -7,7 +9,17 @@ import type { Agent } from '@/types'
 // avatar, the transcript printed the raw id, the empty state silently fell back
 // to a DIFFERENT agent. resolveAgent is the one answer.
 
-export const DELETED_AGENT_LABEL = 'Silinmiş ajan'
+export function deletedAgentLabel(): string {
+  return sharedText('agents.deleted')
+}
+
+// Compatibility binding for older consumers. Rendering code uses the function
+// above; the live binding is refreshed as well so an imported legacy value does
+// not stay in the language active at module initialization.
+export let DELETED_AGENT_LABEL = deletedAgentLabel()
+i18next.on('languageChanged', () => {
+  DELETED_AGENT_LABEL = deletedAgentLabel()
+})
 
 export interface ResolvedAgent {
   id: string
@@ -36,7 +48,7 @@ export function resolveAgent(agents: Agent[], id: string | undefined | null): Re
   if (!id) return null
   const found = agents.find((a) => a.id === id)
   if (!found) {
-    return { id, name: DELETED_AGENT_LABEL, deleted: true, missing: true }
+    return { id, name: deletedAgentLabel(), deleted: true, missing: true }
   }
   return {
     id: found.id,

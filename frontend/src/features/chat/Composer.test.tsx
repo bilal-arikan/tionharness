@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnnotatorExport } from '@/features/image-annotator/imageAnnotatorExport'
 import type { Agent } from '@/types'
 import { Composer } from './Composer'
+import { setLocale } from '@/i18n'
 
 const mocks = vi.hoisted(() => ({
   uploadFile: vi.fn(),
@@ -181,7 +182,8 @@ async function flush() {
   await act(async () => {})
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await setLocale('tr')
   mocks.annotatorProps = null
   mocks.uploadFile.mockImplementation(async (_sessionId: string, file: File) => attachment(file))
   mocks.deleteFile.mockResolvedValue(undefined)
@@ -696,7 +698,7 @@ describe('Composer steer availability', () => {
     const btn = steerBtn(container)
     expect(btn?.disabled).toBe(true)
     // Disabled WITH a reason the user can act on, not silently inert.
-    expect(btn?.title).toContain('unavailable')
+    expect(btn?.title).toContain('kullanılamıyor')
 
     act(() => btn?.click())
     await flush()

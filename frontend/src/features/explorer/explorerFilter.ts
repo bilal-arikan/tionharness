@@ -1,5 +1,6 @@
 import type { ViewGraphResult } from '@/types'
 import { refToString } from '@/types'
+import { i18next } from '@/i18n'
 
 // Explorer filtering — the Network screen's facets carried over to the map:
 // group layers (hide a whole bucket subtree), live-only, session kind, owning
@@ -19,15 +20,30 @@ export interface ExplorerFilter {
 export const EXPLORER_FILTER_KEY = 'tionharness.explorerFilter'
 
 // Short session-kind labels for the kind chips.
-export const SESSION_KIND_LABEL: Record<string, string> = {
-  chat: 'Sohbet',
-  task: 'Görev',
-  flow: 'Akış',
-  'flow-coordinator': 'Akış koordinatörü',
-  schedule: 'Zamanlama',
-  spawned: 'Spawn',
-  worker: 'Worker',
-  inbox: 'Inbox',
+const SESSION_KIND_KEYS: Record<string, string> = {
+  chat: 'chat',
+  task: 'task',
+  flow: 'flow',
+  'flow-coordinator': 'flowCoordinator',
+  schedule: 'schedule',
+  spawned: 'spawned',
+  worker: 'worker',
+  inbox: 'inbox',
+}
+
+export function sessionKindLabel(kind: string): string {
+  const key = SESSION_KIND_KEYS[kind]
+  return key ? i18next.t(`sessionKind.${key}`, { ns: 'explorer' }) : kind
+}
+
+// Kept for callers that use the existing lookup contract. Values are resolved
+// lazily so changing the UI language cannot leave a module-level label frozen.
+export const SESSION_KIND_LABEL: Record<string, string> = {}
+for (const kind of Object.keys(SESSION_KIND_KEYS)) {
+  Object.defineProperty(SESSION_KIND_LABEL, kind, {
+    enumerable: true,
+    get: () => sessionKindLabel(kind),
+  })
 }
 
 export const emptyExplorerFilter = (): ExplorerFilter => ({

@@ -5,6 +5,7 @@
 // user presses Kaydet.
 
 import { useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Search, X } from 'lucide-react'
 import type {
   Agent,
@@ -18,12 +19,14 @@ import type {
 import { FacetDropdown, type FacetOption } from './FacetDropdown'
 import { SavedViewMenu } from './SavedViewMenu'
 import {
-  DEP_LABELS,
-  REVIEW_LABELS,
-  GROUP_BY_LABELS,
-  PRIORITY_LABELS,
+  dependencyFilterLabel,
+  reviewFilterLabel,
+  GROUP_BY_VALUES,
+  SORT_VALUES,
   PRIORITY_ORDER,
-  SORT_LABELS,
+  groupByLabel,
+  priorityLabel,
+  sortLabel,
   countActiveFacets,
   isBuiltinId,
 } from './boardViewTypes'
@@ -41,6 +44,7 @@ interface Props {
 }
 
 export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns }: Props) {
+  const { t } = useTranslation('tasks')
   const { live, setFilter } = view
   const f = live.filter
   const searchRef = useRef<HTMLInputElement>(null)
@@ -82,7 +86,7 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
     () =>
       [...PRIORITY_ORDER, '' as const].map((p) => ({
         value: p,
-        label: PRIORITY_LABELS[p],
+        label: priorityLabel(p),
         count: priorityCounts.get(p) ?? 0,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,11 +107,11 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
       .filter((a) => (agentCounts.get(a.id) ?? 0) > 0)
       .map((a) => ({ value: a.id, label: a.name, color: a.color, count: agentCounts.get(a.id) }))
     if ((agentCounts.get('-') ?? 0) > 0) {
-      opts.push({ value: '-', label: 'Atanmamış', count: agentCounts.get('-') })
+      opts.push({ value: '-', label: t('filters.unassigned'), count: agentCounts.get('-') })
     }
     return opts
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, agents])
+  }, [tasks, agents, t])
 
   const columnOptions: FacetOption[] = boardColumns.map((c) => ({
     value: c.key,
@@ -118,12 +122,12 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
 
   const depOptions: FacetOption[] = (['blocked', 'ready'] as const).map((d) => ({
     value: d,
-    label: DEP_LABELS[d],
+    label: dependencyFilterLabel(d),
   }))
 
   const reviewOptions: FacetOption[] = (['bounced', 'exhausted'] as const).map((r) => ({
     value: r,
-    label: REVIEW_LABELS[r],
+    label: reviewFilterLabel(r),
   }))
 
   const activeFacets = countActiveFacets(f)
@@ -133,19 +137,17 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
     // Overwriting a built-in is impossible, so an edited built-in always becomes
     // a new view — which is also what the user means by "save" in that case.
     if (isBuiltinId(view.selectedId)) {
-      const label = prompt('Yeni görünüm adı')
+      const label = prompt(t('views.newNamePrompt'))
       if (label === null) return
       await view.saveAsNew(label)
       return
     }
-    const choice = confirm(
-      'Bu görünümün üzerine yazılsın mı?\n\nTamam = üzerine yaz · İptal = yeni olarak kaydet',
-    )
+    const choice = confirm(t('views.overwriteConfirm'))
     if (choice) {
       await view.saveOverwrite()
       return
     }
-    const label = prompt('Yeni görünüm adı')
+    const label = prompt(t('views.newNamePrompt'))
     if (label === null) return
     await view.saveAsNew(label)
   }
@@ -168,7 +170,7 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
               e.currentTarget.blur()
             }
           }}
-          placeholder="ara…  /"
+          placeholder={t('filters.searchPlaceholder')}
           data-testid="board-filter-search"
           className="w-40 rounded border border-[var(--color-border)] bg-[var(--color-bg)] py-1 pl-6 pr-2 text-xs outline-none transition focus:border-[var(--color-accent)]"
         />
@@ -186,40 +188,40 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
       <span className="mx-0.5 h-4 w-px bg-[var(--color-border)]" />
 
       <FacetDropdown
-        label="Öncelik"
+        label={t('filters.priority')}
         options={priorityOptions}
         selected={f.priorities ?? []}
         onChange={(v) => patch({ priorities: v as never })}
       />
       <FacetDropdown
-        label="Etiket"
+        label={t('filters.tag')}
         options={tagOptions}
         selected={f.tags ?? []}
         onChange={(v) => patch({ tags: v })}
-        emptyHint="Hiçbir görevde etiket yok"
+        emptyHint={t('filters.noTags')}
       />
       <FacetDropdown
-        label="Ajan"
+        label={t('filters.agent')}
         options={agentOptions}
         selected={f.agentIds ?? []}
         onChange={(v) => patch({ agentIds: v })}
       />
       <FacetDropdown
-        label="Bağımlılık"
+        label={t('filters.dependency')}
         options={depOptions}
         selected={f.dep ? [f.dep] : []}
         onChange={(v) => patch({ dep: (v[0] ?? '') as BoardDepFilter })}
         mode="single"
       />
       <FacetDropdown
-        label="Doğrulama"
+        label={t('filters.reviewLabel')}
         options={reviewOptions}
         selected={f.review ? [f.review] : []}
         onChange={(v) => patch({ review: (v[0] ?? '') as BoardReviewFilter })}
         mode="single"
       />
       <FacetDropdown
-        label="Sütun"
+        label={t('filters.column')}
         options={columnOptions}
         selected={f.columns ?? []}
         onChange={(v) => patch({ columns: v })}
@@ -231,26 +233,26 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
       <select
         value={live.groupBy}
         onChange={(e) => view.setGroupBy(e.target.value as BoardGroupBy)}
-        title="Sütunları neye göre böl"
+        title={t('views.groupByTitle')}
         data-testid="board-group-by"
         className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
       >
-        {(Object.keys(GROUP_BY_LABELS) as BoardGroupBy[]).map((g) => (
+        {GROUP_BY_VALUES.map((g) => (
           <option key={g} value={g}>
-            ⊞ {GROUP_BY_LABELS[g]}
+            ⊞ {groupByLabel(g)}
           </option>
         ))}
       </select>
       <select
         value={live.sort}
         onChange={(e) => view.setSort(e.target.value as BoardSort)}
-        title="Sütun içi sıralama"
+        title={t('views.sortTitle')}
         data-testid="board-sort"
         className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
       >
-        {(Object.keys(SORT_LABELS) as BoardSort[]).map((s) => (
+        {SORT_VALUES.map((s) => (
           <option key={s} value={s}>
-            ↕ {SORT_LABELS[s]}
+            ↕ {sortLabel(s)}
           </option>
         ))}
       </select>
@@ -262,22 +264,24 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
           data-testid="board-filter-count"
           className={`text-xs ${filtering ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'}`}
         >
-          {filtering ? `${visibleCount} / ${tasks.length}` : `${tasks.length} görev`}
+          {filtering
+            ? `${visibleCount} / ${tasks.length}`
+            : t('taskCount', { count: tasks.length })}
         </span>
         {filtering && (
           <button
             onClick={view.clearFilter}
-            title="Tüm filtreleri temizle"
+            title={t('filters.clearAll')}
             className="flex items-center gap-1 rounded border border-[var(--color-accent)] bg-[var(--color-accent-soft)] px-1.5 py-1 text-xs text-[var(--color-accent)]"
           >
-            {activeFacets} filtre <X size={11} />
+            {t('filters.activeCount', { count: activeFacets })} <X size={11} />
           </button>
         )}
         {view.dirty && (
           <>
             <button
               onClick={view.revert}
-              title="Görünümün kayıtlı haline dön"
+              title={t('views.revert')}
               className="rounded border border-[var(--color-border)] px-1.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             >
               ↺
@@ -287,7 +291,7 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
               data-testid="board-view-save"
               className="rounded border border-[var(--color-accent)] bg-[var(--color-accent-soft)] px-2 py-1 text-xs text-[var(--color-accent)]"
             >
-              Kaydet
+              {t('actions.save')}
             </button>
           </>
         )}

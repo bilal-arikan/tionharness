@@ -6,7 +6,7 @@ import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { Artifact } from '@/types'
 import { ModalOverlay } from '@/shared/components'
 import { ArtifactView } from './ArtifactView'
-import { KIND_ICON, KIND_LABEL } from './artifactMeta'
+import { KIND_ICON, artifactKindKey } from './artifactMeta'
 import { OriginBadge } from './OriginBadge'
 import { ImageAnnotator } from '@/features/image-annotator/ImageAnnotator'
 import type { DrawableSource } from '@/features/image-annotator/imageAnnotatorExport'
@@ -27,7 +27,7 @@ interface Props {
 // renders it via the shared ArtifactView. Escape / backdrop click closes it; the
 // header offers a shortcut to open the dedicated Artifacts screen for editing.
 export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError }: Props) {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation(['artifacts', 'common'])
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [loading, setLoading] = useState(true)
   const [annotatorSource, setAnnotatorSource] = useState<DrawableSource | null>(null)
@@ -101,7 +101,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
       try {
         bitmap = await createImageBitmap(blob)
       } catch {
-        throw new Error(t('imageAnnotator.decodeError'))
+        throw new Error(t('imageAnnotator.decodeError', { ns: 'common' }))
       }
       try {
         validateImageSource(
@@ -166,13 +166,13 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
             {Icon && <Icon size={16} className="shrink-0 text-[var(--color-accent)]" />}
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">
-                {artifact ? artifact.title : 'Yükleniyor…'}
+                {artifact ? artifact.title : t('preview.loading')}
               </div>
               {artifact && (
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
                   <OriginBadge origin={artifact.origin} />
                   <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
-                    {KIND_LABEL[artifact.kind] ?? artifact.kind}
+                    {t(artifactKindKey(artifact.kind))}
                     {artifact.language ? ` · ${artifact.language}` : ''}
                   </span>
                 </div>
@@ -184,7 +184,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
               <button
                 onClick={() => void openEditor()}
                 disabled={openingEditor}
-                title={t('artifactAnnotation.drawTitle')}
+                title={t('artifactAnnotation.drawTitle', { ns: 'common' })}
                 className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
               >
                 {openingEditor ? (
@@ -192,22 +192,24 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
                 ) : (
                   <Pencil size={14} />
                 )}
-                <span className="hidden sm:inline">{t('artifactAnnotation.draw')}</span>
+                <span className="hidden sm:inline">
+                  {t('artifactAnnotation.draw', { ns: 'common' })}
+                </span>
               </button>
             )}
             {onOpenFull && (
               <button
                 onClick={() => onOpenFull(artifactId)}
-                title="Artifactlar ekranında aç"
+                title={t('preview.openFullTitle')}
                 className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
               >
                 <ExternalLink size={14} />
-                <span className="hidden sm:inline">Ekranda aç</span>
+                <span className="hidden sm:inline">{t('preview.openFull')}</span>
               </button>
             )}
             <button
               onClick={onClose}
-              title="Kapat (Esc)"
+              title={t('actions.closeEsc')}
               className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
               <X size={16} />
@@ -219,7 +221,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-[var(--color-text-dim)]">
-              <Loader2 size={16} className="animate-spin" /> Yükleniyor…
+              <Loader2 size={16} className="animate-spin" /> {t('preview.loading')}
             </div>
           ) : artifact ? (
             <ArtifactView
@@ -230,7 +232,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
             />
           ) : (
             <div className="py-12 text-center text-sm text-[var(--color-text-dim)]">
-              Artifact yüklenemedi.
+              {t('preview.loadFailed')}
             </div>
           )}
         </div>
@@ -246,7 +248,8 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
               artifact.sessionId || '_shared',
               new File([blob], `${artifact.id}-derived.${extension}`, { type: mime }),
             )
-            if (!upload.relPath) throw new Error(t('artifactAnnotation.stagingPathError'))
+            if (!upload.relPath)
+              throw new Error(t('artifactAnnotation.stagingPathError', { ns: 'common' }))
             if (!mountedRef.current || generation !== editorGenerationRef.current) {
               await api.deleteFile(upload.relPath)
               return
@@ -254,7 +257,10 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
             let derived
             try {
               derived = await api.createArtifact({
-                title: t('artifactAnnotation.derivedTitle', { title: artifact.title }),
+                title: t('artifactAnnotation.derivedTitle', {
+                  ns: 'common',
+                  title: artifact.title,
+                }),
                 kind: 'image',
                 sessionId: artifact.sessionId,
                 sourcePath: upload.relPath,
@@ -267,7 +273,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
               } catch (cleanupError) {
                 throw new AggregateError(
                   [createError, cleanupError],
-                  t('artifactAnnotation.saveAndCleanupError'),
+                  t('artifactAnnotation.saveAndCleanupError', { ns: 'common' }),
                   { cause: cleanupError },
                 )
               }

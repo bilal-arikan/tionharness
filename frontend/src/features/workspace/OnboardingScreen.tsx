@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Sparkles, FolderPlus, FolderOpen } from 'lucide-react'
 import { WorkspaceCreateModal, type NewWorkspaceData } from './WorkspaceCreateModal'
 import { api } from '@/api'
@@ -22,6 +23,7 @@ interface Props {
 // or a prior install). Neither provisions anything until the user acts, and no
 // default workspace is ever created behind their back.
 export function OnboardingScreen({ onCreate, onAttach }: Props) {
+  const { t } = useTranslation('workspace')
   const [showModal, setShowModal] = useState(false)
   const [selecting, setSelecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,19 +59,15 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
         <div className="flex flex-col gap-2">
           <h1 className="flex items-center justify-center gap-2 text-xl font-semibold">
             <Sparkles size={18} className="text-[var(--color-accent)]" />
-            TionHarness'e hoş geldin
+            {t('onboarding.title')}
           </h1>
-          <p className="text-sm text-[var(--color-text-dim)]">
-            Başlamak için bir workspace oluştur ya da daha önce kullandığın bir workspace klasörünü
-            seç. Tüm ajanların, oturumların ve verilerin seçtiğin workspace içinde izole şekilde
-            saklanır.
-          </p>
+          <p className="text-sm text-[var(--color-text-dim)]">{t('onboarding.description')}</p>
         </div>
 
         <div className="flex flex-col items-stretch gap-2 sm:flex-row">
           <Button onClick={() => setShowModal(true)} size="lg">
             <FolderPlus size={16} className="mr-1.5 inline shrink-0" />
-            Workspace Oluştur
+            {t('onboarding.create')}
           </Button>
           <Button
             onClick={selectExisting}
@@ -79,7 +77,7 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
             data-testid="select-existing-workspace"
           >
             <FolderOpen size={16} className="mr-1.5 inline shrink-0" />
-            {selecting ? 'Seçiliyor…' : 'Mevcut Workspace Seç'}
+            {selecting ? t('onboarding.selecting') : t('onboarding.selectExisting')}
           </Button>
         </div>
 
@@ -89,9 +87,7 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
           </p>
         )}
 
-        <p className="text-xs text-[var(--color-text-dim)]">
-          Workspace oluşturmadan ya da seçmeden devam edemezsin — varsayılan bir kurulum yapılmaz.
-        </p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('onboarding.requireWorkspace')}</p>
       </div>
 
       {showModal && (

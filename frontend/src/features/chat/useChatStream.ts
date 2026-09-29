@@ -6,6 +6,7 @@
 // modules (chatStreamSend/History/Interventions/AutoLive/Commands); this hook
 // holds the React state and wires the callbacks to them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import type { Attachment, Message, SlashCommand, TurnStep } from '@/types'
@@ -30,6 +31,7 @@ const THINKING_LEVEL_KEY = 'tionharness.thinkingLevel.bySession'
 const PERMISSION_MODE_KEY = 'tionharness.permissionMode.bySession'
 
 export function useChatStream(deps: ChatStreamDeps) {
+  const { t } = useTranslation('chatStatus')
   const {
     sessions,
     activeWorkspaceId,
@@ -532,8 +534,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         const r = await api.sessionControl(sid, 'steer', text)
         if (r?.result === 'unsupported') {
           const queued = await sendMessage(text)
-          if (queued)
-            setError('Live guidance is unavailable for this turn. Your message was queued.')
+          if (queued) setError(t('stream.guidanceQueued'))
           return queued
         }
         return true
@@ -542,7 +543,7 @@ export function useChatStream(deps: ChatStreamDeps) {
         return false
       }
     },
-    [activeSessionId, setError, sendMessage],
+    [activeSessionId, setError, sendMessage, t],
   )
 
   // Remove a WAITING queued message before it is dispatched (backend cancel).
@@ -597,13 +598,13 @@ export function useChatStream(deps: ChatStreamDeps) {
       try {
         const r = await api.steerQueued(sid, id)
         if (r?.result === 'unsupported') {
-          setError('Live guidance is unavailable for this turn. Your message remains queued.')
+          setError(t('stream.guidanceRemainsQueued'))
         }
       } catch (e) {
         setError((e as Error).message)
       }
     },
-    [activeSessionId, setError],
+    [activeSessionId, setError, t],
   )
 
   // Promote a waiting message so it dispatches next ("öne al").

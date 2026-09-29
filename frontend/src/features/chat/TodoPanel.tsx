@@ -25,7 +25,7 @@ const MARK: Record<TodoItem['status'], { icon: string; cls: string }> = {
 // page reloads. It stays pinned while work remains; once complete, the user can
 // dismiss that session/list pair with the close button.
 export function TodoPanel({ todos, dismissed, onDismiss }: Props) {
-  const { t } = useTranslation()
+  const { t } = useTranslation('chatStatus')
   const done = todos.filter((t) => t.status === 'completed').length
   const allDone = todos.length > 0 && done === todos.length
   const [open, setOpen] = useState(false)
@@ -43,7 +43,7 @@ export function TodoPanel({ todos, dismissed, onDismiss }: Props) {
           className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left hover:bg-[var(--color-surface-2)]"
         >
           <span>{allDone ? '✅' : '📋'}</span>
-          <span className="font-medium text-[var(--color-text)]">{t('chat.todos.title')}</span>
+          <span className="font-medium text-[var(--color-text)]">{t('todos.title')}</span>
           {/* Slim progress bar. */}
           <span className="ml-1 hidden h-1.5 w-24 overflow-hidden rounded-full bg-[var(--color-border)] sm:block">
             <span
@@ -59,8 +59,8 @@ export function TodoPanel({ todos, dismissed, onDismiss }: Props) {
         {allDone && (
           <button
             type="button"
-            aria-label={t('chat.todos.dismiss')}
-            title={t('chat.todos.dismiss')}
+            aria-label={t('todos.dismiss')}
+            title={t('todos.dismiss')}
             onClick={(event) => {
               event.stopPropagation()
               onDismiss()

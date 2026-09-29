@@ -14,6 +14,10 @@ import {
   type FileGroup,
 } from '@/shared/lib/fileChanges'
 import { count } from '@/shared/lib/format'
+import { useTranslation } from 'react-i18next'
+
+const MINUS_SIGN = String.fromCharCode(0x2212)
+const MULTIPLICATION_SIGN = String.fromCharCode(0xd7)
 
 type Scope = 'turn' | 'session'
 
@@ -44,6 +48,7 @@ export function ChangesModal({
   onClose,
   onOpenFile,
 }: Props) {
+  const { t } = useTranslation('chat')
   const [scope, setScope] = useState<Scope>('turn')
   const [selected, setSelected] = useState<string>('')
 
@@ -123,33 +128,36 @@ export function ChangesModal({
     <ModalOverlay onClose={onClose}>
       <div className="flex h-[min(800px,88vh)] w-[min(1120px,95vw)] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
         <header className="flex shrink-0 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5">
-          <span className="text-sm font-semibold">Dosya değişiklikleri</span>
+          <span className="text-sm font-semibold">{t('changes.title')}</span>
           <div className="flex rounded-md border border-[var(--color-border)] p-0.5 text-xs">
             <Tab active={scope === 'turn'} onClick={() => setScope('turn')}>
-              Bu tur
+              {t('changes.thisTurn')}
             </Tab>
             <Tab
               active={scope === 'session'}
               onClick={() => setScope('session')}
               disabled={!sessionId}
-              title={sessionId ? undefined : 'Bu görünümde oturum bağlamı yok'}
+              title={sessionId ? undefined : t('changes.noSessionContext')}
             >
-              Tüm oturum
+              {t('changes.fullSession')}
             </Tab>
           </div>
           <span className="text-xs text-[var(--color-text-dim)]">
-            {groups.length} dosya
+            {t('changes.files', { count: groups.length })}
             {groups.length > 0 && (
               <>
                 {' · '}
                 <span className="text-[var(--color-success)]">+{totals.added}</span>{' '}
-                <span className="text-[var(--color-danger)]">−{totals.removed}</span>
+                <span className="text-[var(--color-danger)]">
+                  {MINUS_SIGN}
+                  {totals.removed}
+                </span>
               </>
             )}
           </span>
           <button
             onClick={onClose}
-            aria-label="Kapat"
+            aria-label={t('changes.close')}
             className="ml-auto text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
           >
             <X size={16} />
@@ -174,11 +182,19 @@ export function ChangesModal({
                   <span className="flex items-center gap-1.5 text-[10px]">
                     {g.added > 0 && <span className="text-[var(--color-success)]">+{g.added}</span>}
                     {g.removed > 0 && (
-                      <span className="text-[var(--color-danger)]">−{g.removed}</span>
+                      <span className="text-[var(--color-danger)]">
+                        {MINUS_SIGN}
+                        {g.removed}
+                      </span>
                     )}
-                    {g.created && <Pill>yeni</Pill>}
-                    {g.changes.length > 1 && <Pill>{g.changes.length}×</Pill>}
-                    {g.changes.some((c) => c.nested) && <Pill>alt-ajan</Pill>}
+                    {g.created && <Pill>{t('changes.new')}</Pill>}
+                    {g.changes.length > 1 && (
+                      <Pill>
+                        {g.changes.length}
+                        {MULTIPLICATION_SIGN}
+                      </Pill>
+                    )}
+                    {g.changes.some((c) => c.nested) && <Pill>{t('changes.subagent')}</Pill>}
                   </span>
                 </button>
               </li>
@@ -186,10 +202,10 @@ export function ChangesModal({
             {groups.length === 0 && (
               <li className="px-3 py-4 text-xs text-[var(--color-text-dim)]">
                 {loadingSession
-                  ? 'Yükleniyor…'
+                  ? t('changes.loading')
                   : sessionErr
-                    ? `Alınamadı: ${sessionErr}`
-                    : 'Dosya değişikliği yok.'}
+                    ? t('changes.loadFailed', { error: sessionErr })
+                    : t('changes.empty')}
               </li>
             )}
           </ul>
@@ -201,7 +217,7 @@ export function ChangesModal({
         </div>
 
         <footer className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-[10px] text-[var(--color-text-dim)]">
-          Gösterilen fark, değişikliğin yapıldığı andaki halidir — dosyanın şu anki içeriği değil.
+          {t('changes.snapshotNotice')}
         </footer>
       </div>
     </ModalOverlay>
@@ -213,6 +229,7 @@ export function ChangesModal({
 // content, so a merged patch cannot be computed — showing them stacked and
 // labelled is the honest form.
 function FileDetail({ group, onOpenFile }: { group: FileGroup; onOpenFile?: (p: string) => void }) {
+  const { t } = useTranslation('chat')
   const joined = group.changes.map((c) => c.patch).join('\n')
   return (
     <>
@@ -227,13 +244,13 @@ function FileDetail({ group, onOpenFile }: { group: FileGroup; onOpenFile?: (p: 
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <CopyButton text={joined} />
           <IconAction
-            title="Yaması .patch olarak indir"
+            title={t('changes.downloadPatch')}
             onClick={() => downloadPatch(group.path, joined)}
           >
             <Download size={13} />
           </IconAction>
           {onOpenFile && (
-            <IconAction title="Dosyayı aç" onClick={() => onOpenFile(group.path)}>
+            <IconAction title={t('changes.openFile')} onClick={() => onOpenFile(group.path)}>
               <FileText size={13} />
             </IconAction>
           )}
@@ -241,8 +258,7 @@ function FileDetail({ group, onOpenFile }: { group: FileGroup; onOpenFile?: (p: 
       </div>
       {group.changes.length > 1 && (
         <p className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
-          Bu dosya {group.changes.length} kez değiştirildi. Aşağıdakiler sıralı değişikliklerdir,
-          birleştirilmiş tek bir fark değildir.
+          {t('changes.multipleChanges', { count: group.changes.length })}
         </p>
       )}
       {group.changes.map((c, i) => (
@@ -264,6 +280,7 @@ function ChangeBlock({
   index: number
   total: number
 }) {
+  const { t } = useTranslation('chat')
   const lineCount = change.patch ? change.patch.split('\n').length : 0
   const [open, setOpen] = useState(!change.created)
 
@@ -273,14 +290,16 @@ function ChangeBlock({
         <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]">
           {total > 1 && <span>#{index + 1}</span>}
           <span className="font-mono">{change.tool}</span>
-          {change.created && <Pill>yeni dosya · {count(lineCount)} satır</Pill>}
-          {change.synthesized && (
-            <Pill title="Bu farkı çevre bağlamı olmadan araç girdisinden ürettik (claude-cli düzenlemeyi kendisi uyguladı).">
-              sentezlendi
+          {change.created && (
+            <Pill>
+              {t('changes.newFileLines', { count: lineCount, formattedCount: count(lineCount) })}
             </Pill>
           )}
+          {change.synthesized && (
+            <Pill title={t('changes.synthesizedDescription')}>{t('changes.synthesized')}</Pill>
+          )}
           {change.truncated && (
-            <Pill title="Sunucu bu yamayı okuma yolunda kırptı; tam iz alınamadı.">kırpılmış</Pill>
+            <Pill title={t('changes.truncatedDescription')}>{t('changes.truncated')}</Pill>
           )}
         </div>
       )}
@@ -293,7 +312,7 @@ function ChangeBlock({
           onClick={() => setOpen(true)}
           className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-left text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
         >
-          Yeni dosya · {count(lineCount)} satır — içeriği göster
+          {t('changes.showNewFile', { count: lineCount, formattedCount: count(lineCount) })}
         </button>
       )}
     </div>
@@ -311,11 +330,12 @@ function downloadPatch(path: string, patch: string) {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation('chat')
   return (
     <IconAction
-      title="Yamayı panoya kopyala"
+      title={t('changes.copyPatch')}
       onClick={() => {
-        navigator.clipboard.writeText(text).then(() => toast.info('Panoya kopyalandı'))
+        navigator.clipboard.writeText(text).then(() => toast.info(t('changes.copied')))
       }}
     >
       <Copy size={13} />

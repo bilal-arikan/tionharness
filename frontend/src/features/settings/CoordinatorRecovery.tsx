@@ -1,34 +1,36 @@
+import { useTranslation } from 'react-i18next'
 import { Toggle, NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function CoordinatorRecovery({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
       <Toggle
-        label="Detect stalled coordinators"
-        hint="Use a judge and periodic checks to recover coordinators that claim to have started workers without actually starting them."
+        label={t('coordinatorRecovery.detect.label')}
+        hint={t('coordinatorRecovery.detect.hint')}
         checked={draft.coordinatorStallGuard}
         onChange={(v) => set('coordinatorStallGuard', v)}
       />
       <NumberField
-        label="Stall check window (minutes)"
-        hint="0 uses the default window; -1 disables periodic checks while retaining the turn-end guard."
+        label={t('coordinatorRecovery.window.label')}
+        hint={t('coordinatorRecovery.window.hint')}
         min={-1}
         max={1440}
         value={draft.coordinatorStallSweepMin}
         onChange={(v) => set('coordinatorStallSweepMin', v)}
       />
       <NumberField
-        label="Consecutive recovery nudges"
-        hint="Maximum corrective nudges before reporting a visible failure. 0 uses the default."
+        label={t('coordinatorRecovery.nudges.label')}
+        hint={t('coordinatorRecovery.nudges.hint')}
         min={0}
         max={10}
         value={draft.coordinatorStallMaxNudges}
         onChange={(v) => set('coordinatorStallMaxNudges', v)}
       />
       <Toggle
-        label="Show recovery notes in chat"
-        hint="Only controls visibility. Recovery notes are always recorded and passed to the coordinator."
+        label={t('coordinatorRecovery.notes.label')}
+        hint={t('coordinatorRecovery.notes.hint')}
         checked={draft.coordinatorStallNoteVisible}
         onChange={(v) => set('coordinatorStallNoteVisible', v)}
       />

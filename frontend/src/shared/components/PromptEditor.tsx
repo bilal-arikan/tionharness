@@ -7,6 +7,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react'
 import { Columns2, Copy, Eye, Maximize2, Minimize2, Pencil } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Markdown } from './markdown/Markdown'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { toast } from './toastStore'
@@ -66,6 +67,7 @@ export function PromptEditor({
   autoSizeMax = 320,
   ...rest
 }: Props) {
+  const { t } = useTranslation('sharedUi')
   // null until the first width measurement picks the default (edit vs split).
   const [mode, setMode] = useState<ViewMode | null>(null)
   const [full, setFull] = useState(false)
@@ -106,7 +108,7 @@ export function PromptEditor({
   }, [autoSize, autoSizeMax, rows, value, m, full])
 
   const copy = async () => {
-    if (await copyToClipboard(value)) toast.info('Panoya kopyalandı')
+    if (await copyToClipboard(value)) toast.info(t('actions.copied'))
   }
 
   // Escape exits fullscreen; lock body scroll while the overlay is open.
@@ -131,35 +133,35 @@ export function PromptEditor({
       <ToolbarButton
         active={m === 'edit'}
         onClick={() => setMode('edit')}
-        title="Düzenle"
-        aria-label="Düzenle"
+        title={t('promptEditor.edit')}
+        aria-label={t('promptEditor.edit')}
       >
         <Pencil className="h-3.5 w-3.5" />
       </ToolbarButton>
       <ToolbarButton
         active={m === 'preview'}
         onClick={() => setMode('preview')}
-        title="Önizleme"
-        aria-label="Markdown önizleme"
+        title={t('promptEditor.preview')}
+        aria-label={t('promptEditor.markdownPreview')}
       >
         <Eye className="h-3.5 w-3.5" />
       </ToolbarButton>
       <ToolbarButton
         active={m === 'split'}
         onClick={() => setMode('split')}
-        title="Böl (düzenle + önizleme)"
-        aria-label="Bölünmüş görünüm"
+        title={t('promptEditor.splitTitle')}
+        aria-label={t('promptEditor.split')}
       >
         <Columns2 className="h-3.5 w-3.5" />
       </ToolbarButton>
       <span className="mx-0.5 h-3.5 w-px bg-[var(--color-border)]" />
-      <ToolbarButton onClick={copy} title="Panoya kopyala" aria-label="Panoya kopyala">
+      <ToolbarButton onClick={copy} title={t('actions.copy')} aria-label={t('actions.copy')}>
         <Copy className="h-3.5 w-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => setFull(!fullscreen)}
-        title={fullscreen ? 'Tam ekrandan çık (Esc)' : 'Tam ekran'}
-        aria-label={fullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+        title={fullscreen ? t('promptEditor.exitFullscreenTitle') : t('actions.fullscreen')}
+        aria-label={fullscreen ? t('promptEditor.exitFullscreen') : t('actions.fullscreen')}
       >
         {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
       </ToolbarButton>
@@ -212,7 +214,9 @@ export function PromptEditor({
       {value.trim() ? (
         <Markdown>{value}</Markdown>
       ) : (
-        <p className="text-xs italic text-[var(--color-text-dim)]">Önizlenecek içerik yok.</p>
+        <p className="text-xs italic text-[var(--color-text-dim)]">
+          {t('promptEditor.emptyPreview')}
+        </p>
       )}
     </div>
   )
@@ -261,7 +265,7 @@ export function PromptEditor({
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Tam ekran düzenleyici"
+            aria-label={t('promptEditor.fullscreenEditor')}
             className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >

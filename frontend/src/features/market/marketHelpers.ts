@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { Pack, PackKind, WorkspaceTemplateFlow } from '@/types'
+import { i18next } from '@/i18n'
 
 // updateAvailable reports whether a pack's catalog version is newer than the
 // version last installed here (best-effort dotted-numeric comparison).
@@ -53,53 +54,38 @@ function compareVersions(a: string, b: string): number {
 // always selected, defaulting to the first). Each maps to a market pack kind.
 // Workspaces lead because they are the only kind that ships bundled packs, so a
 // fresh install opens on a non-empty catalog.
-export const KIND_NAV: { key: PackKind; label: string; icon: LucideIcon }[] = [
-  { key: 'workspace', label: 'Workspaces', icon: Boxes },
-  { key: 'skill', label: 'Skills', icon: Sparkles },
-  { key: 'agent', label: 'Agents', icon: Users },
-  { key: 'provider', label: 'Providers', icon: Plug },
-  { key: 'flow', label: 'Flows', icon: GitBranch },
-  { key: 'mcp', label: 'Tools (MCP)', icon: Wrench },
-  { key: 'hook', label: 'Hooks', icon: Webhook },
+export const KIND_NAV: { key: PackKind; icon: LucideIcon }[] = [
+  { key: 'workspace', icon: Boxes },
+  { key: 'skill', icon: Sparkles },
+  { key: 'agent', icon: Users },
+  { key: 'provider', icon: Plug },
+  { key: 'flow', icon: GitBranch },
+  { key: 'mcp', icon: Wrench },
+  { key: 'hook', icon: Webhook },
 ]
 
-export const KIND_LABEL: Record<PackKind, string> = {
-  skill: 'Skill',
-  agent: 'Ajan',
-  provider: 'Sağlayıcı',
-  flow: 'Akış',
-  workspace: 'Workspace',
-  mcp: 'MCP',
-  hook: 'Hook',
-}
+export const packKindKey = (kind: PackKind) => `kind.${kind}` as const
+export const packKindPluralKey = (kind: PackKind) => `kindPlural.${kind}` as const
 
-export const INSTALL_LABEL: Record<PackKind, string> = {
-  skill: "Bu workspace'e kur",
-  agent: 'Ajanı oluştur',
-  provider: 'Sağlayıcıyı ekle',
-  flow: 'Akışı içe aktar',
-  workspace: 'Workspace oluştur',
-  mcp: 'Sunucuyu ekle',
-  hook: "Hook'u ekle",
-}
+export const installLabelKey = (kind: PackKind) => `install.${kind}` as const
 
 // cacheLabel turns a provider's promptCache mode into a human label for the badge.
 export function cacheLabel(mode?: string): string {
   switch (mode) {
     case 'native':
-      return 'Cache: ✅ cache_control'
+      return i18next.t('preview.cache.native', { ns: 'market' })
     case 'auto':
-      return 'Cache: ✅ otomatik'
+      return i18next.t('preview.cache.auto', { ns: 'market' })
     case 'none':
-      return 'Cache: ❌ yok'
+      return i18next.t('preview.cache.none', { ns: 'market' })
     default:
-      return 'Cache: ? bilinmiyor'
+      return i18next.t('preview.cache.unknown', { ns: 'market' })
   }
 }
 
 // fmtPrice formats a USD/1M-token figure compactly (e.g. "$0.30", "$15").
 export function fmtPrice(n: number): string {
-  if (n === 0) return 'ücretsiz'
+  if (n === 0) return i18next.t('preview.free', { ns: 'market' })
   return '$' + (n < 1 ? n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') : String(n))
 }
 
@@ -122,10 +108,10 @@ export const NODE_ICON: Record<string, LucideIcon> = {
 }
 
 // SOURCE_LABEL labels which tier/source a pack came from.
-export const SOURCE_LABEL: Record<string, string> = {
-  bundled: '📦 Gömülü',
-  global: '💾 Yerel',
-  remote: '🌐 Uzak',
+export function sourceLabel(source: string): string {
+  const icons: Record<string, string> = { bundled: '📦', global: '💾', remote: '🌐' }
+  const translated = i18next.t(`source.${source}`, { ns: 'market', defaultValue: source })
+  return icons[source] ? `${icons[source]} ${translated}` : translated
 }
 
 // flowSummary returns a flow's node list for the preview, from either its full

@@ -21,6 +21,8 @@ import { api } from '@/api'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { relativeTime } from '@/shared/lib/time'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 interface Props {
   // The agent whose activity to show; null clears the panel.
@@ -34,18 +36,21 @@ interface Props {
 
 // Per-kind display metadata mirrors the unified executions feed so an agent's
 // activity rows carry the same icon + label vocabulary as the Activity screen.
-const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
-  chat: { label: 'Sohbet', icon: MessageSquare },
-  task: { label: 'Görev', icon: LayoutGrid },
-  flow: { label: 'Akış', icon: GitBranch },
-  schedule: { label: 'Zamanlama', icon: Clock },
+const KIND_META: Record<string, { key: string; icon: LucideIcon }> = {
+  chat: { key: 'activity.kinds.chat', icon: MessageSquare },
+  task: { key: 'activity.kinds.task', icon: LayoutGrid },
+  flow: { key: 'activity.kinds.flow', icon: GitBranch },
+  schedule: { key: 'activity.kinds.schedule', icon: Clock },
 }
 
 // Backstop refresh; the panel is visibility-gated (see useVisiblePoll).
 const POLL_MS = 10000
 
-function kindMeta(kind: string) {
-  return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
+function kindMeta(t: TFunction<'agents'>, kind: string) {
+  const meta = KIND_META[kind]
+  return meta
+    ? { label: t(meta.key), icon: meta.icon }
+    : { label: kind || t('activity.kinds.other'), icon: Activity }
 }
 
 // AgentActivityPanel is the right-hand rail on the Ajanlar screen: a compact,
@@ -55,6 +60,7 @@ function kindMeta(kind: string) {
 // tagged with its owner agent. Clicking a row opens the full transcript on the
 // Activity screen.
 export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose }: Props) {
+  const { t } = useTranslation('agents')
   const [items, setItems] = useState<Execution[]>([])
   // With an agent selected the initial fetch is in flight from the first paint.
   const [loading, setLoading] = useState(Boolean(agentId))
@@ -130,22 +136,22 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
       {/* Drag handle on the left edge — widen the panel by dragging left. */}
       <div
         onMouseDown={startResize}
-        title="Sürükleyerek genişlet"
+        title={t('activity.resize')}
         className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize transition hover:bg-[color-mix(in_srgb,var(--color-accent)_50%,transparent)]"
       />
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          <Activity size={13} /> Aktivite
+          <Activity size={13} /> {t('activity.title')}
           {runningCount > 0 && (
             <span className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]">
-              {runningCount} çalışıyor
+              {t('activity.running', { count: runningCount })}
             </span>
           )}
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={refresh}
-            title="Yenile"
+            title={t('activity.refresh')}
             className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
           >
             <RefreshCw size={14} />
@@ -153,8 +159,8 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
           {onClose && (
             <button
               onClick={onClose}
-              title="Aktivite panelini kapat"
-              aria-label="Aktivite panelini kapat"
+              title={t('activity.close')}
+              aria-label={t('activity.close')}
               className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
             >
               <X size={15} />
@@ -165,7 +171,7 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {items.map((it) => {
-          const meta = kindMeta(it.kind)
+          const meta = kindMeta(t, it.kind)
           const Icon = meta.icon
           const clickable = !!onOpenExecution
           return (
@@ -185,7 +191,10 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="flex items-center gap-1.5">
                   {it.running ? (
-                    <span className="relative flex h-2 w-2 shrink-0" title="Çalışıyor">
+                    <span
+                      className="relative flex h-2 w-2 shrink-0"
+                      title={t('activity.runningStatus')}
+                    >
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
                       <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
                     </span>
@@ -193,7 +202,7 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
                     it.unread && (
                       <span
                         className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]"
-                        title="Okunmadı"
+                        title={t('activity.unread')}
                       />
                     )
                   )}
@@ -207,12 +216,12 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] opacity-70">
                   <span>{meta.label}</span>
-                  <span>· {relativeTime(it.updatedAt)}</span>
+                  <span>{t('activity.time', { time: relativeTime(it.updatedAt) })}</span>
                   {it.lastStatus === 'success' && (
-                    <span className="text-[var(--color-success)]">· başarılı</span>
+                    <span className="text-[var(--color-success)]">{t('activity.successMeta')}</span>
                   )}
                   {it.lastStatus === 'failure' && (
-                    <span className="text-[var(--color-danger)]">· hata</span>
+                    <span className="text-[var(--color-danger)]">{t('activity.failureMeta')}</span>
                   )}
                 </span>
               </span>
@@ -227,9 +236,7 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
         })}
         {!loading && items.length === 0 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
-            {agentId
-              ? 'Bu ajan için henüz aktivite yok. Bir sohbet, görev, akış veya zamanlama çalıştığında burada belirir.'
-              : 'Aktiviteyi görmek için bir ajan seç.'}
+            {agentId ? t('activity.empty') : t('activity.select')}
           </p>
         )}
       </div>

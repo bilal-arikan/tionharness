@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 export interface ExplorerSearchResult {
   key: string
   label: string
@@ -17,6 +18,7 @@ interface Props {
 // In-map search: the canvas dims every non-matching node (focus + context) and
 // this list is the fast path — one click selects and glides the camera to it.
 export function ExplorerSearch({ value, onChange, results, onPick }: Props) {
+  const { t } = useTranslation('explorer')
   return (
     <div className="relative ml-2 hidden items-center sm:flex">
       <Search
@@ -26,14 +28,14 @@ export function ExplorerSearch({ value, onChange, results, onPick }: Props) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="haritada ara…"
-        aria-label="Haritada ara"
+        placeholder={t('search.placeholder')}
+        aria-label={t('search.label')}
         className="w-44 rounded-md border border-[var(--color-border)] bg-transparent py-1 pl-7 pr-6 text-xs text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none"
       />
       {value && (
         <button
           onClick={() => onChange('')}
-          title="Aramayı temizle"
+          title={t('search.clear')}
           className="absolute right-1.5 text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
         >
           <X size={13} />
@@ -42,7 +44,7 @@ export function ExplorerSearch({ value, onChange, results, onPick }: Props) {
       {value && results.length > 0 && (
         <div
           role="listbox"
-          aria-label="Harita arama sonuçları"
+          aria-label={t('search.results')}
           className="absolute left-0 top-8 z-30 max-h-80 w-72 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl"
         >
           {results.map((result) => (

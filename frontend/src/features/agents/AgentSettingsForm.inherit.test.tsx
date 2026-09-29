@@ -4,6 +4,7 @@ import { act, type ButtonHTMLAttributes, type TextareaHTMLAttributes } from 'rea
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Agent, AgentOverrideKey, AgentPatch } from '@/types'
+import { currentLocale, setLocale } from '@/i18n'
 
 vi.mock('@/shared/lib/dirtySignals', () => ({ useRegisterDirty: () => undefined }))
 vi.mock('@/shared/components/agents/AgentAvatar', () => ({ AgentAvatar: () => null }))
@@ -169,10 +170,16 @@ describe('AgentSettingsForm inheritance', () => {
   })
 
   // Editing a built-in reaches every workspace, so the note has to say so.
-  it('tells the user a built-in edit applies to every workspace', () => {
-    const { container } = renderForm(parent)
-    const note = container.querySelector('[data-testid="agent-locked-note"]')?.textContent ?? ''
-    expect(note).toContain('tüm workspace')
+  it('tells the user a built-in edit applies to every workspace', async () => {
+    const original = currentLocale()
+    await act(() => setLocale('tr'))
+    try {
+      const { container } = renderForm(parent)
+      const note = container.querySelector('[data-testid="agent-locked-note"]')?.textContent ?? ''
+      expect(note).toContain('tüm workspace')
+    } finally {
+      await act(() => setLocale(original))
+    }
   })
 
   // What a built-in still cannot be: deleted or disabled.

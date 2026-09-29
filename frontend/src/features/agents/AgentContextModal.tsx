@@ -15,16 +15,11 @@ import {
   useBulkToggle,
 } from '@/shared/components'
 import { count } from '@/shared/lib/format'
+import { useTranslation } from 'react-i18next'
 
 // LAZY_VIS_CHIP labels a lazy tool's visibility tier next to its name so the
 // load-on-demand list reflects the same Tam/Özet/İsim/Gizli chips set in the tools
 // screen: "summary" keeps its description, "name-only"/"hidden" show the name alone.
-const LAZY_VIS_CHIP: Record<string, string> = {
-  summary: 'Özet',
-  'name-only': 'İsim',
-  hidden: 'Gizli',
-}
-
 interface Props {
   agentId: string
   agentName: string
@@ -36,6 +31,7 @@ interface Props {
 // simulates the message-dependent dynamic suffix (cross-session block);
 // session-only parts (summary/artifacts/todos) need a live session.
 export function AgentContextModal({ agentId, agentName, onClose }: Props) {
+  const { t } = useTranslation('agents')
   const api = useAgentEditorApi()
   const [data, setData] = useState<AgentContextPreview | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -73,7 +69,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const copy = () => {
     if (!data) return
     copyToClipboard(data.system).then((ok) => {
-      if (ok) toast.info('Panoya kopyalandı')
+      if (ok) toast.info(t('context.copied'))
     })
   }
 
@@ -91,7 +87,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Ajan bağlamı"
+        aria-label={t('context.dialogLabel')}
         data-testid="agent-context-modal"
         className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
         onClick={(e) => e.stopPropagation()}
@@ -99,17 +95,19 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
         {/* Header — title with the copy + close actions inline beside it. */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold">Bağlam — {agentName}</h2>
+            <h2 className="truncate text-sm font-semibold">
+              {t('context.title', { name: agentName })}
+            </h2>
             <p className="truncate text-xs text-[var(--color-text-dim)]">
-              Ajanın sıfırdan (oturum yokken) bir tura başlarken aldığı sistem promptu + araçlar
+              {t('context.description')}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {data && (
               <button
                 onClick={copy}
-                title="Promptu kopyala"
-                aria-label="Promptu kopyala"
+                title={t('context.copy')}
+                aria-label={t('context.copy')}
                 className="flex shrink-0 items-center rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
               >
                 <Copy size={13} />
@@ -136,13 +134,13 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 size={14}
                 className={`shrink-0 text-[var(--color-text-dim)] transition-transform ${statsOpen ? 'rotate-90' : ''}`}
               />
-              <span className="font-medium">Token özeti</span>
+              <span className="font-medium">{t('context.tokenSummary')}</span>
               <span className="text-[var(--color-text-dim)]">
-                · Toplam {count(data.totalTokens)} <span className="opacity-70">(~tahmini)</span>
+                {t('context.totalEstimate', { value: count(data.totalTokens) })}
               </span>
               {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
                 <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
-                  CLI ek yükü
+                  {t('context.cliOverhead')}
                 </span>
               )}
             </button>
@@ -150,26 +148,35 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
             {statsOpen && (
               <>
                 <div className="flex flex-wrap items-center gap-2 px-5 pb-2">
-                  <Stat label="Toplam" value={data.totalTokens} accent />
-                  <Stat label="Sistem promptu" value={data.systemTokens} />
-                  {data.skills && <Stat label="Skills" value={data.skillsTokens} />}
-                  <Stat label={`Şema araçlar (${data.tools.length})`} value={data.toolTokens} />
+                  <Stat label={t('context.total')} value={data.totalTokens} accent />
+                  <Stat label={t('context.systemPrompt')} value={data.systemTokens} />
+                  {data.skills && <Stat label={t('context.skills')} value={data.skillsTokens} />}
+                  <Stat
+                    label={t('context.schemaTools', { total: data.tools.length })}
+                    value={data.toolTokens}
+                  />
                   {data.lazyTools.length > 0 && (
-                    <Stat label={`Talep-üzerine (${data.lazyTools.length})`} value={0} dim />
+                    <Stat
+                      label={t('context.onDemand', { total: data.lazyTools.length })}
+                      value={0}
+                      dim
+                    />
                   )}
-                  <Stat label="Dinamik" value={data.dynamicTokens} />
+                  <Stat label={t('context.dynamic')} value={data.dynamicTokens} />
                   {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
                     <Stat
                       label={
                         data.cliOverhead.predictedSource === 'measured'
-                          ? `Ölçülmüş taban (CLI · ${data.cliOverhead.predictedSamples ?? 0} tur)`
-                          : 'Beklenen taban (CLI)'
+                          ? t('context.measuredBaseline', {
+                              turns: data.cliOverhead.predictedSamples ?? 0,
+                            })
+                          : t('context.expectedBaseline')
                       }
                       value={data.totalTokens + data.cliOverhead.predictedOverhead}
                       accent
                     />
                   )}
-                  <span className="text-[var(--color-text-dim)]">~token tahmini</span>
+                  <span className="text-[var(--color-text-dim)]">{t('context.tokenEstimate')}</span>
                 </div>
 
                 {/* CLI-wrapper overhead: totalTokens under-reports for claude-cli.
@@ -178,18 +185,18 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                   <div className="bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
-                        CLI ek yükü
+                        {t('context.cliOverhead')}
                         <InfoPopover
-                          text={`${data.cliOverhead.note}\n\n"Beklenen taban" = bir turun ALT SINIRI (yalnız CLI tabanı + eager araç şemaları). Gerçek girdi, biriken bağlam + aktive edilen deferred araçlarla bunu aşabilir; kesin değer ilk turdan sonra ölçülür.`}
-                          label="CLI ek yükü nasıl hesaplanır?"
+                          text={t('context.cliInfo', { note: data.cliOverhead.note })}
+                          label={t('context.cliInfoLabel')}
                         />
                       </span>
                       <span className="text-[var(--color-text-dim)]">
-                        Tahmin <strong>{count(data.totalTokens)}</strong> → beklenen taban ~
-                        <strong>
-                          {count(data.totalTokens + data.cliOverhead.predictedOverhead)}
-                        </strong>{' '}
-                        (+<strong>{count(data.cliOverhead.predictedOverhead)}</strong> taban ek yük)
+                        {t('context.estimateLine', {
+                          current: count(data.totalTokens),
+                          baseline: count(data.totalTokens + data.cliOverhead.predictedOverhead),
+                          overhead: count(data.cliOverhead.predictedOverhead),
+                        })}
                       </span>
                     </div>
                   </div>
@@ -206,7 +213,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && load(message)}
-              placeholder="Örnek mesaj yaz → bu mesaj için çapraz-oturum bağlamı simüle edilir"
+              placeholder={t('context.samplePlaceholder')}
               className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
             />
           }
@@ -215,7 +222,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               {/* Expand/collapse-all (icon-only), sitting next to the simulate button. */}
               {data && <BulkButtons onExpand={expandAll} onCollapse={collapseAll} />}
               <Button onClick={() => load(message)} disabled={loading} className="shrink-0">
-                {loading ? '…' : 'Simüle et'}
+                {loading ? '…' : t('context.simulate')}
               </Button>
             </>
           }
@@ -224,20 +231,24 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {err && <p className="text-sm text-[var(--color-danger)]">{err}</p>}
-          {!err && !data && <p className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>}
+          {!err && !data && (
+            <p className="text-sm text-[var(--color-text-dim)]">{t('context.loading')}</p>
+          )}
           {data && (
             <>
               {/* Dynamic suffix (simulated) — moved to the top per user request,
                   ahead of the stable system prompt / skills / tools prefix. */}
               <CollapsibleSection
-                title={<>Dinamik bağlam {message.trim() ? '(örnek mesaja göre)' : ''}</>}
+                title={
+                  <>
+                    {t('context.dynamicTitle')} {message.trim() ? t('context.sampleSuffix') : ''}
+                  </>
+                }
                 bulk={bulk}
               >
                 {data.provider === 'claude-cli' && (
                   <div className="mb-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
-                    claude-cli: dinamik bağlam ayrı bir system bloğu olarak değil,{' '}
-                    <strong>son kullanıcı mesajının içine dokunularak</strong> gönderilir (sıcak
-                    cache prefix'ini bozmaz).
+                    {t('context.claudeDynamic')}
                   </div>
                 )}
                 {data.dynamic ? (
@@ -251,24 +262,26 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                     </div>
                   )
                 ) : (
-                  <p className="text-xs text-[var(--color-text-dim)]">
-                    Bu mesaj için dinamik bağlam yok. Özet · oturum artifact'ları · todo listesi
-                    gerçek bir oturumda, tur anında eklenir (burada simüle edilmez).
-                  </p>
+                  <p className="text-xs text-[var(--color-text-dim)]">{t('context.noDynamic')}</p>
                 )}
               </CollapsibleSection>
 
               <CollapsibleSection
-                title="Sistem promptu"
+                title={t('context.systemPrompt')}
                 bulk={bulk}
                 right={
                   <div className="flex items-center overflow-hidden rounded-md border border-[var(--color-border)] text-[11px]">
-                    {(['Markdown', 'Ham'] as const).map((mode) => {
-                      const isRaw = mode === 'Ham'
+                    {(
+                      [
+                        { key: 'markdown', label: t('context.markdown') },
+                        { key: 'raw', label: t('context.raw') },
+                      ] as const
+                    ).map((mode) => {
+                      const isRaw = mode.key === 'raw'
                       const activeMode = raw === isRaw
                       return (
                         <button
-                          key={mode}
+                          key={mode.key}
                           onClick={() => setRaw(isRaw)}
                           className={`px-2 py-0.5 ${
                             activeMode
@@ -276,7 +289,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                               : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                           }`}
                         >
-                          {mode}
+                          {mode.label}
                         </button>
                       )
                     })}
@@ -285,18 +298,18 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               >
                 {raw ? (
                   <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
-                    {data.system || '(boş)'}
+                    {data.system || t('context.empty')}
                   </pre>
                 ) : (
                   <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1">
-                    <Markdown>{data.system || '(boş)'}</Markdown>
+                    <Markdown>{data.system || t('context.empty')}</Markdown>
                   </div>
                 )}
               </CollapsibleSection>
 
               {/* Skills catalog block, split out of the system prompt. */}
               {data.skills && (
-                <CollapsibleSection title="Skills" bulk={bulk}>
+                <CollapsibleSection title={t('context.skills')} bulk={bulk}>
                   {raw ? (
                     <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text)]">
                       {data.skills}
@@ -318,37 +331,35 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
 
               {shownLazyTools.length > 0 && (
                 <CollapsibleSection
-                  title={<>Araçlar — talep üzerine (lazy) · {shownLazyTools.length}</>}
+                  title={t('context.lazyTools', { total: shownLazyTools.length })}
                   bulk={bulk}
                 >
                   <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                    Şema tura girmez — yalnızca ad+özet sistem promptundaki{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">
-                      Available Tools (load on demand)
-                    </code>{' '}
-                    bölümünde durur. Ajan{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">activate_tools</code>{' '}
-                    ile istediğini bir sonraki adımda etkinleştirir.
+                    {t('context.lazyDescription')}
                   </p>
                   <ul className="space-y-1">
-                    {shownLazyTools.map((t) => (
+                    {shownLazyTools.map((tool) => (
                       <li
-                        key={t.name}
+                        key={tool.name}
                         className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"
                       >
                         <div className="flex items-center gap-1.5">
                           <code className="text-xs font-medium text-[var(--color-text-dim)]">
-                            {t.name}
+                            {tool.name}
                           </code>
-                          {t.visibility && LAZY_VIS_CHIP[t.visibility] && (
+                          {tool.visibility && (
                             <span className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-                              {LAZY_VIS_CHIP[t.visibility]}
+                              {tool.visibility === 'summary'
+                                ? t('context.visibility.summary')
+                                : tool.visibility === 'name-only'
+                                  ? t('context.visibility.nameOnly')
+                                  : t('context.visibility.hidden')}
                             </span>
                           )}
                         </div>
-                        {t.description && (
+                        {tool.description && (
                           <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">
-                            {t.description}
+                            {tool.description}
                           </p>
                         )}
                       </li>
@@ -367,14 +378,25 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
 // BulkButtons is the header pair that broadcasts expand-all / collapse-all to
 // every CollapsibleSection in the modal.
 function BulkButtons({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
+  const { t } = useTranslation('agents')
   const cls =
     'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
   return (
     <div className="flex shrink-0 items-center gap-1">
-      <button onClick={onExpand} title="Tümünü aç" aria-label="Tümünü aç" className={cls}>
+      <button
+        onClick={onExpand}
+        title={t('context.expandAll')}
+        aria-label={t('context.expandAll')}
+        className={cls}
+      >
         <ChevronsUpDown size={14} />
       </button>
-      <button onClick={onCollapse} title="Tümünü kapat" aria-label="Tümünü kapat" className={cls}>
+      <button
+        onClick={onCollapse}
+        title={t('context.collapseAll')}
+        aria-label={t('context.collapseAll')}
+        className={cls}
+      >
         <ChevronsDownUp size={14} />
       </button>
     </div>

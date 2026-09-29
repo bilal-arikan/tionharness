@@ -3,7 +3,8 @@ import type { ViewGraphLive, ViewGraphResult, ViewHandle, ViewKind, ViewRef } fr
 import { refToString } from '@/types'
 import { CATEGORY_LABELS } from '@/features/tools/toolMeta'
 import { agentAvatarDataUrl, initialsAscii } from '@/features/network/agentAvatar'
-import { SESSION_KIND_LABEL } from './explorerFilter'
+import { i18next } from '@/i18n'
+import { sessionKindLabel } from './explorerFilter'
 import { isLiveAgentRef } from './explorerLive'
 import type { SeedLayout } from './explorerSeed'
 
@@ -56,22 +57,26 @@ export function resolveExplorerTheme(): ExplorerTheme {
   }
 }
 
-const KIND_LABEL: Record<ViewKind, string> = {
-  workspace: 'Workspace',
-  category: 'Grup',
-  board: 'Pano',
-  session: 'Oturum',
-  flowrun: 'Akış çalıştırması',
-  schedule: 'Zamanlama',
-  agent: 'Ajan',
-  budget: 'Bütçe',
-  tools: 'Araçlar',
-  artifact: 'Artifact',
-  automation: 'Otomasyon',
-  skill: 'Skill',
-  insight: 'İçgörü',
-  logs: 'Günlükler',
-  trajectory: 'Rota',
+const KIND_KEY: Record<ViewKind, string> = {
+  workspace: 'workspace',
+  category: 'category',
+  board: 'board',
+  session: 'session',
+  flowrun: 'flowrun',
+  schedule: 'schedule',
+  agent: 'agent',
+  budget: 'budget',
+  tools: 'tools',
+  artifact: 'artifact',
+  automation: 'automation',
+  skill: 'skill',
+  insight: 'insight',
+  logs: 'logs',
+  trajectory: 'trajectory',
+}
+
+function kindLabel(kind: ViewKind): string {
+  return i18next.t(`kind.${KIND_KEY[kind]}`, { ns: 'explorer' })
 }
 
 // Bucket colors: one hue per top-level group so the ring reads at a glance and a
@@ -132,21 +137,25 @@ export function nodeRole(ref: ViewRef): NodeRole {
   return null
 }
 
-const ROLE_LABEL: Record<Exclude<NodeRole, null>, string> = {
-  'board-column': 'Pano sütunu',
-  'board-card': 'Kart',
-  'tool-group': 'Araç grubu',
-  'tool-mcp': 'MCP sunucusu',
-  'budget-provider': 'Sağlayıcı',
-  'live-agent': 'Çalışan ajan',
-  'session-kind': 'Oturum türü',
+const ROLE_KEY: Record<Exclude<NodeRole, null>, string> = {
+  'board-column': 'boardColumn',
+  'board-card': 'boardCard',
+  'tool-group': 'toolGroup',
+  'tool-mcp': 'toolMcp',
+  'budget-provider': 'budgetProvider',
+  'live-agent': 'liveAgent',
+  'session-kind': 'sessionKind',
+}
+
+function roleLabel(role: Exclude<NodeRole, null>): string {
+  return i18next.t(`role.${ROLE_KEY[role]}`, { ns: 'explorer' })
 }
 
 // nodeLabelOfKind is the human name of what a node is: the role label for a
 // sub node, otherwise the kind label.
 export function nodeLabelOfKind(ref: ViewRef): string {
   const role = nodeRole(ref)
-  return role ? ROLE_LABEL[role] : KIND_LABEL[ref.kind]
+  return role ? roleLabel(role) : kindLabel(ref.kind)
 }
 
 export function kindColor(ref: ViewRef): string {
@@ -181,6 +190,16 @@ export function kindColor(ref: ViewRef): string {
 export function displayLabel(handle: ViewHandle): string {
   const key = refToString(handle.ref)
   let label = handle.label.trim()
+  if (handle.ref.kind === 'category' && handle.ref.id.startsWith('col:')) {
+    const column = handle.ref.id.slice('col:'.length)
+    return i18next.t(`boardColumn.${column}`, { ns: 'explorer', defaultValue: label || column })
+  }
+  if (handle.ref.kind === 'category' && !handle.ref.id.startsWith('skind:')) {
+    return i18next.t(`category.${handle.ref.id}`, {
+      ns: 'explorer',
+      defaultValue: label || handle.ref.id,
+    })
+  }
   if (nodeRole(handle.ref) === 'tool-group') {
     const groupKey = handle.ref.sub!.slice('group:'.length)
     const localized = CATEGORY_LABELS[groupKey]
@@ -189,7 +208,8 @@ export function displayLabel(handle: ViewHandle): string {
   }
   if (nodeRole(handle.ref) === 'session-kind') {
     const kind = handle.ref.id.slice('skind:'.length)
-    const localized = SESSION_KIND_LABEL[kind] ?? (kind === 'other' ? 'Diğer' : undefined)
+    const localized =
+      kind === 'other' ? i18next.t('sessionKind.other', { ns: 'explorer' }) : sessionKindLabel(kind)
     if (localized) label = label.replace(kind, localized)
     return label || kind
   }
@@ -332,7 +352,8 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
   const nodes: Node[] = graph.nodes.map((handle) => {
     const key = refToString(handle.ref)
     const depth = opts.layout.depth[key] ?? 2
-    const label = key === ROOT_KEY ? 'Workspace' : displayLabel(handle)
+    const label =
+      key === ROOT_KEY ? i18next.t('workspace', { ns: 'explorer' }) : displayLabel(handle)
     const matches =
       needle === '' || label.toLowerCase().includes(needle) || key.toLowerCase().includes(needle)
     if (!matches) dimmed.add(key)
@@ -383,16 +404,22 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
       label:
         truncate(label, depth <= 1 ? 24 : 26) + (hiddenChildren > 0 ? ` [+${hiddenChildren}]` : ''),
       title: tooltip(label, [
-        role ? ROLE_LABEL[role] : KIND_LABEL[handle.ref.kind],
+        role ? roleLabel(role) : kindLabel(handle.ref.kind),
         key,
-        ...(hiddenChildren > 0 ? [`${hiddenChildren} alt düğüm gizli`] : []),
+        ...(hiddenChildren > 0
+          ? [i18next.t('tooltip.hiddenChildren', { ns: 'explorer', count: hiddenChildren })]
+          : []),
         ...(liveSessionState === 'running'
-          ? ['● çalışıyor']
+          ? [`● ${i18next.t('tooltip.running', { ns: 'explorer' })}`]
           : liveSessionState === 'awaiting-workers'
-            ? ['◐ worker bekliyor']
+            ? [`◐ ${i18next.t('tooltip.awaitingWorkers', { ns: 'explorer' })}`]
             : []),
-        ...(liveEntry ? [`oturum: ${liveEntry.session.id}`] : []),
-        ...(handle.ref.kind === 'session' ? ['↗ çift tık sohbeti açar'] : []),
+        ...(liveEntry
+          ? [i18next.t('tooltip.session', { ns: 'explorer', id: liveEntry.session.id })]
+          : []),
+        ...(handle.ref.kind === 'session'
+          ? [`↗ ${i18next.t('tooltip.doubleClickChat', { ns: 'explorer' })}`]
+          : []),
       ]),
       shape,
       size: liveEntry ? 18 : size,
@@ -459,9 +486,9 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
       },
       title:
         source === target
-          ? `${source} kendi üzerine döngü`
+          ? i18next.t('edge.selfLoop', { ns: 'explorer', source })
           : cyclic
-            ? `${source} ↔ ${target} iki yönlü`
+            ? i18next.t('edge.bidirectional', { ns: 'explorer', source, target })
             : undefined,
     }
   })

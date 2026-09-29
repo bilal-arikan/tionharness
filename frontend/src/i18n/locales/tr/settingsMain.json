@@ -1,0 +1,700 @@
+{
+  "shared": {
+    "active": "Aktif",
+    "add": "Ekle",
+    "appliesAll": "Kaydettikten sonra tüm workspace'lere uygulanır.",
+    "cancel": "İptal",
+    "close": "Kapat",
+    "deleting": "Siliniyor…",
+    "inactive": "Pasif",
+    "loading": "Yükleniyor…",
+    "off": "Kapalı",
+    "on": "Açık",
+    "refresh": "Yenile",
+    "retry": "Tekrar dene",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…",
+    "secondsShort": " sn"
+  },
+  "about": {
+    "tagline": "Çok ajanlı AI runtime",
+    "version": "Sürüm",
+    "devBuild": "geliştirme build'i",
+    "unavailable": "Alınamadı",
+    "commit": "Commit",
+    "buildDate": "Build tarihi",
+    "goVersion": "Go sürümü",
+    "links": {
+      "website": "Web sitesi",
+      "docs": "Dokümantasyon",
+      "github": "GitHub"
+    },
+    "updateNote": "Yeni sürüm çıktığında uygulama üstte bir bildirim şeridi gösterir, ancak güncellemeyi kendisi kurmaz. İndirme ve kurulum elle yapılır.",
+    "storage": {
+      "prefix": "Uygulama ayarları",
+      "workspacePrefix": "dosyasında, workspace ayarları ise her workspace'in",
+      "between": "dosyasında, workspace ayarları ise her workspace'in",
+      "suffix": "dosyasında saklanır. Veritabanı kullanılmaz; tüm veriler düz dosyalardır."
+    }
+  },
+  "agentRoster": {
+    "searchLabel": "Ajan ara",
+    "searchPlaceholder": "Ad, model veya workspace ara…",
+    "kinds": {
+      "all": "Tümü",
+      "custom": "Özel",
+      "services": "Servisler",
+      "workers": "Worker'lar"
+    },
+    "workspaceFilter": "Workspace'e göre filtrele",
+    "allWorkspaces": "Tüm workspace'ler",
+    "unassigned": "Atanmamış",
+    "workspaceCount_one": "{{count}} workspace",
+    "workspaceCount_other": "{{count}} workspace",
+    "badges": {
+      "builtIn": "Yerleşik",
+      "role": "Rol",
+      "custom": "Özel",
+      "disabled": "Devre dışı"
+    },
+    "inherits": "{{name}} ajanından devralır",
+    "empty": "Bu filtrelerle eşleşen ajan yok."
+  },
+  "assignments": {
+    "label": "Workspace atamaları",
+    "removeConfirm": "“{{agent}}” ajanı “{{workspace}}” workspace'inden kaldırılsın mı?\n\nSohbet geçmişi ve merkezi profil korunur. Bu atamayı kullanan zamanlanmış işler yeniden atanıncaya kadar çalışamaz.",
+    "builtInHint": "Yerleşik ajanlar her workspace'te otomatik olarak kullanılabilir.",
+    "syncHint": "Profil düzenlemeleri atanmış workspace'ler arasında eşitlenir.",
+    "removeFrom": "{{workspace}} workspace'inden kaldır",
+    "assignTo": "{{workspace}} workspace'ine ata",
+    "archived": "arşivlenmiş",
+    "unavailable": "kullanılamıyor",
+    "empty": "Ajan atamak için bir workspace oluştur."
+  },
+  "anthropic": {
+    "description": "Bu seçenekler Claude CLI için değil, yalnızca desteklenen Anthropic API modelleri için geçerlidir.",
+    "extendedCache": {
+      "label": "Uzatılmış prompt cache (1 saat)",
+      "hint": "Yeniden kullanılabilir prompt ön eklerini daha uzun süre cache'te tut."
+    },
+    "contextEditing": {
+      "label": "Sunucu tarafı bağlam düzenleme",
+      "hint": "Cache'lenmiş ön eki korurken eski araç sonuçlarını buda."
+    },
+    "toolSearch": {
+      "label": "Native araç arama",
+      "hint": "Desteklenen Anthropic modellerinin ertelenmiş araçları sunucuda keşfetmesini sağla."
+    },
+    "programmaticTools": {
+      "label": "Programatik araç çağrıları",
+      "hint": "Araç orkestrasyonunu sağlayıcı container'ında çalıştır. Yerel kod modu ayrı bir yetenektir; izin kontrolleri uygulanmaya devam eder."
+    },
+    "webTools": {
+      "label": "Sunucu tarafı web araçları",
+      "hint": "Araçları etkin ajanlar için sağlayıcı barındırmalı arama ve sayfa alımını aç. Kullanım ek ücrete tabi olabilir."
+    },
+    "compaction": {
+      "label": "Sunucu tarafı sıkıştırma",
+      "hint": "Uzun araç döngülerini sunucuda sıkıştır. İstemci tarafı konuşma sıkıştırması ayrı kalır."
+    },
+    "refusalFallback": {
+      "label": "Reddetme fallback'i",
+      "hint": "Desteklenen Fable/Mythos isteklerinde yapılandırılmış API fallback'ini kullan."
+    },
+    "taskBudget": {
+      "label": "Otonom görev bütçesi (token)",
+      "hint": "0 API görev bütçesini kapatır. Desteklenen adaptif modeller etkin olduğunda en az 20.000 token kullanır."
+    }
+  },
+  "tools": {
+    "shell": {
+      "label": "Shell erişimi",
+      "hint": "Ajanların uygulama shell'i üzerinden komut çalıştırmasına izin ver. Kaydettikten sonra tüm workspace'lere uygulanır."
+    },
+    "codeMode": {
+      "label": "Yerel kod modu",
+      "hint": "Native ajan döngüsünün üretilmiş Python bağları üzerinden MCP araçlarını çağırmasına izin ver. Shell erişimi gerekir; araç izinleri uygulanmaya devam eder.",
+      "warningTitle": "Kod modu shell erişimi gerektirir.",
+      "warningBody": "Bu yeteneği kullanmak için yukarıdaki Shell erişimini etkinleştir."
+    }
+  },
+  "appearance": {
+    "saved": "Görünüm kaydedildi",
+    "resetSuccess": "Genele sıfırlandı",
+    "scope": {
+      "prefix": "Bu görünüm ayarları",
+      "emphasis": "yalnızca bu workspace",
+      "suffix": " için geçerlidir. Workspace değiştirdiğinde tema da değişir. Değişiklikler anında önizlenir; kalıcı olması için Kaydet'e bas."
+    },
+    "theme": {
+      "label": "Tema rengi",
+      "hint": "Bir renk ve açık/koyu varyantını seç; tüm arayüz anında yeniden renklenir."
+    },
+    "colors": {
+      "violet": "Menekşe",
+      "blue": "Mavi",
+      "green": "Yeşil",
+      "orange": "Turuncu",
+      "rose": "Gül",
+      "slate": "Arduvaz"
+    },
+    "dark": "Koyu",
+    "light": "Açık",
+    "resetTitle": "Bu workspace'in görünümünü uygulama geneli varsayılana döndür",
+    "reset": "Genele sıfırla",
+    "customStatus": "Bu workspace özel görünüm kullanıyor",
+    "globalStatus": "Uygulama geneli görünüm kullanılıyor"
+  },
+  "autonomous": {
+    "description": "Bu kontroller otonom işler için geçerlidir. Etkileşimli konuşmalar etkilenmez.",
+    "confine": {
+      "label": "Otonom dosya işlemlerini sınırla",
+      "hint": "Desteklenen dosya araçlarını çalışma diziniyle sınırla ve git push'u engelle. Shell komutları ve rastgele betikler başka yollara erişebilir; bu bir sandbox değildir."
+    },
+    "checklist": {
+      "label": "Otonom başlangıç kontrol listesi",
+      "hint": "Otonom ajanlara ortamı tanımayı, başlangıç durumunu doğrulamayı, bir görevi tamamlamayı ve döngüyü kapatmayı hatırlat."
+    },
+    "continue": {
+      "label": "Bitmemiş otonom işe devam et",
+      "hint": "Bitmemiş otonom turları otomatik sürdür. Elle durdurulan veya koruma sınırına takılan çalışmalar hariç tutulur."
+    },
+    "maxTurns": {
+      "label": "Maksimum devam turu",
+      "hint": "0 yerleşik varsayılanı kullanır."
+    }
+  },
+  "background": {
+    "description": "Üretken işlerin toplam süre sınırı yoktur. Boşta kalma pencereleri takılan çalışmaları algılar.",
+    "concurrent": {
+      "label": "Eşzamanlı arka plan oturumları",
+      "hint": "Aynı anda çalışabilen en fazla arka plan oturumu (1–128)."
+    },
+    "queued": {
+      "label": "Kuyruktaki arka plan oturumları",
+      "hint": "Kapasite bekleyebilen en fazla oturum (1–128)."
+    },
+    "flowRetention": {
+      "label": "Saklanacak tamamlanmış flow çalışmaları",
+      "hint": "Flow başına tutulan tamamlanmış çalışma ağaçları. 0 sınırsızdır; eskiler düzenli olarak kaldırılır."
+    },
+    "perTurn": {
+      "label": "Tur başına arka plan oturumu",
+      "hint": "Bir ajanın tek turda başlatabileceği en fazla oturum (1–64)."
+    },
+    "idle": {
+      "label": "Arka plan boşta kalma penceresi (dakika)",
+      "hint": "Anlamlı ilerleme olmadan bu süreyi aşan arka plan, worker veya zamanlanmış çalışmayı iptal et."
+    },
+    "chatIdle": {
+      "label": "Sohbet boşta kalma penceresi (dakika)",
+      "hint": "Anlamlı adımı olmayan etkileşimli turu iptal et. Ağ heartbeat'leri sayılmaz. 0 sınırı kapatır."
+    },
+    "codexIdle": {
+      "label": "Codex çıktı boşta kalma penceresi (saniye)",
+      "hint": "Codex alt süreç çıktı akışı için boşta kalma penceresi."
+    },
+    "recovery": {
+      "label": "Boşta kalma kurtarma denemeleri",
+      "hint": "Boşta kalma kesintisinden sonra en fazla otomatik devam denemesi."
+    },
+    "watchdog": {
+      "label": "Tur watchdog penceresi (dakika)",
+      "hint": "Tur watchdog'u tarafından kullanılan boşta kalma penceresi."
+    }
+  },
+  "cli": {
+    "hooks": {
+      "label": "Hook'ları Claude CLI'ya geçir",
+      "hint": "Workspace hook'larını CLI üzerinden çalıştır. Komutlar CLI shell'iyle uyumlu olmalıdır."
+    },
+    "sessionMode": {
+      "label": "Claude CLI oturum modu",
+      "persistent": {
+        "label": "Kalıcı süreç",
+        "hint": "Her oturum için bir CLI sürecini canlı tut ve yalnızca yeni mesajları gönder."
+      },
+      "resume": {
+        "label": "Devam ettir",
+        "hint": "Her turda bir süreç başlat ve önceki CLI oturumunu sürdür. Tek ajanlı konuşmalarda kullanılabilir."
+      },
+      "off": {
+        "label": "Kapalı",
+        "hint": "Her turda tam transkriptle yeni süreç başlat. Tanılama için yararlıdır; girdi kullanımını artırır."
+      }
+    },
+    "promptFile": {
+      "label": "Sistem promptunu dosya üzerinden geçir",
+      "hint": "Büyük promptlarda komut satırı uzunluk sınırını aşmamak için geçici dosya kullan."
+    },
+    "toolAllowlist": {
+      "label": "Claude CLI yerleşik araçlarını sınırla",
+      "hint": "Prompt yükünü azaltmak için yalnızca köprünün gerektirdiği yerleşik araçları göster."
+    },
+    "researchAgents": {
+      "label": "Claude CLI araştırma ajanları",
+      "hint": "Native Explore ve Plan ajanlarına izin ver. TionHarness ajanlarına delegasyon ayrı kalır."
+    },
+    "auxRouting": {
+      "label": "Yardımcı çağrılarda Anthropic API kullan",
+      "hint": "Desteklenen başlık, özet ve araçsız sistem çağrılarını kullanılabilir bir Anthropic API örneği üzerinden yönlendir. Bu çağrılar CLI aboneliği yerine API faturalaması kullanır."
+    }
+  },
+  "commands": {
+    "intro": {
+      "prefix": "Sohbet kutusuna",
+      "middle": "yazınca komut paleti açılır. Bir komutu düz metin olarak göndermek için tırnak içine al:"
+    },
+    "empty": "Kayıtlı komut yok.",
+    "deterministic": "Bu komut deterministiktir. Model veya prompt kullanmaz; sonuç runtime'da doğrudan üretilir.",
+    "autoTitle": "Otomatik başlık",
+    "autoTitleHint": "Komut değil — sohbet ve görev başlığı üretir"
+  },
+  "contextHandoff": {
+    "description": "Uzun otonom görevleri taze bir bağlamda sürdür. Elle handoff ayrıca kullanılabilir.",
+    "auto": {
+      "label": "Otomatik bağlam handoff'u",
+      "hint": "Otonom tur bağlam sınırına ulaşınca taze oturum başlat. Elle sohbet etkilenmez."
+    },
+    "maxChain": {
+      "label": "Maksimum handoff zinciri",
+      "hint": "Normal sıkıştırmaya dönmeden önce ardışık en fazla sıfırlama."
+    },
+    "writeFile": {
+      "label": "Handoff dosyası yaz",
+      "hint": "Çalışma dizinine ayrıca .tionharness/handoff.md yaz."
+    }
+  },
+  "contextProgress": {
+    "save": {
+      "label": "İlerlemeyi diske kaydet",
+      "hint": "Görev kontrol listesini oturumlar arasında yeniden kullanılmak üzere sakla."
+    },
+    "restore": {
+      "label": "Yeni oturumlarda ilerlemeyi geri yükle",
+      "hint": "Kendi kontrol listesi olmayan yeni oturumda bitmemiş ilerlemeyi yükle."
+    }
+  },
+  "contextRecovery": {
+    "description": "Native sağlayıcı döngüsü için kurtarma kontrolleri. CLI sağlayıcıları kendi döngülerini yönetir.",
+    "compact": {
+      "label": "Bağlam taşmasından sonra sıkıştır",
+      "hint": "Bağlam penceresi taştığında eski mesajları özetle ve yeniden dene."
+    },
+    "continue": {
+      "label": "Çıktı devam denemeleri",
+      "hint": "Çıktı sınırına ulaşan yanıtları sürdür. 0 kısmi yanıtı yeniden denemeden tutar."
+    },
+    "recent": {
+      "label": "Kurtarmada saklanacak son mesajlar",
+      "hint": "Reaktif sıkıştırmada aynen tutulan mesajlar (2–50)."
+    },
+    "outputLimit": {
+      "label": "Çıktı token sınırı",
+      "hint": "0 modele özel sınırı seçer. Pozitif değer sabit tavan uygular."
+    },
+    "retries": {
+      "label": "Sağlayıcı yeniden deneme bütçesi",
+      "hint": "Tur içinde geçici sağlayıcı hatalarını yeniden dene (0–5). Kalıcı kimlik veya kota hataları yeniden denenmez."
+    }
+  },
+  "coordinatorLimits": {
+    "description": "Çok ajanlı koordinasyon için worker kapasitesi ve iç içe geçme sınırları. Otomatik turlar ve toplam alt ağaç oturumları sınırsız kalır.",
+    "workers": {
+      "label": "Koordinatör başına worker",
+      "hint": "Her koordinatör için en fazla aktif worker (1–64)."
+    },
+    "depth": {
+      "label": "Koordinatör derinliği",
+      "hint": "Kök derinliği 0'dır. Sınırsız iç içe geçme için -1 kullan."
+    },
+    "grace": {
+      "label": "Rapor bekleme süresi (saniye)",
+      "hint": "Bir dal boşta kaldıktan sonra eksik tamamlama raporu göndermeden önce bu kadar bekle."
+    }
+  },
+  "coordinatorRecovery": {
+    "detect": {
+      "label": "Takılan koordinatörleri algıla",
+      "hint": "Worker başlattığını söyleyip gerçekten başlatmayan koordinatörleri hakem ve düzenli kontrollerle kurtar."
+    },
+    "window": {
+      "label": "Takılma kontrol penceresi (dakika)",
+      "hint": "0 varsayılan pencereyi kullanır; -1 tur sonu korumasını tutup düzenli kontrolleri kapatır."
+    },
+    "nudges": {
+      "label": "Ardışık kurtarma dürtmeleri",
+      "hint": "Görünür hata bildirmeden önce en fazla düzeltici dürtme. 0 varsayılanı kullanır."
+    },
+    "notes": {
+      "label": "Kurtarma notlarını sohbette göster",
+      "hint": "Yalnızca görünürlüğü kontrol eder. Kurtarma notları her zaman kaydedilir ve koordinatöre aktarılır."
+    }
+  },
+  "delegation": {
+    "description": "Eşzamanlı ajan delegasyonu sınırları. Tek tek araç erişimi Araçlar ekranından yönetilir.",
+    "depth": {
+      "label": "Maksimum delegasyon derinliği",
+      "hint": "Eşzamanlı ajan delegasyonu için en fazla iç içe geçme (1–10)."
+    },
+    "perTurn": {
+      "label": "Tur başına delegasyon",
+      "hint": "Tek kullanıcı turunda en fazla eşzamanlı delegasyon çağrısı (1–100)."
+    }
+  },
+  "diagnostics": {
+    "record": {
+      "label": "Tanılama olaylarını kaydet",
+      "hint": "Oturum başına zamanlama, token kullanımı, araç sonuçları ve kurtarma olaylarını kaydet."
+    },
+    "retain": {
+      "label": "Saklanacak tanılama olayı",
+      "hint": "Oturum başına en yeni olayları tut. 0 varsayılan 5.000 değerini kullanır."
+    }
+  },
+  "execution": {
+    "delegation": "Delegasyon",
+    "background": "Arka plan çalışmaları ve boşta kalma sınırları",
+    "toolLimits": "Araç yürütme sınırları",
+    "coordinatorLimits": "Koordinatör sınırları",
+    "coordinatorRecovery": "Koordinatör kurtarma",
+    "autonomous": "Otonom çalışma"
+  },
+  "general": {
+    "keepAwake": {
+      "label": "Ekranı uyanık tut",
+      "hint": "Uygulama açıkken ekranın uyumasını önle. Kaydettikten sonra tüm workspace'lere uygulanır."
+    },
+    "autoTitle": {
+      "label": "Başlıkları otomatik üret",
+      "hint": "Yeni konuşma ve görevleri otomatik adlandır."
+    },
+    "autoTag": {
+      "label": "Oturumları otomatik etiketle",
+      "hint": "Hata, hedef, tamamlama ve arşivleme etiketleri ekle. Elle ve ajan tarafından eklenen etiketler kullanılmaya devam eder."
+    }
+  },
+  "createAgent": {
+    "description": "Merkezi profil oluştur, ardından workspace'lerine ata.",
+    "name": "Ad",
+    "reasoning": "Akıl yürütme",
+    "creating": "Oluşturuluyor…",
+    "submit": "Ajan oluştur"
+  },
+  "lessons": {
+    "deleted": "Ders silindi",
+    "title": "Kayıtlı dersler",
+    "empty": "Henüz ders yok. Kötü biten bir turdan sonra burada görünür. En yeni beş ders her turun bağlamına otomatik eklenir.",
+    "seen": "{{count}}× görüldü",
+    "deleteTitle": "Dersi sil (bir daha bağlama eklenmez)"
+  },
+  "auth": {
+    "loginFailed": "Giriş tamamlanamadı",
+    "loggedIn": "Giriş yapılmış.",
+    "currentlyLoggedIn": "Şu an giriş yapılmış.",
+    "success": "Giriş başarılı",
+    "connecting": "Bağlantı alınıyor…",
+    "startBrowser": "Giriş başlat (tarayıcıyı aç)",
+    "reopen": "Tekrar aç",
+    "verifying": "Doğrulanıyor…",
+    "complete": "Girişi tamamla",
+    "signIn": "Giriş yap",
+    "claude": {
+      "title": "claude-cli kimlik doğrulama",
+      "description": "{{provider}} örneğinin izole config dizinine Max/Pro hesabınla giriş yap.",
+      "codePlaceholder": "kod#state",
+      "pasteCode": "Tarayıcıdaki kodu yapıştır",
+      "auto": "Otomatik (önerilen)",
+      "manual": "Elle kod",
+      "remoteWarning": "Otomatik giriş yalnız tarayıcı ve sunucu aynı makinedeyken çalışır. Uzaktan erişimde Elle kod modunu kullan.",
+      "waiting": "Tarayıcıda giriş yapmanı bekliyorum.",
+      "reopenLogin": "Giriş sayfasını tekrar aç"
+    },
+    "codex": {
+      "title": "codex-cli kimlik doğrulama",
+      "description": "{{provider}} örneğinin izole codex-home'unu yetkilendir; terminal gerekmez.",
+      "browserTab": "Tarayıcıyla giriş",
+      "apiKeyTab": "API anahtarı",
+      "successDetail": "Bu sağlayıcı örneğinin codex-home'una kimlik yazıldı.",
+      "browserDescription": "ChatGPT hesabınla tarayıcıdan giriş yap. Üretilen doğrulama kodunu tarayıcıda onaylayınca kimlik doğrudan bu sağlayıcı örneğinin codex-home'una yazılır.",
+      "stepOpen": "Tarayıcıda sayfayı aç.",
+      "stepCode": "Aşağıdaki kodu gir ve onayla:",
+      "copyCode": "Kodu kopyala",
+      "copied": "Panoya kopyalandı",
+      "waiting": "Tarayıcıda onaylamanı bekliyorum; onaylayınca otomatik döner.",
+      "apiKeyDescription": "platform.openai.com'dan bir API anahtarı yapıştır. Anahtar bu sağlayıcı örneğinin codex-home'una yazılır ve uygulamada bir daha gösterilmez.",
+      "apiKeyLabel": "API anahtarı",
+      "apiKeyRequired": "API anahtarı gerekli",
+      "errors": {
+        "expired": "Kodun süresi doldu. Tekrar dene.",
+        "cancelled": "Giriş iptal edildi.",
+        "inProgress": "Bu workspace için zaten devam eden bir giriş var.",
+        "cliMissing": "codex CLI bulunamadı (Sağlayıcılar altında yolunu belirt)."
+      }
+    }
+  },
+  "plugins": {
+    "scanError": "Marketplace taraması başarısız",
+    "importSuccess": "{{name}} kopyalandı — {{count}} plugin kullanılabilir",
+    "importError": "İçe aktarma başarısız",
+    "marketplaces": "Marketplace'ler",
+    "empty": "Henüz marketplace yok. Aşağıdan makinedekileri tara veya kendi yerel/Git kaynağını ekle.",
+    "removeMarketplace": "{{name}} marketplace'ini kaldır",
+    "enabled": "Etkin plugin'ler",
+    "addSource": "Kendi kaynağını ekle",
+    "namePlaceholder": "ad (harf, rakam, _ -)",
+    "gitSourcePlaceholder": "owner/repo veya URL",
+    "sourceTypes": {
+      "local": "Yerel",
+      "git": "Git"
+    },
+    "discoveredTitle": "Makinendeki Codex plugin'leri",
+    "scanning": "Taranıyor…",
+    "scan": "Tara",
+    "discoveryDescription": "Bulunan marketplace bu workspace'e kopyalanır ve yeni bir adla kaydedilir. Codex ayrılmış adlarını başka bir kaynaktan eklemeyi reddeder. Bundled plugin'ler yalnız sen istediğinde kopyalanır.",
+    "noneFound": "Bu makinede marketplace bulunamadı.",
+    "reservedName": "ayrılmış ad",
+    "pluginCount_one": "{{count}} plugin",
+    "pluginCount_other": "{{count}} plugin",
+    "import": "İçe aktar"
+  },
+  "hooks": {
+    "commandRequired": "Komut zorunludur",
+    "updated": "Hook güncellendi",
+    "added": "Hook eklendi",
+    "deleteConfirm": "Bu hook kalıcı olarak silinsin mi?",
+    "deleted": "Hook silindi",
+    "title": "Araç hook'ları (PreToolUse / PostToolUse)",
+    "description": "Hook'lar native sağlayıcı döngüsünde araç çağrılarının çevresinde dış komut çalıştırır. PreToolUse girdiyi değiştirebilir, onaylayabilir veya engelleyebilir; PostToolUse çıktıyı dönüştürebilir veya bağlam ekleyebilir. Komut JSON'u stdin'den alıp stdout'a döndürür; exit 2 çağrıyı engeller.",
+    "codexWarningTitle": "codex-cli ajanlarında hook'lar çalışmaz",
+    "codexWarningBody": "codex-cli araç döngüsünü ayrı bir süreçte çalıştırır ve hook aktarımı sunmaz. Bu hook'lar codex araçlarında veya MCP köprüsünden çağrılan TionHarness araçlarında tetiklenmez. sqz gibi PostToolUse token optimizer'ları da codex-cli ajanlarında kullanılamaz.",
+    "empty": "Henüz hook yok.",
+    "matcher": "Eşleşme",
+    "allTools": "* (tüm araçlar)",
+    "add": "Hook ekle",
+    "edit": "Hook düzenle",
+    "new": "Yeni hook",
+    "event": "Olay",
+    "toolEvents": "Araç (yalnız native döngü)",
+    "beforeCall": "çağrı öncesi",
+    "afterCall": "çağrı sonrası",
+    "lifecycleEvents": "Yaşam döngüsü (native + claude-cli)",
+    "eventHints": {
+      "userPrompt": "prompt öncesi — bağlam ekle veya engelle",
+      "sessionStart": "oturumun ilk turu",
+      "stop": "ana ajan turu bitti",
+      "subagentStop": "alt ajan bitti",
+      "preCompact": "sıkıştırma öncesi",
+      "notification": "bildirim",
+      "sessionEnd": "oturum silindi"
+    },
+    "options": {
+      "preToolUse": "PreToolUse (çağrı öncesi)",
+      "postToolUse": "PostToolUse (çağrı sonrası)",
+      "userPromptSubmit": "UserPromptSubmit (prompt öncesi — bağlam ekle veya engelle)",
+      "sessionStart": "SessionStart (oturumun ilk turu)",
+      "stop": "Stop (ana ajan turu bitti)",
+      "subagentStop": "SubagentStop (alt ajan bitti)",
+      "preCompact": "PreCompact (sıkıştırma öncesi)",
+      "notification": "Notification (bildirim)",
+      "sessionEnd": "SessionEnd (oturum silindi)"
+    },
+    "matcherHint": "Araç olayları: araç adı glob'u (boş = tümü). SessionStart: kaynak (startup|resume). PreCompact: tetik (manual|auto). Diğer yaşam döngüsü olaylarında boş bırak.",
+    "command": "Komut",
+    "commandHint": "Shell komutu (Windows: PowerShell). JSON'u stdin'den alıp stdout'a döndürür.",
+    "timeout": "Zaman aşımı (saniye)",
+    "timeoutHint": "1–120 arası.",
+    "builtins": {
+      "title": "Yerleşik davranışlar (salt okunur)",
+      "description": "TionHarness araç döngüsünün çevresine otomatik eklenen hook'lar. Düzenlenemez; bazıları ilgili ayarla açılıp kapatılır.",
+      "setting": "ayar"
+    }
+  },
+  "context": {
+    "heading": "Bağlam penceresi",
+    "floor": {
+      "label": "Maks. bağlam token — TABAN",
+      "hint": "Bütçenin alt sınırıdır; bütçeyi yalnızca yükseltir. Pencereyi küçültmek için Bütçe tavanını düşür."
+    },
+    "recent": {
+      "label": "Korunan son mesaj",
+      "hint": "Her zaman aynen gönderilir."
+    },
+    "ceil": {
+      "label": "Bütçe tavanı (token) — ÜST SINIR",
+      "hint": "Bütçenin üst sınırı ve bağlam penceresini küçültmek için değiştirilecek ayardır. Düşürmek etkin bütçeyi kırpar; yükseltmek daha çok ham geçmiş tutar."
+    },
+    "fraction": {
+      "label": "Pencere oranı",
+      "hint": "Transkripte ayrılan pay (0–1). 0 model ailesine göre önerilen adaptif değeri seçer."
+    },
+    "formula": {
+      "prefix": "Etkin bütçe = clamp(pencere × oran,",
+      "floor": "taban",
+      "ceil": "tavan",
+      "suffix": "). Oran 0 adaptiftir; bilinmeyen pencere tabanı kullanır."
+    },
+    "preview": {
+      "heading": "Etkin bütçe önizlemesi (girdiğin değerlerle)",
+      "model1m": "1M model (Opus/Sonnet/Fable)",
+      "model200k": "200K model (Haiku)"
+    },
+    "bound": {
+      "ceil": "tavana kırpıldı",
+      "floor": "tabana yükseltildi",
+      "fraction": "pencere × oran"
+    },
+    "compaction": {
+      "label": "Otomatik sıkıştırma modu",
+      "rolling": {
+        "label": "Kademeli (TionHarness)",
+        "hint": "Bütçe aşılınca en eski turlar TionHarness'in rolling özetine katlanır; transkriptin kalanı aynen gönderilir."
+      },
+      "native": {
+        "label": "Yerleşik (CLI)",
+        "hint": "Sıkıştırmayı CLI sağlayıcısına bırakır. Native sıkıştırma sıcak CLI oturumunu düşürür; sonraki tur soğuk başlar."
+      },
+      "auto": {
+        "label": "Otomatik",
+        "hint": "Sağlayıcı destekliyorsa ve sıcak CLI oturumu varsa native, aksi halde rolling sıkıştırma kullanılır."
+      }
+    },
+    "sections": {
+      "handoff": "Bağlam handoff'u",
+      "progress": "Kalıcı ilerleme",
+      "recovery": "Kurtarma ve çıktı sınırları"
+    }
+  },
+  "backup": {
+    "runSuccess": "{{count}} workspace yedeklendi, {{failures}} hata → {{dir}}",
+    "runError": "Yedekleme başarısız: {{error}}",
+    "restoreActiveSuccess": "Geri yüklendi: {{archive}}. Aktif workspace yenileniyor…",
+    "restoreSuccess": "Geri yüklendi: {{archive}}.",
+    "restoreError": "Geri yükleme başarısız: {{error}}",
+    "deleteSuccess": "Silindi: {{archive}}",
+    "deleteError": "Silme başarısız: {{error}}",
+    "never": "henüz yok",
+    "scope": {
+      "title": "Uygulama geneli ayar:",
+      "body": "Bu ayar tüm workspace'ler için geçerlidir. Her workspace'in verisi düzenli olarak ayrı bir zip arşivine alınır. Eski arşivler otomatik budanır. Yedekler varsayılan olarak veri dizinindeki backups/ klasörüne yazılır."
+    },
+    "auto": {
+      "label": "Otomatik yedekleme",
+      "hint": "Açıkken her workspace belirlenen aralıkta yedeklenir. İlk yedek bir aralık sonra alınır."
+    },
+    "interval": {
+      "label": "Yedekleme aralığı (saat)",
+      "hint": "İki otomatik yedek arası süre (en az 1 saat). 24 günde birdir."
+    },
+    "retain": {
+      "label": "Saklanan yedek sayısı",
+      "hint": "Workspace başına tutulan en yeni arşiv sayısı; eskiler budanır."
+    },
+    "folder": {
+      "label": "Yedek klasörü",
+      "hint": "Boşsa veri dizinindeki backups/ kullanılır. Mutlak yol girebilirsin.",
+      "placeholder": "boş = <veri dizini>/backups"
+    },
+    "status": {
+      "label": "Durum:",
+      "lastBackup": "Son yedek",
+      "folder": "Klasör",
+      "lastError": "Son hata"
+    },
+    "running": "Yedekleniyor…",
+    "runNow": "Şimdi yedekle",
+    "note": "Aralık ve saklama değişiklikleri Kaydet'ten sonra uygulanır. Şimdi yedekle kayıtlı ayarları kullanır.",
+    "archives": {
+      "title": "Mevcut yedekler ({{count}})",
+      "warning": "Geri yükleme seçilen workspace'in mevcut tüm verisini arşivdekiyle değiştirir ve geri alınamaz. İşlem sırasında workspace kapatılıp arşivden yeniden açılır.",
+      "empty": "Henüz yedek yok. İlk yedeği Şimdi yedekle ile oluşturabilirsin.",
+      "count_one": "{{count}} arşiv",
+      "count_other": "{{count}} arşiv"
+    },
+    "restoring": "Geri yükleniyor…",
+    "confirmRestore": "Eminim, geri yükle",
+    "confirmDelete": "Eminim, sil",
+    "restore": "Geri yükle",
+    "deleteArchive": "Bu arşivi sil"
+  },
+  "externalTools": {
+    "categories": {
+      "provider": "LLM sağlayıcı CLI'ları",
+      "token": "Token / bağlam optimizasyonu",
+      "dev": "Geliştirme araçları",
+      "render": "Render / diyagram",
+      "design": "Tasarım",
+      "voice": "Ses (TTS / STT)"
+    },
+    "description": "TionHarness ile kullanılabilen isteğe bağlı CLI araçlarının bu cihazda kurulu olup olmadığını kontrol eder. Önce yol geçersiz kılması, sonra PATH aranır. Araçlar kurulmaz, çalıştırılmaz veya değiştirilmez. Hook araçları tek tıkla bağlanabilir; MCP ve CLI araçları bilgi rozetiyle gösterilir.",
+    "version": "v{{version}}",
+    "noOutput": "(çıktı yok)",
+    "copied": "Panoya kopyalandı",
+    "checking": "Kontrol ediliyor…",
+    "checkInstalled": "Kurulu mu kontrol et",
+    "updateCheckHint": "Kurulu araçları en son GitHub sürümleriyle karşılaştır. Sonuçlar 6 saat cache'lenir.",
+    "fetchingVersions": "Sürümler alınıyor…",
+    "checkUpdates": "Güncellemeleri kontrol et",
+    "bypassCacheHint": "Cache'i atlayıp GitHub'a yeniden sor",
+    "bypassCache": "Cache'i atla",
+    "installed": "kurulu",
+    "notFound": "bulunamadı",
+    "versionUnreadable": "sürüm okunamadı",
+    "latestRelease": "En son yayımlanan sürüm: {{version}}{{stale}}",
+    "cachedSuffix": " (cache'ten — GitHub'a ulaşılamadı)",
+    "latestVersion": "En son sürüm",
+    "upToDate": "güncel",
+    "versionCompareFailed": "sürüm karşılaştırılamadı",
+    "toggleHookHint": "TionHarness hook bağlantısını aç veya kapat",
+    "createHookHint": "Bu araç için TionHarness hook'u oluştur ve etkinleştir",
+    "connect": "Bağla",
+    "settingWireHint": "Bu araç workspace ayarıyla bağlanır. Yalnız ölçülmüş kazanç veren test ve build komutları yeniden yazılır.",
+    "mcpHint": "MCP tabanlı — Ayarlar ▸ MCP'den eklenir",
+    "providerHint": "LLM sağlayıcısı çalıştırır — Ayarlar ▸ Sağlayıcılar'dan yapılandırılır",
+    "provider": "Sağlayıcı",
+    "cliHint": "Ajanların doğrudan çağırdığı düz CLI",
+    "commandToRun": "Çalıştırılacak komut: {{command}}",
+    "updating": "Güncelleniyor…",
+    "update": "Güncelle",
+    "repository": "repo",
+    "manualUpdate": "{{version}} yayımlanmış — elle güncellenir.",
+    "releasePage": "release sayfası",
+    "updateComplete": "Güncelleme tamamlandı",
+    "updateFailed": "Güncelleme başarısız",
+    "copyUpdateCommand": "Güncelleme komutunu panoya kopyala",
+    "cbm": {
+      "title": "codebase-memory entegrasyonu:",
+      "description": "MCP sunucusu eklendiğinde TionHarness ajanlara workspace'e özel izole kod grafiği araması sunar ve çalışma dizinini otomatik indeksler.",
+      "mustBeOnPath": "Önce bu araç PATH'te bulunmalı",
+      "removeHint": "MCP sunucusunu kaldır",
+      "addHint": "MCP sunucusunu otomatik ekle",
+      "remove": "MCP'yi kaldır",
+      "add": "MCP'yi otomatik ekle",
+      "notOnPath": "Araç PATH'te bulunamadı.",
+      "connected": "MCP sunucusu ekli — ajanlar kullanabilir.",
+      "disconnected": "MCP sunucusu ekli değil."
+    },
+    "token": {
+      "title": "Token optimizasyonu entegrasyonu:",
+      "description": "rtk veya sqz bağlandığında TionHarness ajana çıktının otomatik kısaltıldığını bildirir. Hook matcher'ları Bash ve PowerShell'i kapsamalıdır.",
+      "enableBoth": "İkisini birden açmak önerilir",
+      "enableBothDetail": "— rtk komutu çalışmadan önce şekillendirir, sqz çıktıyı sonra sıkıştırır; ölçümde birlikte kullanım en iyi sonucu verir.",
+      "matcherMissing": "matcher {{matcher}} PowerShell'i kapsamıyor",
+      "fixMatcherHint": "Matcher'a PowerShell ekle",
+      "fixMatcher": "Matcher'ı düzelt"
+    },
+    "maintenance": {
+      "title": "Bakım ve tasarruf raporu",
+      "gain": "kazanç",
+      "refreshed": "Rapor yenilendi.",
+      "refreshHint": "rtk gain / sqz gain çıktısını yeniden al",
+      "description": "Aşağıdaki değerler araçların kendi gain raporlarıdır; TionHarness yeniden hesaplamaz.",
+      "emptyReport": "(rapor boş — henüz veri yok)",
+      "cacheCleared": "sqz dedup cache'i temizlendi.",
+      "clearCacheHint": "İstatistikleri koruyarak sqz dedup cache'ini temizle.",
+      "clearCache": "sqz dedup cache'ini temizle",
+      "configMissing": "dosya henüz yok; rtk yerleşik varsayılanlarla çalışıyor. Terminalde oluşturmak için",
+      "machineWide": "Bu dosya makine genelidir; workspace'e özel değildir. Değişiklikler tüm workspace'leri etkiler."
+    }
+  }
+}

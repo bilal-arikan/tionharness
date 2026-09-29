@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react'
 import { useProviderInstances } from '@/features/settings/providers/useProviderInstances'
 import type { CatalogModelInfo } from '@/api/providers'
+import { useTranslation } from 'react-i18next'
 
 // Sentinel <option> value for "the user has not picked a model yet". It must
 // differ from '' — that is the catalog's real "session model" entry.
@@ -55,6 +56,7 @@ interface Props {
 // instance id no longer resolves (the instance was deleted), it shows a clear
 // warning instead of silently falling back to some other instance.
 export function ProviderInstanceModelSelect({ providerInstanceId, model, onChange }: Props) {
+  const { t } = useTranslation('sharedUi')
   const { instances, kinds, loading } = useProviderInstances()
   const [custom, setCustom] = useState(false)
 
@@ -103,7 +105,9 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
     <div className="space-y-2">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-[var(--color-text-dim)]">Sağlayıcı</span>
+          <span className="text-xs font-medium text-[var(--color-text-dim)]">
+            {t('provider.provider')}
+          </span>
           <select
             data-testid="provider-instance-select"
             value={providerInstanceId}
@@ -111,14 +115,16 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
             className={inputCls}
           >
             {isOrphaned && (
-              <option value={providerInstanceId}>{providerInstanceId} (silinmiş örnek)</option>
+              <option value={providerInstanceId}>
+                {providerInstanceId} {t('provider.deletedInstance')}
+              </option>
             )}
             {[...byKind.entries()].map(([kindId, list]) => (
               <optgroup key={kindId} label={kindLabel(kindId)}>
                 {list.map((inst) => (
                   <option key={inst.id} value={inst.id}>
                     {inst.label || inst.id}
-                    {!inst.enabled ? ' (devre dışı)' : ''}
+                    {!inst.enabled ? t('provider.disabledSuffix') : ''}
                   </option>
                 ))}
               </optgroup>
@@ -127,7 +133,9 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
         </label>
 
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-[var(--color-text-dim)]">Model</span>
+          <span className="text-xs font-medium text-[var(--color-text-dim)]">
+            {t('provider.model')}
+          </span>
           {showCustom ? (
             <div className="flex gap-1">
               <input
@@ -136,7 +144,7 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
                 onChange={(e) =>
                   onChange(selected?.kindId ?? '', providerInstanceId, e.target.value)
                 }
-                placeholder="model adı"
+                placeholder={t('provider.modelName')}
                 className={inputCls}
               />
               {selected && (
@@ -147,7 +155,7 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
                     setCustom(false)
                     onChange(selected.kindId, providerInstanceId, models[0]?.id ?? '')
                   }}
-                  title="Listeden seç"
+                  title={t('provider.selectFromList')}
                   className="shrink-0 rounded border border-[var(--color-border)] px-2 text-xs text-[var(--color-text-dim)] hover:border-[var(--color-accent)]"
                 >
                   ↩
@@ -170,7 +178,7 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
             >
               {unselected && (
                 <option value={UNSELECTED} disabled>
-                  Model seçin…
+                  {t('provider.selectModel')}
                 </option>
               )}
               {models.map((m) => {
@@ -182,7 +190,7 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
                   </option>
                 )
               })}
-              <option value="__custom__">Özel…</option>
+              <option value="__custom__">{t('provider.custom')}</option>
             </select>
           )}
           {!showCustom && selectedModelInfo?.description && (
@@ -198,8 +206,7 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
           data-testid="provider-instance-orphaned-warning"
           className="rounded-md border border-[color-mix(in_srgb,var(--color-danger)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] px-2 py-1.5 text-xs text-[var(--color-danger)]"
         >
-          ⚠ Bu ajanın bağlı olduğu sağlayıcı örneği ("{providerInstanceId}") silinmiş. Ajan bu
-          haliyle çalışmaz — yukarıdan yeni bir sağlayıcı örneği seçip kaydedin.
+          {t('provider.orphaned', { providerInstanceId })}
         </p>
       )}
     </div>

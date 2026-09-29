@@ -8,6 +8,7 @@ import { looksLikeDiff } from '@/shared/lib/diff'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { toast } from '../toastStore'
 import { Copy } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   code: string
@@ -18,6 +19,7 @@ interface Props {
 // and highlight.js syntax coloring. `diff` blocks (explicit or detected) render
 // through DiffView, and `mermaid` blocks render as diagrams.
 export function CodeBlock({ code, lang }: Props) {
+  const { t } = useTranslation('sharedUi')
   const isDiff = lang === 'diff' || (!lang && looksLikeDiff(code))
   const isMermaid = lang === 'mermaid'
   const isGallery = lang === 'gallery' || lang === 'image-preview' || lang === 'images'
@@ -42,7 +44,7 @@ export function CodeBlock({ code, lang }: Props) {
 
   const copy = () => {
     copyToClipboard(code).then((ok) => {
-      if (ok) toast.info('Panoya kopyalandı')
+      if (ok) toast.info(t('actions.copied'))
     })
   }
 
@@ -52,8 +54,8 @@ export function CodeBlock({ code, lang }: Props) {
         <span>{lang || 'text'}</span>
         <button
           onClick={copy}
-          title="Kodu kopyala"
-          aria-label="Kodu kopyala"
+          title={t('actions.copyCode')}
+          aria-label={t('actions.copyCode')}
           className="rounded px-1.5 py-0.5 opacity-0 transition hover:bg-[var(--color-surface-2)] group-hover:opacity-100"
         >
           <Copy size={14} />

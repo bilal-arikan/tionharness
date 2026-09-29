@@ -8,6 +8,7 @@
 // That copy is never made automatically: those are OpenAI's proprietary files,
 // so it happens only when the user asks for it here.
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { workspaceApi } from '@/api/workspaces'
 import { Button, toast } from '@/shared/components'
@@ -27,6 +28,7 @@ export function CodexPluginsSection({
   onChangeMarketplaces,
   onChangePlugins,
 }: Props) {
+  const { t } = useTranslation('settingsMain')
   const [discovered, setDiscovered] = useState<CodexDiscoveredMarketplace[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [newName, setNewName] = useState('')
@@ -38,7 +40,7 @@ export function CodexPluginsSection({
     try {
       setDiscovered(await workspaceApi.discoverCodexMarketplaces())
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Marketplace taraması başarısız')
+      toast.error(e instanceof Error ? e.message : t('plugins.scanError'))
     } finally {
       setBusy(false)
     }
@@ -58,10 +60,13 @@ export function CodexPluginsSection({
         res.marketplace,
       ])
       toast.success(
-        `${res.marketplace.name} kopyalandı — ${res.availablePlugins.length} plugin kullanılabilir`,
+        t('plugins.importSuccess', {
+          name: res.marketplace.name,
+          count: res.availablePlugins.length,
+        }),
       )
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'İçe aktarma başarısız')
+      toast.error(e instanceof Error ? e.message : t('plugins.importError'))
     } finally {
       setBusy(false)
     }
@@ -96,12 +101,11 @@ export function CodexPluginsSection({
     <div className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
       {/* Configured marketplaces */}
       <div className="flex flex-col gap-1.5">
-        <div className="text-xs font-medium text-[var(--color-text)]">Marketplace'ler</div>
+        <div className="text-xs font-medium text-[var(--color-text)]">
+          {t('plugins.marketplaces')}
+        </div>
         {marketplaces.length === 0 ? (
-          <div className="text-xs text-[var(--color-text-dim)]">
-            Henüz marketplace yok. Aşağıdan makinendekileri tara veya kendi yerel/Git kaynağını
-            ekle.
-          </div>
+          <div className="text-xs text-[var(--color-text-dim)]">{t('plugins.empty')}</div>
         ) : (
           marketplaces.map((m) => (
             <div
@@ -117,7 +121,7 @@ export function CodexPluginsSection({
               <button
                 type="button"
                 onClick={() => removeMarketplace(m.name)}
-                aria-label={`${m.name} marketplace'ini kaldır`}
+                aria-label={t('plugins.removeMarketplace', { name: m.name })}
                 className="shrink-0 rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
               >
                 <Trash2 size={14} />
@@ -130,7 +134,7 @@ export function CodexPluginsSection({
       {/* Enabled plugin selectors */}
       {plugins.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <div className="text-xs font-medium text-[var(--color-text)]">Etkin plugin'ler</div>
+          <div className="text-xs font-medium text-[var(--color-text)]">{t('plugins.enabled')}</div>
           <div className="flex flex-wrap gap-1.5">
             {plugins.map((p) => (
               <button
@@ -148,12 +152,12 @@ export function CodexPluginsSection({
 
       {/* Manual source */}
       <div className="flex flex-col gap-1.5 border-t border-[var(--color-border)] pt-2">
-        <div className="text-xs font-medium text-[var(--color-text)]">Kendi kaynağını ekle</div>
+        <div className="text-xs font-medium text-[var(--color-text)]">{t('plugins.addSource')}</div>
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="ad (harf, rakam, _ -)"
+            placeholder={t('plugins.namePlaceholder')}
             className={`${inputCls} w-40`}
           />
           <select
@@ -161,17 +165,19 @@ export function CodexPluginsSection({
             onChange={(e) => setNewType(e.target.value as 'local' | 'git')}
             className={`${inputCls} w-24`}
           >
-            <option value="local">local</option>
-            <option value="git">git</option>
+            <option value="local">{t('plugins.sourceTypes.local')}</option>
+            <option value="git">{t('plugins.sourceTypes.git')}</option>
           </select>
           <input
             value={newSource}
             onChange={(e) => setNewSource(e.target.value)}
-            placeholder={newType === 'local' ? 'C:\\...\\marketplace' : 'owner/repo veya URL'}
+            placeholder={
+              newType === 'local' ? 'C:\\...\\marketplace' : t('plugins.gitSourcePlaceholder')
+            }
             className={`${inputCls} min-w-0 flex-1`}
           />
           <Button onClick={addManual} disabled={!newName.trim() || !newSource.trim()}>
-            <Plus size={14} /> Ekle
+            <Plus size={14} /> {t('shared.add')}
           </Button>
         </div>
       </div>
@@ -180,22 +186,17 @@ export function CodexPluginsSection({
       <div className="flex flex-col gap-1.5 border-t border-[var(--color-border)] pt-2">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs font-medium text-[var(--color-text)]">
-            Makinendeki Codex plugin'leri
+            {t('plugins.discoveredTitle')}
           </div>
           <Button onClick={discover} disabled={busy}>
-            <RefreshCw size={14} /> {busy ? 'Taranıyor…' : 'Tara'}
+            <RefreshCw size={14} /> {busy ? t('plugins.scanning') : t('plugins.scan')}
           </Button>
         </div>
         <div className="text-[11px] text-[var(--color-text-dim)]">
-          Bulunan marketplace bu workspace'e <strong>kopyalanır</strong> ve yeni bir adla kaydedilir
-          — Codex kendi adlarını (örn. <code>openai-bundled</code>) başka bir kaynaktan eklemeyi
-          reddeder. Bundled plugin'ler OpenAI'ın tescilli dosyalarıdır; kopyalama yalnız senin
-          isteğinle yapılır.
+          {t('plugins.discoveryDescription')}
         </div>
         {discovered?.length === 0 && (
-          <div className="text-xs text-[var(--color-text-dim)]">
-            Bu makinede marketplace bulunamadı.
-          </div>
+          <div className="text-xs text-[var(--color-text-dim)]">{t('plugins.noneFound')}</div>
         )}
         {discovered?.map((d) => (
           <div
@@ -207,16 +208,16 @@ export function CodexPluginsSection({
                 <span className="text-xs font-medium text-[var(--color-text)]">{d.name}</span>
                 {d.reserved && (
                   <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] px-1 py-0.5 text-[10px] text-[var(--color-warning)]">
-                    ayrılmış ad → {d.suggestedName}
+                    {t('plugins.reservedName')} → {d.suggestedName}
                   </span>
                 )}
               </div>
               <div className="truncate text-[10px] text-[var(--color-text-dim)]">
-                {d.plugins.length} plugin · {d.root}
+                {t('plugins.pluginCount', { count: d.plugins.length })} · {d.root}
               </div>
             </div>
             <Button onClick={() => importOne(d)} disabled={busy}>
-              <Download size={14} /> İçe aktar
+              <Download size={14} /> {t('plugins.import')}
             </Button>
           </div>
         ))}

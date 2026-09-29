@@ -2,8 +2,9 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArchiveViewBanner, ArchiveViewToggle } from './ArchiveView'
+import { setLocale } from '@/i18n'
 
 const reactTestEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT: boolean
@@ -11,6 +12,10 @@ const reactTestEnvironment = globalThis as typeof globalThis & {
 reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: ReturnType<typeof createRoot>[] = []
+
+beforeEach(async () => {
+  await setLocale('tr')
+})
 
 function render(node: React.ReactNode) {
   const container = document.createElement('div')
@@ -53,5 +58,15 @@ describe('ArchiveViewBanner', () => {
     expect(
       render(<ArchiveViewBanner count={2} noun="skill" restoreHint="geri al" />).textContent,
     ).toContain('2 arşivlenmiş skill — geri al')
+  })
+
+  it('renders the shared archive copy in English', async () => {
+    await setLocale('en')
+    expect(render(<ArchiveViewBanner count={0} noun="agent" />).textContent).toContain(
+      'No archived agent.',
+    )
+    expect(render(<ArchiveViewToggle active={false} onToggle={vi.fn()} />).textContent).toContain(
+      'Archive',
+    )
   })
 })

@@ -16,9 +16,11 @@ import { NodeInspector } from './NodeInspector'
 import { FlowVarsButton } from './FlowVarsButton'
 import type { FlowRFNode } from './flowGraph'
 import { NODE_TYPES, EDGE_STYLES } from './flowsPanelShared'
-import { NODE_TYPE_HELP } from './nodeTypeHelp'
+import { nodeTypeHelp } from './nodeTypeHelp'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '@/types'
 import { Button, TagEditor, ModalOverlay, InfoPopover } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
+import { statusLabel } from './runStatus'
 
 interface Props {
   agents: Agent[]
@@ -107,6 +109,7 @@ export function FlowEditorView({
   liveNodes,
   trace,
 }: Props) {
+  const { t } = useTranslation('flows')
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       {/* Node palette (add nodes + flow-level presentation) + canvas. The flow
@@ -118,51 +121,57 @@ export function FlowEditorView({
               type="button"
               onClick={togglePalette}
               className="flex w-full items-center gap-1 px-1 text-xs font-semibold text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-              title={paletteOpen ? 'Node ekle bölümünü daralt' : 'Node ekle bölümünü genişlet'}
+              title={paletteOpen ? t('editor.collapsePalette') : t('editor.expandPalette')}
               aria-expanded={paletteOpen}
             >
               {paletteOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              Node ekle
+              {t('editor.nodeAdd')}
             </button>
             {/* Each palette entry pairs the add/drag button with an (ⓘ) popover
               explaining what that node type does. The popover renders in fixed
               coordinates because this column scrolls (and would clip it). */}
             {paletteOpen &&
-              NODE_TYPES.map((t) => (
-                <div key={t.value} className="flex items-center gap-1">
+              NODE_TYPES.map((nodeType) => (
+                <div key={nodeType.value} className="flex items-center gap-1">
                   <button
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData(FLOW_NODE_DND_MIME, t.value)
+                      e.dataTransfer.setData(FLOW_NODE_DND_MIME, nodeType.value)
                       e.dataTransfer.effectAllowed = 'move'
                     }}
-                    onClick={() => addNode(t.value)}
+                    onClick={() => addNode(nodeType.value)}
                     className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)] active:cursor-grabbing"
                   >
-                    <t.Icon size={15} className="shrink-0 text-[var(--color-text-dim)]" />
-                    <span className="truncate">{t.label}</span>
+                    <nodeType.Icon size={15} className="shrink-0 text-[var(--color-text-dim)]" />
+                    <span className="truncate">{nodeType.label}</span>
                   </button>
-                  <InfoPopover fixed text={NODE_TYPE_HELP[t.value]} label={`${t.label} nedir?`} />
+                  <InfoPopover
+                    fixed
+                    text={nodeTypeHelp(nodeType.value)}
+                    label={t('inspector.nodeTypeWhat', { type: nodeType.label })}
+                  />
                 </div>
               ))}
 
             {/* Flow-level presentation moved here from the meta toolbar. */}
             <div className="space-y-2 border-t border-[var(--color-border)] pt-2">
-              <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">Görünüm</div>
+              <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">
+                {t('editor.view')}
+              </div>
               <div className="px-0.5">
                 <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">
-                  Etiket
+                  {t('editor.tag')}
                 </span>
                 <TagEditor
                   tags={tags}
                   onChange={onTagsChange}
-                  placeholder="Etiket…"
+                  placeholder={t('editor.tagPlaceholder')}
                   className="py-1"
                 />
               </div>
               <label className="block px-0.5">
                 <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">
-                  Kablo
+                  {t('editor.cable')}
                 </span>
                 <select
                   value={edgeStyle}
@@ -182,18 +191,18 @@ export function FlowEditorView({
                   checked={animated}
                   onChange={(e) => setAnimated(e.target.checked)}
                 />
-                Animasyon
+                {t('editor.animation')}
               </label>
               <label
                 className="flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]"
-                title="Ardışık ajan node'ları büyüyen tek bir konuşmayı paylaşır → prompt-cache düğümler arası yeniden kullanılır"
+                title={t('editor.accumulateTitle')}
               >
                 <input
                   type="checkbox"
                   checked={accumulate}
                   onChange={(e) => setAccumulate(e.target.checked)}
                 />
-                Bağlamı biriktir (cache)
+                {t('editor.accumulate')}
               </label>
             </div>
           </div>
@@ -206,7 +215,7 @@ export function FlowEditorView({
             type="button"
             onClick={togglePaletteVisible}
             aria-pressed={paletteVisible}
-            title={paletteVisible ? 'Sol paneli gizle' : 'Sol paneli göster'}
+            title={paletteVisible ? t('editor.hidePalette') : t('editor.showPalette')}
             className="absolute left-2 top-2 z-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-[var(--color-text-dim)] shadow-lg transition hover:text-[var(--color-accent)]"
           >
             {paletteVisible ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
@@ -235,12 +244,12 @@ export function FlowEditorView({
           <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
               <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-                Node
+                {t('editor.node')}
               </span>
               <button
                 onClick={() => setNodeEditorOpen(false)}
-                title="Kapat"
-                aria-label="Kapat"
+                title={t('actions.close')}
+                aria-label={t('actions.close')}
                 className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
               >
                 <X size={16} />
@@ -280,19 +289,21 @@ export function FlowEditorView({
             // Locked while the run is in flight, like the Çalıştır button — the
             // text is kept either way, so a failed run can be retried as-is.
             disabled={running}
-            placeholder="Girdi (akışa {{input}} olarak geçer)"
+            placeholder={t('editor.runInputPlaceholder')}
             rows={1}
             className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
           />
           <Button onClick={doRun} disabled={running} size="lg">
-            {running ? 'Çalışıyor…' : '▶ Çalıştır'}
+            {running ? t('actions.running') : t('actions.run')}
           </Button>
         </div>
 
         {/* Live node progress while running (before the final run lands). */}
         {!run && liveNodes.length > 0 && (
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
-            <div className="mb-2 text-xs text-[var(--color-text-dim)]">Canlı ilerleme</div>
+            <div className="mb-2 text-xs text-[var(--color-text-dim)]">
+              {t('editor.liveProgress')}
+            </div>
             <ol className="space-y-2">
               {liveNodes.map((n, i) => (
                 <li
@@ -312,7 +323,9 @@ export function FlowEditorView({
                       ⚠️ {n.error}
                     </span>
                   ) : n.output === undefined ? (
-                    <span className="text-xs italic text-[var(--color-text-dim)]">çalışıyor…</span>
+                    <span className="text-xs italic text-[var(--color-text-dim)]">
+                      {t('run.running')}
+                    </span>
                   ) : n.type === 'branch' ? (
                     <div className="whitespace-pre-wrap">{n.output}</div>
                   ) : (
@@ -327,7 +340,7 @@ export function FlowEditorView({
         {run && (
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
             <div className="mb-2 text-xs">
-              Durum:{' '}
+              {t('run.status')}{' '}
               <span
                 className={
                   run.status === 'success'
@@ -335,7 +348,7 @@ export function FlowEditorView({
                     : 'text-[var(--color-danger)]'
                 }
               >
-                {run.status}
+                {statusLabel(run.status)}
               </span>
               {run.error && <span className="ml-2 text-[var(--color-danger)]">· {run.error}</span>}
             </div>

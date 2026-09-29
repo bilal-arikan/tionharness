@@ -1,9 +1,10 @@
+import { count, tokens, usd } from '@/shared/lib/format'
+import { numberFormat } from '@/shared/lib/intl'
+
 // Number/currency formatters for the dashboard charts. Split out so charts.tsx
 // exports only components (fast refresh).
 export function compact(n: number): string {
-  if (n < 1000) return String(n)
-  if (n < 1_000_000) return `${Math.round(n / 100) / 10}k`
-  return `${Math.round(n / 100_000) / 10}M`
+  return Math.abs(n) < 1000 ? count(n) : tokens(n)
 }
 
 // fmtUsd renders a USD amount for a chart total or tile. Sub-cent figures keep
@@ -11,10 +12,16 @@ export function compact(n: number): string {
 // compact to $1.2k so a header stays short. estimated prefixes "~" (subscription
 // providers are priced by an equivalent-API estimate, not a real invoice).
 export function fmtUsd(n: number, estimated = false): string {
-  const p = estimated ? '~$' : '$'
-  if (n > 0 && n < 0.01) return `${p}${n.toFixed(3)}`
-  if (n < 1000) return `${p}${n.toFixed(2)}`
-  return `${p}${compact(n)}`
+  const value =
+    Math.abs(n) < 1000
+      ? usd(n)
+      : numberFormat({
+          style: 'currency',
+          currency: 'USD',
+          notation: 'compact',
+          maximumFractionDigits: 1,
+        }).format(n)
+  return `${estimated ? '~' : ''}${value}`
 }
 
 // DeltaBadge shows the period-over-period change as a coloured arrow. invert flips

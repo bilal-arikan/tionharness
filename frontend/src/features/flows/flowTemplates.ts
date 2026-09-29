@@ -3,6 +3,7 @@
 // agents after instantiating the template into a real flow. Positions are
 // provided so the read-only preview lays out cleanly without auto-layout.
 import type { FlowGraph } from '@/types'
+import { i18next } from '@/i18n'
 
 export interface FlowTemplate {
   id: string
@@ -14,6 +15,51 @@ export interface FlowTemplate {
   // (index into this array), which instantiate rewrites to the created flow's
   // real id — so an async spawn/join example is runnable out of the box.
   companions?: { name: string; graph: FlowGraph }[]
+}
+
+export function flowTemplateName(template: FlowTemplate): string {
+  return i18next.t(`templates.${template.id}.name`, { ns: 'flows', defaultValue: template.name })
+}
+
+export function flowTemplateDescription(template: FlowTemplate): string {
+  return i18next.t(`templates.${template.id}.description`, {
+    ns: 'flows',
+    defaultValue: template.description,
+  })
+}
+
+function localizedTemplateGraph(graph: FlowGraph, keyPrefix: string): FlowGraph {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => {
+      const typeTitle =
+        node.type === 'start' || node.type === 'end'
+          ? i18next.t(`nodeTypes.${node.type}`, { ns: 'flows' })
+          : (node.title ?? '')
+      const title = i18next.t(`${keyPrefix}.nodes.${node.id}`, {
+        ns: 'flows',
+        defaultValue: typeTitle,
+      })
+      return title === node.title ? node : { ...node, title }
+    }),
+  }
+}
+
+// These helpers create localized copies for preview/instantiation. The static
+// template remains immutable, so prompts, ids, routing and existing saved flows
+// are never rewritten when the UI locale changes.
+export function flowTemplateGraph(template: FlowTemplate): FlowGraph {
+  return localizedTemplateGraph(template.graph, `templates.${template.id}`)
+}
+
+export function flowTemplateCompanions(template: FlowTemplate): FlowTemplate['companions'] {
+  return template.companions?.map((companion, index) => ({
+    name: i18next.t(`templates.${template.id}.companions.${index}.name`, {
+      ns: 'flows',
+      defaultValue: companion.name,
+    }),
+    graph: localizedTemplateGraph(companion.graph, `templates.${template.id}.companions.${index}`),
+  }))
 }
 
 export const FLOW_TEMPLATES: FlowTemplate[] = [

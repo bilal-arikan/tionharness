@@ -6,65 +6,71 @@ import { LOCALES, localeMeta } from '@/i18n'
 import type { PanelProps } from './settingsPanelShared'
 
 export function ProfilePanel({ draft, set }: PanelProps) {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation(['settings', 'common'])
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Bu bilgiler ajanların yanıtlarını sana göre kişiselleştirmesi için sohbet bağlamına eklenir.
+        {t('profile.intro')}
       </div>
-      <Field label="Ad" hint="Ajan sana nasıl hitap etsin.">
+      <Field label={t('profile.name')} hint={t('profile.nameHint')}>
         <input
           value={draft.userName}
           onChange={(e) => set('userName', e.target.value)}
-          placeholder="örn. Ada"
+          placeholder={t('profile.namePlaceholder')}
           className={inputCls}
         />
       </Field>
-      <Field label="Saat dilimi" hint="'yarın', 'gelecek hafta' gibi göreli tarihler için.">
+      <Field label={t('profile.timezone')} hint={t('profile.timezoneHint')}>
         <input
           value={draft.userTimezone}
           onChange={(e) => set('userTimezone', e.target.value)}
-          placeholder="örn. Europe/Istanbul"
+          placeholder={t('profile.timezonePlaceholder')}
           className={inputCls}
         />
       </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Şehir">
+        <Field label={t('profile.city')}>
           <input
             value={draft.userCity}
             onChange={(e) => set('userCity', e.target.value)}
-            placeholder="örn. İstanbul"
+            placeholder={t('profile.cityPlaceholder')}
             className={inputCls}
           />
         </Field>
-        <Field label="Ülke">
+        <Field label={t('profile.country')}>
           <input
             value={draft.userCountry}
             onChange={(e) => set('userCountry', e.target.value)}
-            placeholder="örn. Türkiye"
+            placeholder={t('profile.countryPlaceholder')}
             className={inputCls}
           />
         </Field>
       </div>
-      <Field label="Notlar" hint="Tercihlerini anlatan serbest metin (talimatlar, çalışma şekli…).">
+      <Field label={t('profile.notes')} hint={t('profile.notesHint')}>
         <PromptEditor
           value={draft.userNotes}
           onChange={(v) => set('userNotes', v)}
           rows={5}
-          placeholder="Ajanların bilmesi gereken tercihlerin…"
+          placeholder={t('profile.notesPlaceholder')}
         />
       </Field>
       {/* Two independent language axes, deliberately adjacent so the difference is
           visible at a glance: the interface can be English while the agent still
           answers in Turkish, or the reverse. See _Docs/73. */}
-      <Field label={t('language.uiLabel')} hint={t('language.uiHint')}>
+      <Field
+        label={t('language.uiLabel', { ns: 'common' })}
+        hint={t('language.uiHint', { ns: 'common' })}
+      >
         <select
           value={draft.uiLanguage}
           onChange={(e) => set('uiLanguage', e.target.value as AppSettings['uiLanguage'])}
           className={inputCls}
         >
           <option value="">
-            {t('language.followAgent', { language: localeMeta(draft.language).label })}
+            {t('language.followAgent', {
+              ns: 'common',
+              language: localeMeta(draft.language).label,
+            })}
           </option>
           {LOCALES.map((l) => (
             <option key={l.code} value={l.code}>
@@ -73,7 +79,10 @@ export function ProfilePanel({ draft, set }: PanelProps) {
           ))}
         </select>
       </Field>
-      <Field label={t('language.agentLabel')} hint={t('language.agentHint')}>
+      <Field
+        label={t('language.agentLabel', { ns: 'common' })}
+        hint={t('language.agentHint', { ns: 'common' })}
+      >
         <select
           value={draft.language}
           onChange={(e) => set('language', e.target.value as AppSettings['language'])}

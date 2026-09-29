@@ -1,4 +1,5 @@
 import type { ShellOptimization } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   optimizer: ShellOptimization
@@ -14,6 +15,7 @@ interface Props {
 // no before/after to measure, so it shows the name only rather than a made-up
 // percentage.
 export function OptimizerChip({ optimizer }: Props) {
+  const { t } = useTranslation('chatStatus')
   const { kind, inTokens, outTokens, dedup, command, degraded } = optimizer
   const measured =
     typeof inTokens === 'number' &&
@@ -28,16 +30,14 @@ export function OptimizerChip({ optimizer }: Props) {
   // a reader would otherwise file as a bug (the command printed plenty, the card
   // shows one "§ref:…§" line).
   const title = degraded
-    ? `${kind}: komut BAŞARISIZ oldu ve yukarıdaki metin ham çıktı değil, ${kind} özeti. ` +
-      `Test/derleme hataları korunur ama kurulum hataları (bozuk go.mod, eksik toolchain) ` +
-      `anlamsız bir özete inebilir. Gerçek nedeni görmek için aynı komutu no_compress ile tekrar çalıştır.` +
-      (command ? `\n\nÇalıştırılan: ${command}` : '')
+    ? t('optimizer.degradedTitle', { kind }) +
+      (command ? `\n\n${t('optimizer.command', { command })}` : '')
     : dedup
-      ? `${kind}: bu çıktı oturumda daha önce görülenle birebir aynı — tekrar edilmek yerine "§ref:…§" işaretçisiyle değiştirildi. Komut düzgün çalıştı, çıktı kaybolmadı.`
+      ? t('optimizer.deduplicatedTitle', { kind })
       : (measured
-          ? `${kind}: ${inTokens} → ${outTokens} token (%${percent} tasarruf) — çıktı kısaltılmış olarak bağlama girdi, kırpılmadı`
-          : `${kind}: komut token-optimize edici üzerinden çalıştı`) +
-        (command ? `\n\nÇalıştırılan: ${command}` : '')
+          ? t('optimizer.measuredTitle', { kind, input: inTokens, output: outTokens, percent })
+          : t('optimizer.optimizedTitle', { kind })) +
+        (command ? `\n\n${t('optimizer.command', { command })}` : '')
 
   return (
     <span
@@ -50,11 +50,15 @@ export function OptimizerChip({ optimizer }: Props) {
     >
       {kind}
       {degraded ? (
-        <span className="ml-1">özet — ham değil</span>
+        <span className="ml-1">{t('optimizer.degradedBadge')}</span>
       ) : dedup ? (
-        <span className="ml-1 text-[var(--color-success)]">yinelenen</span>
+        <span className="ml-1 text-[var(--color-success)]">{t('optimizer.deduplicatedBadge')}</span>
       ) : (
-        measured && <span className="ml-1 text-[var(--color-success)]">−%{percent}</span>
+        measured && (
+          <span className="ml-1 text-[var(--color-success)]">
+            {t('optimizer.savingBadge', { percent })}
+          </span>
+        )
       )}
     </span>
   )

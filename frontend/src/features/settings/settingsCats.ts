@@ -19,29 +19,37 @@ import {
 // Settings category tables. Split out so primitives.tsx exports only components
 // (fast refresh).
 import type { CatMeta } from './primitives'
+import { i18next } from '@/i18n'
+
+function category(key: CatMeta['key'], icon: CatMeta['icon']): CatMeta {
+  return {
+    key,
+    get label() {
+      return i18next.t(`categories.${key}`, { ns: 'settings' })
+    },
+    icon,
+  }
+}
 
 export const APP_CATS: CatMeta[] = [
-  { key: 'general', label: 'General', icon: SlidersHorizontal },
-  { key: 'profile', label: 'Profile', icon: User },
-  { key: 'sound', label: 'Sound & notifications', icon: Volume2 },
-  { key: 'providers', label: 'Providers', icon: KeyRound },
-  { key: 'secrets', label: 'Secrets', icon: Shield },
-  { key: 'context', label: 'Context & memory', icon: Brain },
-  { key: 'tools', label: 'Tool permissions', icon: Wrench },
-  { key: 'execution', label: 'Agent execution', icon: Gauge },
-  { key: 'sysagents', label: 'Agent library', icon: Bot },
-  { key: 'decider', label: 'Decision authorities', icon: Scale },
-  { key: 'hooks', label: 'Hooks', icon: Webhook },
-  { key: 'exttools', label: 'External tools', icon: ScanSearch },
-  { key: 'diagnostics', label: 'Diagnostics', icon: Bug },
-  { key: 'backup', label: 'Backup', icon: Archive },
+  category('general', SlidersHorizontal),
+  category('profile', User),
+  category('sound', Volume2),
+  category('providers', KeyRound),
+  category('secrets', Shield),
+  category('context', Brain),
+  category('tools', Wrench),
+  category('execution', Gauge),
+  category('sysagents', Bot),
+  category('decider', Scale),
+  category('hooks', Webhook),
+  category('exttools', ScanSearch),
+  category('diagnostics', Bug),
+  category('backup', Archive),
 ]
 
 // Reference material is separate from the editable settings menu.
-export const HELP_CATS: CatMeta[] = [
-  { key: 'reference', label: 'Reference', icon: BookOpen },
-  { key: 'about', label: 'About', icon: Info },
-]
+export const HELP_CATS: CatMeta[] = [category('reference', BookOpen), category('about', Info)]
 
 export function resolveSettingsCat(value: string | null | undefined): CatMeta['key'] {
   if (value === 'advanced') return 'general'

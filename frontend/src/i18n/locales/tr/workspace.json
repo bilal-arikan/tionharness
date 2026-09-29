@@ -1,0 +1,384 @@
+{
+  "actions": {
+    "cancel": "İptal",
+    "close": "Kapat",
+    "create": "Oluştur",
+    "creating": "Oluşturuluyor…",
+    "loading": "Yükleniyor…",
+    "refresh": "Yenile",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…"
+  },
+  "switcher": {
+    "activeAria": "Workspace: {{name}}",
+    "select": "Workspace seç",
+    "otherBusy": "Başka workspace’te işlem sürüyor",
+    "otherActivity": "Başka workspace’te yeni etkinlik",
+    "unsavedChanges": "Kaydedilmemiş değişiklik",
+    "busy": "İşlem sürüyor",
+    "listAria": "Workspace listesi",
+    "switchAria": "Workspace’e geç: {{name}}",
+    "unnamed": "İsimsiz",
+    "degradedTitle": "Workspace açılamadı",
+    "degraded": "bozuk",
+    "running": "çalışıyor",
+    "completedTitle": "Tamamlandı — görülmemiş etkinlik",
+    "completed": "tamamlandı",
+    "favoriteRemove": "Başlangıç workspace’i (kaldır)",
+    "favoriteAdd": "Başlangıçta bunu aç",
+    "openWindow": "Ayrı pencerede aç",
+    "deleteViaSettings": "Workspace’i sil — ayarlar ekranından",
+    "create": "Yeni workspace"
+  },
+  "create": {
+    "dialogAria": "Yeni workspace",
+    "title": "Yeni Workspace",
+    "template": {
+      "label": "Şablon",
+      "agentCount_one": "{{count}} ajan",
+      "agentCount_other": "{{count}} ajan",
+      "flow": "akış",
+      "coordinatorCount_one": "{{count}} koordinatör",
+      "coordinatorCount_other": "{{count}} koordinatör",
+      "automationCount_one": "{{count}} otomasyon",
+      "automationCount_other": "{{count}} otomasyon"
+    },
+    "iconAndName": "Simge ve ad",
+    "namePlaceholder": "ör. Müşteri Projesi",
+    "projectDir": {
+      "label": "Proje dizini (path)",
+      "optional": "(opsiyonel — oturumların çalışma dizini)",
+      "browse": "Gözat"
+    },
+    "gitInit": {
+      "prefix": "Git deposu başlat",
+      "command": "git init",
+      "branch": "dal",
+      "branchName": "main",
+      "ignoreFile": ".gitignore",
+      "withFile": "ile",
+      "gitMissing": "Bu bilgisayarda Git bulunamadı — kurup uygulamayı yeniden başlat.",
+      "alreadyRepo": "Bu klasör zaten bir Git deposu{{branch}}.",
+      "unversioned": "Klasör mevcut, henüz versiyonlanmamış.",
+      "willCreate": "Klasör yok — oluşturma sırasında açılacak."
+    },
+    "errors": {
+      "folderPicker": "Klasör seçici açılamadı — yolu elle yazabilirsin. ({{error}})",
+      "nameRequired": "Workspace adı gerekli",
+      "failed": "Workspace oluşturulamadı: {{error}}"
+    }
+  },
+  "view": {
+    "title": "Workspace",
+    "tabs": {
+      "general": "Genel",
+      "appearance": "Görünüm",
+      "project": "Proje",
+      "logs": "Loglar",
+      "processes": "İşlemler",
+      "export": "Dışa Aktar",
+      "recommendations": "Öneriler"
+    },
+    "savedToast": "Kaydedildi",
+    "unsaved": "Kaydedilmemiş",
+    "unsavedChanges": "Kaydedilmemiş değişiklik",
+    "saved": "Kayıtlı"
+  },
+  "project": {
+    "gitTitle": "Git",
+    "init": "git init (main)",
+    "directory": {
+      "label": "Proje dizini (path)",
+      "hint": "Bu workspace'in proje klasörü. Yeni sohbetler bu dizinden başlar (oturum bazında değiştirilebilir). Mutlak yol kullan.",
+      "placeholder": "(workspace dizini)",
+      "select": "Proje dizinini seç"
+    },
+    "selectFirst": "Önce bir proje dizini seç.",
+    "gitMissing": "Bu bilgisayarda Git bulunamadı (PATH'te yok). Git'i kurup uygulamayı yeniden başlat.",
+    "directoryMissing": "Dizin bulunamadı. Klasörü şimdi oluşturup sürüm kontrolünü başlatabilirsin:",
+    "createAndInit": "Klasörü oluştur + git init (main)",
+    "notRepository": "Bu dizin bir Git deposu değil. Sürüm kontrolü için başlat:",
+    "noBranch": "dal yok",
+    "repository": "Git deposu",
+    "remote": {
+      "label": "Origin uzak depo adresi",
+      "hint": "Uzak depo adresi (push/pull için)."
+    },
+    "userNameHint": "Bu repodaki commit yazarı adı.",
+    "userEmailHint": "Bu repodaki commit yazarı e-postası.",
+    "saveGit": "Git ayarlarını kaydet"
+  },
+  "dataFolder": {
+    "label": "Workspace dosyaları klasörü"
+  },
+  "onboarding": {
+    "title": "TionHarness'e hoş geldin",
+    "description": "Başlamak için bir workspace oluştur ya da daha önce kullandığın bir workspace klasörünü seç. Tüm ajanların, oturumların ve verilerin seçtiğin workspace içinde izole şekilde saklanır.",
+    "create": "Workspace Oluştur",
+    "selecting": "Seçiliyor…",
+    "selectExisting": "Mevcut Workspace Seç",
+    "requireWorkspace": "Workspace oluşturmadan ya da seçmeden devam edemezsin — varsayılan bir kurulum yapılmaz."
+  },
+  "authGate": {
+    "title": "Yeni workspace için claude-cli girişi gerekli",
+    "description": "Bu workspace'in claude-home'u henüz yetkilendirilmedi. Kimlik doğrulamadan claude-cli turları çalışmaz.",
+    "authenticate": "Kimlik doğrula",
+    "providerLabel": "Workspace claude-cli"
+  },
+  "process": {
+    "title": "İşlemler",
+    "summary": "{{total}} işlem · {{running}} çalışıyor",
+    "refreshTitle": "İşlem listesini yenile",
+    "status": {
+      "running": "Çalışıyor",
+      "succeeded": "Başarılı",
+      "failed": "Başarısız",
+      "killed": "Durduruldu",
+      "timedOut": "Zaman aşımı"
+    },
+    "kind": {
+      "shell": "Kabuk",
+      "shellBackground": "Arka plan kabuk",
+      "code": "Kod",
+      "provider": "Sağlayıcı",
+      "mcp": "MCP",
+      "hook": "Hook",
+      "external": "Harici araç"
+    },
+    "filters": {
+      "statusAria": "Duruma göre filtrele",
+      "allStatuses": "Durum: hepsi",
+      "kindAria": "Türe göre filtrele",
+      "allKinds": "Tür: hepsi",
+      "searchPlaceholder": "Ara (komut/etiket/ajan/oturum)…",
+      "searchAria": "Komut, etiket, ajan veya oturuma göre ara",
+      "runningOnly": "Yalnız çalışanlar"
+    },
+    "loadFailed": "İşlemler okunamadı: {{error}}",
+    "empty": {
+      "title": "İşlem yok",
+      "filtered": "Filtrelerle eşleşen işlem yok.",
+      "workspace": "Bu workspace için izlenen bir süreç bulunmuyor."
+    },
+    "columns": {
+      "status": "Durum",
+      "kind": "Tür",
+      "command": "Komut",
+      "owner": "Sahip",
+      "started": "Başlangıç",
+      "duration": "Süre",
+      "exit": "Çıkış"
+    },
+    "parentPrefix": "üst:",
+    "openSession": "Bu oturuma git",
+    "collapseDetails": "Ayrıntıyı kapat",
+    "expandDetails": "Ayrıntıyı aç",
+    "confirmStop": "Emin misin?",
+    "stop": "Durdur",
+    "stopping": "Durduruluyor…",
+    "stopTitle": "Bu süreci durdur",
+    "stopFailed": "İşlem durdurulamadı.",
+    "noOutput": "Bu süreç için kayıtlı çıktı yok."
+  },
+  "export": {
+    "flow": "akış",
+    "noPrompt": "prompt yok",
+    "success": "“{{name}}” şablon olarak dışa aktarıldı (id: {{id}}). Artık market ve workspace oluşturma ekranında görünür.",
+    "intro": {
+      "beforeName": "“",
+      "afterName": "” workspace’ini taşınabilir bir ",
+      "pack": "şablon paketine",
+      "afterPack": " dönüştür. Aşağıdan neyin dahil edileceğini seç."
+    },
+    "secrets": "Sırlar ve oturum geçmişi asla dahil edilmez.",
+    "metadata": {
+      "name": "Şablon adı",
+      "description": "Açıklama",
+      "descriptionHint": "Boş bırakılırsa otomatik bir açıklama üretilir.",
+      "descriptionPlaceholder": "“{{name}}” workspace'inden dışa aktarıldı.",
+      "version": "Sürüm",
+      "versionHint": "Örn. 1.0.0 — boş bırakılırsa 1.0.0 kullanılır."
+    },
+    "pickList": {
+      "selectAll": "Tümünü seç",
+      "clearAll": "Tümünü kaldır"
+    },
+    "sections": {
+      "agents": {
+        "title": "Ajanlar",
+        "empty": "Bu workspace’te ajan yok — dışa aktarım için en az bir ajan gerekir."
+      },
+      "flows": {
+        "title": "Akışlar (Flows)",
+        "empty": "Bu workspace’te akış yok.",
+        "note": "Ajan düğümleri taşınabilir anahtarlara yeniden yazılır."
+      },
+      "skills": {
+        "title": "Workspace skill’leri",
+        "empty": "Bu workspace’e özel skill yok (global/gömülü skill’ler paylaşımlıdır, dahil edilmez).",
+        "note": "SKILL.md + ekli dosyalar birebir gömülür."
+      },
+      "schedules": {
+        "title": "Zamanlamalar",
+        "empty": "Bu workspace’te zamanlama yok.",
+        "note": "Yalnızca seçili ajana bağlı zamanlamalar dışa aktarılır; diğerleri düşer."
+      },
+      "automations": {
+        "title": "Otomasyonlar",
+        "empty": "Bu workspace’e özel otomasyon yok (gömülü pano varsayılanları her workspace’te kendiliğinden oluşur, dahil edilmez).",
+        "note": "Hedefi seçili ajana veya akışa bağlı olanlar taşınır; kurulumda hepsi PASİF gelir."
+      }
+    },
+    "files": {
+      "title": "Dosyalar",
+      "instructions": "Workspace talimatları",
+      "emptySuffix": "(boş)",
+      "instructionsHint": "config/instructions.md içeriği.",
+      "prompts": "Promptlar & README",
+      "defaultSuffix": "(varsayılan)",
+      "promptsHintCustom": "Yalnızca varsayılandan farklı runtime promptları{{readme}} dahil edilir. Dokunulmamış promptlar hedefte güncel varsayılanı korur.",
+      "promptsHintEmpty": "Tüm runtime promptları varsayılan ve README boş — dahil edilecek bir şey yok.",
+      "boardColumns": "Pano sütunları",
+      "boardColumnsHint": "Kanban sütun düzeni."
+    },
+    "preview": {
+      "title": "Önizleme",
+      "identityVersion": " · v{{version}} · ",
+      "excluded": "Dahil edilmiyor",
+      "overwrite": "“{{id}}” zaten varsa üzerine yazılır (aynı slug).",
+      "newId": "Yeni pack id oluşturulur: “{{id}}”.",
+      "items": {
+        "agent": "Ajan",
+        "flow": "Akış",
+        "schedule": "Zamanlama",
+        "automation": "Otomasyon",
+        "skill": "Skill",
+        "instructions": "Talimat",
+        "prompts": "Prompt/README",
+        "boardColumn": "Pano sütunu"
+      }
+    },
+    "warnings": {
+      "title_one": "Bağımlılık uyarısı ({{count}})",
+      "title_other": "Bağımlılık uyarısı ({{count}})",
+      "flowLabel": "Akış “{{name}}”",
+      "scheduleLabel": "Zamanlama “{{name}}”",
+      "automationLabel": "Otomasyon “{{name}}”",
+      "excludedAgents": "hariç bırakılan ajanlara bağlı — dışa aktarımda kopuk referans kalır: {{agents}}",
+      "excludedAgent": "hariç bırakılan ajana bağlı ({{agent}}) — dışa aktarıma dahil edilmez",
+      "excludedFlow": "hariç bırakılan bir akışa bağlı — dışa aktarıma dahil edilmez"
+    },
+    "action": {
+      "ready": "Seçili içerik bir şablon paketine yazılır.",
+      "selectAgent": "Dışa aktarmak için en az bir ajan seç.",
+      "exporting": "Dışa aktarılıyor…",
+      "export": "Şablon olarak dışa aktar"
+    }
+  },
+  "recommendations": {
+    "panel": {
+      "description": "Yeni bir workspace oluşturulduğunda sağ altta çıkan öneri kartları. Buradan tüm önerilerin şu anki durumunu görebilir, yok saydıklarını gözden geçirebilir ve yok saymayı kaldırabilirsin. Yok sayılan bir öneri bir daha kart olarak gösterilmez.",
+      "refresh": "Durumu yenile",
+      "noCardsTitle": "Şu an gösterilecek geçerli ve yok sayılmamış öneri yok",
+      "showCardsTitle": "Geçerli önerileri sağ altta kart olarak göster",
+      "showCards": "Kartları göster",
+      "showCardsCount_one": "Kartları göster ({{count}})",
+      "showCardsCount_other": "Kartları göster ({{count}})",
+      "state": {
+        "ignored": "Yok sayıldı",
+        "applicable": "Şu an geçerli",
+        "notApplicable": "Uygulanabilir değil"
+      },
+      "unignoreTitle": "Yok saymayı kaldır — tekrar önerilebilir",
+      "ignoreTitle": "Yok say — bir daha önerme",
+      "unignore": "Yok saymayı kaldır",
+      "ignore": "Yok say"
+    },
+    "toast": {
+      "ignoreTitle": "Yok say (bir daha gösterme)"
+    },
+    "rules": {
+      "no-agents": {
+        "title": "Henüz ajan yok",
+        "summary": "Workspace’te hiç ajan yoksa oturumları yürütecek bir aktör yoktur.",
+        "desc": "Bu workspace boş. Bir ajan oluştur ya da market’ten hazır bir şablon kur.",
+        "action": "Ajanlara git"
+      },
+      "workdir": {
+        "title": "Çalışma dizini belirle",
+        "summary": "Varsayılan çalışma dizini yoksa oturumlar fiziksel workspace dizininde başlar.",
+        "desc": "Bir varsayılan çalışma dizini seçersen oturumlar o kök, Git dalı ve CLAUDE.md bağlamıyla başlar.",
+        "action": "Ayarları aç"
+      },
+      "cbm-add": {
+        "title": "Kod bilgi grafiğini ekle",
+        "summary": "codebase-memory-mcp PATH’te kuruluysa ama MCP olarak eklenmemişse.",
+        "desc": "codebase-memory-mcp kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen kod arama ve gezinme milisaniyenin altında, düşük tokenla çalışır.",
+        "action": "MCP’yi ekle"
+      },
+      "cbm-enable": {
+        "title": "Kod bilgi grafiğini aç",
+        "summary": "codebase-memory MCP ekliyken workspace anahtarı kapalıysa.",
+        "desc": "codebase-memory MCP ekli ama bu workspace’te kapalı. Açarsan otomatik indeksleme ve codebase_workspace_search devreye girer.",
+        "action": "Aç"
+      },
+      "zvec-add": {
+        "title": "Anlamsal aramayı ekle",
+        "summary": "zvec-grep (zg) PATH’te kuruluysa ama MCP olarak eklenmemişse.",
+        "desc": "zvec-grep kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen ajan adını bilmediği kodu ve dokümanı niyetle bulur; çalışma dizini arka planda indekslenir.",
+        "action": "MCP’yi ekle"
+      },
+      "zvec-enable": {
+        "title": "Anlamsal aramayı aç",
+        "summary": "zvec-grep MCP ekliyken workspace anahtarı kapalıysa.",
+        "desc": "zvec-grep MCP ekli ama bu workspace’te kapalı. Açarsan ajanın bağlamına arama yönergesi eklenir ve çalışma dizini otomatik indekslenir.",
+        "action": "Aç"
+      },
+      "token": {
+        "title": "Token optimizasyonunu bağla",
+        "summary": "sqz kuruluyken çıktı sıkıştırma hook’u bağlı değilse.",
+        "desc": "sqz bu cihazda kurulu ama bağlı değil. Hook olarak bağlarsan araç çıktıları kayıpsız sıkışır ve token tasarrufu sağlar.",
+        "action": "sqz’i bağla"
+      },
+      "shell-compress": {
+        "title": "Shell çıktısı sıkıştırmayı aç",
+        "summary": "sqz kuruluyken süreç içi shell çıktısı sıkıştırma pasifse; hook yoktur ve otomatik mod devre dışıdır.",
+        "desc": "sqz kurulu ama bu workspace’te shell çıktısı sıkıştırma pasif. Açarsan ajanın shell çıktısı modele dönmeden süreç içi sqz ile kayıpsız kısaltılır. Hook gerekmez; köprülenmiş araçlarda hook yolu zaten çalışmaz.",
+        "action": "Aç"
+      },
+      "terse-mode": {
+        "title": "Terse Mode’u aç",
+        "summary": "Yanıt üslubunu sıkıştıran terse prompt’u bu workspace’te kapalıysa.",
+        "desc": "Terse Mode kapalı. Açarsan ajanların yanıtlarındaki dolgu metin düşer; kod, komut, dosya yolu ve hata metni gibi teknik içerik birebir kalırken çıktı tokenı belirgin azalır.",
+        "action": "Aç"
+      },
+      "no-mcp": {
+        "title": "MCP kaynağı yok",
+        "summary": "Hiç MCP sunucusu yoksa ve codebase-memory veya zvec-grep için daha özel bir öneri beklemiyorsa.",
+        "desc": "Harici veri veya araç bağlamak için market’ten ya da .mcp.json içe aktarımıyla bir MCP sunucusu ekleyebilirsin.",
+        "action": "Market’i aç"
+      },
+      "backup-off": {
+        "title": "Yedekleme kapalı",
+        "summary": "Uygulama genelinde periyodik zip yedeği kapalıysa.",
+        "desc": "Periyodik zip yedeği kapalı. Açarsan her workspace’in verisi düzenli yedeklenir.",
+        "action": "Yedekleme ayarları"
+      },
+      "tool-update": {
+        "title": "Harici araç güncellemesi var",
+        "summary": "Kurulu bir harici aracın daha yeni bir sürümü yayımlanmışsa.",
+        "published": "{{names}} yayımlanmış. ",
+        "oneClick_one": "{{count}} tanesi tek tıkla güncellenebilir; kalanlar elle güncellenir çünkü çalışan bir alt süreç ikiliyi kilitlediğinde TionHarness üzerine yazmaz.",
+        "oneClick_other": "{{count}} tanesi tek tıkla güncellenebilir; kalanlar elle güncellenir çünkü çalışan bir alt süreç ikiliyi kilitlediğinde TionHarness üzerine yazmaz.",
+        "manual": "Bu araçlar elle güncellenir — çalışan bir alt süreç ikiliyi kilitlediği için TionHarness üzerine yazmaz; ekranda adım adım talimat vardır.",
+        "action": "Harici araçlar"
+      },
+      "cli-tools": {
+        "title": "Kurulu CLI araçları var",
+        "summary": "PATH’te doğrudan Bash ile çağrılabilecek CLI araçları, örneğin mmdc, varsa.",
+        "desc": "{{tools}} bu cihazda kurulu — ajan geliştirme sırasında Bash ile doğrudan çağırabilir.",
+        "action": "Detay"
+      }
+    }
+  }
+}

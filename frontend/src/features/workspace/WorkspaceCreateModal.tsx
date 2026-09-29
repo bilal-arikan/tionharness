@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import type { GitInfo, WorkspaceTemplate } from '@/types'
@@ -25,6 +26,7 @@ interface Props {
 // an optional project directory (native picker or manual path — the session cwd)
 // and an emoji identity. The data dir always uses the app default location.
 export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
+  const { t } = useTranslation('workspace')
   const [name, setName] = useState('')
   const [projectDir, setProjectDir] = useState('')
   const [icon, setIcon] = useState('⬡')
@@ -99,7 +101,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
       const { path: chosen, canceled } = await api.pickFolder()
       if (!canceled && chosen) setProjectDir(chosen)
     } catch (e) {
-      setError('Klasör seçici açılamadı — yolu elle yazabilirsin. (' + (e as Error).message + ')')
+      setError(t('create.errors.folderPicker', { error: (e as Error).message }))
     } finally {
       setPicking(false)
     }
@@ -108,7 +110,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   const submit = async () => {
     if (busy) return
     if (!name.trim()) {
-      setError('Workspace adı gerekli')
+      setError(t('create.errors.nameRequired'))
       nameRef.current?.focus()
       return
     }
@@ -129,7 +131,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
         gitInit: gitInit && gitAvailable,
       })
     } catch (e) {
-      setError('Workspace oluşturulamadı: ' + (e as Error).message)
+      setError(t('create.errors.failed', { error: (e as Error).message }))
     } finally {
       setBusy(false)
     }
@@ -140,41 +142,46 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Yeni workspace"
+        aria-label={t('create.dialogAria')}
         data-testid="workspace-create-modal"
         className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
       >
-        <h2 className="mb-4 text-base font-semibold">Yeni Workspace</h2>
+        <h2 className="mb-4 text-base font-semibold">{t('create.title')}</h2>
 
         {/* Template */}
         {templates.length > 0 && (
           <>
-            <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Şablon</label>
+            <label className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              {t('create.template.label')}
+            </label>
             <div className="mb-4 grid max-h-60 grid-cols-1 gap-1.5 overflow-y-auto">
-              {templates.map((t) => (
+              {templates.map((template) => (
                 <button
-                  key={t.id}
-                  onClick={() => selectTemplate(t)}
+                  key={template.id}
+                  onClick={() => selectTemplate(template)}
                   className={`flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition ${
-                    templateId === t.id
+                    templateId === template.id
                       ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
                       : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
                   }`}
                 >
-                  <span className="mt-0.5 text-lg leading-none">{t.icon}</span>
+                  <span className="mt-0.5 text-lg leading-none">{template.icon}</span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2 text-sm font-medium">
-                      {t.name}
+                      {template.name}
                       <span className="text-[10px] font-normal text-[var(--color-text-dim)]">
-                        {t.agentCount} ajan{t.hasFlow ? ' · akış' : ''}
+                        {t('create.template.agentCount', { count: template.agentCount })}
+                        {template.hasFlow ? ` · ${t('create.template.flow')}` : ''}
                         {/* "2 ajan" reads identically for a chat pair and for a
                             delegation chain — say which one this is. */}
-                        {!!t.coordinatorCount && ` · ${t.coordinatorCount} koordinatör`}
-                        {!!t.automationCount && ` · ${t.automationCount} otomasyon`}
+                        {!!template.coordinatorCount &&
+                          ` · ${t('create.template.coordinatorCount', { count: template.coordinatorCount })}`}
+                        {!!template.automationCount &&
+                          ` · ${t('create.template.automationCount', { count: template.automationCount })}`}
                       </span>
                     </span>
                     <span className="mt-0.5 block text-xs text-[var(--color-text-dim)]">
-                      {t.description}
+                      {template.description}
                     </span>
                   </span>
                 </button>
@@ -185,7 +192,9 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
 
         {/* Icon + Name on one row: the icon is a compact square to the left of the
             name input (same inline pattern as the agent editor). */}
-        <label className="mb-1 block text-xs text-[var(--color-text-dim)]">Simge ve ad</label>
+        <label className="mb-1 block text-xs text-[var(--color-text-dim)]">
+          {t('create.iconAndName')}
+        </label>
         <div className="mb-4 flex items-center gap-2">
           <EmojiField value={icon} onChange={setIcon} clearLabel="⬡" compact />
           <input
@@ -193,7 +202,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
-            placeholder="ör. Müşteri Projesi"
+            placeholder={t('create.namePlaceholder')}
             className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
           />
         </div>
@@ -201,8 +210,8 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
         {/* Project directory (session cwd) — optional. The data dir always uses the
             app default location and is no longer user-selectable. */}
         <label className="mb-1 block text-xs text-[var(--color-text-dim)]">
-          Proje dizini (path){' '}
-          <span className="opacity-60">(opsiyonel — oturumların çalışma dizini)</span>
+          {t('create.projectDir.label')}{' '}
+          <span className="opacity-60">{t('create.projectDir.optional')}</span>
         </label>
         <div className="mb-2 flex gap-1">
           <input
@@ -216,7 +225,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
             disabled={picking}
             className="shrink-0 rounded-lg border border-[var(--color-border)] px-3 text-sm hover:bg-[var(--color-surface-2)] disabled:opacity-50"
           >
-            {picking ? '…' : 'Gözat'}
+            {picking ? '…' : t('create.projectDir.browse')}
           </button>
         </div>
 
@@ -237,17 +246,21 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
               onChange={(e) => setGitInit(e.target.checked)}
               className="accent-[var(--color-accent)]"
             />
-            Git deposu başlat (<code>git init</code>, dal: main, <code>.gitignore</code> ile)
+            {t('create.gitInit.prefix')} (<code>{t('create.gitInit.command')}</code>,{' '}
+            {t('create.gitInit.branch')}: {t('create.gitInit.branchName')},{' '}
+            <code>{t('create.gitInit.ignoreFile')}</code> {t('create.gitInit.withFile')})
           </label>
           {projectDir.trim() && git && (
             <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
               {!git.gitInstalled
-                ? 'Bu bilgisayarda git bulunamadı — kurup uygulamayı yeniden başlat.'
+                ? t('create.gitInit.gitMissing')
                 : git.isGitRepo
-                  ? `Bu klasör zaten bir git deposu${git.branch ? ` (${git.branch})` : ''}.`
+                  ? t('create.gitInit.alreadyRepo', {
+                      branch: git.branch ? ` (${git.branch})` : '',
+                    })
                   : git.exists
-                    ? 'Klasör mevcut, henüz versiyonlanmamış.'
-                    : 'Klasör yok — oluşturma sırasında açılacak.'}
+                    ? t('create.gitInit.unversioned')
+                    : t('create.gitInit.willCreate')}
             </p>
           )}
         </div>
@@ -260,10 +273,10 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
             disabled={busy}
             className="rounded-lg px-3 py-2 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
           >
-            İptal
+            {t('actions.cancel')}
           </button>
           <Button onClick={submit} size="lg" disabled={busy}>
-            {busy ? 'Oluşturuluyor…' : 'Oluştur'}
+            {busy ? t('actions.creating') : t('actions.create')}
           </Button>
         </div>
       </div>

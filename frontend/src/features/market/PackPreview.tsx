@@ -21,9 +21,11 @@ import {
   Row,
   StatChip,
 } from './previewParts'
+import { useTranslation } from 'react-i18next'
 
 // PackPreview renders a kind-appropriate preview of the selected pack's payload.
 export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }) {
+  const { t } = useTranslation('market')
   const catalog = useCatalog()
   const p = pack.payload
   if (pack.kind === 'skill' && p?.skill?.body) {
@@ -35,11 +37,14 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
       <div className="space-y-3">
         {a.soul && <p className="text-xs leading-relaxed text-[var(--color-text)]">{a.soul}</p>}
         <div className="space-y-1">
-          <Row k="Sağlayıcı" v={a.provider} />
-          <Row k="Model" v={resolveModelLabel(catalog, a.provider ?? '', a.model ?? '')} />
-          <Row k="Düşünme" v={a.thinkingLevel} />
-          <Row k="İzin modu" v={a.permissionMode} />
-          <Row k="Skills" v={a.skills?.join(', ')} />
+          <Row k={t('preview.field.provider')} v={a.provider} />
+          <Row
+            k={t('preview.field.model')}
+            v={resolveModelLabel(catalog, a.provider ?? '', a.model ?? '')}
+          />
+          <Row k={t('preview.field.thinking')} v={a.thinkingLevel} />
+          <Row k={t('preview.field.permissionMode')} v={a.permissionMode} />
+          <Row k={t('preview.field.skills')} v={a.skills?.join(', ')} />
         </div>
       </div>
     )
@@ -48,16 +53,16 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
     const pr = p.provider
     return (
       <div className="space-y-1">
-        <Row k="Tür" v={pr.kind} />
-        <Row k="Base URL" v={pr.baseUrl} />
-        <Row k="Sağlayıcı modeli" v={pr.defaultModel} />
+        <Row k={t('preview.field.type')} v={pr.kind} />
+        <Row k={t('preview.field.baseUrl')} v={pr.baseUrl} />
+        <Row k={t('preview.field.providerModel')} v={pr.defaultModel} />
         <div className="flex flex-wrap gap-1.5 pt-1.5">
           <CapBadge
             label={cacheLabel(pr.promptCache)}
             on={pr.promptCache === 'native' || pr.promptCache === 'auto'}
           />
           <CapBadge
-            label={pr.reasoning ? 'Düşünme: ✅ destekli' : 'Düşünme: —'}
+            label={pr.reasoning ? t('preview.reasoningSupported') : t('preview.reasoningNone')}
             on={!!pr.reasoning}
           />
         </div>
@@ -73,7 +78,9 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
     const nodes = flowNodeSummary(p.flow.graph)
     return (
       <div className="space-y-2">
-        <p className="text-xs text-[var(--color-text-dim)]">{nodes.length} düğüm:</p>
+        <p className="text-xs text-[var(--color-text-dim)]">
+          {t('preview.nodeCount', { count: nodes.length })}
+        </p>
         <ul className="space-y-1">
           {nodes.map((n, i) => (
             <li key={i} className="flex gap-2 text-xs">
@@ -85,7 +92,7 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
           ))}
         </ul>
         <p className="pt-1 text-[11px] text-[var(--color-text-dim)]">
-          İçe aktarınca boş ajan slotları ilk ajana atanır; Akışlar ekranından düzenleyebilirsin.
+          {t('preview.flowImportHint')}
         </p>
       </div>
     )
@@ -95,22 +102,19 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
   }
   if (pack.kind === 'mcp' && p?.mcp) {
     const m = p.mcp
-    const scope =
-      m.scope === 'scoped'
-        ? 'scoped (oturum+ajan başına bağlantı)'
-        : 'shared (workspace geneli tek bağlantı)'
+    const scope = m.scope === 'scoped' ? t('preview.scope.scoped') : t('preview.scope.shared')
     return (
       <div className="space-y-1">
-        <Row k="Ad" v={m.name} />
-        <Row k="Açıklama" v={m.description} />
-        <Row k="Transport" v={m.transport} />
-        <Row k="Kapsam" v={scope} />
-        <Row k="Komut" v={m.command} />
-        <Row k="Argümanlar" v={m.args} />
+        <Row k={t('preview.field.name')} v={m.name} />
+        <Row k={t('preview.field.description')} v={m.description} />
+        <Row k={t('preview.field.transport')} v={m.transport} />
+        <Row k={t('preview.field.scope')} v={scope} />
+        <Row k={t('preview.field.command')} v={m.command} />
+        <Row k={t('preview.field.arguments')} v={m.args} />
         <Row k="URL" v={m.url} />
-        <Row k="Başlıklar" v={m.headersConfig} />
+        <Row k={t('preview.field.headers')} v={m.headersConfig} />
         <p className="pt-2 text-[11px] text-[var(--color-text-dim)]">
-          Kurunca workspace'e bir MCP sunucusu eklenir; araçları sonraki turda görünür.
+          {t('preview.mcpInstallHint')}
         </p>
       </div>
     )
@@ -119,24 +123,25 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
     const h = p.hook
     return (
       <div className="space-y-1">
-        <Row k="Olay" v={h.event} />
-        <Row k="Matcher" v={h.matcher || '(tüm araçlar)'} />
-        <Row k="Zaman aşımı" v={h.timeoutSec ? `${h.timeoutSec} sn` : undefined} />
+        <Row k={t('preview.field.event')} v={h.event} />
+        <Row k={t('preview.field.matcher')} v={h.matcher || t('preview.allTools')} />
+        <Row
+          k={t('preview.field.timeout')}
+          v={h.timeoutSec ? t('preview.seconds', { count: h.timeoutSec }) : undefined}
+        />
         <div className="pt-1">
-          <span className="text-xs text-[var(--color-text-dim)]">Komut</span>
+          <span className="text-xs text-[var(--color-text-dim)]">{t('preview.field.command')}</span>
           <pre className="mt-1 overflow-x-auto rounded bg-[var(--color-surface-2)] p-2 text-[11px]">
             {h.command}
           </pre>
         </div>
         <p className="pt-2 text-[11px] text-[var(--color-text-dim)]">
-          Hook aktif olarak kurulur ve sonraki turda çalışır. Paketle gelen scriptler workspace'in
-          hook-scripts klasörüne yazılır. <strong>Komutu kurmadan önce oku</strong> — hook'lar
-          makinende kabuk komutu çalıştırır.
+          {t('preview.hookInstallHint')}
         </p>
       </div>
     )
   }
-  return <p className="text-xs text-[var(--color-text-dim)]">Önizleme yok.</p>
+  return <p className="text-xs text-[var(--color-text-dim)]">{t('preview.none')}</p>
 }
 
 // WorkspacePackPreview renders the full starter ecosystem of a workspace-template
@@ -149,6 +154,7 @@ function WorkspacePackPreview({
   wsp: WorkspacePayload
   catalog: ReturnType<typeof useCatalog>
 }) {
+  const { t } = useTranslation('market')
   const agents = wsp.agents ?? []
   const flows = wsp.flows ?? []
   const schedules = wsp.schedules ?? []
@@ -163,17 +169,21 @@ function WorkspacePackPreview({
       {/* Stat strip. Automations only take a slot when the pack ships some — an
           always-visible "0" would imply every template has them. */}
       <div className={`grid gap-2 ${automations.length > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
-        <StatChip icon={Users} label="Ajan" value={agents.length} />
-        <StatChip icon={GitBranch} label="Akış" value={flows.length} />
-        <StatChip icon={Clock} label="Zamanlama" value={schedules.length} />
+        <StatChip icon={Users} label={t('preview.workspace.agent')} value={agents.length} />
+        <StatChip icon={GitBranch} label={t('preview.workspace.flow')} value={flows.length} />
+        <StatChip icon={Clock} label={t('preview.workspace.schedule')} value={schedules.length} />
         {automations.length > 0 && (
-          <StatChip icon={Zap} label="Otomasyon" value={automations.length} />
+          <StatChip
+            icon={Zap}
+            label={t('preview.workspace.automation')}
+            value={automations.length}
+          />
         )}
-        <StatChip icon={Sparkles} label="Skill" value={skills.length} />
+        <StatChip icon={Sparkles} label={t('preview.workspace.skill')} value={skills.length} />
       </div>
 
       {wsp.instructions && (
-        <PreviewSection title="Yönergeler">
+        <PreviewSection title={t('preview.workspace.instructions')}>
           <p className="whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-[11px] leading-relaxed">
             {wsp.instructions}
           </p>
@@ -181,7 +191,7 @@ function WorkspacePackPreview({
       )}
 
       {agents.length > 0 && (
-        <PreviewSection title={`Ajanlar (${agents.length})`}>
+        <PreviewSection title={t('preview.workspace.agents', { count: agents.length })}>
           <div className="space-y-1.5">
             {agents.map((a) => (
               <div
@@ -197,15 +207,15 @@ function WorkspacePackPreview({
                   {/* The headline property of an orchestrating template: which agents
                       arrive able to drive workers. Invisible otherwise until install. */}
                   {a.coordinatorMode && (
-                    <MiniChip title="Açtığı yeni oturumlar koordinatör başlar (worker yönetebilir)">
-                      🕸 koordinatör
+                    <MiniChip title={t('preview.workspace.coordinatorTitle')}>
+                      🕸 {t('preview.workspace.coordinator')}
                     </MiniChip>
                   )}
                   {a.coordinatorWorkflow && <MiniChip>📐 {a.coordinatorWorkflow}</MiniChip>}
                 </div>
                 {(a.provider || a.model) && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
-                    {a.provider || 'sağlayıcı belirtilmemiş'}
+                    {a.provider || t('preview.workspace.providerUnspecified')}
                     {' · '}
                     {resolveModelLabel(catalog, a.provider ?? '', a.model ?? '')}
                   </div>
@@ -224,7 +234,7 @@ function WorkspacePackPreview({
                 )}
                 {(a.toolOverrides || a.blockedTools) && (
                   <div className="mt-1 flex flex-wrap gap-1">
-                    <MiniChip>🔧 araç override&apos;ları</MiniChip>
+                    <MiniChip>🔧 {t('preview.workspace.toolOverrides')}</MiniChip>
                   </div>
                 )}
               </div>
@@ -234,7 +244,7 @@ function WorkspacePackPreview({
       )}
 
       {flows.length > 0 && (
-        <PreviewSection title={`Akışlar (${flows.length})`}>
+        <PreviewSection title={t('preview.workspace.flows', { count: flows.length })}>
           <div className="space-y-1.5">
             {flows.map((f, i) => {
               const nodes = flowSummary(f)
@@ -270,12 +280,12 @@ function WorkspacePackPreview({
                             {NIcon ? (
                               <NIcon size={11} className="text-[var(--color-text-dim)]" />
                             ) : (
-                              <span className="text-[var(--color-text-dim)]">•</span>
+                              <span className="text-[var(--color-text-dim)]">{'•'}</span>
                             )}
                             {n.title || n.id}
                           </span>
                           {j < nodes.length - 1 && (
-                            <span className="text-[10px] text-[var(--color-text-dim)]">→</span>
+                            <span className="text-[10px] text-[var(--color-text-dim)]">{'→'}</span>
                           )}
                         </span>
                       )
@@ -289,7 +299,7 @@ function WorkspacePackPreview({
       )}
 
       {schedules.length > 0 && (
-        <PreviewSection title={`Zamanlamalar (${schedules.length})`}>
+        <PreviewSection title={t('preview.workspace.schedules', { count: schedules.length })}>
           <div className="space-y-1.5">
             {schedules.map((s, i) => (
               <div
@@ -300,7 +310,10 @@ function WorkspacePackPreview({
                   <code className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px]">
                     {s.cronExpr}
                   </code>
-                  <span className="text-[var(--color-text-dim)]">→ {s.agentKey}</span>
+                  <span className="text-[var(--color-text-dim)]">
+                    {'→ '}
+                    {s.agentKey}
+                  </span>
                 </div>
                 {s.prompt && (
                   <p className="mt-1 line-clamp-2 leading-relaxed text-[var(--color-text-dim)]">
@@ -311,13 +324,13 @@ function WorkspacePackPreview({
             ))}
           </div>
           <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-            Zamanlamalar pasif (disabled) kurulur — Zamanlamalar ekranından açılır.
+            {t('preview.workspace.schedulesHint')}
           </p>
         </PreviewSection>
       )}
 
       {automations.length > 0 && (
-        <PreviewSection title={`Otomasyonlar (${automations.length})`}>
+        <PreviewSection title={t('preview.workspace.automations', { count: automations.length })}>
           <div className="space-y-1.5">
             {automations.map((a, i) => (
               <div
@@ -327,20 +340,27 @@ function WorkspacePackPreview({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-xs font-medium">{a.name}</span>
                   <MiniChip>{a.triggerKind || 'tag'}</MiniChip>
-                  {a.boardToState && <MiniChip>→ {a.boardToState}</MiniChip>}
+                  {a.boardToState && (
+                    <MiniChip>
+                      {'→ '}
+                      {a.boardToState}
+                    </MiniChip>
+                  )}
                   {a.boardAction && <MiniChip>{a.boardAction}</MiniChip>}
                   {/* An exclusive rule silences every other rule on the same card
                       change — worth seeing BEFORE install, not after. */}
                   {a.boardExclusive && (
-                    <MiniChip title="Aynı kart değişiminde tek sahip">tek sahip</MiniChip>
+                    <MiniChip title={t('preview.workspace.exclusiveTitle')}>
+                      {t('preview.workspace.exclusive')}
+                    </MiniChip>
                   )}
                 </div>
                 <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
                   {a.flowName
-                    ? `akış → ${a.flowName}`
+                    ? t('preview.workspace.flowTarget', { name: a.flowName })
                     : a.agentKey
-                      ? `ajan → ${agentName(a.agentKey)}`
-                      : 'LLM çağrısı yok'}
+                      ? t('preview.workspace.agentTarget', { name: agentName(a.agentKey) })
+                      : t('preview.workspace.noLlmCall')}
                 </div>
                 {a.promptTemplate && (
                   <p className="mt-1 line-clamp-2 leading-relaxed text-[var(--color-text-dim)]">
@@ -351,14 +371,13 @@ function WorkspacePackPreview({
             ))}
           </div>
           <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-            Otomasyonlar da <strong>pasif</strong> kurulur — kablolama gelir, harcama gelmez.
-            Otomasyonlar ekranından tek anahtarla açılır.
+            {t('preview.workspace.automationsHint')}
           </p>
         </PreviewSection>
       )}
 
       {skills.length > 0 && (
-        <PreviewSection title={`Gömülü Skill'ler (${skills.length})`}>
+        <PreviewSection title={t('preview.workspace.embeddedSkills', { count: skills.length })}>
           <div className="space-y-1.5">
             {skills.map((s) => {
               const meta = skillMeta(s.body)
@@ -384,21 +403,22 @@ function WorkspacePackPreview({
       )}
 
       {wsp.columns && wsp.columns.length > 0 && (
-        <PreviewSection title="Board kolonları">
+        <PreviewSection title={t('preview.workspace.boardColumns')}>
           <ColumnsPreview columns={wsp.columns} />
         </PreviewSection>
       )}
 
       {promptKeys.length > 0 && (
-        <PreviewSection title={`Prompt override'ları (${promptKeys.length})`}>
+        <PreviewSection
+          title={t('preview.workspace.promptOverrides', { count: promptKeys.length })}
+        >
           <div className="flex flex-wrap gap-1">
             {promptKeys.map((k) => (
               <MiniChip key={k}>{k}</MiniChip>
             ))}
           </div>
           <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-            Bu şablon merkezi prompt registry'sinin varsayılanlarını ezer — config/prompts/ altına
-            yazılır.
+            {t('preview.workspace.promptOverridesHint')}
           </p>
         </PreviewSection>
       )}
@@ -412,7 +432,7 @@ function WorkspacePackPreview({
       )}
 
       <p className="pt-1 text-[11px] text-[var(--color-text-dim)]">
-        Kurunca bu şablondan yeni bir workspace oluşturulur.
+        {t('preview.workspace.installHint')}
       </p>
     </div>
   )

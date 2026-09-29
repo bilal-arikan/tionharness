@@ -3,18 +3,77 @@
 // leads since the app's primary UI language is Turkish; the rest are a compact
 // multilingual set. Extend freely — any BCP-47 tag the browser engine supports.
 import type { PickerOption } from './pickerOptions'
+import { i18next } from '@/i18n'
+
+const hint = (key: string) => i18next.t(`sttLanguages.${key}`, { ns: 'chatControls' })
 
 // The picker never renders an "auto/default" row, so every entry carries a real
 // language code. `icon` is a flag glyph purely for at-a-glance recognition.
 export const STT_LANGUAGES: PickerOption[] = [
-  { value: 'tr-TR', label: 'Türkçe', hint: 'Turkish', icon: '🇹🇷' },
-  { value: 'en-US', label: 'English', hint: 'English (US)', icon: '🇺🇸' },
-  { value: 'de-DE', label: 'Deutsch', hint: 'German', icon: '🇩🇪' },
-  { value: 'es-ES', label: 'Español', hint: 'Spanish', icon: '🇪🇸' },
-  { value: 'fr-FR', label: 'Français', hint: 'French', icon: '🇫🇷' },
-  { value: 'it-IT', label: 'Italiano', hint: 'Italian', icon: '🇮🇹' },
-  { value: 'ru-RU', label: 'Русский', hint: 'Russian', icon: '🇷🇺' },
-  { value: 'ar-SA', label: 'العربية', hint: 'Arabic', icon: '🇸🇦' },
+  {
+    value: 'tr-TR',
+    label: 'Türkçe',
+    get hint() {
+      return hint('turkish')
+    },
+    icon: '🇹🇷',
+  },
+  {
+    value: 'en-US',
+    label: 'English',
+    get hint() {
+      return hint('englishUs')
+    },
+    icon: '🇺🇸',
+  },
+  {
+    value: 'de-DE',
+    label: 'Deutsch',
+    get hint() {
+      return hint('german')
+    },
+    icon: '🇩🇪',
+  },
+  {
+    value: 'es-ES',
+    label: 'Español',
+    get hint() {
+      return hint('spanish')
+    },
+    icon: '🇪🇸',
+  },
+  {
+    value: 'fr-FR',
+    label: 'Français',
+    get hint() {
+      return hint('french')
+    },
+    icon: '🇫🇷',
+  },
+  {
+    value: 'it-IT',
+    label: 'Italiano',
+    get hint() {
+      return hint('italian')
+    },
+    icon: '🇮🇹',
+  },
+  {
+    value: 'ru-RU',
+    label: 'Русский',
+    get hint() {
+      return hint('russian')
+    },
+    icon: '🇷🇺',
+  },
+  {
+    value: 'ar-SA',
+    label: 'العربية',
+    get hint() {
+      return hint('arabic')
+    },
+    icon: '🇸🇦',
+  },
 ]
 
 const DEFAULT_STT_LANG = 'tr-TR'

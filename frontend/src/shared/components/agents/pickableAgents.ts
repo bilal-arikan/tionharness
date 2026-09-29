@@ -1,8 +1,11 @@
 import type { Agent } from '@/types'
+import { i18next } from '@/i18n'
 
 // Label appended to an archived agent that is still shown in a picker because
 // it is the record's currently-saved value.
-export const ARCHIVED_AGENT_LABEL = '(arşivli)'
+export function archivedAgentLabel(): string {
+  return i18next.t('agents.archived', { ns: 'sharedUi' })
+}
 
 // pickableAgents returns the agents a picker may offer as a NEW selection: an
 // archived agent cannot run and the backend refuses it as a schedule /

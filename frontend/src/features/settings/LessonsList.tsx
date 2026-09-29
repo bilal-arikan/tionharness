@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
@@ -10,6 +11,7 @@ import { formatDateTime } from '@/shared/lib/intl'
 // mount + manual refresh. fill=true makes it a full-height page (flex column with
 // the list growing to fill); the default is the compact embedded card (max-h-56).
 export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
+  const { t } = useTranslation('settingsMain')
   const [lessons, setLessons] = useState<Lesson[] | null>(null)
   const [error, setError] = useState('')
   // Busy from the first paint: the mount fetch is already in flight. run lands
@@ -39,7 +41,7 @@ export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
     try {
       await api.deleteLesson(id)
       setLessons((cur) => (cur ? cur.filter((l) => l.id !== id) : cur))
-      toast.success('Ders silindi')
+      toast.success(t('lessons.deleted'))
     } catch (e) {
       setError((e as Error).message)
     }
@@ -51,24 +53,21 @@ export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
     >
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--color-text)]">
-          Kayıtlı dersler {lessons ? `(${lessons.length})` : ''}
+          {t('lessons.title')} {lessons ? `(${lessons.length})` : ''}
         </span>
         <button
           type="button"
           onClick={() => void load()}
           disabled={busy}
           className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] disabled:opacity-50"
-          title="Yenile"
+          title={t('shared.refresh')}
         >
-          <RefreshCw size={12} className={busy ? 'animate-spin' : ''} /> Yenile
+          <RefreshCw size={12} className={busy ? 'animate-spin' : ''} /> {t('shared.refresh')}
         </button>
       </div>
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       {lessons && lessons.length === 0 && !error && (
-        <p className="text-xs text-[var(--color-text-dim)]">
-          Henüz ders yok — kötü biten bir turdan sonra burada görünür. En yeni 5 ders her turun
-          bağlamına otomatik enjekte edilir.
-        </p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('lessons.empty')}</p>
       )}
       {lessons && lessons.length > 0 && (
         <ul className={`space-y-1.5 overflow-y-auto ${fill ? 'min-h-0 flex-1' : 'max-h-56'}`}>
@@ -84,7 +83,7 @@ export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
                       {l.tool}
                     </span>
                   )}
-                  {l.count > 1 && <span>{l.count}× görüldü</span>}
+                  {l.count > 1 && <span>{t('lessons.seen', { count: l.count })}</span>}
                   <span>
                     {formatDateTime(new Date(l.ts * 1000), {
                       dateStyle: 'short',
@@ -98,7 +97,7 @@ export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
                 type="button"
                 onClick={() => void remove(l.id)}
                 className="mt-0.5 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition-opacity hover:text-[var(--color-danger)] group-hover:opacity-100"
-                title="Dersi sil (bir daha enjekte edilmez)"
+                title={t('lessons.deleteTitle')}
               >
                 <Trash2 size={13} />
               </button>

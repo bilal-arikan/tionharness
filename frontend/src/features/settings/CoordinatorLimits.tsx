@@ -1,32 +1,31 @@
+import { useTranslation } from 'react-i18next'
 import { NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function CoordinatorLimits({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Worker capacity and nesting limits for multi-agent coordination. Automatic turns and total
-        subtree sessions remain unlimited.
-      </p>
+      <p className="text-xs text-[var(--color-text-dim)]">{t('coordinatorLimits.description')}</p>
       <NumberField
-        label="Workers per coordinator"
-        hint="Maximum active workers for each coordinator (1–64)."
+        label={t('coordinatorLimits.workers.label')}
+        hint={t('coordinatorLimits.workers.hint')}
         min={1}
         max={64}
         value={draft.coordinatorMaxWorkers}
         onChange={(v) => set('coordinatorMaxWorkers', v)}
       />
       <NumberField
-        label="Coordinator depth"
-        hint="Root depth is 0. Use -1 for unlimited nesting."
+        label={t('coordinatorLimits.depth.label')}
+        hint={t('coordinatorLimits.depth.hint')}
         min={-1}
         max={12}
         value={draft.coordinatorMaxDepth}
         onChange={(v) => set('coordinatorMaxDepth', v)}
       />
       <NumberField
-        label="Report grace period (seconds)"
-        hint="Wait this long after a branch becomes idle before sending a missing completion report. Allow enough time for synthesis."
+        label={t('coordinatorLimits.grace.label')}
+        hint={t('coordinatorLimits.grace.hint')}
         min={5}
         max={1800}
         value={draft.coordinatorSettleGraceSec}

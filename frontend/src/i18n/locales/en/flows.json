@@ -1,0 +1,427 @@
+{
+  "actions": {
+    "addBranch": "+ add branch",
+    "autoLayout": "▦ Auto layout",
+    "close": "Close",
+    "copy": "Copy",
+    "createFromTemplate": "+ Create flow from this template",
+    "delete": "Delete",
+    "duplicate": "Duplicate",
+    "insertIntoField": "Insert into field",
+    "makeStart": "Make start",
+    "rerun": "Run again",
+    "run": "▶ Run",
+    "running": "Running…",
+    "save": "Save",
+    "send": "Send",
+    "showMap": "🗺 map",
+    "showSubRuns": "Show child runs"
+  },
+  "canvas": {
+    "autoLayoutTitle": "Automatically arrange nodes",
+    "hideMinimap": "Hide minimap",
+    "showMinimap": "Show minimap"
+  },
+  "edgeStyles": {
+    "default": "Curved",
+    "smoothstep": "Smooth",
+    "step": "Stepped",
+    "straight": "Straight"
+  },
+  "editor": {
+    "accumulate": "Accumulate context (cache)",
+    "accumulateTitle": "Sequential agent nodes share one growing conversation → the prompt cache is reused across nodes",
+    "animation": "Animation",
+    "cable": "Connector",
+    "collapsePalette": "Collapse add node section",
+    "expandPalette": "Expand add node section",
+    "hidePalette": "Hide left panel",
+    "liveProgress": "Live progress",
+    "node": "Node",
+    "nodeAdd": "Add node",
+    "runInputPlaceholder": "Input (passed to the flow as {{input}})",
+    "showPalette": "Show left panel",
+    "tag": "Tag",
+    "tagPlaceholder": "Tag…",
+    "view": "View"
+  },
+  "empty": {
+    "flow": "Select a flow on the left or create a new one.",
+    "run": "Select a run on the left to inspect its current stage, node outputs, and errors in read-only mode.",
+    "template": "Select a template on the left to preview its structure, then create a flow from it."
+  },
+  "flow": {
+    "created": "Flow created",
+    "deleted": "Flow deleted",
+    "deletedName": "(deleted flow)",
+    "deleteConfirm": "Delete flow \"{{name}}\"?",
+    "deleteManyConfirm": "Delete {{count}} flows?",
+    "deletedMany": "{{count}} flows deleted",
+    "namePrompt": "Flow name:",
+    "saved": "Flow saved",
+    "templateNeedsAgent": "Create at least one agent before creating a flow from a template."
+  },
+  "handles": {
+    "body": "Body → subchain that runs on every iteration",
+    "branch": "Branch → {{label}}",
+    "exit": "Exit → runs after the loop ends",
+    "input": "Input",
+    "join": "Join → runs after every branch finishes",
+    "next": "Output → next node",
+    "parallel": "Parallel branches (run concurrently)",
+    "resumeNext": "Output → next node after input arrives",
+    "startNext": "Output → first node"
+  },
+  "header": {
+    "flowIdTitle": "Flow ID (file name)",
+    "flowNamePlaceholder": "Flow name",
+    "flowPathCopy": "Copy flow path",
+    "flows": "Flows",
+    "readOnlyPreview": "read-only preview",
+    "rerunDeleted": "The flow was deleted — it cannot be run again",
+    "rerunTitle": "Run this again with the same input"
+  },
+  "inspector": {
+    "agent": "Agent",
+    "agentPlaceholder": "— select agent —",
+    "branchHint": "Describe each branch as a plain-language option; the decision model selects which one matches the latest output. If it is unsure or cannot answer, the default (empty) branch is used. Enable it under Settings → Deciders.",
+    "branches": "Branches (draw an edge to the target)",
+    "coordinatorAgent": "Coordinator agent",
+    "coordinatorDescription": "The agent runs in its own coordinator session and decides how many workers to open at runtime. The node blocks until every worker finishes and the coordinator stops; its final reply becomes the output. On timeout, active workers are stopped and the flow fails.",
+    "coordinatorGoal": "Task (goal given to the coordinator)",
+    "coordinatorTurns": "Maximum coordinator turns",
+    "coordinatorTurnsHint": "0 = recipe limit, otherwise workspace default",
+    "delay": "Wait (seconds)",
+    "delayHint": "Continues to the next node after waiting (up to 5 minutes).",
+    "emptyLastPlaceholder": "empty = {{last}}",
+    "exactPlaceholder": "equals… (empty = default)",
+    "exitCondition": "Exit condition (stop when matched)",
+    "exitJudgePlaceholder": "describe the condition (for example, Review approved the change)",
+    "exitLimitPlaceholder": "empty = iteration limit only",
+    "freshContext": "Fresh context",
+    "freshContextHint": "(does not see the accumulated conversation — effective only when “Accumulate context” is enabled)",
+    "inputTemplate": "Input template",
+    "inputTemplateEach": "Input template (for every child)",
+    "joinDescription": "Waits for spawned child runs, combines their output, and stores it in {{last}}.",
+    "joinPartial": "Partial mode (drop failed, waiting, or timed-out children without failing the join)",
+    "joinSpawn": "Spawn node to wait for",
+    "joinSpawnAll": "all (all pending spawns)",
+    "loopDescription": "Repeat the body chain from the bottom body handle; then continue through the exit handle. Body nodes can use {{iteration}} (zero-based).",
+    "loopBody": "body",
+    "loopExit": "exit",
+    "loopJudgeHint": "After every iteration, the decision model checks whether the exit condition is satisfied. If it cannot answer, the loop continues up to the iteration limit; without a limit, the flow fails.",
+    "match": "Match",
+    "matchContains": "Contains (substring)",
+    "matchEquals": "Equals (exact)",
+    "matchJudge": "Decision model (judge)",
+    "matchRegex": "Regex",
+    "maxIterations": "Maximum iterations",
+    "maxIterationsHint": "0 = stop only by the exit condition (one is required).",
+    "noOtherFlows": "no other flows",
+    "parallelDescription": "Connect concurrent agent nodes from the bottom fan handle and the join target from the right join handle.",
+    "prompt": "Prompt",
+    "regexPlaceholder": "regex… (empty = default)",
+    "spawnDescription": "Starts flows without blocking; a join collects their results. Async children must not be interactive (a child waiting for input causes the join to fail).",
+    "spawnFlows": "Async flows (select multiple)",
+    "subflow": "Subflow",
+    "subflowDescription": "If the subflow reaches await-input, this flow is suspended too. The subflow resumes when input is delivered (propagation).",
+    "subflowInputPlaceholder": "empty = {{last}} · input passed to the subflow",
+    "subflowPlaceholder": "— select flow —",
+    "template": "Template (output)",
+    "templatePlaceholder": "{{input}}, {{last}}, {{node.<id>}} — produces output without calling an LLM",
+    "timeout": "Timeout (seconds)",
+    "timeoutDefault": "0 = 30-minute default",
+    "timeoutUnlimited": "0 = unlimited",
+    "title": "Title",
+    "titlePlaceholder": "title",
+    "typeFixed": "(type is fixed)",
+    "nodeTypeWhat": "What is {{type}}?",
+    "untilContainsPlaceholder": "contains… (empty = default)",
+    "untilJudgePlaceholder": "describe the option… (empty = default)",
+    "workflow": "Coordination type (workflow)",
+    "workflowHelp": "What is a workflow?"
+  },
+  "judge": {
+    "placeholder": "e.g. What type of request is this?",
+    "question": "Decision question (optional)"
+  },
+  "list": {
+    "clear": "clear",
+    "clearTagFilter": "Clear tag filter",
+    "filterByTag": "Filter by this tag",
+    "flowsMine": "My flows",
+    "flowsLoading": "Loading flows…",
+    "flowsNone": "No flows yet.",
+    "flowsNoMatch": "No matching flows.",
+    "label": "Flows",
+    "newFlow": "New flow",
+    "nodeCount_one": "{{count}} node",
+    "nodeCount_other": "{{count}} nodes",
+    "removeFilter": "Remove filter",
+    "runs": "Runs",
+    "runsNone": "No runs yet.",
+    "searchFlow": "Search flows…",
+    "searchRun": "Search runs (flow name)…",
+    "searchTemplate": "Search templates…",
+    "templates": "Templates"
+  },
+  "nodeHelp": {
+    "agent": "Runs the selected agent with a templated prompt and uses its reply as output. The prompt can use variables such as {{input}}, {{last}}, and {{node.<id>}}. This is the basic node that produces one LLM step.",
+    "await-input": "Durably pauses the flow and waits for external input from a person or another agent. It resumes from the same point when input arrives; an optional timeout can be set. Waiting survives a server restart.",
+    "branch": "Routes the flow based on the latest output. The first matching branch is selected according to the match mode (contains, regex, exact match, and so on); the default branch runs if none match. It does not call an LLM.",
+    "coordinator": "Runs the selected agent as a coordinator: it decides at runtime how many workers to open and how to assign them. Unlike a Parallel node, its width is not fixed at design time. It waits until all workers finish and the coordinator stops, then uses the final reply as this node's output.",
+    "delay": "Waits for the configured duration and continues to the next node. It does not call an LLM; use it for rate limits, cooldowns, or timed steps.",
+    "end": "Optional terminal node. It ends the flow and can format the final output with a template or validate it against a JSON schema. Without one, the flow ends with the last node's output.",
+    "join": "Barrier node: waits for the child runs launched by a Spawn node, collects their output, and continues with one result.",
+    "loop": "Repeats its body chain until it reaches the maximum iteration count or the exit condition is satisfied. Nodes in the body can use {{iteration}} for the current iteration number.",
+    "parallel": "Runs multiple agent nodes at the same time, collects their results after all finish, and passes one combined output to the continuation node. Use it to speed up independent work.",
+    "spawn": "Starts selected flows as asynchronous child runs and continues immediately without waiting. Add a Join node later to collect their results.",
+    "start": "Required entry point of the flow. Execution begins here and the supplied input ({{input}}) passes directly to the next node. Every flow has exactly one.",
+    "subflow": "Runs another flow from start to finish, captures its output, and continues in this flow. It lets you reuse common parts instead of drawing them repeatedly.",
+    "transform": "Renders your template and emits it as output without calling an LLM. Use it to combine earlier results ({{last}}, {{node.<id>}}), reformat content, or inject fixed text."
+  },
+  "nodeTypes": {
+    "agent": "Agent",
+    "await-input": "Wait for Input",
+    "branch": "Branch",
+    "coordinator": "Coordinator",
+    "delay": "Wait",
+    "end": "End",
+    "join": "Join (Barrier)",
+    "loop": "Loop",
+    "parallel": "Parallel",
+    "spawn": "Spawn (Async)",
+    "start": "Start",
+    "subflow": "Subflow",
+    "transform": "Transform"
+  },
+  "nodes": {
+    "agentMissing": "— no agent selected —",
+    "awaitInputIdle": "waits for external input → {{last}}",
+    "awaitInputWaiting": "⏳ waiting for input…",
+    "branchEmpty": "no branches",
+    "childRun": "child run",
+    "childRunOpen": "Double-click to open the child run",
+    "coordinatorFanout": "dynamic worker fan-out",
+    "defaultBranch": "default",
+    "delaySeconds": "{{value}} sec",
+    "delayWait": "wait {{value}}",
+    "endDefault": "End",
+    "endHere": "the flow ends here",
+    "endSchema": "flow ends · output schema required",
+    "joinAll": "⛙ wait for all spawns",
+    "joinOne": "⛙ wait for {{spawn}}",
+    "loopExit": " · exit: \"{{condition}}\"",
+    "loopRepeat": "repeat {{cap}}{{exit}}",
+    "parallelCount_one": "{{count}} concurrent branch · join →",
+    "parallelCount_other": "{{count}} concurrent branches · join →",
+    "spawnCount_one": "🚀 {{count}} flow (async)",
+    "spawnCount_other": "🚀 {{count}} flows (async)",
+    "spawnNone": "no flow selected",
+    "startDefault": "Start",
+    "startHere": "the flow starts here",
+    "subflowNone": "↳ no subflow selected",
+    "subflowRef": "↳ flow {{id}}",
+    "transformEmpty": "(empty template)"
+  },
+  "run": {
+    "allSteps": "All steps",
+    "branchDecision": "Decision: {{note}}",
+    "branchEmpty": "empty",
+    "branchEvaluated": "Evaluated value{{field}} · match: {{mode}}",
+    "branchJsonField": " (JSON field: {{field}})",
+    "branchNone": "No branches are defined.",
+    "clipboardCopied": "Copied to clipboard",
+    "coordinatorNoRota": "This coordinator node does not have a trajectory yet",
+    "coordinatorOpenRota": "Open this coordinator's trajectory on the Trajectory screen",
+    "coordinatorRunning": "Coordinator is running — waiting for workers…",
+    "coordinatorSteps": "Worker steps are in the coordinator's own session and can be inspected on the Sessions screen (“Flow Coordinator”).",
+    "input": "Input",
+    "inputMissing": "No input was recorded (this node has not completed yet or this is an older run).",
+    "inputPlaceholder": "Input to send to the flow…",
+    "noExchange": "This node type ({{type}}) has no message exchange.",
+    "noOutput": "no output",
+    "parallelCount_one": "{{count}} concurrent branch",
+    "parallelCount_other": "{{count}} concurrent branches",
+    "parallelCritical": " — critical path",
+    "parallelNone": "No parallel branches are defined.",
+    "parallelTotal": "total {{duration}}",
+    "priorContext": "Previous context (accumulated conversation)",
+    "priorMessages_one": "{{count}} message",
+    "priorMessages_other": "{{count}} messages",
+    "rota": "Trajectory",
+    "progressCompleted": "{{progress}} completed…",
+    "running": "running…",
+    "status": "Status:",
+    "stepCount_one": "{{count}} step",
+    "stepCount_other": "{{count}} steps",
+    "stepsLoading": "Loading steps…",
+    "trace": "Step trace",
+    "traceEmpty": "No step trace.",
+    "traceHide": "Hide step trace",
+    "traceNoneCompleted": "No step has completed yet…",
+    "traceNode": "Node view",
+    "traceShow": "Show step trace",
+    "tree": "Run tree",
+    "waiting": "⏳ Waiting for input"
+  },
+  "status": {
+    "failure": "✕ failed",
+    "running": "▶ running",
+    "success": "✓ succeeded",
+    "waiting": "⏳ waiting for input"
+  },
+  "templates": {
+    "async-fanout": {
+      "name": "Async Fan-out (Spawn/Join)",
+      "description": "Starts two analysis subflows concurrently without blocking, collects their results at a join barrier, then combines them into one reply. Partial mode is enabled, so the join continues if one branch fails. The two companion subflows are created and connected automatically.",
+      "nodes": {
+        "spawn": "Start Analyses",
+        "join": "Collect Results",
+        "synth": "Synthesize"
+      },
+      "companions": {
+        "0": {
+          "name": "Analysis — Positive Perspective",
+          "nodes": {
+            "t": "Positive"
+          }
+        },
+        "1": {
+          "name": "Analysis — Negative Perspective",
+          "nodes": {
+            "t": "Negative"
+          }
+        }
+      }
+    },
+    "branch-router": {
+      "name": "Sentiment Router",
+      "description": "Branching flow: analyzes sentiment first, then responds with thanks for positive input or an apology for negative input.",
+      "nodes": {
+        "classify": "Classify",
+        "route": "Route",
+        "thanks": "Thank",
+        "apologize": "Apologize"
+      }
+    },
+    "classify-act": {
+      "name": "Classify & Route",
+      "description": "Classifies input as bug, feature, or question and routes each category to its own handler. A deterministic Flow equivalent of the coordinator Classify-And-Act pattern.",
+      "nodes": {
+        "classify": "Classify",
+        "route": "Route",
+        "handle-bug": "Handle Bug",
+        "handle-feature": "Handle Feature",
+        "handle-question": "Answer Question"
+      }
+    },
+    "critique-loop": {
+      "name": "Critique & Revise",
+      "description": "Draft → critique → revise. One agent creates, a second finds flaws, and a third fixes them.",
+      "nodes": {
+        "draft": "Draft",
+        "critique": "Critique",
+        "revise": "Revise"
+      }
+    },
+    "default-starter": {
+      "name": "Answer & Verify",
+      "description": "The default flow automatically added to every workspace. One agent answers the request; a second finds errors and gaps and produces a corrected final version.",
+      "nodes": {
+        "answer": "Answer",
+        "verify": "Verify"
+      }
+    },
+    "experts-synthesis": {
+      "name": "Multiple Experts + Synthesis",
+      "description": "Three experts answer the same question concurrently from different angles; one agent synthesizes their views.",
+      "nodes": {
+        "panel": "Expert Panel",
+        "e1": "Technical",
+        "e2": "Commercial",
+        "e3": "User",
+        "synth": "Synthesis"
+      }
+    },
+    "gan-loop": {
+      "name": "Generator↔Evaluator (GAN)",
+      "description": "A contract-based generate → evaluate → refine loop. A producing agent and a separate skeptical evaluator refine or pivot based on the score. Uses Playwright for real UI/E2E checks. Assign two different agents.",
+      "nodes": {
+        "contract": "Generator: Contract",
+        "review-contract": "Evaluator: Review Contract",
+        "generate": "Generator: Generate",
+        "evaluate": "Evaluator: Evaluate",
+        "decide": "Decision",
+        "pivot": "Generator: Pivot",
+        "finalize": "Finalize"
+      }
+    },
+    "generate-filter": {
+      "name": "Generate & Filter",
+      "description": "Generates many candidates from different angles in parallel, then one agent removes duplicates, scores them with a rubric, and selects the strongest few. A Flow equivalent of the Generate-And-Filter pattern.",
+      "nodes": {
+        "gen": "Generate",
+        "g1": "Candidate A (safe)",
+        "g2": "Candidate B (bold)",
+        "g3": "Candidate C (simple)",
+        "filter": "Filter & Rank"
+      }
+    },
+    "pipeline": {
+      "name": "Sequential Pipeline",
+      "description": "Research → draft → polish. Produces a polished short text from one topic.",
+      "nodes": {
+        "research": "Research",
+        "draft": "Write Draft",
+        "polish": "Polish"
+      }
+    },
+    "planner-executor": {
+      "name": "Plan & Execute",
+      "description": "A planner splits the task into steps, an executor carries them out, and a summarizer reports the result.",
+      "nodes": {
+        "plan": "Plan",
+        "execute": "Execute",
+        "summarize": "Summarize"
+      }
+    },
+    "pros-cons": {
+      "name": "Pros and Cons Analysis",
+      "description": "Parallel fan-out + join: two agents write arguments for and against at the same time; a third produces a balanced conclusion.",
+      "nodes": {
+        "debate": "Debate",
+        "pros": "Pros",
+        "cons": "Cons",
+        "conclude": "Conclusion"
+      }
+    },
+    "tournament": {
+      "name": "Tournament",
+      "description": "Four candidates are generated in parallel, two semifinal judges select the winners of each pair, and a final judge chooses the champion. A deterministic Flow equivalent of the Tournament pattern.",
+      "nodes": {
+        "seed": "Candidates",
+        "c1": "Candidate 1",
+        "c2": "Candidate 2",
+        "c3": "Candidate 3",
+        "c4": "Candidate 4",
+        "semis": "Semifinals",
+        "semiA": "Semi A (1 vs 2)",
+        "semiB": "Semi B (3 vs 4)",
+        "final": "Final"
+      }
+    }
+  },
+  "vars": {
+    "date": "Current date (2026-07-04)",
+    "datetime": "Date + time",
+    "input": "Flow input (RunFlow input)",
+    "last": "Output of the most recently run node",
+    "nodeOutput": "Specific node output",
+    "nodeTitle": "Variables between nodes (click → insert)",
+    "seedIntro": "The text you enter here becomes {{input}} in the flow.",
+    "seedTitle": "Variables (click → insert)",
+    "time": "Current time (23:43)",
+    "title": "Available variables"
+  }
+}

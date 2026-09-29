@@ -4,6 +4,10 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NavRail } from './NavRail'
+import { MobileNavBar } from './MobileNavBar'
+import { AppHeader } from './AppHeader'
+import { NAV } from './navItems'
+import { VIEW_TITLE } from './viewRegistry'
 import { WorkspaceView } from '@/features/workspace/WorkspaceView'
 import { i18next } from '@/i18n'
 
@@ -48,10 +52,74 @@ function renderNavigation() {
   return { nav, workspace }
 }
 
-afterEach(() => {
+afterEach(async () => {
   for (const root of roots.splice(0)) act(() => root.unmount())
   document.body.replaceChildren()
   localStorage.clear()
+  await i18next.changeLanguage('tr')
+})
+
+it('updates desktop, mobile and module-level navigation labels after a language switch', async () => {
+  await act(() => i18next.changeLanguage('tr'))
+  const { nav } = renderNavigation()
+  const mobile = render(
+    <MobileNavBar
+      view="dashboard"
+      onSelectView={() => {}}
+      workspaces={[]}
+      activeWorkspaceId={null}
+      onSwitchWorkspace={() => {}}
+      onCreateWorkspace={() => {}}
+      busyViews={new Set(['chat'])}
+      dirtyViews={new Set(['settings'])}
+    />,
+  )
+  expect(nav.querySelector('[data-testid="nav-chat"]')?.textContent).toBe('Sohbet')
+  expect(VIEW_TITLE.settings).toBe('Ayarlar')
+
+  await act(() => i18next.changeLanguage('en'))
+  expect(nav.querySelector('[data-testid="nav-chat"]')?.textContent).toBe('Chat')
+  expect(nav.querySelector('[data-testid="nav-settings"]')?.getAttribute('aria-label')).toBe(
+    'Settings',
+  )
+  expect(mobile.querySelector('[data-testid="mnav-board"]')?.textContent).toBe('Tasks')
+  expect(mobile.querySelector('[data-testid="mnav-settings"]')?.getAttribute('aria-label')).toBe(
+    'Settings',
+  )
+  expect(mobile.querySelector('[data-testid="mnav-chat"] span[title]')?.getAttribute('title')).toBe(
+    'Work in progress',
+  )
+  expect(VIEW_TITLE.settings).toBe('Settings')
+  expect(NAV.find((item) => item.key === 'chat')?.label).toBe('Chat')
+
+  await act(() => i18next.changeLanguage('tr'))
+  expect(mobile.querySelector('[data-testid="mnav-board"]')?.textContent).toBe('Görevler')
+  expect(NAV.find((item) => item.key === 'chat')?.label).toBe('Sohbet')
+})
+
+it('translates chat header actions and the untitled-session fallback', async () => {
+  await act(() => i18next.changeLanguage('en'))
+  const props = {
+    sessions: [],
+    agents: [],
+    activeSessionId: null,
+    activeAgentId: null,
+    detailOpen: false,
+    listOpen: true,
+    navOpen: true,
+    onToggleList() {},
+    onToggleNav() {},
+    onOpenContextPreview() {},
+    onOpenCoord() {},
+    onToggleDetail() {},
+    onError() {},
+  }
+  const header = render(<AppHeader {...props} view="chat" />)
+  expect(header.textContent).toContain('New chat')
+  expect(header.querySelector('button')?.getAttribute('title')).toBe('Hide session list')
+  await act(() => i18next.changeLanguage('tr'))
+  expect(header.textContent).toContain('Yeni sohbet')
+  expect(header.querySelector('button')?.getAttribute('title')).toBe('Oturum listesini gizle')
 })
 
 describe.each([

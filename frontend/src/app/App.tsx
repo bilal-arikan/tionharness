@@ -131,15 +131,15 @@ export default function App() {
   const paletteCommands = useMemo<Command[]>(() => {
     const nav = (Object.keys(VIEW_TITLE) as View[]).map((v) => ({
       id: `view:${v}`,
-      label: VIEW_TITLE[v].startsWith('navigation.') ? t(VIEW_TITLE[v]) : VIEW_TITLE[v],
-      group: 'Git',
+      label: VIEW_TITLE[v],
+      group: t('shell.goTo'),
       keywords: v,
       run: () => setView(v),
     }))
     const ws = workspaces.map((w) => ({
       id: `ws:${w.id}`,
-      label: w.name || 'İsimsiz',
-      group: 'Workspace',
+      label: w.name || t('shell.untitled'),
+      group: t('navigation.workspace'),
       keywords: 'workspace çalışma alanı',
       run: () => switchWorkspace(w.id),
     }))
@@ -282,7 +282,7 @@ export default function App() {
       return next
     })
   }, [])
-  // Coordination drawer (chat header's "Coord" button): a right-anchored side sheet
+  // Coordination drawer (chat header's {t('shell.coordination')} button): a right-anchored side sheet
   // hosting the coordination UI (worker roster, workflow, tree). Not persisted — it
   // is an on-demand overlay, not a docked column like the detail panel.
   const [coordOpen, setCoordOpen] = useState(false)
@@ -509,11 +509,9 @@ export default function App() {
     (next: View): boolean => {
       if (next === view) return true
       if (!dirtyViews.has(view)) return true
-      return window.confirm(
-        'Bu sayfada kaydedilmemiş değişiklikler var. Kaydetmeden ayrılmak istiyor musunuz?',
-      )
+      return window.confirm(t('shell.leaveUnsaved'))
     },
-    [view, dirtyViews],
+    [view, dirtyViews, t],
   )
   const { setOpen: setSessionsListOpen } = sessionsList
   const selectView = useCallback(
@@ -636,7 +634,7 @@ export default function App() {
         <CollapsibleListShell
           open={sessionsList.open}
           onToggle={sessionsList.toggle}
-          label="Oturumlar"
+          label={t('shell.sessions')}
           testId="sessions-column"
         >
           <div data-list-mode={shell.list} className="flex h-full">
@@ -714,7 +712,7 @@ export default function App() {
           />
         )}
 
-        <Suspense fallback={<LoadingState label="Loading…" className="flex-1" />}>
+        <Suspense fallback={<LoadingState label={t('shell.loading')} className="flex-1" />}>
           {view === 'chat' && (
             <ChatView
               chat={chat}
@@ -787,7 +785,9 @@ export default function App() {
             />
           )}
           {view === 'rota' && activeWorkspaceId !== null && (
-            <Suspense fallback={<LoadingState label="Rota yükleniyor…" className="flex-1" />}>
+            <Suspense
+              fallback={<LoadingState label={t('shell.loadingTrajectory')} className="flex-1" />}
+            >
               <RotaPanel
                 workspaceId={activeWorkspaceId}
                 onError={setError}
@@ -802,7 +802,7 @@ export default function App() {
             </Suspense>
           )}
           {view === 'explorer' && activeWorkspaceId !== null && (
-            <Suspense fallback={<LoadingState label="Harita yükleniyor…" className="flex-1" />}>
+            <Suspense fallback={<LoadingState label={t('shell.loadingMap')} className="flex-1" />}>
               <ExplorerView
                 workspaceId={activeWorkspaceId}
                 onError={setError}
@@ -834,7 +834,9 @@ export default function App() {
             />
           )}
           {view === 'flows' && (
-            <Suspense fallback={<LoadingState label="Akışlar yükleniyor…" className="flex-1" />}>
+            <Suspense
+              fallback={<LoadingState label={t('shell.loadingFlows')} className="flex-1" />}
+            >
               <FlowsPanel
                 agents={ctl.agents}
                 onError={setError}
@@ -963,7 +965,7 @@ export default function App() {
                 : 'th-drawer-from-right fixed inset-y-0 right-0 z-40 shrink-0 shadow-xl max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]'
             }
           >
-            <Suspense fallback={<LoadingState label="Loading session details…" />}>
+            <Suspense fallback={<LoadingState label={t('shell.loadingDetails')} />}>
               <SessionDetailPanel
                 sessionId={ctl.activeSessionId}
                 refreshKey={ctl.meterRefresh}
@@ -982,7 +984,7 @@ export default function App() {
         </>
       )}
 
-      {/* Coordination side sheet, opened from the chat header's "Coord" button. */}
+      {/* Coordination side sheet, opened from the chat header's {t('shell.coordination')} button. */}
       {view === 'chat' && coordOpen && ctl.activeSessionId && (
         <Suspense fallback={null}>
           <CoordinatorPanel

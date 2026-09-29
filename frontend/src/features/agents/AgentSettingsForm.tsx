@@ -25,6 +25,7 @@ import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 import { BuiltinPromptRevert } from './BuiltinPromptRevert'
 import { AgentLineageChips } from './AgentLineageChips'
 import { FieldOverrideBadge } from './FieldOverrideBadge'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   agent: Agent
@@ -118,7 +119,7 @@ export function AgentSettingsForm({
   onSave,
   onSaved,
   onCancel,
-  cancelLabel = 'İptal',
+  cancelLabel,
   onDelete,
   onRestoreDefault,
   onToggleDisabled,
@@ -137,6 +138,7 @@ export function AgentSettingsForm({
   readOnlyNote,
   allowFreeDerive = true,
 }: Props) {
+  const { t } = useTranslation('agents')
   const descriptionId = useId()
   // `locked` gates every editor and mutating action below. It now follows
   // `readOnly` ALONE: a built-in system agent is editable in place, its edit
@@ -386,7 +388,7 @@ export function AgentSettingsForm({
 
   const save = async () => {
     if (!name.trim()) {
-      setErr('Ajan adı boş olamaz.')
+      setErr(t('settings.nameRequired'))
       return
     }
     setSaving(true)
@@ -408,8 +410,11 @@ export function AgentSettingsForm({
   const changeParent = async (parentId: string) => {
     if (parentId === (agent.parentId ?? '')) return
     const msg = parentId
-      ? `"${agent.name}" artık "${parentOptions.find((p) => p.id === parentId)?.name ?? parentId}" ajanından kalıtım alsın mı?\n\nMevcut değerleri korunur: her alan override olarak işaretlenir; istediklerini tek tek "devral" ile ebeveyne bırakabilirsin.`
-      : `"${agent.name}" kalıtımdan ayrılsın mı?\n\nŞu anki etkin değerler kendi değerleri olarak dondurulur; ebeveyn değişiklikleri artık yansımaz.`
+      ? t('settings.changeParentConfirm', {
+          agent: agent.name,
+          parent: parentOptions.find((p) => p.id === parentId)?.name ?? parentId,
+        })
+      : t('settings.detachParentConfirm', { agent: agent.name })
     if (!confirm(msg)) return
     setErr(null)
     try {
@@ -479,10 +484,10 @@ export function AgentSettingsForm({
           <div className="min-w-[14rem] flex-1">
             <div className="flex items-baseline gap-2">
               <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">
-                {name || 'Ajan'}
+                {name || t('settings.fallbackName')}
               </h2>
               <span
-                title="Ajan ID — disk klasörünün adı"
+                title={t('settings.idTitle')}
                 className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
               >
                 {agent.id}
@@ -491,17 +496,19 @@ export function AgentSettingsForm({
             </div>
             <p className="text-xs text-[var(--color-text-dim)]">
               {agent.locked
-                ? 'Yerleşik sistem ajanı — değişiklikler tüm workspaceʼlerde geçerli'
+                ? t('settings.builtinSummary')
                 : readOnly
-                  ? 'Salt okunur görünüm'
+                  ? t('settings.readOnlySummary')
                   : isChild
-                    ? `${parentName ?? 'Ebeveyninden'} kalıtım alan ajan`
-                    : 'Ajan ayarları'}
+                    ? t('settings.childSummary', {
+                        name: parentName ?? t('settings.parentFallback'),
+                      })
+                    : t('settings.summary')}
             </p>
           </div>
           <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
             {savedAt > 0 && !saving && (
-              <span className="text-xs text-[var(--color-text-dim)]">Kaydedildi ✓</span>
+              <span className="text-xs text-[var(--color-text-dim)]">{t('settings.saved')}</span>
             )}
             {/* A system agent serves the runtime (titling, compaction, workers) and
               is never a conversation partner, so it cannot be the default agent
@@ -514,11 +521,7 @@ export function AgentSettingsForm({
                   if (!isDefault) onSetDefault()
                 }}
                 disabled={isDefault || defaultSaveState === 'saving'}
-                title={
-                  isDefault
-                    ? 'Bu ajan yeni sohbetler için varsayılan'
-                    : 'Yeni sohbetler için varsayılan yap'
-                }
+                title={isDefault ? t('settings.defaultTitle') : t('settings.makeDefaultTitle')}
                 className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition ${
                   isDefault
                     ? 'text-[var(--color-accent)]'
@@ -527,31 +530,31 @@ export function AgentSettingsForm({
               >
                 <Star size={14} className={isDefault ? 'fill-current' : ''} />
                 {defaultSaveState === 'saving'
-                  ? 'Kaydediliyor…'
+                  ? t('settings.saving')
                   : isDefault
                     ? defaultSaveState === 'saved'
-                      ? 'Kaydedildi ✓'
-                      : 'Varsayılan'
-                    : 'Varsayılan yap'}
+                      ? t('settings.saved')
+                      : t('settings.default')
+                    : t('settings.makeDefault')}
               </button>
             )}
             <button
               data-testid="agent-preview-context"
               onClick={() => setPreviewOpen(true)}
-              title="Ajanın sıfırdan aldığı bağlamı (sistem promptu + araçlar) önizle"
+              title={t('settings.contextTitle')}
               className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
-              <Eye size={14} /> Bağlam
+              <Eye size={14} /> {t('settings.context')}
             </button>
             {onDerive && allowFreeDerive && !readOnly && (
               <button
                 data-testid="agent-derive"
                 onClick={() => derive(false)}
                 disabled={deriving}
-                title="Bu ajandan kalıtım alan yeni bir ajan türet: her alanı devralır, istediklerini override edersin"
+                title={t('settings.deriveTitle')}
                 className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
               >
-                <GitBranch size={14} /> {deriving ? 'Türetiliyor…' : 'Türet'}
+                <GitBranch size={14} /> {deriving ? t('settings.deriving') : t('settings.derive')}
               </button>
             )}
             {onDuplicate && !locked && !isBuiltin && (
@@ -559,10 +562,10 @@ export function AgentSettingsForm({
                 data-testid="agent-duplicate"
                 onClick={duplicate}
                 disabled={duplicating}
-                title="Bu ajanın tüm ayarlarıyla (sağlayıcı/model, araçlar, yetenekler) bağımsız bir klonunu oluştur"
+                title={t('settings.cloneTitle')}
                 className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
               >
-                <Copy size={14} /> {duplicating ? 'Klonlanıyor…' : 'Klonla'}
+                <Copy size={14} /> {duplicating ? t('settings.cloning') : t('settings.clone')}
               </button>
             )}
             {onCancel && (
@@ -571,7 +574,7 @@ export function AgentSettingsForm({
                 onClick={onCancel}
                 className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
               >
-                {cancelLabel}
+                {cancelLabel ?? t('settings.cancel')}
               </button>
             )}
             {onDelete && !locked && !isBuiltin && (
@@ -580,7 +583,7 @@ export function AgentSettingsForm({
                 onClick={onDelete}
                 className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
               >
-                <Trash2 size={14} /> Sil
+                <Trash2 size={14} /> {t('settings.delete')}
               </button>
             )}
             {onRestoreDefault && (isChild || agent.locked) && (
@@ -589,13 +592,12 @@ export function AgentSettingsForm({
                 onClick={onRestoreDefault}
                 disabled={systemActionPending || (agent.overrides ?? []).length === 0}
                 title={
-                  agent.locked
-                    ? 'Tüm özelleştirmeleri kaldır: her alan yeniden yerleşik tanımdan gelir (tüm workspaceʼlerde)'
-                    : "Tüm override'ları kaldır: her alan yeniden ebeveynden devralınır"
+                  agent.locked ? t('settings.resetBuiltinTitle') : t('settings.resetChildTitle')
                 }
                 className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
               >
-                <RotateCcw size={14} /> {agent.locked ? 'Tümünü sıfırla' : 'Tümünü devral'}
+                <RotateCcw size={14} />{' '}
+                {agent.locked ? t('settings.resetAll') : t('settings.inheritAll')}
               </button>
             )}
             {onToggleDisabled && !locked && !isBuiltin && (
@@ -605,12 +607,12 @@ export function AgentSettingsForm({
                 disabled={systemActionPending}
                 className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
               >
-                <Power size={14} /> {agent.disabled ? 'Etkinleştir' : 'Devre dışı bırak'}
+                <Power size={14} /> {agent.disabled ? t('settings.enable') : t('settings.disable')}
               </button>
             )}
             {!locked && (
               <Button data-testid="agent-save" onClick={save} disabled={saving}>
-                {saving ? 'Kaydediliyor…' : 'Kaydet'}
+                {saving ? t('settings.saving') : t('settings.save')}
               </Button>
             )}
           </div>
@@ -636,15 +638,7 @@ export function AgentSettingsForm({
             className="flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
           >
             <Lock size={14} className="mt-0.5 shrink-0" />
-            <p>
-              Bu <strong>yerleşik sistem ajanı</strong>: uygulama{' '}
-              <code className="font-mono">{agent.systemKey}</code> rolünü buradan çözer. Doğrudan
-              düzenleyebilirsin — kopya oluşmaz. Değiştirdiğin alanlar{' '}
-              <strong>tüm workspaceʼlerde</strong> geçerli olur ve sonraki açılışlarda korunur;
-              dokunmadığın alanlar yerleşik tanımı izlemeye devam eder, böylece uygulama
-              güncellendiğinde onlar da güncellenir. <em>Tümünü sıfırla</em> ile yerleşik tanıma
-              dönersin. Silinemez ve devre dışı bırakılamaz.
-            </p>
+            <p>{t('settings.builtinNote', { role: agent.systemKey })}</p>
           </div>
         )}
         {isChild && !agent.system && (
@@ -652,9 +646,7 @@ export function AgentSettingsForm({
             data-testid="agent-inherit-note"
             className="rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
           >
-            Bu ajan <strong>{parentName ?? 'ebeveyninden'}</strong> kalıtım alır: "devralındı"
-            alanlar ebeveyn değiştikçe onu izler, "override" alanlar bu ajana özeldir. Bir alanı
-            düzenlemek onu override eder; <em>devral</em> ile geri bırakırsın.
+            {t('settings.inheritNote', { parent: parentName ?? t('settings.parentFallback') })}
           </div>
         )}
         {isChild && agent.system && !agent.locked && (
@@ -662,10 +654,10 @@ export function AgentSettingsForm({
             data-testid="agent-role-note"
             className="rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
           >
-            Bu ajan yerleşik <strong>{parentName ?? agent.systemKey}</strong> tanımının workspace
-            özelleştirmesidir: etkinken uygulama{' '}
-            <code className="font-mono">{agent.systemKey}</code> rolünü buradan çözer; devre dışı
-            bırakınca yerleşik tanıma döner. Override etmediğin alanlar yerleşik değeri izler.
+            {t('settings.roleNote', {
+              parent: parentName ?? agent.systemKey,
+              role: agent.systemKey,
+            })}
           </div>
         )}
 
@@ -673,7 +665,7 @@ export function AgentSettingsForm({
           disabled={locked}
           className={`m-0 min-w-0 space-y-4 border-0 p-0 ${locked ? 'opacity-80' : ''}`}
         >
-          <Field label="Ad">
+          <Field label={t('settings.fields.name')}>
             <div className="flex items-center gap-2">
               {/* Icon-only emoji picker sits to the left of the name input. */}
               <EmojiField
@@ -693,43 +685,39 @@ export function AgentSettingsForm({
             </div>
             {isChild && (
               <div className="flex items-center gap-2 pt-1">
-                <span className="text-[10px] text-[var(--color-text-dim)]">Avatar:</span>
+                <span className="text-[10px] text-[var(--color-text-dim)]">
+                  {t('settings.fields.avatar')}
+                </span>
                 {badge('avatar')}
               </div>
             )}
           </Field>
 
           {libraryParent && (
-            <p className="text-xs text-[var(--color-text-dim)]">
-              This profile inherits from an agent in the library. Manage its parent in Agent
-              library.
-            </p>
+            <p className="text-xs text-[var(--color-text-dim)]">{t('settings.libraryParent')}</p>
           )}
           {!agent.system && !libraryParent && (parentOptions.length > 0 || isChild) && (
-            <Field label="Kalıtım (ebeveyn ajan)">
+            <Field label={t('settings.fields.parent')}>
               <select
                 data-testid="agent-parent-select"
                 value={agent.parentId ?? ''}
                 onChange={(e) => changeParent(e.target.value)}
                 className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
               >
-                <option value="">— Kalıtım yok (bağımsız ajan) —</option>
+                <option value="">{t('settings.noParent')}</option>
                 {parentOptions.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.locked ? ' (yerleşik)' : ''} · {p.id}
+                    {p.locked
+                      ? t('settings.parentOptionBuiltin', { name: p.name, id: p.id })
+                      : t('settings.parentOption', { name: p.name, id: p.id })}
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-[var(--color-text-dim)]">
-                Ebeveyn seçince mevcut değerlerin korunur (hepsi override sayılır); kalıtımı
-                kaldırınca etkin değerler bu ajanın kendi değeri olarak dondurulur. Anında
-                kaydedilir.
-              </p>
+              <p className="text-[11px] text-[var(--color-text-dim)]">{t('settings.parentHelp')}</p>
             </Field>
           )}
 
-          <Field label="Renk" trailing={badge('color')}>
+          <Field label={t('settings.fields.color')} trailing={badge('color')}>
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 data-testid="agent-color"
@@ -743,7 +731,7 @@ export function AgentSettingsForm({
                     ? 'border-[var(--color-accent)] text-[var(--color-text)]'
                     : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
                 }`}
-                title="Otomatik (id'den türet)"
+                title={t('settings.autoColor')}
                 style={{ background: color === '' ? resolveColor(preview) : undefined }}
               >
                 {color === '' ? '' : 'A'}
@@ -769,9 +757,9 @@ export function AgentSettingsForm({
 
           {isChild && (
             <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-dim)]">
-              <span>Sağlayıcı:</span>
+              <span>{t('settings.fields.provider')}</span>
               {badge('provider')}
-              <span>Model:</span>
+              <span>{t('settings.fields.model')}</span>
               {badge('model')}
             </div>
           )}
@@ -791,15 +779,11 @@ export function AgentSettingsForm({
               data-testid="agent-hooks-not-applied-warning"
               className="-mt-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_14%,var(--color-surface))] px-2 py-1.5 text-xs text-[var(--color-text-dim)]"
             >
-              ⚠️ <strong>codex-cli</strong>'da PreToolUse/PostToolUse hook'ların hiçbiri çalışmaz —
-              ne codex'in kendi shell/apply_patch araçları ne de MCP köprüsüyle çağrılan TionHarness
-              araçları için. Bu yüzden <code>sqz</code> gibi PostToolUse token-optimizer
-              sıkıştırması da bu ajanda devre dışıdır. Sebep: codex kendi araç döngüsünü ayrı bir
-              alt süreçte koşturur ve hook aktarımı sunmaz.
+              {t('settings.hooksWarning')}
             </p>
           )}
 
-          <OptionField label="Düşünme (thinking) seviyesi" trailing={badge('thinkingLevel')}>
+          <OptionField label={t('settings.fields.thinking')} trailing={badge('thinkingLevel')}>
             <OptionPills
               value={thinkingLevel}
               onChange={(v) => {
@@ -807,7 +791,7 @@ export function AgentSettingsForm({
                 mark('thinkingLevel')
               }}
               options={thinkingOptions}
-              ariaLabel="Düşünme seviyesi"
+              ariaLabel={t('settings.fields.thinking')}
               ariaDescribedBy={`${descriptionId}-thinking-level`}
               testid="agent-thinking-level"
             />
@@ -816,25 +800,15 @@ export function AgentSettingsForm({
             id={`${descriptionId}-thinking-level`}
             className="-mt-2 text-xs text-[var(--color-text-dim)]"
           >
-            Uzatılmış akıl yürütme <strong>anthropic</strong> sağlayıcıda araçsız sohbette
-            etkilidir. <strong>claude-cli</strong>'da seviye alt sürece geçer: seçilen seviye CLI{' '}
-            <code>effortLevel</code>'ına eşlenir (<strong>Yüksek+ / Maks</strong> derin-çalışma
-            tiyerleri artık gerçekten CLI'ye ulaşır). <strong>Maks</strong>, settings.json'ın
-            reddettiği tek değer olduğu için <code>CLAUDE_CODE_EFFORT_LEVEL=max</code> env
-            değişkeniyle uygulanır; bu tiyerlerde thinking açık kaldığından paralel araç batch'i
-            kapanır ("think XOR batch"). <strong>Kapalı</strong> thinking'i tamamen kapatır (
-            <code>MAX_THINKING_TOKENS=0</code>).
+            {t('settings.thinkingHelp')}
           </p>
           {provider === 'claude-cli' && thinkingLevel === 'off' && (
             <p className="-mt-1 rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2 py-1 text-xs text-[var(--color-text-dim)]">
-              ⚡ <strong>Kapalı + claude-cli:</strong> Claude Code ≥2.1.203 thinking açıkken paralel
-              araç çağrısı yapmaz ("think XOR batch"). Bu seçimle thinking kapanır ve paralel
-              batch'ler (tek istekte N araç) geri gelir — daha hızlı ve belirgin şekilde daha ucuz;
-              bedeli derin akıl yürütmenin olmaması.
+              ⚡ {t('settings.thinkingOffHelp')}
             </p>
           )}
 
-          <OptionField label="İzin modu (araç kullanımı)" trailing={badge('permissionMode')}>
+          <OptionField label={t('settings.fields.permission')} trailing={badge('permissionMode')}>
             <OptionPills
               value={permissionMode}
               onChange={(v) => {
@@ -842,7 +816,7 @@ export function AgentSettingsForm({
                 mark('permissionMode')
               }}
               options={PERMISSION_OPTIONS}
-              ariaLabel="İzin modu"
+              ariaLabel={t('settings.fields.permission')}
               ariaDescribedBy={`${descriptionId}-permission-mode`}
               testid="agent-permission-mode"
             />
@@ -851,14 +825,13 @@ export function AgentSettingsForm({
             id={`${descriptionId}-permission-mode`}
             className="-mt-2 text-xs text-[var(--color-text-dim)]"
           >
-            <strong>Salt-okunur</strong> yalnız okuma araçlarına izin verir. <strong>Sor</strong>{' '}
-            modunda yazma/komut araçları için sohbette onay penceresi çıkar (Allow once / Always
-            allow / Deny); onay verecek kimse yoksa (otonom koşu) reddedilir. claude-cli ajanlarında
-            bu mod CLI izin bayrağına çevrilir (salt-okunur→<code>plan</code>, sor→
-            <code>acceptEdits</code>, otomatik→<code>bypass</code>).
+            {t('settings.permissionHelp')}
           </p>
 
-          <OptionField label="Sağlayıcının kendi web araması" trailing={badge('nativeWebSearch')}>
+          <OptionField
+            label={t('settings.fields.nativeWebSearch')}
+            trailing={badge('nativeWebSearch')}
+          >
             <OptionPills
               value={nativeWebSearch ? 'on' : 'off'}
               onChange={(value) => {
@@ -866,7 +839,7 @@ export function AgentSettingsForm({
                 mark('nativeWebSearch')
               }}
               options={BOOLEAN_OPTIONS}
-              ariaLabel="Sağlayıcının kendi web araması"
+              ariaLabel={t('settings.fields.nativeWebSearch')}
               ariaDescribedBy={`${descriptionId}-native-web-search`}
               testid="agent-native-web-search"
             />
@@ -875,16 +848,10 @@ export function AgentSettingsForm({
             id={`${descriptionId}-native-web-search`}
             className="-mt-2 text-xs text-[var(--color-text-dim)]"
           >
-            CLI sağlayıcısı <strong>kendi</strong> web aramasını kullanabilsin; ayar varsayılan
-            olarak açıktır. Açıkken sağlayıcı kendi aramasını yapar ve çağrı yine de aktivite izinde
-            bir adım olarak görünür. Kapatırsan codex'in <code>web_search</code>'ü config'te
-            kapatılır ve claude-cli'nin <code>WebSearch</code>/<code>WebFetch</code> yerleşikleri{' '}
-            <code>--disallowedTools</code> + <code>permissions.deny</code> ile engellenir; arama
-            yalnız TionHarness'in köprülenen <code>WebSearch</code>/<code>WebFetch</code>{' '}
-            araçlarından geçer (izleme ve kullanım sayacı bunlarda çalışır).
+            {t('settings.nativeWebSearchHelp')}
           </p>
 
-          <OptionField label="Provider-native shell" trailing={badge('nativeShell')}>
+          <OptionField label={t('settings.fields.nativeShell')} trailing={badge('nativeShell')}>
             <OptionPills
               value={nativeShell ? 'on' : 'off'}
               onChange={(value) => {
@@ -892,7 +859,7 @@ export function AgentSettingsForm({
                 mark('nativeShell')
               }}
               options={BOOLEAN_OPTIONS}
-              ariaLabel="Provider-native shell"
+              ariaLabel={t('settings.fields.nativeShell')}
               ariaDescribedBy={`${descriptionId}-native-shell`}
               testid="agent-native-shell"
             />
@@ -901,13 +868,10 @@ export function AgentSettingsForm({
             id={`${descriptionId}-native-shell`}
             className="-mt-2 text-xs text-[var(--color-text-dim)]"
           >
-            Off by default: Claude Code and Codex use the TionHarness shell when the shell bridge is
-            enabled. Turn this on to also allow the provider&apos;s own shell. Native commands use
-            the provider&apos;s permissions and run outside TionHarness shell approval and
-            background process management.
+            {t('settings.nativeShellHelp')}
           </p>
 
-          <OptionField label="Koordinatör" trailing={badge('coordinatorMode')}>
+          <OptionField label={t('settings.fields.coordinator')} trailing={badge('coordinatorMode')}>
             <OptionPills
               value={coordinatorMode ? 'on' : 'off'}
               onChange={(value) => {
@@ -915,7 +879,7 @@ export function AgentSettingsForm({
                 mark('coordinatorMode')
               }}
               options={BOOLEAN_OPTIONS}
-              ariaLabel="Koordinatör"
+              ariaLabel={t('settings.fields.coordinator')}
               ariaDescribedBy={`${descriptionId}-coordinator-mode`}
               testid="agent-coordinator-mode"
             />
@@ -924,15 +888,10 @@ export function AgentSettingsForm({
             id={`${descriptionId}-coordinator-mode`}
             className="-mt-2 text-xs text-[var(--color-text-dim)]"
           >
-            Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın. Açıkken
-            ajan her yeni oturumda koordinatör el kitabını ve <code>spawn_worker</code> /{' '}
-            <code>send_to_worker</code> / <code>stop_worker</code> / <code>list_workers</code>{' '}
-            araçlarını hazır bulur — oturum başına elle açman gerekmez. Bu bir{' '}
-            <strong>varsayılan</strong>: <em>mevcut</em> oturumlar etkilenmez, ve ajan tek-iş moduna
-            dönerken kendi oturumunun modunu <code>set_coordinator_mode</code> ile kapatabilir.
+            {t('settings.coordinatorHelp')}
           </p>
           {coordinatorMode && (
-            <Field label="Varsayılan koordinasyon reçetesi" trailing={badge('coordinatorWorkflow')}>
+            <Field label={t('settings.fields.workflow')} trailing={badge('coordinatorWorkflow')}>
               <CoordinatorWorkflowPicker
                 value={coordinatorWorkflow}
                 onChange={(v) => {
@@ -946,7 +905,10 @@ export function AgentSettingsForm({
           )}
           {coordinatorMode && (
             <>
-              <Field label="Koordinatör promptu" trailing={badge('coordinatorPrompt')}>
+              <Field
+                label={t('settings.fields.coordinatorPrompt')}
+                trailing={badge('coordinatorPrompt')}
+              >
                 <PromptEditor
                   data-testid="agent-coordinator-prompt-textarea"
                   value={coordinatorPrompt}
@@ -958,17 +920,13 @@ export function AgentSettingsForm({
                 />
               </Field>
               <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
-                Yalnızca oturum <strong>koordinatör modundayken</strong>, ortak koordinatör el
-                kitabının hemen ardından sistem bağlamına eklenir. Bu ajana özel delegasyon
-                yönergesi (hangi worker'lar açılsın, iş nasıl bölünsün) buraya yazılır — soul'a
-                değil: mod kapalıyken hiç enjekte edilmez, dolayısıyla <strong>sıfır token</strong>{' '}
-                maliyeti olur.
+                {t('settings.coordinatorPromptHelp')}
               </p>
             </>
           )}
 
           <Field
-            label="Karakter / sistem promptu (soul)"
+            label={t('settings.fields.soul')}
             trailing={
               <>
                 {badge('soul')}
@@ -1001,7 +959,7 @@ export function AgentSettingsForm({
             />
           </Field>
 
-          <Field label="Kimlik (identity)" trailing={badge('identity')}>
+          <Field label={t('settings.fields.identity')} trailing={badge('identity')}>
             <PromptEditor
               data-testid="agent-identity-textarea"
               value={identity}
@@ -1015,7 +973,7 @@ export function AgentSettingsForm({
 
           {isChild && (
             <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-dim)]">
-              <span>Yetenekler:</span>
+              <span>{t('settings.fields.skills')}</span>
               {badge('skills')}
             </div>
           )}
@@ -1031,7 +989,7 @@ export function AgentSettingsForm({
           <div className="border-t border-[var(--color-border)] pt-4">
             <div className="mb-1 flex items-center gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Yasaklı Araçlar
+                {t('settings.toolsTitle')}
               </h3>
               {isChild && (
                 <FieldOverrideBadge
@@ -1044,11 +1002,9 @@ export function AgentSettingsForm({
               )}
             </div>
             <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-              Bu ajan varsayılan olarak <strong>tüm</strong> workspace-aktif araçlara erişir. Burada
-              yalnızca <strong>kullanmasını istemediğin</strong> araçları yasakla. Yalnız
-              workspace'te aktif araçlar listelenir (aktivasyon <strong>Araçlar</strong>{' '}
-              ekranından). Değişiklikler anında kaydedilir
-              {isChild ? ' ve bu bölümü override eder' : ''}.
+              {t('settings.toolsHelp', {
+                inheritance: isChild ? t('settings.toolsInheritance') : '',
+              })}
             </p>
             <AgentToolsSection
               key={toolsKey}
@@ -1062,7 +1018,7 @@ export function AgentSettingsForm({
         {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}
         {saveWarn && (
           <p className="rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2 py-1.5 text-xs text-[var(--color-text-dim)]">
-            ⚠️ {saveWarn}
+            {t('settings.saveWarning', { warning: saveWarn })}
           </p>
         )}
       </div>

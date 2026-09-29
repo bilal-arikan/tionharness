@@ -4,6 +4,7 @@ import { api } from '@/api'
 import type { BtwResponse } from '@/types'
 import { ActionButton } from './ActionButton'
 import { BTN_PRIMARY } from './buttonStyles'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   sessionId: string
@@ -25,6 +26,7 @@ interface Props {
 // The answer therefore lives only in this panel: it is shown until the panel is
 // closed and is never persisted. That is intentional, not a missing feature.
 export function BtwPanel({ sessionId, agentId, onClose }: Props) {
+  const { t } = useTranslation('chatControls')
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState<BtwResponse | null>(null)
   const [asking, setAsking] = useState(false)
@@ -67,14 +69,14 @@ export function BtwPanel({ sessionId, agentId, onClose }: Props) {
     >
       <div className="mb-2 flex items-center gap-2">
         <MessageCircleQuestion size={16} className="text-[var(--color-accent)]" />
-        <span className="text-sm font-medium">Btw — yan soru</span>
-        <span className="text-xs text-[var(--color-text-dim)]">geçmişe yazılmaz</span>
+        <span className="text-sm font-medium">{t('btw.title')}</span>
+        <span className="text-xs text-[var(--color-text-dim)]">{t('btw.notSaved')}</span>
         <div className="flex-1" />
         <button
           type="button"
           onClick={onClose}
-          title="Kapat"
-          aria-label="Kapat"
+          title={t('common.close')}
+          aria-label={t('common.close')}
           data-testid="btw-close"
           className="text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
         >
@@ -83,9 +85,8 @@ export function BtwPanel({ sessionId, agentId, onClose }: Props) {
       </div>
 
       <p className="mb-2 text-xs leading-4 text-[var(--color-text-dim)]">
-        Ajan bu soruyu mevcut konuşmanın tam bağlamıyla yanıtlar, ama soru ve cevap sohbet geçmişine{' '}
-        <strong>eklenmez</strong> ve ana görev kesilmez. Yan sohbette araç kullanımı yoktur (komut
-        çalıştıramaz, dosya düzenleyemez).
+        {t('btw.descriptionBefore')} <strong>{t('btw.descriptionEmphasis')}</strong>{' '}
+        {t('btw.descriptionAfter')}
       </p>
 
       <textarea
@@ -94,9 +95,9 @@ export function BtwPanel({ sessionId, agentId, onClose }: Props) {
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={onKeyDown}
         rows={2}
-        placeholder="Yan soru yaz — Enter ile sor"
+        placeholder={t('btw.placeholder')}
         data-testid="btw-input"
-        aria-label="Yan soru"
+        aria-label={t('btw.questionLabel')}
         className="max-h-[8rem] w-full resize-none overflow-y-auto rounded-xl border border-[var(--color-border)] bg-transparent px-2.5 py-2 text-sm leading-5 outline-none transition-colors focus:border-[var(--color-accent)] placeholder:text-[var(--color-text-dim)]"
       />
 
@@ -107,7 +108,7 @@ export function BtwPanel({ sessionId, agentId, onClose }: Props) {
           disabled={!question.trim() || asking}
           testId="btw-ask"
           icon={Send}
-          label={asking ? 'Soruluyor…' : 'Sor'}
+          label={asking ? t('btw.asking') : t('btw.ask')}
           className={BTN_PRIMARY}
         />
       </div>

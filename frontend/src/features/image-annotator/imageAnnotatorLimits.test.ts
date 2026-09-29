@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { i18next } from '@/i18n'
 import {
   ImageAnnotatorError,
   MAX_SOURCE_BYTES,
@@ -8,6 +9,7 @@ import {
   validateImageSource,
   validateImageHeader,
   validateSourceLimits,
+  imageAnnotatorErrorMessage,
 } from './imageAnnotatorLimits'
 
 const codeOf = (run: () => void) => {
@@ -20,6 +22,17 @@ const codeOf = (run: () => void) => {
 }
 
 describe('image source limits', () => {
+  it('localizes validation messages without changing their error codes', async () => {
+    await i18next.changeLanguage('en')
+    expect(imageAnnotatorErrorMessage('IMAGE_TOO_LARGE_BYTES')).toBe(
+      'The image exceeds the 20 MB limit.',
+    )
+    await i18next.changeLanguage('tr')
+    expect(imageAnnotatorErrorMessage('IMAGE_TOO_LARGE_BYTES')).toBe(
+      'Görsel 20 MB sınırını aşıyor.',
+    )
+  })
+
   it('keeps frontend and artifact-source backend limits in parity', () => {
     const backend = readFileSync('../internal/api/artifacts.go', 'utf8')
     const goNumber = (value: number) => value.toLocaleString('en-US').replaceAll(',', '_')

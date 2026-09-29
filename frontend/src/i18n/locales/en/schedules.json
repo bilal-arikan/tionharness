@@ -1,0 +1,453 @@
+{
+  "common": {
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "agent": "Agent",
+    "flow": "Flow",
+    "selectFlow": "Select a flow…",
+    "loading": "Loading…",
+    "close": "Close",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "archive": "Archive",
+    "workspace": "workspace",
+    "session": "session",
+    "phase": "phase",
+    "input": "Input",
+    "prompt": "Prompt",
+    "runNow": "Run now",
+    "error": "Error",
+    "unknownError": "unknown error",
+    "expiresAt": "Expires",
+    "expired": "expired",
+    "any": "(any)",
+    "select": "Select",
+    "nameOptional": "Name (optional)",
+    "titleSuggested": "Title suggested — remember to save",
+    "generateTitle": "Generate a title with AI",
+    "generate": "Generate",
+    "expiresOptional": "Expiration (optional)",
+    "expiresOptionalShort": "Expiration (opt.)",
+    "clearExpiry": "Clear expiration",
+    "wildcard": "∗",
+    "none": "—",
+    "targetArrow": "→ {{target}}",
+    "dotValue": "· {{value}}"
+  },
+  "archive": {
+    "restored": "Automation restored from archive",
+    "noun": "automation",
+    "restoreHint": "Archived automations do not fire; select “Restore” to bring one back.",
+    "loading": "Loading archive…",
+    "restore": "Restore"
+  },
+  "triggerKinds": {
+    "tag": "Tag",
+    "board": "Board",
+    "token": "Token",
+    "phase": "Trajectory phase",
+    "trajectory_end": "Trajectory end"
+  },
+  "automationKinds": {
+    "tag": "tag automation",
+    "board": "board automation",
+    "token": "token automation",
+    "phase": "phase automation",
+    "trajectory_end": "trajectory-end automation"
+  },
+  "fires": {
+    "title": "Fire ledger: every attempt (fired / skipped with a reason / failed)",
+    "label": "Fires",
+    "empty": "No attempts recorded yet.",
+    "openedSession": "Opened session"
+  },
+  "fireReasons": {
+    "archived": "archived",
+    "disabled": "disabled",
+    "expired": "expired",
+    "cooldown": "cooldown",
+    "maxIterations": "iteration limit",
+    "absoluteBackstop": "absolute limit",
+    "autonomyPaused": "autonomy paused",
+    "targetMissing": "target missing",
+    "agentArchived": "target agent archived",
+    "emptyPrompt": "empty prompt",
+    "notFound": "automation not found"
+  },
+  "board": {
+    "liveMetricTitle": "The workspace's current value — the live metric watched by these rules",
+    "runFailed": "Run failed: {{error}}",
+    "confirmDeleteSchedule": "Delete this schedule?",
+    "scheduleDeleted": "Schedule deleted",
+    "confirmArchiveAutomation": "Archive this automation? It will be kept, stop firing, and leave the board.",
+    "automationArchived": "Automation archived",
+    "confirmDeleteAutomation": "Delete this automation?",
+    "automationDeleted": "Automation deleted",
+    "tokensToday": "{{count}} tokens today",
+    "automationsLoading": "Loading automations…",
+    "title": "Automation",
+    "archiveTitle": "Automation — Archive",
+    "backToBoard": "Back to board",
+    "backToBoardTitle": "Return to the automation board",
+    "curatorTitle": "Curator: a weekly, idle, LLM-free cleanup pass — view the latest report or run it manually",
+    "autonomyPausedTitle": "Autonomy is paused in this workspace. Only scheduled calls are blocked; manual chat and Run now are unaffected. Select to resume.",
+    "pauseAutonomyTitle": "Pause autonomy in this workspace. Only scheduled calls are blocked; manual chat and Run now are unaffected.",
+    "autonomyPaused": "Autonomy paused",
+    "pauseAutonomy": "Pause autonomy"
+  },
+  "lanes": {
+    "schedules": {
+      "title": "Schedules",
+      "description": "Cron / time based — runs an agent or flow when the expression is due.",
+      "add": "New schedule",
+      "loading": "Loading schedules…",
+      "empty": "No schedules yet."
+    },
+    "tag": {
+      "title": "Tag automations",
+      "description": "Runs with the final response when a turn in a session with the trigger tag finishes.",
+      "add": "New tag automation",
+      "empty": "No tag automations yet."
+    },
+    "board": {
+      "title": "Board automations",
+      "description": "Runs with card context when a kanban card is moved, created, or changed.",
+      "add": "New board automation",
+      "empty": "No board automations yet."
+    },
+    "token": {
+      "title": "Token automations",
+      "description": "Runs maintenance or cleanup when session or workspace token usage crosses a threshold.",
+      "add": "New token automation",
+      "empty": "No token automations yet."
+    },
+    "phase": {
+      "title": "Trajectory phase automations",
+      "description": "Runs when a declared trajectory phase ends or starts; recipe watchers can also bind it.",
+      "add": "New phase automation",
+      "empty": "No phase automations yet."
+    },
+    "trajectoryEnd": {
+      "title": "Trajectory-end automations",
+      "description": "Runs when a trajectory finishes (done, failed, or abandoned) for summaries, lessons, and docs.",
+      "add": "New trajectory-end automation",
+      "empty": "No trajectory-end automations yet."
+    }
+  },
+  "fields": {
+    "event": "Event",
+    "source": "Source",
+    "target": "Target",
+    "scope": "Scope",
+    "phase": "Phase",
+    "endStatus": "End",
+    "recipe": "Recipe",
+    "session": "Session",
+    "trigger": "Trigger",
+    "promptTemplate": "Prompt template",
+    "availableVariables": "Available variables",
+    "variablePickerHint": "Variables available in the template (select to insert)",
+    "addToTemplate": "Insert into template",
+    "promptPlaceholder": "Prompt template — select ℹ️ to view variables.",
+    "board": {
+      "action": "Action",
+      "actionHint": "Choose what happens when triggered: start the target agent or flow, archive the card, or move it without an LLM call.",
+      "priority": "Order",
+      "priorityHint": "Fire order among automations watching the same card change. Lower numbers run first.",
+      "exclusive": "Exclusive",
+      "exclusiveHint": "This automation exclusively owns a matching card change and suppresses every other matching board automation."
+    },
+    "token": {
+      "threshold": "Threshold (token interval)",
+      "thresholdHint": "Fires whenever cumulative usage crosses another multiple of this interval (for example 100k, 200k). Tokens include input, output, and cache."
+    },
+    "trajectory": {
+      "phaseHint": "Phase id from the recipe (plan, code, review…). Empty matches every phase.",
+      "anyPhase": "any phase",
+      "recipeHint": "Only trajectories seeded from this recipe slug, without a version. Empty matches every trajectory.",
+      "anyRecipe": "any recipe"
+    }
+  },
+  "form": {
+    "deleteRule": "Delete this rule"
+  },
+  "scheduleCard": {
+    "flowBased": "Flow-based schedule",
+    "oneShotAt": "One time · {{time}}",
+    "next": "Next",
+    "last": "Last",
+    "nextAndLast": "Next: {{next}} · Last: "
+  },
+  "deliveryStatus": {
+    "success": "success",
+    "failure": "failure"
+  },
+  "validation": {
+    "cronRequired": "Cron expression is required",
+    "flowRequired": "Select a flow",
+    "agentRequired": "Agent is required",
+    "promptRequired": "Prompt is required",
+    "expiryFuture": "Expiration must be in the future",
+    "triggerTagRequired": "Trigger tag is required; an empty tag never fires",
+    "tokenThreshold": "Token threshold must be at least {{min}}",
+    "moveTargetRequired": "Target column is required for a move",
+    "targetFlowRequired": "Target flow is required",
+    "targetAgentRequired": "Target agent is required",
+    "promptTemplateRequired": "Prompt template is required"
+  },
+  "scheduleModal": {
+    "oneShotTitle": "One-time wake",
+    "oneShotDescription": "A one-time wake cannot be edited, but it can be deleted.",
+    "runTime": "Run time",
+    "updated": "Schedule updated",
+    "created": "Schedule created",
+    "editTitle": "Edit schedule",
+    "newTitle": "New schedule",
+    "add": "+ Schedule",
+    "nameHint": "Give the schedule a name to show on its card and in lists.",
+    "namePlaceholder": "e.g. daily report",
+    "targetHint": "A schedule sends a prompt to an agent or runs a flow.",
+    "sessionHint": "Add every run to the same schedule conversation or open a new session for each run.",
+    "sessionReuse": "Continue the same session (default)",
+    "sessionSpawn": "Open a new session for every run",
+    "cronExpression": "Cron expression",
+    "cronHint": "Choose a preset or enter an expression.",
+    "selectPreset": "Choose a preset…",
+    "cronPlaceholder": "cron: min hour day month weekday",
+    "flowInputOptional": "Flow input (optional)",
+    "promptRequired": "Prompt (required)",
+    "promptPlaceholder": "Instruction to send to the agent",
+    "expiryHint": "The schedule will not run after this time."
+  },
+  "automationCard": {
+    "targetlessBoardAction": "Targetless board action — no LLM call",
+    "flowBased": "Flow-based automation",
+    "boardTriggered": "Board card-triggered automation",
+    "archivesCard": "Archives the card without an LLM call",
+    "movesCard": "Moves the card to the target column without an LLM call",
+    "tokenTriggered": "Token-triggered automation — runs when cumulative usage crosses the threshold",
+    "everyTokens": "every {{count}} tokens",
+    "tokenSummary": "{{scope}} · every {{count}} tokens",
+    "boardTransition": "({{from}} → {{to}})",
+    "phaseSummary": "phase {{phase}} · {{event}}",
+    "trajectoryEndSummary": "trajectory end · {{status}}",
+    "phaseTriggered": "Trajectory phase automation — runs when a declared phase starts or ends",
+    "onEnter": "on start",
+    "onExit": "on end",
+    "trajectoryEndTriggered": "Trajectory-end automation — runs when a trajectory reaches a terminal state",
+    "trajectoryEnd": "trajectory end",
+    "pinnedTitle": "Pinned: exempt from the curator's automatic passes",
+    "pinned": "pinned",
+    "exclusiveTitle": "Exclusive: only this automation runs for a matching card change; other matches are suppressed.",
+    "priorityTitle": "Fire order among automations watching the same card change; lower numbers run first.",
+    "priority": "order {{priority}}",
+    "continueTitle": "Continues the same session so the agent sees the previous conversation on every trigger.",
+    "continue": "continue",
+    "unpin": "Unpin",
+    "pin": "Pin (exclude from curator)",
+    "resetCounter": "Reset counter",
+    "iterations": "Iter",
+    "maxed": "maxed",
+    "cooldown": "Cooldown",
+    "cooldownSecondsValue": "Cooldown: {{seconds}}s",
+    "last": "Last",
+    "boardNoLoop": "Board-triggered — cannot loop itself (spawn tags are ignored).",
+    "tokenNoLoop": "Token-triggered — cannot loop itself (spawn tags are ignored).",
+    "flowNoLoop": "Flow-based — cannot loop itself (spawn tags are ignored).",
+    "spawnTags": "Spawn tags",
+    "spawnTagsPlaceholder": "leave empty to break the loop"
+  },
+  "automationModal": {
+    "updated": "Automation updated",
+    "created": "Automation created",
+    "editTitle": "Edit — {{kind}}",
+    "newTitle": "New — {{kind}}",
+    "add": "+ Automation",
+    "namePlaceholder": "Automation name",
+    "triggerTagPlaceholder": "trigger tag (e.g. loop)",
+    "archiveActionDescription": "The archive action hides the card from the board; it needs no target agent, flow, or prompt.",
+    "targetColumn": "Target column",
+    "targetHint": "The agent or flow to run when triggered.",
+    "sessionHint": "Open a new session for every trigger or continue one persistent session with its previous conversation.",
+    "sessionSpawn": "New session",
+    "sessionContinue": "Same session · continue",
+    "continueDescription": "The agent sees the previous thread on every trigger, like a persistent cron job; no tag loop is seeded.",
+    "maxIterations": "Max iterations",
+    "maxIterationsHint": "Must be between 1 and {{max}}. Zero (unlimited) is rejected because it risks an infinite loop; the server validates this range too.",
+    "cooldownSeconds": "Cooldown (sec)",
+    "cooldownHint": "Minimum seconds between triggers",
+    "expiryHint": "The automation will not trigger after this optional time.",
+    "template": "Template",
+    "stuckTemplate": "Stuck session repairer",
+    "stuckTemplateHint": "Fills the form with the stuck-session repairer. It starts a fixer after a tagged session repeatedly fails, then clears the stuck tag and counter after a successful repair. Choose a target agent before saving.",
+    "stuckTemplateActive": "template active: the fixer session starts without tags to prevent a loop"
+  },
+  "curator": {
+    "title": "Curator",
+    "description": "runs weekly while idle · archives only, never deletes · pinned items are exempt",
+    "lastRun": "Last pass: {{time}} · {{trigger}}",
+    "triggers": {
+      "weekly": "weekly",
+      "manual": "manual"
+    },
+    "workspaceBusy": "workspace was busy",
+    "archivedCount_one": "{{count}} archived",
+    "archivedCount_other": "{{count}} archived",
+    "suggestionCount_one": "{{count}} suggestion",
+    "suggestionCount_other": "{{count}} suggestions",
+    "neverRun": "The curator has not run in this workspace yet. Its first pass runs after a week of idle time or when started manually below.",
+    "dryRunTitle": "Produce suggestions without archiving anything",
+    "dryRun": "Dry run",
+    "runTitle": "Archive exhausted or expired agent-made rules and suggest the rest",
+    "runNow": "Run now",
+    "clean": "Clean: there is nothing to archive or suggest.",
+    "archived": "archived",
+    "suggestion": "suggestion",
+    "evidence": "Evidence",
+    "reasons": {
+      "exhausted": "iteration limit",
+      "expired": "expired",
+      "oneShotDone": "one-time run completed",
+      "neverFired": "never fired",
+      "unfiredWatcher": "watcher never fired",
+      "ghostPhase": "phase never started"
+    },
+    "entities": {
+      "automation": "automation",
+      "schedule": "schedule",
+      "recipe": "recipe"
+    }
+  },
+  "cron": {
+    "groups": {
+      "minutes": "Minutes",
+      "hours": "Hours",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly"
+    },
+    "presets": {
+      "everyMinute": "Every minute",
+      "every5Minutes": "Every 5 minutes",
+      "every10Minutes": "Every 10 minutes",
+      "every15Minutes": "Every 15 minutes",
+      "every30Minutes": "Every 30 minutes",
+      "hourly": "Every hour",
+      "every2Hours": "Every 2 hours",
+      "every4Hours": "Every 4 hours",
+      "every6Hours": "Every 6 hours",
+      "every12Hours": "Every 12 hours",
+      "midnight": "Midnight",
+      "weekdaysAt0900": "Weekdays at 09:00",
+      "mondayAt0800": "Monday at 08:00",
+      "mondayAt0900": "Monday at 09:00",
+      "fridayAt1700": "Friday at 17:00",
+      "weekendsAt1000": "Weekends at 10:00",
+      "firstAt0900": "1st of the month at 09:00",
+      "fifteenthAt0900": "15th of the month at 09:00",
+      "monthEndAt1800": "End of month at 18:00"
+    }
+  },
+  "meta": {
+    "trajectoryEvents": {
+      "exit": "when the phase ends (done/skipped/failed)",
+      "enter": "when the phase starts (active)"
+    },
+    "trajectoryStatuses": {
+      "any": "any ending",
+      "done": "done",
+      "failed": "failed",
+      "abandoned": "abandoned"
+    },
+    "defaultColumns": {
+      "todo": "To do",
+      "inProgress": "In progress",
+      "review": "Review",
+      "done": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "boardOps": {
+      "move": "Moved (column changed)",
+      "create": "Created",
+      "update": "Updated",
+      "delete": "Deleted",
+      "any": "Any change"
+    },
+    "boardActions": {
+      "spawn": "Start agent/flow (execute)",
+      "archive": "Archive card (no LLM)",
+      "move": "Move card to a column (no LLM)"
+    },
+    "tokenScopes": {
+      "session": "Session (lifetime tokens for one session)",
+      "workspace": "Workspace (today's total tokens)"
+    },
+    "promptVars": {
+      "trajectory": {
+        "trajectoryId": "Trajectory id (RTA…)",
+        "rootSessionId": "Trajectory's root coordinator session",
+        "sessionId": "Root session (same value)",
+        "recipe": "Recipe slug; empty for an unplanned trajectory",
+        "phase": "Phase that transitioned",
+        "phaseState": "New phase state (done/skipped/failed/active)",
+        "event": "exit or enter",
+        "status": "Terminal trajectory status (done/failed/abandoned)",
+        "phases": "Phase line with each phase's state",
+        "iteration": "One-based fire number",
+        "maxIterations": "Upper limit; zero means unlimited on legacy records",
+        "automation": "Automation name",
+        "date": "Current date",
+        "time": "Current time",
+        "datetime": "Current date and time"
+      },
+      "tag": {
+        "result": "Final response from the completed session",
+        "title": "Completed session title",
+        "tag": "Trigger tag",
+        "sessionId": "Completed session id",
+        "iteration": "One-based fire number",
+        "maxIterations": "Upper limit; zero means unlimited on legacy records",
+        "agent": "Name of the agent that produced the result",
+        "prevPrompt": "User prompt that triggered the previous turn",
+        "automation": "Automation name",
+        "date": "Current date",
+        "time": "Current time",
+        "datetime": "Current date and time"
+      },
+      "board": {
+        "taskId": "Changed card id",
+        "title": "Card title",
+        "op": "Operation (move/create/update/delete)",
+        "from": "Previous column key",
+        "to": "New column key",
+        "fromLabel": "Previous column name",
+        "toLabel": "New column name",
+        "board": "Current column",
+        "tags": "Comma-separated card tags",
+        "owner": "Assigned agent name; empty when unassigned",
+        "priority": "Priority (critical/high/medium/low, possibly empty)",
+        "iteration": "One-based fire number",
+        "maxIterations": "Upper limit; zero means unlimited on legacy records",
+        "automation": "Automation name",
+        "date": "Current date",
+        "time": "Current time",
+        "datetime": "Current date and time"
+      },
+      "token": {
+        "tokens": "Cumulative token total that crossed the threshold",
+        "threshold": "Token interval (threshold)",
+        "scope": "Scope (session/workspace)",
+        "sessionId": "Session that caused the crossing; empty for workspace scope",
+        "iteration": "One-based fire number",
+        "maxIterations": "Upper limit; zero means unlimited on legacy records",
+        "automation": "Automation name",
+        "date": "Current date",
+        "time": "Current time",
+        "datetime": "Current date and time"
+      }
+    }
+  }
+}

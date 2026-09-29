@@ -1,0 +1,129 @@
+{
+  "title": "Map",
+  "workspace": "Workspace",
+  "summary": "{{nodes}} nodes · {{edges}} connections",
+  "density": "Density",
+  "densityHint": "How tightly nodes are packed",
+  "refresh": "Refresh",
+  "refreshHint": "Refresh the map",
+  "loading": "Loading map…",
+  "loadFailed": "Could not load the map: {{error}}",
+  "retry": "Try again",
+  "backToRoot": "Return to the Workspace root",
+  "regionLabel": "Workspace map",
+  "detail": {
+    "button": "Details",
+    "selectedTitle": "Selected node details",
+    "close": "Close node details"
+  },
+  "search": {
+    "placeholder": "search the map…",
+    "label": "Search the map",
+    "clear": "Clear search",
+    "results": "Map search results"
+  },
+  "filters": {
+    "label": "Map filters",
+    "layers": "layers",
+    "live": "Live",
+    "liveHint": "Only sessions running now",
+    "kind": "kind",
+    "agent": "agent",
+    "all": "all",
+    "tag": "tag",
+    "nodeCount": "{{visible}}/{{total}} nodes",
+    "clear_one": "{{count}} filter · clear",
+    "clear_other": "{{count}} filters · clear"
+  },
+  "selection": {
+    "announcement": "Selected node {{label}} ({{kind}}).",
+    "showChildren_one": "Show child nodes · {{count}}",
+    "showChildren_other": "Show child nodes · {{count}}",
+    "hideChildren_one": "Hide child nodes · {{count}}",
+    "hideChildren_other": "Hide child nodes · {{count}}",
+    "openScreen": "Open on the {{label}} screen"
+  },
+  "errors": {
+    "invalidFocus": "Invalid focus link: {{focus}}",
+    "missingFocus": "Focus node is not on the map: {{focus}}"
+  },
+  "kind": {
+    "workspace": "Workspace",
+    "category": "Group",
+    "board": "Board",
+    "session": "Session",
+    "flowrun": "Flow run",
+    "schedule": "Schedule",
+    "agent": "Agent",
+    "budget": "Budget",
+    "tools": "Tools",
+    "artifact": "Artifact",
+    "automation": "Automation",
+    "skill": "Skill",
+    "insight": "Insight",
+    "logs": "Logs",
+    "trajectory": "Rota"
+  },
+  "role": {
+    "boardColumn": "Board column",
+    "boardCard": "Card",
+    "toolGroup": "Tool group",
+    "toolMcp": "MCP server",
+    "budgetProvider": "Provider",
+    "liveAgent": "Running agent",
+    "sessionKind": "Session kind"
+  },
+  "sessionKind": {
+    "chat": "Chat",
+    "task": "Task",
+    "flow": "Flow",
+    "flowCoordinator": "Flow coordinator",
+    "schedule": "Schedule",
+    "spawned": "Spawn",
+    "worker": "Worker",
+    "inbox": "Inbox",
+    "other": "Other"
+  },
+  "category": {
+    "sessions": "Sessions",
+    "flows": "Flows",
+    "agents": "Agents",
+    "artifacts": "Artifacts",
+    "automations": "Automations",
+    "skills": "Skills",
+    "insights": "Insights"
+  },
+  "boardColumn": {
+    "todo": "To do",
+    "in_progress": "In progress",
+    "review": "Review",
+    "done": "Done",
+    "failed": "Failed"
+  },
+  "tooltip": {
+    "hiddenChildren_one": "{{count}} child node hidden",
+    "hiddenChildren_other": "{{count}} child nodes hidden",
+    "running": "running",
+    "awaitingWorkers": "waiting for workers",
+    "session": "session: {{id}}",
+    "doubleClickChat": "double-click to open chat"
+  },
+  "edge": {
+    "selfLoop": "{{source}} loops to itself",
+    "bidirectional": "{{source}} ↔ {{target}} bidirectional"
+  },
+  "screen": {
+    "workspace": "Workspace",
+    "chat": "Chat",
+    "flows": "Flows",
+    "agents": "Agents",
+    "artifacts": "Artifacts",
+    "schedules": "Schedules",
+    "skills": "Skills",
+    "insights": "Insights",
+    "board": "Board",
+    "budget": "Budget",
+    "tools": "Tools",
+    "rota": "Rota"
+  }
+}

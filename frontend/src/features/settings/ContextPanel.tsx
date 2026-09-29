@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { SettingsDisclosure } from './SettingsDisclosure'
 import { ContextRecovery } from './ContextRecovery'
 import { ContextProgress } from './ContextProgress'
@@ -42,19 +43,20 @@ function effectiveBudget(
 }
 
 const fmtK = (n: number) => `${(n / 1000).toFixed(1)}K`
-const boundLabel: Record<'ceil' | 'floor' | 'fraction', string> = {
-  ceil: 'tavana kırpıldı',
-  floor: 'tabana yükseltildi',
-  fraction: 'pencere × oran',
+const boundLabelKey: Record<'ceil' | 'floor' | 'fraction', string> = {
+  ceil: 'context.bound.ceil',
+  floor: 'context.bound.floor',
+  fraction: 'context.bound.fraction',
 }
 
 export function ContextPanel({ draft, set, setDraft }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   // Two representative windows so the clamp is tangible: a 1M model (Opus/Sonnet/
   // Fable, auto-fraction 0.45) and a 200K model (Haiku, 0.40). Computed live from
   // the current draft values.
   const previews = [
     {
-      label: '1M model (Opus/Sonnet/Fable)',
+      label: t('context.preview.model1m'),
       ...effectiveBudget(
         1_000_000,
         draft.maxContextTokens,
@@ -64,7 +66,7 @@ export function ContextPanel({ draft, set, setDraft }: PanelProps) {
       ),
     },
     {
-      label: '200K model (Haiku)',
+      label: t('context.preview.model200k'),
       ...effectiveBudget(
         200_000,
         draft.maxContextTokens,
@@ -76,32 +78,32 @@ export function ContextPanel({ draft, set, setDraft }: PanelProps) {
   ]
   return (
     <>
-      <SubHead icon={Layers}>Bağlam penceresi</SubHead>
+      <SubHead icon={Layers}>{t('context.heading')}</SubHead>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
-          label="Maks. bağlam token — TABAN"
-          hint="Bütçenin ALT sınırı: bütçeyi yalnızca YÜKSELTİR, asla düşürmez. Türetilen değer (pencere × oran, tavana kırpılı) bunun üstündeyse etkisizdir. Pencereyi KÜÇÜLTMEK için bunu değil, aşağıdaki 'Bütçe tavanı'nı düşür."
+          label={t('context.floor.label')}
+          hint={t('context.floor.hint')}
           min={0}
           value={draft.maxContextTokens}
           onChange={(v) => set('maxContextTokens', v)}
         />
         <NumberField
-          label="Korunan son mesaj"
-          hint="Her zaman aynen gönderilir."
+          label={t('context.recent.label')}
+          hint={t('context.recent.hint')}
           min={0}
           value={draft.keepRecentMsgs}
           onChange={(v) => set('keepRecentMsgs', v)}
         />
         <NumberField
-          label="Bütçe tavanı (token) — ÜST SINIR"
-          hint="Bütçenin ÜST sınırı ve pencereyi KÜÇÜLTMEK için değiştireceğin ayar BUDUR. Varsayılan 262144 (256K) — ham pencereyi gradyanın yüksek-hassasiyet bölgesinde tutar (context-rot). Düşürürsen etkin bütçe buraya kırpılır; yükseltmek daha çok ham geçmiş tutar ama recall hassasiyetiyle takas eder."
+          label={t('context.ceil.label')}
+          hint={t('context.ceil.hint')}
           min={0}
           value={draft.contextBudgetCeil}
           onChange={(v) => set('contextBudgetCeil', v)}
         />
         <NumberField
-          label="Pencere oranı"
-          hint="Transkripte ayrılan pay (0–1). 0 = otomatik (model-ailesine göre adaptif, önerilen). Pozitif değer sabit pay sabitler (ör. 0.45 → 1M model 450K, tavana kırpılır)."
+          label={t('context.fraction.label')}
+          hint={t('context.fraction.hint')}
           min={0}
           max={1}
           step={0.05}
@@ -110,9 +112,10 @@ export function ContextPanel({ draft, set, setDraft }: PanelProps) {
         />
       </div>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        Etkin bütçe = clamp(pencere × oran, <span className="font-medium">taban</span>,{' '}
-        <span className="font-medium">tavan</span>). Oran 0 = otomatik adaptif; bilinmeyen pencere →
-        taban kullanılır.
+        {t('context.formula.prefix')}{' '}
+        <span className="font-medium">{t('context.formula.floor')}</span>,{' '}
+        <span className="font-medium">{t('context.formula.ceil')}</span>
+        {t('context.formula.suffix')}
       </p>
 
       {/* Live preview: shows the effective budget these three knobs resolve to, per
@@ -120,7 +123,7 @@ export function ContextPanel({ draft, set, setDraft }: PanelProps) {
           lowering the floor below a ceil-capped value changes nothing. */}
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
         <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          Etkin bütçe önizlemesi (girdiğin değerlerle)
+          {t('context.preview.heading')}
         </div>
         {previews.map((p) => (
           <div key={p.label} className="flex items-center justify-between gap-2 py-0.5 text-xs">
@@ -130,7 +133,7 @@ export function ContextPanel({ draft, set, setDraft }: PanelProps) {
               <span
                 className={`ml-1.5 ${p.bound === 'ceil' ? 'text-[var(--color-warning)]' : p.bound === 'floor' ? 'text-[var(--color-accent)]' : ''}`}
               >
-                · {boundLabel[p.bound]}
+                · {t(boundLabelKey[p.bound])}
               </span>
             </span>
           </div>
@@ -138,35 +141,35 @@ export function ContextPanel({ draft, set, setDraft }: PanelProps) {
       </div>
 
       <Segmented
-        label="Otomatik sıkıştırma modu"
+        label={t('context.compaction.label')}
         value={draft.autoCompactMode}
         onChange={(v) => set('autoCompactMode', v)}
         options={[
           {
             value: 'rolling',
-            label: 'Rolling (TionHarness)',
-            hint: "Varsayılan ve bugünkü davranış: bütçe aşıldığında en eski turlar TionHarness'in kendi rolling özetine katlanır; transkriptin geri kalanı aynen gider. Sıkıştırma tamamen TionHarness'in kontrolündedir.",
+            label: t('context.compaction.rolling.label'),
+            hint: t('context.compaction.rolling.hint'),
           },
           {
             value: 'native',
-            label: 'Native (CLI)',
-            hint: "Sıkıştırmayı CLI sağlayıcısının kendi native compaction'ına bırakır. BEDELİ: native compaction warm CLI oturumunu düşürür — sonraki tur cold start olur (prompt cache soğur, o tur pahalanır).",
+            label: t('context.compaction.native.label'),
+            hint: t('context.compaction.native.hint'),
           },
           {
             value: 'auto',
-            label: 'Otomatik',
-            hint: 'Sağlayıcı native compaction destekliyorsa ve canlı bir warm CLI oturumu varsa native, aksi halde rolling seçilir.',
+            label: t('context.compaction.auto.label'),
+            hint: t('context.compaction.auto.hint'),
           },
         ]}
       />
 
-      <SettingsDisclosure title="Context handoff">
+      <SettingsDisclosure title={t('context.sections.handoff')}>
         <ContextHandoff draft={draft} set={set} setDraft={setDraft} />
       </SettingsDisclosure>
-      <SettingsDisclosure title="Persistent progress">
+      <SettingsDisclosure title={t('context.sections.progress')}>
         <ContextProgress draft={draft} set={set} setDraft={setDraft} />
       </SettingsDisclosure>
-      <SettingsDisclosure title="Recovery and output limits">
+      <SettingsDisclosure title={t('context.sections.recovery')}>
         <ContextRecovery draft={draft} set={set} setDraft={setDraft} />
       </SettingsDisclosure>
       {/* Self-healing (döngü koruması & ders çıkarma) moved to İçgörü ▸ Dersler. */}

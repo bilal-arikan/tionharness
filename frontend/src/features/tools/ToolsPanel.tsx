@@ -7,6 +7,7 @@ import { VisibilityBadge } from './VisibilityControls'
 import { ToolDetail } from './ToolDetail'
 import { ServerManagement } from './ServerManagement'
 import { MCPDisconnectNotices } from './MCPDisconnectNotices'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onError: (msg: string) => void
@@ -21,6 +22,7 @@ interface Props {
 // it can be activated/deactivated for the whole workspace. The right column also
 // hosts MCP server management when no tool is selected.
 export function ToolsPanel({ onError, group, onGroupChange }: Props) {
+  const { t: tr } = useTranslation('tools')
   const {
     servers,
     testing,
@@ -98,7 +100,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
         onToggle={toggleList}
         widthKey="tionharness.toolsListWidth"
         defaultWidth={288}
-        label="Araçlar"
+        label={tr('panel.listLabel')}
         testId="tools-list-toggle"
       >
         <div className="border-b border-[var(--color-border)] p-3">
@@ -106,14 +108,14 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
           <button
             data-testid="tools-mcp-servers"
             onClick={() => setSelectedName(null)}
-            title="MCP sunucularını yönet"
+            title={tr('panel.manageServers')}
             className={`mb-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
               !selected
                 ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
                 : 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
             }`}
           >
-            <Plug size={15} /> MCP Sunucuları
+            <Plug size={15} /> {tr('panel.mcpServers')}
           </button>
           <div className="relative">
             <Search
@@ -124,7 +126,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
               data-testid="tools-search-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Araç ara…"
+              placeholder={tr('panel.searchPlaceholder')}
               className="w-full rounded-lg bg-[var(--color-surface-2)] py-2 pl-8 pr-3 text-sm outline-none"
             />
           </div>
@@ -139,7 +141,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                   data-tier={tier.value}
                   data-on={on}
                   onClick={() => toggleVisFilter(tier.value)}
-                  title={`Görünürlük: ${tier.label}`}
+                  title={tr('panel.visibilityFilter', { label: tier.label })}
                   className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition"
                   style={
                     on
@@ -167,7 +169,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                   data-status={st}
                   data-on={on}
                   onClick={() => setStatusFilter((prev) => (prev === st ? 'all' : st))}
-                  title={st === 'enabled' ? 'Aktif araçları göster' : 'Devre dışı araçları göster'}
+                  title={st === 'enabled' ? tr('panel.showEnabled') : tr('panel.showDisabled')}
                   className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition ${
                     on
                       ? st === 'enabled'
@@ -176,7 +178,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
                   }`}
                 >
-                  {st === 'enabled' ? 'Aktif' : 'Pasif'}
+                  {st === 'enabled' ? tr('status.enabled') : tr('status.disabledShort')}
                 </button>
               )
             })}
@@ -187,16 +189,16 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                   setVisFilter(new Set())
                   setStatusFilter('all')
                 }}
-                title="Filtreleri temizle"
+                title={tr('panel.clearFilters')}
                 className="rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
               >
-                Temizle
+                {tr('panel.clear')}
               </button>
             )}
           </div>
           <p className="mt-2 px-0.5 text-xs text-[var(--color-text-dim)]">
-            {filtersActive ? `${filtered.length} eşleşme · ` : ''}
-            {activeCount}/{tools.length} aktif
+            {filtersActive ? tr('panel.matches', { count: filtered.length }) : ''}
+            {tr('panel.activeCount', { active: activeCount, total: tools.length })}
           </p>
         </div>
 
@@ -206,7 +208,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
           <div
             className="flex flex-wrap gap-1 border-b border-[var(--color-border)] px-2 py-2"
             role="group"
-            aria-label="Araç grupları"
+            aria-label={tr('panel.toolGroups')}
           >
             <button
               data-testid="tools-group-all"
@@ -218,7 +220,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                   : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
               }`}
             >
-              Tümü
+              {tr('panel.all')}
             </button>
             {groups.map((g) => {
               const on = activeGroup === g.key
@@ -277,7 +279,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                       }`}
                     >
                       <span
-                        title={t.enabled ? 'Aktif' : 'Devre dışı'}
+                        title={t.enabled ? tr('status.enabled') : tr('status.disabled')}
                         className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
                           t.enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-border)]'
                         }`}
@@ -300,7 +302,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
           })}
           {groups.length === 0 && (
             <p className="px-3 py-3 text-sm text-[var(--color-text-dim)]">
-              {tools.length === 0 ? 'Henüz araç yok.' : 'Eşleşen araç yok.'}
+              {tools.length === 0 ? tr('panel.noTools') : tr('panel.noMatches')}
             </p>
           )}
         </div>
@@ -311,10 +313,10 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
           onSelectAll={orderedNames.length ? () => sel.selectAll(orderedNames) : undefined}
         >
           <SelectionBarButton icon={<Check size={13} />} onClick={() => bulkSetEnabled(true)}>
-            Etkinleştir
+            {tr('actions.enable')}
           </SelectionBarButton>
           <SelectionBarButton icon={<Ban size={13} />} onClick={() => bulkSetEnabled(false)}>
-            Devre dışı
+            {tr('actions.disable')}
           </SelectionBarButton>
           {VISIBILITY_TIERS.map((tier) => (
             <SelectionBarButton key={tier.value} onClick={() => bulkSetVisibility(tier.value)}>
@@ -328,7 +330,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
           The title bar sits ONLY here, to the right of the list — like the chat header. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <PaneHeader
-          title="Araçlar & MCP"
+          title={tr('panel.title')}
           subtitle={selected ? `· ${selected.name}` : undefined}
           listOpen={listOpen}
           onToggleList={toggleList}

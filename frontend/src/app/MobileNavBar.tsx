@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/refs -- `drag` is the object returned by useDragScroll;
    reading drag.ref / drag.onMouseDown to spread onto JSX is a plain property read,
    not a ref *dereference* during render. The rule matches on the `.ref` name. */
-import { Boxes, Settings, type LucideIcon } from 'lucide-react'
+import { Boxes, Settings } from 'lucide-react'
 import { NAV } from './navItems'
 import type { View } from './NavRail'
 import { useDragScroll } from '@/shared/hooks/useDragScroll'
@@ -29,9 +29,9 @@ interface Props {
 
 // The two pinned items that sit below the primary NAV list in the desktop rail.
 // Appended after NAV so the mobile bar exposes the exact same destinations.
-const PINNED: { key: View; label: string; icon: LucideIcon }[] = [
-  { key: 'workspace', label: 'Workspace', icon: Boxes },
-  { key: 'settings', label: 'Ayarlar', icon: Settings },
+const PINNED: typeof NAV = [
+  { key: 'workspace', label: 'navigation.workspace', icon: Boxes },
+  { key: 'settings', label: 'navigation.settings', icon: Settings },
 ]
 
 // MobileNavBar is the bottom navigation for portrait phones (`< md`). The desktop
@@ -59,7 +59,7 @@ export function MobileNavBar({
     // The nav itself does NOT scroll (overflow visible) so the workspace picker's
     // upward popup is not clipped; only the inner view strip scrolls horizontally.
     <nav
-      aria-label="Ana gezinme"
+      aria-label={t('shell.mainNavigation')}
       className="fixed inset-x-0 bottom-0 z-50 flex items-stretch border-t border-[var(--color-border)] bg-[var(--color-surface)] pt-1 shadow-[var(--shadow-sm)] md:hidden"
       style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
     >
@@ -81,7 +81,7 @@ export function MobileNavBar({
         className="flex flex-1 cursor-grab gap-1 overflow-x-auto px-2 select-none active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item) => {
-          const label = item.key === 'prompts' ? t('navigation.promptsFiles') : item.label
+          const label = item.labelKey ? t(item.labelKey) : t(item.label)
           const Icon = item.icon
           const active = view === item.key
           const busy = busyViews?.has(item.key) ?? false
@@ -105,7 +105,7 @@ export function MobileNavBar({
               {dirty && (
                 <span
                   className="absolute left-2 top-1 h-1.5 w-1.5 rounded-full bg-[var(--color-warning)]"
-                  title="Kaydedilmemiş değişiklik"
+                  title={t('shell.unsaved')}
                 />
               )}
               {(busy || unread) && (
@@ -113,7 +113,7 @@ export function MobileNavBar({
                   className={`absolute right-2 top-1 h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] ${
                     busy ? 'animate-pulse' : ''
                   }`}
-                  title={busy ? 'İşlem sürüyor' : 'Yeni etkinlik'}
+                  title={busy ? t('shell.busy') : t('shell.newActivity')}
                 />
               )}
             </button>

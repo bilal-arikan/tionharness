@@ -7,6 +7,7 @@ import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Plus } from 'lucide-react'
 import type { ProviderKind, ProviderInstance, UpsertProviderInput } from '@/api/providers'
 import { ProviderFieldInput } from './ProviderFieldInput'
+import { useTranslation } from 'react-i18next'
 
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
@@ -34,6 +35,7 @@ function emptyDraft(kindId: string): UpsertProviderInput {
 }
 
 export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSave }: Props) {
+  const { t } = useTranslation('settings')
   const selectableKinds = useMemo(
     () =>
       kinds.filter(
@@ -89,18 +91,15 @@ export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSa
   }
 
   if (!editing && selectableKinds.length === 0) {
-    return (
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Tüm sağlayıcı taslakları için zaten birer örnek var (bu taslaklar çoklu örneğe izin
-        vermiyor).
-      </p>
-    )
+    return <p className="text-xs text-[var(--color-text-dim)]">{t('providerForm.noKinds')}</p>
   }
 
   return (
     <div className="space-y-2 rounded-md border border-dashed border-[var(--color-border)] p-2">
       <div className="text-xs font-medium">
-        {editing ? `Düzenle: ${editing.label || editing.id}` : 'Yeni sağlayıcı örneği'}
+        {editing
+          ? t('providerForm.editTitle', { label: editing.label || editing.id })
+          : t('providerForm.newTitle')}
       </div>
 
       <div className="grid grid-cols-2 gap-1.5">
@@ -119,7 +118,7 @@ export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSa
         </select>
         <input
           data-testid="provider-instance-label-input"
-          placeholder="Etiket (ör. Anthropic — iş hesabı)"
+          placeholder={t('providerForm.labelPlaceholder')}
           value={draft.label}
           onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
           className={inputCls}
@@ -132,20 +131,20 @@ export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSa
           checked={draft.enabled}
           onChange={(e) => setDraft((d) => ({ ...d, enabled: e.target.checked }))}
         />
-        Etkin
+        {t('providerForm.enabled')}
       </label>
 
       <div className="grid grid-cols-2 gap-1.5">
         <input
           data-testid="provider-instance-default-model-input"
-          placeholder="boş = sağlayıcı oturum modeli"
+          placeholder={t('providerForm.defaultModelPlaceholder')}
           value={draft.defaultModel}
           onChange={(e) => setDraft((d) => ({ ...d, defaultModel: e.target.value }))}
           className={inputCls}
         />
         <input
           data-testid="provider-instance-models-input"
-          placeholder="model id'leri — virgülle (opsiyonel)"
+          placeholder={t('providerForm.modelsPlaceholder')}
           value={draft.models}
           onChange={(e) => setDraft((d) => ({ ...d, models: e.target.value }))}
           className={inputCls}
@@ -185,14 +184,14 @@ export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSa
           disabled={busy || !draft.kindId || !draft.label}
           className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-30"
         >
-          <Plus size={13} /> {editing ? 'Güncelle' : 'Ekle'}
+          <Plus size={13} /> {editing ? t('common.update') : t('common.add')}
         </button>
         <button
           data-testid="provider-instance-cancel"
           onClick={onCancel}
           className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs"
         >
-          İptal
+          {t('common.cancel')}
         </button>
       </div>
     </div>

@@ -14,7 +14,7 @@ import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { FlowNodeEvent } from '@/api/flows'
 import { TemplatePreview } from './TemplatePreview'
 import { RunTreeView } from './RunTreeView'
-import { FLOW_TEMPLATES } from './flowTemplates'
+import { FLOW_TEMPLATES, flowTemplateGraph } from './flowTemplates'
 import { graphToReactFlow, reactFlowToGraph, canonicalGraphKey, type FlowRFNode } from './flowGraph'
 import type { EdgeStyle } from './FlowCanvas'
 import { safeParse, type FlowsTab } from './flowsPanelShared'
@@ -31,6 +31,7 @@ import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_FLOWS } from '@/app/eventToRefreshSignals'
 import { compareText } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
 
 // Backstop refresh for the Koşular tab; run lifecycle also arrives over SSE.
 const RUNS_POLL_MS = 15000
@@ -53,6 +54,7 @@ interface Props {
 // (FlowEditorView) and the action factories (flowActions / flowGraphOps) render
 // and mutate it.
 export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabChange }: Props) {
+  const { t } = useTranslation('flows')
   const flowsTick = useRefreshTrigger(SIGNAL_FLOWS)
   const [flows, setFlows] = useState<Flow[]>([])
   // Selection + active tab persist across screen switches within the session
@@ -489,25 +491,19 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
           <div className="flex min-w-0 flex-1 flex-col">
             {!selectedTemplate ? (
               <div className="flex-1 p-6">
-                <p className="text-sm text-[var(--color-text-dim)]">
-                  Soldan bir şablon seçin — yapısını önizleyin, sonra "Bu şablondan akış oluştur"
-                  deyin.
-                </p>
+                <p className="text-sm text-[var(--color-text-dim)]">{t('empty.template')}</p>
               </div>
             ) : (
               // Template name/description + actions now live in the top PaneHeader.
               <div className="min-h-0 flex-1">
-                <TemplatePreview graph={selectedTemplate.graph} agents={agents} />
+                <TemplatePreview graph={flowTemplateGraph(selectedTemplate)} agents={agents} />
               </div>
             )}
           </div>
         ) : tab === 'runs' ? (
           !selectedRun ? (
             <div className="flex-1 p-6">
-              <p className="text-sm text-[var(--color-text-dim)]">
-                Soldan bir koşu seçin — akışın hangi aşamada olduğunu, node çıktılarını ve hataları
-                salt-okunur görün.
-              </p>
+              <p className="text-sm text-[var(--color-text-dim)]">{t('empty.run')}</p>
             </div>
           ) : (
             <RunTreeView
@@ -526,9 +522,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
           )
         ) : !selectedId ? (
           <div className="flex-1 p-6">
-            <p className="text-sm text-[var(--color-text-dim)]">
-              Soldan bir akış seçin veya yeni bir akış oluşturun.
-            </p>
+            <p className="text-sm text-[var(--color-text-dim)]">{t('empty.flow')}</p>
           </div>
         ) : (
           <FlowEditorView

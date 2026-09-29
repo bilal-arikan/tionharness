@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { setLocale } from '@/i18n'
 import { costHint, costLabel } from './toolCostLabel'
+import { visibilityMeta } from './toolMeta'
+
+beforeEach(async () => {
+  await setLocale('tr')
+})
 
 describe('costLabel', () => {
   it('returns null when the backend sent no estimate', () => {
@@ -33,5 +39,17 @@ describe('costHint', () => {
 
   it('says there is nothing to promote when already all-full', () => {
     expect(costHint({ currentTokens: 3100, fullTokens: 3100 })).toContain('zaten')
+  })
+})
+
+describe('tool localization', () => {
+  it('updates helper and metadata labels when the UI locale changes', async () => {
+    await setLocale('en')
+    expect(costLabel({ currentTokens: 420 })).toBe('~420 tok/turn')
+    expect(visibilityMeta('full').label).toBe('Full')
+
+    await setLocale('tr')
+    expect(costLabel({ currentTokens: 420 })).toBe('~420 tok/tur')
+    expect(visibilityMeta('full').label).toBe('Tam')
   })
 })

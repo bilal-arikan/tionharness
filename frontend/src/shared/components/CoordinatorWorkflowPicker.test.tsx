@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Skill } from '@/types'
 import { CoordinatorWorkflowPicker } from './CoordinatorWorkflowPicker'
+import { setLocale } from '@/i18n'
 
 const apiMock = vi.hoisted(() => ({ listSkills: vi.fn() }))
 vi.mock('@/api', () => ({ api: apiMock }))
@@ -53,7 +54,8 @@ async function flush() {
   })
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await setLocale('tr')
   vi.clearAllMocks()
   apiMock.listSkills.mockResolvedValue(recipes)
 })

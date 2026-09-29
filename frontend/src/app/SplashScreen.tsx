@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 // SplashScreen is the minimal first-run loading screen. It is shown ONLY on a
 // fresh install (no setup yet) while the initial workspace list is still
 // resolving AND for a brief minimum duration so it never flickers — returning
@@ -6,6 +7,7 @@
 // server and the embedded single-binary build), and everything else is theme-
 // variable driven so it matches the active appearance before any workspace loads.
 export function SplashScreen() {
+  const { t } = useTranslation()
   return (
     <div
       data-testid="splash-screen"
@@ -28,7 +30,7 @@ export function SplashScreen() {
 
       <div className="flex flex-col items-center gap-1">
         <span className="text-lg font-semibold tracking-wide">TionHarness</span>
-        <span className="text-xs text-[var(--color-text-dim)]">Yükleniyor…</span>
+        <span className="text-xs text-[var(--color-text-dim)]">{t('shell.loading')}</span>
       </div>
 
       {/* Keyframes are scoped here so the splash stays fully self-contained (no

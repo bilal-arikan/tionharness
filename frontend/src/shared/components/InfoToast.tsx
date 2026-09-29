@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Info, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   message: string
@@ -14,6 +15,7 @@ interface Props {
 // so an advisory never reads as a failure. Stacked slightly higher so an error
 // toast (bottom-4) and an info toast do not overlap when both are shown.
 export function InfoToast({ message, onDismiss, ttl = 6000 }: Props) {
+  const { t: translate } = useTranslation('sharedUi')
   useEffect(() => {
     if (!message || !ttl) return
     const t = setTimeout(onDismiss, ttl)
@@ -31,7 +33,7 @@ export function InfoToast({ message, onDismiss, ttl = 6000 }: Props) {
         <span className="min-w-0 flex-1 break-words">{message}</span>
         <button
           onClick={onDismiss}
-          title="Kapat"
+          title={translate('actions.close')}
           className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)]"
         >
           <X size={14} />

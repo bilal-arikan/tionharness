@@ -1,18 +1,20 @@
+import { useTranslation } from 'react-i18next'
 import { Toggle } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function ContextProgress({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
       <Toggle
-        label="Save progress to disk"
-        hint="Persist the task checklist so it can be reused across sessions."
+        label={t('contextProgress.save.label')}
+        hint={t('contextProgress.save.hint')}
         checked={draft.progressPersist}
         onChange={(v) => set('progressPersist', v)}
       />
       <Toggle
-        label="Restore progress in new sessions"
-        hint="Load unfinished progress when a new session has no checklist of its own."
+        label={t('contextProgress.restore.label')}
+        hint={t('contextProgress.restore.hint')}
         checked={draft.progressResume}
         onChange={(v) => set('progressResume', v)}
       />

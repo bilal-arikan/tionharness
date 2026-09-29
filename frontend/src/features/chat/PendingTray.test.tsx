@@ -2,7 +2,8 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { i18next } from '@/i18n'
 import { PendingTray } from './PendingTray'
 import type { PendingItem } from './PendingTray'
 
@@ -29,6 +30,10 @@ function steerButton(container: HTMLElement, id: string) {
 const queued: PendingItem[] = [
   { id: 'm-1', text: 'check the other file', kind: 'queue', sid: 'S1' },
 ]
+
+beforeEach(async () => {
+  await i18next.changeLanguage('en')
+})
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount())
@@ -120,7 +125,7 @@ describe('PendingTray dispatched head', () => {
       onRemove: vi.fn(),
     })
 
-    expect(container.textContent).not.toContain('Gönderiliyor')
+    expect(container.textContent).not.toContain('Sending')
     expect(container.textContent).not.toContain('gönderilmiş mesaj')
     // The genuinely waiting message is untouched.
     expect(container.textContent).toContain('check the other file')
@@ -132,7 +137,7 @@ describe('PendingTray dispatched head', () => {
     // Not merely an empty card: the header must not render either, or the user
     // sees a "Bekleyenler" shell listing nothing.
     expect(container.textContent).toBe('')
-    expect(container.textContent).not.toContain('Bekleyenler')
+    expect(container.textContent).not.toContain('Waiting')
   })
 
   // The failed row is the opposite case: its turn never started, so the text is
@@ -147,7 +152,7 @@ describe('PendingTray dispatched head', () => {
     const container = renderTray({ items: [failed], onRemove: vi.fn() })
 
     expect(container.textContent).toContain('başlatılamayan mesaj')
-    expect(container.textContent).toContain('Gönderilemedi')
+    expect(container.textContent).toContain('Not sent')
   })
 
   it('dismisses a failed row through onRemove', () => {
@@ -176,9 +181,9 @@ describe('PendingTray dispatched head', () => {
       onRemove: vi.fn(),
     })
 
-    expect(container.textContent).toContain('Sırada #1')
-    expect(container.textContent).toContain('Sırada #2')
-    expect(container.textContent).not.toContain('Sırada #3')
+    expect(container.textContent).toContain('Queued #1')
+    expect(container.textContent).toContain('Queued #2')
+    expect(container.textContent).not.toContain('Queued #3')
   })
 
   it('still renders steer and holding items', () => {
@@ -191,10 +196,10 @@ describe('PendingTray dispatched head', () => {
       onRemove: vi.fn(),
     })
 
-    expect(container.textContent).toContain('Şu an')
+    expect(container.textContent).toContain('Now')
     expect(container.textContent).toContain('worker bildirimi')
-    expect(container.textContent).toContain('Yönlendir')
-    expect(container.textContent).not.toContain('Gönderiliyor')
+    expect(container.textContent).toContain('Guide')
+    expect(container.textContent).not.toContain('Sending')
   })
 
   it('counts only visible queue items in the clear-all action', () => {
@@ -208,6 +213,18 @@ describe('PendingTray dispatched head', () => {
       onClear: vi.fn(),
     })
 
-    expect(container.textContent).toContain('Kuyruğu temizle (2)')
+    expect(container.textContent).toContain('Clear queue (2)')
+  })
+
+  it('updates tray chrome when the UI locale changes', async () => {
+    const container = renderTray({ items: queued, onRemove: vi.fn() })
+    expect(container.textContent).toContain('Waiting')
+
+    await act(async () => {
+      await i18next.changeLanguage('tr')
+    })
+
+    expect(container.textContent).toContain('Bekleyenler')
+    expect(container.textContent).toContain('Sırada #1')
   })
 })

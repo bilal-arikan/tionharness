@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Agent } from '@/types'
 import { AgentPicker } from './AgentPicker'
-import { ARCHIVED_AGENT_LABEL, pickableAgents } from './pickableAgents'
+import { archivedAgentLabel, pickableAgents } from './pickableAgents'
 
 vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [],
@@ -61,14 +61,14 @@ describe('AgentPicker archived agents', () => {
   it('does not offer an archived agent for a new selection', () => {
     const trigger = open('')
     expect(optionIds()).toEqual(['AGT1'])
-    expect(trigger.textContent).not.toContain(ARCHIVED_AGENT_LABEL)
+    expect(trigger.textContent).not.toContain(archivedAgentLabel())
   })
 
   it('still shows a saved archived agent, marked as archived', () => {
     const trigger = open('AGT2')
     expect(optionIds()).toEqual(['AGT1', 'AGT2'])
     expect(trigger.textContent).toContain('Old')
-    expect(trigger.textContent).toContain(ARCHIVED_AGENT_LABEL)
+    expect(trigger.textContent).toContain(archivedAgentLabel())
     expect(container.querySelectorAll('[data-testid="agent-picker-archived"]')).toHaveLength(2)
   })
 })

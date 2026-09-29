@@ -1,0 +1,176 @@
+{
+  "optimizer": {
+    "degradedTitle": "{{kind}}: komut BAŞARISIZ oldu ve yukarıdaki metin ham çıktı değil, {{kind}} özeti. Test/derleme hataları korunur ama kurulum hataları (bozuk go.mod, eksik toolchain) anlamsız bir özete inebilir. Gerçek nedeni görmek için aynı komutu no_compress ile tekrar çalıştır.",
+    "command": "Çalıştırılan: {{command}}",
+    "deduplicatedTitle": "{{kind}}: bu çıktı oturumda daha önce görülenle birebir aynı — tekrar edilmek yerine \"§ref:…§\" işaretçisiyle değiştirildi. Komut düzgün çalıştı, çıktı kaybolmadı.",
+    "measuredTitle": "{{kind}}: {{input}} → {{output}} token (%{{percent}} tasarruf) — çıktı kısaltılmış olarak bağlama girdi, kırpılmadı",
+    "optimizedTitle": "{{kind}}: komut token-optimize edici üzerinden çalıştı",
+    "degradedBadge": "özet — ham değil",
+    "deduplicatedBadge": "yinelenen",
+    "savingBadge": "−%{{percent}}"
+  },
+  "pending": {
+    "headerFailed": "Bekleyenler — başlatılamayan mesaj var",
+    "header": "Bekleyenler — işleme alınmadan silebilirsin",
+    "clearQueue_one": "Kuyruğu temizle ({{count}})",
+    "clearQueue_other": "Kuyruğu temizle ({{count}})",
+    "currentTitle": "Oturum şu an bu turla meşgul; bekleyenler bittiğinde sırayla çalışacak",
+    "current": "Şu an",
+    "failedTitle": "Bu mesaj için tur başlatılamadı; metin kaybolmasın diye burada tutuluyor",
+    "failed": "Gönderilemedi",
+    "dismiss": "Kapat",
+    "steerTitle": "Canlı yönlendirme (birazdan gönderilecek)",
+    "queueTitle": "Sıradaki mesaj (tur bitince gönderilecek)",
+    "steer": "Yönlendir",
+    "position": "Sırada #{{position}}",
+    "steerCurrent": "Geçerli görevi bu bekleyen mesajla yönlendir",
+    "steerUnavailable": "Bu turda canlı yönlendirme kullanılamıyor. Mesajın kuyrukta kalacak.",
+    "steerNoTurn": "Yönlendirilecek çalışan bir tur yok. Mesajın kuyrukta kalacak.",
+    "promote": "Öne al (sıradaki tur bunu çalıştırsın)",
+    "remove": "Sil (işleme alınmadan)"
+  },
+  "permission": {
+    "risk": {
+      "exec": "komut çalıştırma",
+      "execDecider": "riskli komut — karar modeli onay önerdi",
+      "write": "dosya/durum değişikliği",
+      "default": "işlem"
+    },
+    "intro": "Ajan şu aracı çalıştırmak istiyor:",
+    "defaultTool": "bir araç",
+    "question": "({{risk}}). İzin veriyor musun?",
+    "allowOnce": "İzin ver",
+    "alwaysAllow": "Her zaman izin ver",
+    "deny": "Reddet"
+  },
+  "plan": {
+    "question": "Ajan bir plan sunuyor. Onaylıyor musun?",
+    "approve": "Planı onayla",
+    "reject": "Reddet"
+  },
+  "recovery": { "fallback": "Kurtarma" },
+  "rewind": {
+    "confirmTitle": "Bu mesaj ve sonrasını sil, sohbeti buraya geri sar",
+    "confirm": "Geri sar",
+    "cancel": "Vazgeç",
+    "buttonTitle": "Buraya geri sar (bu mesaj + sonrasını sil)",
+    "buttonLabel": "Buraya geri sar",
+    "dialogLabel": "Sohbeti geri sar",
+    "title": "Sohbeti geri sar",
+    "descriptionBefore": "Bir prompt seç — o prompt ve sonrasındaki tüm mesajlar silinir, sohbet o checkpoint'e döner.",
+    "filesUnchanged": "Dosya değişiklikleri geri alınmaz",
+    "descriptionAfter": "(kod için git kullan). Silinen prompt, düzenleyip yeniden göndermen için mesaj kutusuna geri konur.",
+    "empty": "Bu oturumda geri sarılacak bir kullanıcı mesajı yok.",
+    "message": "Mesaj",
+    "prompt": "Prompt",
+    "removed_one": "{{count}} mesaj silinir",
+    "removed_other": "{{count}} mesaj silinir",
+    "emptyMessage": "(boş mesaj)",
+    "working": "Geri sarılıyor…"
+  },
+  "sessionStart": {
+    "title": "Başlangıç ayarları",
+    "dismissTitle": "Bu oturum için gizle",
+    "dismissLabel": "Başlangıç panelini kapat",
+    "coordinatorOn": "Koordinatör modu açık — bu oturum paralel worker'ları yönetir",
+    "coordinatorOff": "Koordinatör modunu aç (paralel worker'ları yönet)",
+    "disable": "Kapat",
+    "enable": "Aç",
+    "workflow": "Workflow",
+    "workflowLabel": "Workflow nedir?",
+    "footerBefore": "İlk mesajı gönderdiğinde bu panel kapanır. Ayarlar yalnız bu oturuma aittir ve sonradan oturum panelindeki",
+    "coordination": "Koordinasyon",
+    "footerAfter": "bölümünden değiştirilebilir."
+  },
+  "steps": {
+    "guidance": "Yönlendirme:",
+    "subagent": "Alt-ajan",
+    "error": "hata",
+    "count_one": "{{count}} adım",
+    "count_other": "{{count}} adım",
+    "result": "Sonuç",
+    "truncated": "… (kırpıldı)",
+    "thought": "Düşünce",
+    "thinking": "Düşünme",
+    "todo": "Görev Listesi",
+    "tool": "Araç",
+    "running": "çalışıyor…",
+    "parallel_one": "{{count}} paralel araç çağrısı (tek istekte)",
+    "parallel_other": "{{count}} paralel araç çağrısı (tek istekte)"
+  },
+  "taskNotification": {
+    "status": { "completed": "tamamlandı", "failed": "başarısız", "killed": "durduruldu" },
+    "collapse": "Worker sonucunu daralt",
+    "expand": "Worker sonucunu genişlet",
+    "openSession": "{{name}} worker oturumunu aç",
+    "model": "model",
+    "none": "yok",
+    "notification": "Worker bildirimi",
+    "toolCount_one": "{{count}} araç",
+    "toolCount_other": "{{count}} araç"
+  },
+  "todos": {
+    "title": "Görev Listesi",
+    "dismiss": "Tamamlanan görev listesini kapat"
+  },
+  "transcript": {
+    "loading": "Yükleniyor…",
+    "earlier": "Önceki mesajları yükle",
+    "newer": "Sonraki mesajları yükle",
+    "latest": "En yeniye git"
+  },
+  "tts": {
+    "title": "Sesli okuma seviyesi: %{{percent}} (tüm sohbetler için ortak)",
+    "label": "Sesli okuma ses seviyesi"
+  },
+  "wake": {
+    "soon": "birazdan",
+    "seconds": "~{{seconds}} sn",
+    "minutes": "~{{minutes}} dk",
+    "minutesSeconds": "~{{minutes}} dk {{seconds}} sn",
+    "countdownSuffix": " · {{value}}",
+    "reasonSuffix": " — {{reason}}",
+    "waiting": "Otomatik devam bekleniyor",
+    "stopTitle": "Otomatik uyandırmayı durdur",
+    "stop": "Durdur"
+  },
+  "workdir": {
+    "fallback": "Dizin",
+    "current": "Çalışma dizini: {{path}}",
+    "select": "Çalışma dizini seç",
+    "heading": "Çalışma dizini",
+    "resetTitle": "Workspace varsayılanına sıfırla",
+    "reset": "Sıfırla",
+    "parent": "Üst klasör",
+    "computer": "Bu bilgisayar",
+    "loading": "Yükleniyor…",
+    "empty": "Alt klasör yok",
+    "use": "Bu klasörü kullan"
+  },
+  "workerStatus": {
+    "worker": "Worker çalışıyor",
+    "session": "Oturum çalışıyor",
+    "turn": "— turu sürüyor",
+    "stopTitle": "Bu oturumun süren turunu durdur",
+    "stop": "Durdur"
+  },
+  "workerWait": {
+    "running_one": "{{count}} worker çalışıyor",
+    "running_other": "{{count}} worker çalışıyor",
+    "waiting": "— sonuçları bekleniyor",
+    "done": " · {{done}}/{{total}} bitti",
+    "openSession": "{{name}} — worker oturumunu aç",
+    "model": "model",
+    "seconds": "{{seconds}} sn",
+    "minutes": "{{minutes}} dk",
+    "minutesSeconds": "{{minutes}} dk {{seconds}} sn"
+  },
+  "tools": {
+    "items_one": "{{count}} öğe",
+    "items_other": "{{count}} öğe"
+  },
+  "stream": {
+    "guidanceQueued": "Bu turda canlı yönlendirme kullanılamıyor. Mesajın kuyruğa alındı.",
+    "guidanceRemainsQueued": "Bu turda canlı yönlendirme kullanılamıyor. Mesajın kuyrukta kalacak."
+  }
+}

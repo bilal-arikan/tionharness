@@ -1,5 +1,6 @@
 // Komutlar category: read-only reference of the chat slash commands, each an
 // expandable card revealing the built-in prompt behind it.
+import { useTranslation } from 'react-i18next'
 import type { PromptInfo, SlashCommand } from '@/types'
 import { PromptDetails } from './primitives'
 
@@ -12,15 +13,16 @@ interface Props {
 }
 
 export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpenCmds }: Props) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Sohbet kutusuna <code className="rounded bg-[var(--color-bg)] px-1">/</code> yazınca açılan
-        komut paleti. Bir komutu komut olarak değil düz metin olarak göndermek istersen tırnak içine
-        al: <code className="rounded bg-[var(--color-bg)] px-1">"/komut"</code>.
+        {t('commands.intro.prefix')} <code className="rounded bg-[var(--color-bg)] px-1">/</code>{' '}
+        {t('commands.intro.middle')}{' '}
+        <code className="rounded bg-[var(--color-bg)] px-1">"/command"</code>.
       </div>
       {commands.length === 0 ? (
-        <div className="text-sm text-[var(--color-text-dim)]">Kayıtlı komut yok.</div>
+        <div className="text-sm text-[var(--color-text-dim)]">{t('commands.empty')}</div>
       ) : (
         <div className="flex flex-col gap-1.5">
           {commands.map((c) => {
@@ -61,8 +63,7 @@ export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpen
                       <PromptDetails p={p} dir={promptsDir} />
                     ) : (
                       <p className="text-xs text-[var(--color-text-dim)]">
-                        Bu komut deterministiktir — model/prompt kullanmaz; sonuç runtime'da
-                        doğrudan üretilir.
+                        {t('commands.deterministic')}
                       </p>
                     )}
                   </div>
@@ -91,10 +92,10 @@ export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpen
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-[var(--color-text)]">
-                        Otomatik başlık
+                        {t('commands.autoTitle')}
                       </div>
                       <div className="truncate text-xs text-[var(--color-text-dim)]">
-                        Komut değil — sohbet/görev başlığı üretimi
+                        {t('commands.autoTitleHint')}
                       </div>
                     </div>
                     <span className="shrink-0 text-xs text-[var(--color-text-dim)]">

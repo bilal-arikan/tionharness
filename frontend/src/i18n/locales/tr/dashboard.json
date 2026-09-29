@@ -1,0 +1,139 @@
+{
+  "title": "Panel",
+  "rangeDays_one": "{{count}}g",
+  "rangeDays_other": "{{count}}g",
+  "refresh": "Yenile",
+  "loading": "Yükleniyor…",
+  "noData": "Veri yok.",
+  "actions": {
+    "title": "Dikkat gereken",
+    "itemCount_one": "{{value}} öğe",
+    "itemCount_other": "{{value}} öğe",
+    "empty": "Şu an dikkat gerektiren bir şey yok — takılmış oturum, başarısız koşu/kart, bekleyen soru veya hatalı zamanlama yok.",
+    "kindMeta": "{{kind}} · {{id}}",
+    "kind": {
+      "session": "Oturum",
+      "run": "Koşu",
+      "card": "Kart",
+      "schedule": "Zamanlama"
+    }
+  },
+  "charts": {
+    "delta": {
+      "new": "yeni",
+      "stable": "≈ sabit",
+      "previous": "{{current}} (önceki dönem {{previous}})"
+    },
+    "noData": "{{label}}: veri yok",
+    "totalPeak": "toplam {{total}} · tepe {{peak}}",
+    "noActivity": "bu aralıkta hiç hareket yok",
+    "dayValue": "{{day}}: {{value}}",
+    "noRecords": "{{label}}: henüz kayıt yok",
+    "noCost": "{{label}}: henüz maliyet yok",
+    "categoryValue": "{{name}}: {{count}} ({{percent}})",
+    "status": {
+      "success": "Başarılı",
+      "failure": "Başarısız",
+      "waiting": "Bekliyor",
+      "running": "Çalışıyor",
+      "done": "Bitti",
+      "failed": "Başarısız",
+      "inProgress": "Devam ediyor",
+      "review": "İnceleme"
+    }
+  },
+  "commits": {
+    "title": "Commit etkinliği",
+    "period": "Son 52 hafta",
+    "count_one": "{{value}} commit",
+    "count_other": "{{value}} commit",
+    "total_one": "toplam {{value}} commit",
+    "total_other": "toplam {{value}} commit",
+    "loading": "Commit etkinliği yükleniyor…",
+    "error": "Commit etkinliği yüklenemedi: {{error}}",
+    "retry": "Tekrar dene",
+    "notRepository": "Bu çalışma alanı bir Git deposu değil.",
+    "empty": "Son 52 haftada commit yok.",
+    "chartLabel": "Commit etkinliği grafiği",
+    "gridLabel_one": "{{value}} commit, son 52 hafta",
+    "gridLabel_other": "{{value}} commit, son 52 hafta",
+    "dayLabel_one": "{{date}}: {{value}}",
+    "dayLabel_other": "{{date}}: {{value}}",
+    "interactionHint": "Sayı için güne odaklanın veya üzerine gelin.",
+    "intensityLabel": "Etkinlik yoğunluğu: azdan çoğa",
+    "less": "Az",
+    "more": "Çok"
+  },
+  "cost": {
+    "title": "Maliyet",
+    "today": "Bugün",
+    "thisMonth": "Bu ay",
+    "dailyBurn": "Günlük ort. (burn)",
+    "monthEndProjection": "Ay sonu tahmini",
+    "atThisRate": "bu tempoyla",
+    "coolingWasteHint": "Zamanında yanıtla önlenebilecek prompt-cache soğuma israfı",
+    "coolingWaste": "· bu aralıkta {{value}} önlenebilir cache israfı",
+    "estimatedNote": "~ işareti: abonelik sağlayıcıları (ör. claude-cli) gerçek fatura yerine eşdeğer API tahminiyle fiyatlanır."
+  },
+  "duration": {
+    "seconds_one": "{{value}} sn",
+    "seconds_other": "{{value}} sn",
+    "minutes_one": "{{value}} dk",
+    "minutes_other": "{{value}} dk",
+    "hours_one": "{{value}} sa",
+    "hours_other": "{{value}} sa",
+    "days_one": "{{value}} gün",
+    "days_other": "{{value}} gün"
+  },
+  "outcomes": {
+    "title": "Sonuçlar",
+    "completedCards": "Biten kart",
+    "inWindow": "bu aralıkta",
+    "averageCompletion": "Ort. tamamlanma süresi",
+    "createdToDone": "oluşturma → bitti",
+    "noCompletedCards": "biten kart yok",
+    "runSuccessRate": "Koşu başarı oranı",
+    "noClosedRuns": "kapanan koşu yok",
+    "closedRuns_one": "{{value}} kapandı",
+    "closedRuns_other": "{{value}} kapandı",
+    "cardsPerDay": "Biten kart / gün"
+  },
+  "stats": {
+    "agents": "Ajan",
+    "activeSessions": "Aktif oturum",
+    "sessionsHint": "{{total}} toplam{{archived}}",
+    "archived_one": " · {{value}} arşiv",
+    "archived_other": " · {{value}} arşiv",
+    "stuckSessions": "Takılmış oturum",
+    "clear": "temiz",
+    "openCards": "Açık kart",
+    "total_one": "{{value}} toplam",
+    "total_other": "{{value}} toplam",
+    "runningRuns": "Çalışan koşu",
+    "waitingForInput_one": "{{value}} girdi bekliyor",
+    "waitingForInput_other": "{{value}} girdi bekliyor",
+    "failedRuns": "Başarısız koşu",
+    "needsReview": "incelenmeli"
+  },
+  "workspaceSummary": {
+    "title": "Çalışma alanı özeti",
+    "heading": "◱ Çalışma alanı özeti",
+    "descriptionBefore": "ajanların",
+    "descriptionAfter": "ile aldığı metnin aynısı",
+    "tokenEstimateHint": "Yaklaşık token maliyeti (karakter/4)",
+    "meta": "~{{tokens}} tok · zamanı {{time}}"
+  },
+  "trends": {
+    "openedSessions": "Açılan oturum",
+    "flowRuns": "Akış koşusu",
+    "tokens": "Token",
+    "cost": "Maliyet"
+  },
+  "breakdowns": {
+    "boardColumns": "Pano sütunları",
+    "runStatuses": "Koşu durumları",
+    "sessionKinds": "Oturum türleri",
+    "busiestAgents": "En yoğun ajanlar (oturum sayısı)",
+    "costliestAgents": "En maliyetli ajanlar"
+  }
+}

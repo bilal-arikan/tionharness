@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Save } from 'lucide-react'
 import { api } from '@/api'
 import type { AppSettings } from '@/types'
@@ -15,6 +16,7 @@ interface Props {
 // moved here from Settings ▸ Context so all self-improvement lives in the Insight
 // cockpit. It edits the app-global settings directly (draft + Save).
 export function LessonsTab({ onError }: Props) {
+  const { t } = useTranslation('insight')
   const [draft, setDraft] = useState<AppSettings | null>(null)
   const [original, setOriginal] = useState<AppSettings | null>(null)
   const [saving, setSaving] = useState(false)
@@ -66,7 +68,7 @@ export function LessonsTab({ onError }: Props) {
   }
 
   if (!draft) {
-    return <LoadingState label="Yükleniyor…" />
+    return <LoadingState label={t('actions.loading')} />
   }
 
   return (
@@ -77,94 +79,87 @@ export function LessonsTab({ onError }: Props) {
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
               <ShieldCheck size={14} />
             </span>
-            Self-healing (döngü koruması & ders çıkarma)
+            {t('lessons.title')}
           </h3>
           <div className="flex items-center gap-3">
             {numberValidity.hasInvalid && (
               <span className="text-xs text-[var(--color-danger)]">
-                Geçersiz sayı değeri — düzeltmeden kaydedilemez
+                {t('validation.invalidNumber')}
               </span>
             )}
             <button
               onClick={save}
+              data-testid="lessons-save"
               disabled={!dirty || saving || numberValidity.hasInvalid}
-              title={
-                numberValidity.hasInvalid
-                  ? 'Geçersiz sayı değeri — düzeltmeden kaydedilemez'
-                  : undefined
-              }
+              title={numberValidity.hasInvalid ? t('validation.invalidNumber') : undefined}
               className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)] disabled:opacity-50"
             >
-              <Save className="h-4 w-4" /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
+              <Save className="h-4 w-4" /> {saving ? t('actions.saving') : t('actions.save')}
             </button>
           </div>
         </div>
 
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-          Kendi kendini onaran oturum akışları (<code>56-SELF-HEALING</code>): araç döngüsü tur
-          içinde tekrar eden hataları izler (aynı çağrı 2 hatada uyarılır, aynı araç 3 ardışık
-          hatada uyarılır); devre kesici açıksa 5 tekrarında çağrı bloklanır, 8 ardışık hatada tur
-          kontrollü durdurulur. Üst üste kötü biten oturumlar <code>stuck</code> etiketi alır ve
-          otonom turları askıya alınır (manuel sohbet hiç etkilenmez). Ders çıkarma, başarısız
-          turlardan kısa dersler damıtıp sonraki turlara enjekte eder.
+          {t('lessons.descriptionBefore')} <code>56-SELF-HEALING</code>
+          {t('lessons.descriptionMiddle')} <code>stuck</code> {t('lessons.descriptionAfter')}
         </div>
 
         <Toggle
-          label="Guardrail uyarıları"
-          hint="Tekrar eden başarısız araç çağrısının sonucuna eyleme dönük kurtarma ipucu eklenir (teşhis et, farklı argüman/araç dene). Yürütmeyi asla engellemez."
+          label={t('lessons.guardWarnings')}
+          hint={t('lessons.guardWarningsHint')}
           checked={draft.toolGuardWarnings}
           onChange={(v) => set('toolGuardWarnings', v)}
         />
         <Toggle
-          label="Devre kesici (hard stop)"
-          hint="Eşik üstü tekrar: birebir aynı başarısız çağrı blok eşiğinde çalıştırılmadan bloklanır; aynı araç halt eşiğinde turu kontrollü sonlandırır (guardrail_halt). Varsayılan kapalı."
+          label={t('lessons.hardStop')}
+          hint={t('lessons.hardStopHint')}
           checked={draft.toolGuardHardStop}
           onChange={(v) => set('toolGuardHardStop', v)}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <NumberField
-            label="Aynı çağrı: uyarı"
-            hint="Birebir aynı (araç+argüman) başarısız çağrı bu sayıda uyarı alır (0 = varsayılan 2)."
+            label={t('lessons.exactWarn')}
+            hint={t('lessons.exactWarnHint')}
             min={0}
             max={50}
             value={draft.guardExactWarn}
             onChange={(v) => set('guardExactWarn', v)}
           />
           <NumberField
-            label="Aynı çağrı: blok"
-            hint="Devre kesici açıkken birebir aynı başarısız çağrı bu sayıda çalıştırılmadan bloklanır (0 = varsayılan 5)."
+            label={t('lessons.exactBlock')}
+            hint={t('lessons.exactBlockHint')}
             min={0}
             max={50}
             value={draft.guardExactBlock}
             onChange={(v) => set('guardExactBlock', v)}
           />
           <NumberField
-            label="Aynı araç: uyarı"
-            hint="Aynı araç (farklı argümanlarla da olsa) bu kadar ardışık hatada uyarı alır (0 = varsayılan 3)."
+            label={t('lessons.sameToolWarn')}
+            hint={t('lessons.sameToolWarnHint')}
             min={0}
             max={50}
             value={draft.guardSameToolWarn}
             onChange={(v) => set('guardSameToolWarn', v)}
           />
           <NumberField
-            label="Aynı araç: tur durdur"
-            hint="Devre kesici açıkken aynı araç bu kadar ardışık hatada turu kontrollü sonlandırır (0 = varsayılan 8)."
+            label={t('lessons.sameToolHalt')}
+            hint={t('lessons.sameToolHaltHint')}
             min={0}
             max={50}
             value={draft.guardSameToolHalt}
             onChange={(v) => set('guardSameToolHalt', v)}
           />
           <NumberField
-            label="İlerleme yok: uyarı"
-            hint="Aynı salt-okunur çağrının başarılı tekrarları bu sayıyı aşınca uyarı alır (0 = varsayılan 2)."
+            label={t('lessons.noProgressWarn')}
+            hint={t('lessons.noProgressWarnHint')}
             min={0}
             max={50}
             value={draft.guardNoProgressWarn}
             onChange={(v) => set('guardNoProgressWarn', v)}
           />
           <NumberField
-            label="İlerleme yok: blok"
-            hint="Devre kesici açıkken aynı salt-okunur çağrı bu sayıda tekrarda bloklanır (0 = varsayılan 5)."
+            label={t('lessons.noProgressBlock')}
+            hint={t('lessons.noProgressBlockHint')}
             min={0}
             max={50}
             value={draft.guardNoProgressBlock}
@@ -172,22 +167,22 @@ export function LessonsTab({ onError }: Props) {
           />
         </div>
         <NumberField
-          label="Stuck oturum eşiği"
-          hint="Üst üste bu kadar tur kötü biten (tur hatası / guardrail halt) oturum 'stuck' etiketi alır ve OTONOM turları reddedilir; temiz bir tur sayacı sıfırlar, etiketi kaldırmak da sıfırlar. 0 = kapalı."
+          label={t('lessons.stuckThreshold')}
+          hint={t('lessons.stuckThresholdHint')}
           min={0}
           max={20}
           value={draft.stuckTurnThreshold}
           onChange={(v) => set('stuckTurnThreshold', v)}
         />
         <Toggle
-          label="Hatalardan ders çıkar (lesson reflect)"
-          hint="Kötü biten turdan arka planda kısa bir ders damıtılır (başlık modeli varsa o, yoksa ajanın modeli — hata turu başına 1 ucuz çağrı) ve workspace-geneli lessons.jsonl'e yazılır; en yeni 5 ders her turun dinamik bağlamına enjekte edilir. Aynı hata şekli tekrarında mevcut ders güncellenir (yığılmaz)."
+          label={t('lessons.reflect')}
+          hint={t('lessons.reflectHint')}
           checked={draft.lessonReflect}
           onChange={(v) => set('lessonReflect', v)}
         />
         <NumberField
-          label="Ders ömrü (gün)"
-          hint="Bir dersin hata şekli bu kadar gün içinde tekrar etmezse bayat sayılıp budanır (bir sonraki ders yazımında). Düşük = daha hızlı unutma. 0 = yerleşik varsayılan (2 gün)."
+          label={t('lessons.maxAge')}
+          hint={t('lessons.maxAgeHint')}
           min={0}
           max={365}
           value={draft.lessonMaxAgeDays}

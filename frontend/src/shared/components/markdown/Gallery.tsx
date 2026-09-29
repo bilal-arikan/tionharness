@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Lightbox, type LightboxImage } from '@/shared/components'
 import { isExternalUrl, isMediaPath, isVideoPath, mediaUrl } from '@/shared/lib/paths'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   code: string
@@ -74,13 +75,14 @@ function parse(code: string): { title?: string; images: LightboxImage[] } {
 // Clicking a thumbnail opens the shared Lightbox at that index with prev/next
 // navigation (the external agent project-style image gallery).
 export function Gallery({ code }: Props) {
+  const { t } = useTranslation('sharedUi')
   const { title, images } = useMemo(() => parse(code), [code])
   const [open, setOpen] = useState<number | null>(null)
 
   if (images.length === 0) {
     return (
       <div className="my-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-dim)]">
-        gallery · görsel bulunamadı
+        {t('gallery.empty')}
       </div>
     )
   }
@@ -96,7 +98,7 @@ export function Gallery({ code }: Props) {
             key={i}
             type="button"
             onClick={() => setOpen(i)}
-            title={img.alt || `Görsel ${i + 1}`}
+            title={img.alt || t('gallery.image', { number: i + 1 })}
             className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]"
           >
             {img.type === 'video' ? (

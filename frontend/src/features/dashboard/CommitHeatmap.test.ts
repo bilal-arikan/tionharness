@@ -7,6 +7,7 @@ import {
   initialHeatmapTooltipState,
   isHeatmapTooltipVisible,
 } from './commitHeatmapModel'
+import { i18next } from '@/i18n'
 
 describe('CommitHeatmap', () => {
   it('maps zero and non-zero counts to five stable intensity levels', () => {
@@ -27,8 +28,12 @@ describe('CommitHeatmap', () => {
     expect(heatmapMove(8, 'End', 20)).toBe(19)
   })
 
-  it('provides the exact count without relying on color', () => {
+  it('localizes commit counts at call time', async () => {
+    await i18next.changeLanguage('en')
+    expect(commitCountLabel(3)).toBe('3 commits')
+    await i18next.changeLanguage('tr')
     expect(commitCountLabel(3)).toBe('3 commit')
+    await i18next.changeLanguage('en')
   })
 
   it('opens tooltips from focus and hover and closes each interaction independently', () => {

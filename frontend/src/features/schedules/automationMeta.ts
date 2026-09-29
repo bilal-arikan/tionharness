@@ -7,58 +7,159 @@ import type {
   TrajEndStatus,
   TrajEvent,
 } from '@/types'
+import { i18next } from '@/i18n'
+
+const tr = (key: string) => i18next.t(key, { ns: 'schedules' })
 
 // Rota (F2) trigger options.
 export const TRAJ_EVENTS: { value: TrajEvent; label: string }[] = [
-  { value: 'exit', label: 'faz bitince (done/skipped/failed)' },
-  { value: 'enter', label: 'faz başlayınca (active)' },
+  {
+    value: 'exit',
+    get label() {
+      return tr('meta.trajectoryEvents.exit')
+    },
+  },
+  {
+    value: 'enter',
+    get label() {
+      return tr('meta.trajectoryEvents.enter')
+    },
+  },
 ]
 
 export const TRAJ_END_STATUSES: { value: TrajEndStatus; label: string }[] = [
-  { value: '', label: 'her bitiş' },
-  { value: 'done', label: 'tamamlandı' },
-  { value: 'failed', label: 'başarısız' },
-  { value: 'abandoned', label: 'terk edildi' },
+  {
+    value: '',
+    get label() {
+      return tr('meta.trajectoryStatuses.any')
+    },
+  },
+  {
+    value: 'done',
+    get label() {
+      return tr('meta.trajectoryStatuses.done')
+    },
+  },
+  {
+    value: 'failed',
+    get label() {
+      return tr('meta.trajectoryStatuses.failed')
+    },
+  },
+  {
+    value: 'abandoned',
+    get label() {
+      return tr('meta.trajectoryStatuses.abandoned')
+    },
+  },
 ]
 
 // Trajectory-trigger prompt placeholders (kept in sync with
 // agent/automation_trajectory.go trajectoryVars).
 export const TRAJ_PROMPT_VARS: { name: string; desc: string }[] = [
-  { name: '{{trajectoryId}}', desc: 'Rota kimliği (RTA…)' },
-  { name: '{{rootSessionId}}', desc: 'Rotanın kök (koordinatör) oturumu' },
-  { name: '{{sessionId}}', desc: 'Kök oturum (aynı)' },
-  { name: '{{recipe}}', desc: 'Reçete slug’ı (plansız rotada boş)' },
-  { name: '{{phase}}', desc: 'Geçiş yapan faz (faz tetiklerinde)' },
-  { name: '{{phaseState}}', desc: 'Fazın yeni durumu (done/skipped/failed/active)' },
-  { name: '{{event}}', desc: 'exit | enter' },
-  { name: '{{status}}', desc: 'Rota durumu (bitişte done/failed/abandoned)' },
-  { name: '{{phases}}', desc: 'Faz satırı: plan ✓ → kod ● → inceleme ○' },
-  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
-  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
-  { name: '{{automation}}', desc: 'Otomasyonun adı' },
-  { name: '{{date}}', desc: 'Geçerli tarih' },
-  { name: '{{time}}', desc: 'Geçerli saat' },
-  { name: '{{datetime}}', desc: 'Tarih + saat' },
+  ...[
+    'trajectoryId',
+    'rootSessionId',
+    'sessionId',
+    'recipe',
+    'phase',
+    'phaseState',
+    'event',
+    'status',
+    'phases',
+    'iteration',
+    'maxIterations',
+    'automation',
+    'date',
+    'time',
+    'datetime',
+  ].map((name) => ({
+    name: `{{${name}}}`,
+    get desc() {
+      return tr(`meta.promptVars.trajectory.${name}`)
+    },
+  })),
 ]
 
 // Fallback columns used until workspace board columns load (mirrors TaskBoard).
 export const DEFAULT_COLUMNS: BoardColumnDef[] = [
   { key: 'pbi', label: 'PBI', color: '' },
-  { key: 'todo', label: 'Yapılacak', color: '' },
-  { key: 'in_progress', label: 'Devam Eden', color: '' },
-  { key: 'review', label: 'İnceleme', color: '' },
-  { key: 'done', label: 'Bitti', color: '' },
-  { key: 'failed', label: 'Başarısız', color: '' },
-  { key: 'iptal', label: 'İptal', color: '' },
+  {
+    key: 'todo',
+    get label() {
+      return tr('meta.defaultColumns.todo')
+    },
+    color: '',
+  },
+  {
+    key: 'in_progress',
+    get label() {
+      return tr('meta.defaultColumns.inProgress')
+    },
+    color: '',
+  },
+  {
+    key: 'review',
+    get label() {
+      return tr('meta.defaultColumns.review')
+    },
+    color: '',
+  },
+  {
+    key: 'done',
+    get label() {
+      return tr('meta.defaultColumns.done')
+    },
+    color: '',
+  },
+  {
+    key: 'failed',
+    get label() {
+      return tr('meta.defaultColumns.failed')
+    },
+    color: '',
+  },
+  {
+    key: 'iptal',
+    get label() {
+      return tr('meta.defaultColumns.cancelled')
+    },
+    color: '',
+  },
 ]
 
 // Board-trigger operation options (label = Turkish UI text).
 export const BOARD_OPS: { value: BoardOp; label: string }[] = [
-  { value: 'move', label: 'Taşındı (sütun değişti)' },
-  { value: 'create', label: 'Oluşturuldu' },
-  { value: 'update', label: 'Güncellendi' },
-  { value: 'delete', label: 'Silindi' },
-  { value: 'any', label: 'Herhangi bir değişiklik' },
+  {
+    value: 'move',
+    get label() {
+      return tr('meta.boardOps.move')
+    },
+  },
+  {
+    value: 'create',
+    get label() {
+      return tr('meta.boardOps.create')
+    },
+  },
+  {
+    value: 'update',
+    get label() {
+      return tr('meta.boardOps.update')
+    },
+  },
+  {
+    value: 'delete',
+    get label() {
+      return tr('meta.boardOps.delete')
+    },
+  },
+  {
+    value: 'any',
+    get label() {
+      return tr('meta.boardOps.any')
+    },
+  },
 ]
 
 export function boardOpLabel(op?: BoardOp): string {
@@ -68,67 +169,107 @@ export function boardOpLabel(op?: BoardOp): string {
 // Board-trigger action options: 'spawn' runs the target (board drives execution),
 // 'archive' hides the finished card off the board with no LLM call.
 export const BOARD_ACTIONS: { value: BoardAction; label: string }[] = [
-  { value: 'spawn', label: 'Ajanı/akışı başlat (yürütme)' },
-  { value: 'archive', label: 'Kartı arşivle (LLM yok)' },
-  { value: 'move', label: 'Kartı sütuna taşı (LLM yok)' },
+  {
+    value: 'spawn',
+    get label() {
+      return tr('meta.boardActions.spawn')
+    },
+  },
+  {
+    value: 'archive',
+    get label() {
+      return tr('meta.boardActions.archive')
+    },
+  },
+  {
+    value: 'move',
+    get label() {
+      return tr('meta.boardActions.move')
+    },
+  },
 ]
 
 // Token-trigger scope options (label = Turkish UI text).
 export const TOKEN_SCOPES: { value: TokenScope; label: string }[] = [
-  { value: 'session', label: 'Oturum (bir oturumun ömür-boyu tokenı)' },
-  { value: 'workspace', label: 'Workspace (bugünkü toplam token)' },
+  {
+    value: 'session',
+    get label() {
+      return tr('meta.tokenScopes.session')
+    },
+  },
+  {
+    value: 'workspace',
+    get label() {
+      return tr('meta.tokenScopes.workspace')
+    },
+  },
 ]
 
 // Tag-trigger prompt placeholders (kept in sync with agent/automation.go turnVars).
 export const PROMPT_VARS: { name: string; desc: string }[] = [
-  { name: '{{result}}', desc: 'Biten oturumun son yanıtı' },
-  { name: '{{title}}', desc: 'Biten oturumun başlığı' },
-  { name: '{{tag}}', desc: 'Tetikleyici etiket' },
-  { name: '{{sessionId}}', desc: 'Biten oturumun ID’si' },
-  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
-  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
-  { name: '{{agent}}', desc: 'Sonucu üreten ajanın adı ({{agentName}} eşdeğer)' },
-  { name: '{{prevPrompt}}', desc: 'Bir önceki turu tetikleyen kullanıcı promptu' },
-  { name: '{{automation}}', desc: 'Otomasyonun adı' },
-  { name: '{{date}}', desc: 'Geçerli tarih (2026-07-03)' },
-  { name: '{{time}}', desc: 'Geçerli saat (03:00)' },
-  { name: '{{datetime}}', desc: 'Tarih + saat' },
-]
+  'result',
+  'title',
+  'tag',
+  'sessionId',
+  'iteration',
+  'maxIterations',
+  'agent',
+  'prevPrompt',
+  'automation',
+  'date',
+  'time',
+  'datetime',
+].map((name) => ({
+  name: `{{${name}}}`,
+  get desc() {
+    return tr(`meta.promptVars.tag.${name}`)
+  },
+}))
 
 // Board-trigger prompt placeholders (kept in sync with agent/automation.go boardVars).
 export const BOARD_PROMPT_VARS: { name: string; desc: string }[] = [
-  { name: '{{taskId}}', desc: 'Değişen kartın ID’si' },
-  { name: '{{title}}', desc: 'Kartın başlığı' },
-  { name: '{{op}}', desc: 'İşlem (move/create/update/delete)' },
-  { name: '{{from}}', desc: 'Önceki sütun anahtarı' },
-  { name: '{{to}}', desc: 'Yeni sütun anahtarı' },
-  { name: '{{fromLabel}}', desc: 'Önceki sütun adı' },
-  { name: '{{toLabel}}', desc: 'Yeni sütun adı' },
-  { name: '{{board}}', desc: 'Güncel sütun (= {{to}})' },
-  { name: '{{tags}}', desc: 'Kartın etiketleri (virgülle ayrık)' },
-  { name: '{{owner}}', desc: 'Atanan ajanın adı (boş = atanmamış)' },
-  { name: '{{priority}}', desc: 'Öncelik (critical/high/medium/low, boş olabilir)' },
-  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
-  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
-  { name: '{{automation}}', desc: 'Otomasyonun adı' },
-  { name: '{{date}}', desc: 'Geçerli tarih' },
-  { name: '{{time}}', desc: 'Geçerli saat' },
-  { name: '{{datetime}}', desc: 'Tarih + saat' },
-]
+  'taskId',
+  'title',
+  'op',
+  'from',
+  'to',
+  'fromLabel',
+  'toLabel',
+  'board',
+  'tags',
+  'owner',
+  'priority',
+  'iteration',
+  'maxIterations',
+  'automation',
+  'date',
+  'time',
+  'datetime',
+].map((name) => ({
+  name: `{{${name}}}`,
+  get desc() {
+    return tr(`meta.promptVars.board.${name}`)
+  },
+}))
 
 // Token-trigger prompt placeholders (kept in sync with agent/automation.go tokenVars).
 export const TOKEN_PROMPT_VARS: { name: string; desc: string }[] = [
-  { name: '{{tokens}}', desc: 'Eşiği geçen kümülatif token toplamı' },
-  { name: '{{threshold}}', desc: 'Token aralığı (eşik)' },
-  { name: '{{scope}}', desc: 'Kapsam (session/workspace)' },
-  { name: '{{sessionId}}', desc: 'Geçişi tetikleyen oturum (workspace kapsamında boş)' },
-  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
-  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
-  { name: '{{automation}}', desc: 'Otomasyonun adı' },
-  { name: '{{date}}', desc: 'Geçerli tarih' },
-  { name: '{{time}}', desc: 'Geçerli saat' },
-  { name: '{{datetime}}', desc: 'Tarih + saat' },
-]
+  'tokens',
+  'threshold',
+  'scope',
+  'sessionId',
+  'iteration',
+  'maxIterations',
+  'automation',
+  'date',
+  'time',
+  'datetime',
+].map((name) => ({
+  name: `{{${name}}}`,
+  get desc() {
+    return tr(`meta.promptVars.token.${name}`)
+  },
+}))
 
 // Default prompt template for a fresh automation of each kind.
 export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
@@ -151,7 +292,9 @@ export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
 // diagnoses via the debug journal; on success the framework clears the parent's
 // stuck tag + counter, re-opening autonomy.
 export const STUCK_TEMPLATE = {
-  name: 'Stuck oturum onarıcısı',
+  get name() {
+    return tr('automationModal.stuckTemplate')
+  },
   triggerTag: 'stuck',
   maxIterations: '10',
   cooldownSec: '300',

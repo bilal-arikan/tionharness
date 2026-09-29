@@ -2,9 +2,10 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { TurnStep } from '@/types'
 import { CompactionCard } from './CompactionCard'
+import { setLocale } from '@/i18n'
 
 const reactTestEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT: boolean
@@ -12,6 +13,8 @@ const reactTestEnvironment = globalThis as typeof globalThis & {
 reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: ReturnType<typeof createRoot>[] = []
+
+beforeAll(() => setLocale('tr'))
 
 function renderCard(step: TurnStep) {
   const container = document.createElement('div')
@@ -61,8 +64,8 @@ describe('CompactionCard', () => {
 
     const text = header(container).textContent ?? ''
     expect(text).toContain('12 mesaj özete katlandı')
-    expect(text).toContain('48.0k')
-    expect(text).toContain('9.0k')
+    expect(text).toContain('48,0k')
+    expect(text).toContain('9,0k')
     expect(text).toContain('tok')
   })
 

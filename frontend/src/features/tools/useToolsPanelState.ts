@@ -34,6 +34,7 @@ import {
   dismissDisconnect,
   type MCPDisconnectNotice,
 } from './mcpDisconnects'
+import { useTranslation } from 'react-i18next'
 
 // The MCP pool snapshot has no SSE signal, so this interval IS the update path —
 // but it only drives an indicator, so it stays coarse and visibility-gated.
@@ -53,6 +54,7 @@ export function useToolsPanelState(
   onError: (msg: string) => void,
   options: ToolsPanelStateOptions = {},
 ) {
+  const { t } = useTranslation('tools')
   const [servers, setServers] = useState<MCPServer[]>([])
   const [serversReady, setServersReady] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
@@ -193,7 +195,7 @@ export function useToolsPanelState(
       await api.addImportableMCPServer(item.workspaceId, item.server.id)
       loadServers()
       loadImportable()
-      toast.success('MCP sunucusu eklendi')
+      toast.success(t('server.added'))
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -330,7 +332,7 @@ export function useToolsPanelState(
       resetForm()
       loadServers()
       loadPoolStats()
-      toast.success(wasEditing ? 'MCP sunucusu güncellendi' : 'MCP sunucusu eklendi')
+      toast.success(wasEditing ? t('server.updated') : t('server.added'))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -378,12 +380,12 @@ export function useToolsPanelState(
     try {
       const res = await api.importMCPServers(text)
       const errCount = Object.keys(res.errors ?? {}).length
-      const parts = [`${res.created.length} sunucu eklendi`]
+      const parts = [t('server.importCreated', { count: res.created.length })]
       if (errCount > 0) {
         const detail = Object.entries(res.errors)
           .map(([n, e]) => `${n}: ${e}`)
           .join('; ')
-        parts.push(`${errCount} hata — ${detail}`)
+        parts.push(t('server.importErrors', { count: errCount, detail }))
       }
       setImportMsg(parts.join(' · '))
       if (res.created.length > 0) setImportText('')
@@ -406,13 +408,13 @@ export function useToolsPanelState(
 
   const testServer = async (s: MCPServer) => {
     setTesting(s.id)
-    setTestResult((r) => ({ ...r, [s.id]: 'Test ediliyor…' }))
+    setTestResult((r) => ({ ...r, [s.id]: t('server.testing') }))
     try {
       const res = await api.testMCPServer(s.id)
       setTestResult((r) => ({
         ...r,
         [s.id]: res.ok
-          ? `✓ ${res.toolCount} araç: ${(res.tools ?? []).map((t) => t.name).join(', ')}`
+          ? `✓ ${t('server.testSuccess', { count: res.toolCount })}: ${(res.tools ?? []).map((tool) => tool.name).join(', ')}`
           : `✗ ${res.error}`,
       }))
     } catch (e) {
@@ -423,11 +425,11 @@ export function useToolsPanelState(
   }
 
   const removeServer = async (s: MCPServer) => {
-    if (!confirm(`"${s.name}" sunucusu silinsin mi?`)) return
+    if (!confirm(t('server.deleteConfirm', { name: s.name }))) return
     try {
       await api.deleteMCPServer(s.id)
       loadServers()
-      toast.success('MCP sunucusu silindi')
+      toast.success(t('server.deleted'))
     } catch (e) {
       onError((e as Error).message)
     }

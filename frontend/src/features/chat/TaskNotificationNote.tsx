@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { formatDurationMs } from '@/shared/lib/time'
 import { Bot, CheckCircle2, ChevronRight, Clock, OctagonX, Wrench, XCircle } from 'lucide-react'
 import type { Message } from '@/types'
@@ -15,10 +16,10 @@ import { DiffCard } from './DiffCard'
 // and usage, plus the result body folded by default. The raw text stays intact
 // in the DB — this is display-only parsing.
 
-const STATUS_META: Record<string, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-  completed: { label: 'tamamlandı', cls: 'text-[var(--color-success)]', Icon: CheckCircle2 },
-  failed: { label: 'başarısız', cls: 'text-[var(--color-danger)]', Icon: XCircle },
-  killed: { label: 'durduruldu', cls: 'text-[var(--color-warning)]', Icon: OctagonX },
+const STATUS_META: Record<string, { cls: string; Icon: typeof CheckCircle2 }> = {
+  completed: { cls: 'text-[var(--color-success)]', Icon: CheckCircle2 },
+  failed: { cls: 'text-[var(--color-danger)]', Icon: XCircle },
+  killed: { cls: 'text-[var(--color-warning)]', Icon: OctagonX },
 }
 
 // fmtDuration parses the notification's millisecond field (a string in the
@@ -42,13 +43,19 @@ export function TaskNotificationNote({
   onOpenFile?: (path: string) => void
   onDelete?: (id: string) => void
 }) {
+  const { t } = useTranslation('chatStatus')
   const [open, setOpen] = useState(false)
   const p = parseTaskNotification(message.text)
   // Unparseable worker-note (foreign/legacy format): show the raw text folded so
   // nothing is silently hidden.
-  const status = p
-    ? (STATUS_META[p.status] ?? { label: p.status, cls: 'text-[var(--color-text-dim)]', Icon: Bot })
+  const statusMeta = p
+    ? (STATUS_META[p.status] ?? { cls: 'text-[var(--color-text-dim)]', Icon: Bot })
     : null
+  const statusLabel = p
+    ? STATUS_META[p.status]
+      ? t(`taskNotification.status.${p.status}`)
+      : p.status
+    : ''
   const body = p ? p.result || p.summary : message.text
   const duration = p ? fmtDuration(p.durationMs) : ''
   const identity = p
@@ -67,7 +74,7 @@ export function TaskNotificationNote({
             type="button"
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
-            aria-label={open ? 'Worker sonucunu daralt' : 'Worker sonucunu genişlet'}
+            aria-label={open ? t('taskNotification.collapse') : t('taskNotification.expand')}
             className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
           >
             <ChevronRight size={13} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
@@ -77,14 +84,18 @@ export function TaskNotificationNote({
               <button
                 type="button"
                 onClick={() => onSelectSession(p.taskId)}
-                aria-label={`${identity.name} worker oturumunu aç`}
+                aria-label={t('taskNotification.openSession', { name: identity.name })}
                 className="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-left text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
               >
                 <AgentIdentity
                   agent={identity}
                   size="sm"
                   showId={Boolean(identity.id)}
-                  subtitle={identity.provider ? 'model' : identity.model || 'none'}
+                  subtitle={
+                    identity.provider
+                      ? t('taskNotification.model')
+                      : identity.model || t('taskNotification.none')
+                  }
                 />
               </button>
             ) : (
@@ -92,28 +103,33 @@ export function TaskNotificationNote({
                 agent={identity}
                 size="sm"
                 showId={Boolean(identity.id)}
-                subtitle={identity.provider ? 'model' : identity.model || 'none'}
+                subtitle={
+                  identity.provider
+                    ? t('taskNotification.model')
+                    : identity.model || t('taskNotification.none')
+                }
                 className="min-w-0 flex-1"
               />
             )
           ) : (
             <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-accent)]">
-              Worker bildirimi
+              {t('taskNotification.notification')}
             </span>
           )}
-          {p && status && (
+          {p && statusMeta && (
             <div
               className="flex shrink-0 flex-col items-end gap-0.5"
               data-testid="task-status-meta"
             >
-              <span className={`flex items-center gap-1 font-medium ${status.cls}`}>
-                <status.Icon size={13} /> {status.label}
+              <span className={`flex items-center gap-1 font-medium ${statusMeta.cls}`}>
+                <statusMeta.Icon size={13} /> {statusLabel}
               </span>
               {(p.toolUses || duration) && (
                 <span className="flex items-center justify-end gap-3 text-[10px] text-[var(--color-text-dim)]">
                   {p.toolUses && (
                     <span className="flex items-center gap-1">
-                      <Wrench size={10} /> {p.toolUses} araç
+                      <Wrench size={10} />{' '}
+                      {t('taskNotification.toolCount', { count: Number(p.toolUses) })}
                     </span>
                   )}
                   {duration && (

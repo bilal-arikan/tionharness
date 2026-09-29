@@ -1,0 +1,126 @@
+{
+  "title": "Budget",
+  "rangeDays_one": "{{count}}d",
+  "rangeDays_other": "{{count}}d",
+  "refresh": "Refresh",
+  "loading": "Loading…",
+  "noData": "No data.",
+  "notAvailable": "—",
+  "infoSymbol": "ⓘ",
+  "summary": {
+    "tokensToday": "Total tokens today",
+    "inputOutput": "{{input}} input · {{output}} output",
+    "callsToday": "Calls today",
+    "inputTokens": "Input tokens",
+    "estimatedCostToday": "Estimated cost today",
+    "listPriceEstimate": "list-price estimate",
+    "cliEquivalentIncluded": "claude-cli: includes equivalent API cost",
+    "partlySubscription": "partly subscription/unpriced"
+  },
+  "kind": {
+    "chat": "Chat",
+    "task": "Task",
+    "schedule": "Schedule",
+    "flow": "Flow",
+    "delegate": "Delegation",
+    "title": "Title",
+    "summary": "Summary",
+    "reflect": "Reflection",
+    "compact": "Compaction",
+    "decide": "Decision",
+    "system": "System agent",
+    "other": "Other"
+  },
+  "cost": {
+    "subscriptionEstimateHint": "Subscription (claude-cli) — estimated equivalent API cost; not actual billing",
+    "partlyUnpricedHint": "Partly unpriced (subscription/custom model)",
+    "subscriptionOrUnpriced": "subscription / unpriced"
+  },
+  "cliOverhead": {
+    "title": "claude-cli overhead:",
+    "descriptionBefore": "This provider adds its own system prompt, tool schemas, and MCP bridge to the model; actual input is much larger than the segment estimate in the context preview. These figures show",
+    "billed": "actual billed",
+    "descriptionAfter": "usage (at equivalent API cost). Rely on these figures instead of the preview estimate. Use the message debug button in chat to inspect one message.",
+    "toolCountTitle": "Why tool counts differ:",
+    "toolCountBefore": "The information screen counts the entire catalog available to the agent (for example 129); the context popup's",
+    "toolsLabel": "Tools",
+    "toolCountMiddle": "row only counts the",
+    "eager": "eager",
+    "toolCountSet": "schemas sent on every turn. During the session, tools activated through",
+    "activatedWith": "as",
+    "deferred": "deferred (lazy)",
+    "tools": "tools stay warm through",
+    "resumeAfter": "and increase actual input without entering the popup's eager count. See the",
+    "onDemandLabel": "On demand",
+    "chip": "chip in the popup."
+  },
+  "cumulative": {
+    "totalCost_one": "Total cost (last {{count}} day)",
+    "totalCost_other": "Total cost (last {{count}} days)",
+    "callsTokens": "{{calls}} calls · {{tokens}} tokens",
+    "cacheSavings_one": "Cache savings (last {{count}} day)",
+    "cacheSavings_other": "Cache savings (last {{count}} days)",
+    "cacheReadWrite": "{{read}} read · {{write}} written",
+    "cacheHitRate": "Cache hit rate",
+    "cacheHitRateHint": "share of requests read from cache",
+    "noCacheCost": "Cost without caching",
+    "noCacheCostHint": "what would have been paid without caching",
+    "coolingWaste_one": "Cooling waste (last {{count}} day)",
+    "coolingWaste_other": "Cooling waste (last {{count}} days)",
+    "coolingWasteHint": "a late turn let a warm prefix cool"
+  },
+  "savings": {
+    "title": "Savings center",
+    "window_one": "· last {{count}} day · all optimization sources",
+    "window_other": "· last {{count}} days · all optimization sources",
+    "promptCache": "Prompt cache",
+    "promptCacheSub": "{{tokens}} tokens from cache · {{rate}} hit rate",
+    "promptCacheHint": "Actual USD saved by retrieving the static prefix from cache instead of reading it again at the full input price.",
+    "coolingWaste": "Cooling waste (avoidable)",
+    "coolingWasteSub": "rewrite premium for prefixes cooled by TTL/eviction",
+    "coolingWasteHint": "The avoidable difference paid at the write rate instead of the read rate because a late turn let a warm prompt-cache prefix cool. The actual amount is already included in cost; this isolates only the avoidable portion."
+  },
+  "origin": {
+    "title": "Origin breakdown (today)",
+    "empty": "No usage yet today.",
+    "rowMeta": "{{tokens}} · {{percent}} · {{calls}} calls"
+  },
+  "trend": {
+    "title_one": "Trend — last {{count}} day",
+    "title_other": "Trend — last {{count}} days",
+    "empty": "No historical data.",
+    "total": "{{metric}} · {{value}} total",
+    "tooltip": "{{day}} · {{metric}}: {{value}}\n{{tokens}} tokens · {{calls}} calls · {{cost}} cost{{savings}}",
+    "tooltipSavings": " · cache {{value}}",
+    "metric": {
+      "token": "Tokens",
+      "cost": "Cost",
+      "cacheSavings": "Cache savings"
+    }
+  },
+  "provider": {
+    "title": "Provider / model (today)",
+    "cacheSavingsHint": "Savings from prompt-cache reads compared with the full input price",
+    "cacheSavings": "cache savings {{value}}",
+    "empty": "No tagged provider usage today. Usage recorded before deployment has no model/provider metadata; new turns will appear here.",
+    "columns": {
+      "providerModel": "Provider / model",
+      "calls": "Calls",
+      "tokens": "Tokens (I/O)",
+      "cache": "Cache (read/write)",
+      "savings": "Savings",
+      "cost": "Cost"
+    }
+  },
+  "agents": {
+    "title": "Usage by agent (today)",
+    "empty": "No agents.",
+    "unnamed": "Unnamed",
+    "columns": {
+      "agent": "Agent",
+      "calls": "Calls",
+      "tokens": "Tokens (I/O)",
+      "cost": "Cost"
+    }
+  }
+}

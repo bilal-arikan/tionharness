@@ -1,0 +1,210 @@
+{
+  "actions": {
+    "archive": "Archive",
+    "cancel": "Cancel",
+    "close": "Close",
+    "create": "+ Create",
+    "delete": "Delete",
+    "processing": "Processing…",
+    "remove": "Remove",
+    "rename": "Rename",
+    "restore": "Restore",
+    "restoreFromArchive": "Restore from archive",
+    "save": "Save",
+    "saving": "Saving…",
+    "undo": "Undo"
+  },
+  "artifacts": {
+    "dropHint": "or drag and drop a file",
+    "empty": "No artifacts yet",
+    "linkExisting": "Existing",
+    "noMatch": "No matches",
+    "removeReference": "Remove reference",
+    "searchPlaceholder": "Search artifacts…",
+    "uploadError": "Could not add \"{{name}}\": {{error}}",
+    "uploading": "Uploading…"
+  },
+  "board": {
+    "addTask": "+ Task",
+    "archiveNoun": "task",
+    "archiveRestoreHint": "press \"Restore\" to return a card.",
+    "archiveTitle": "Tasks — Archive",
+    "backToActiveBoard": "Return to the active board",
+    "backToBoard": "Back to board",
+    "bulkAssignPlaceholder": "Assign agent…",
+    "bulkAssignTitle": "Assign an agent to selected tasks",
+    "bulkDeleteConfirm_one": "Delete {{count}} task?",
+    "bulkDeleteConfirm_other": "Delete {{count}} tasks?",
+    "bulkMovePlaceholder": "Move to column…",
+    "bulkMoveTitle": "Move selected tasks to a column",
+    "columnAriaLabel_one": "{{column}} column, {{count}} task",
+    "columnAriaLabel_other": "{{column}} column, {{count}} tasks",
+    "columns": "Columns",
+    "dropFileOnCard": "Drop the file on a task card to attach it",
+    "editColumns": "Edit columns",
+    "emptyFiltered": "No tasks match this filter.",
+    "loading": "Loading tasks…",
+    "movedOutsideFilter": "\"{{title}}\" no longer matches the filter",
+    "movedToColumn": "\"{{title}}\" moved to the {{column}} column",
+    "title": "Tasks"
+  },
+  "boardStates": {
+    "done": "Done",
+    "failed": "Failed",
+    "in_progress": "In Progress",
+    "iptal": "Cancelled",
+    "pbi": "PBI",
+    "review": "Review",
+    "todo": "To Do"
+  },
+  "card": {
+    "ariaLabel": "{{title}}{{idPart}}, {{column}} column, {{position}}/{{count}}. Use the left or right arrow key to move it.",
+    "attachmentCount_one": "{{count}} attachment (artifact)",
+    "attachmentCount_other": "{{count}} attachments (artifacts)",
+    "dependenciesComplete": "All dependencies are complete",
+    "flowFallback": "Flow",
+    "generatingTitle": "generating title…",
+    "idPart": ", task ID {{id}}",
+    "restoreTitle": "Restore from archive (return to board)",
+    "unmetDependencies_one": "{{count}} dependency is incomplete",
+    "unmetDependencies_other": "{{count}} dependencies are incomplete"
+  },
+  "columns": {
+    "add": "+ Add Column",
+    "chooseColor": "Choose color",
+    "customColor": "Custom color",
+    "delete": "Delete column",
+    "deleteBlockedTasks_one": "{{count}} task is in this column — move it first",
+    "deleteBlockedTasks_other": "{{count}} tasks are in this column — move them first",
+    "deleteLastBlocked": "The last column cannot be deleted",
+    "dragToReorder": "Drag to reorder",
+    "editorTitle": "Column Editor",
+    "errors": {
+      "duplicateKey": "Duplicate column key: \"{{key}}\"",
+      "emptyLabel": "Column label cannot be empty.",
+      "invalidKey": "Invalid key for \"{{label}}\": \"{{key}}\" (lowercase letters, digits, and underscores only)",
+      "minimumOne": "At least one column is required."
+    },
+    "keyLabel": "key:",
+    "keyPlaceholder": "example_key",
+    "moveDown": "Move down",
+    "moveUp": "Move up",
+    "namePlaceholder": "Column name",
+    "newColumn": "New Column",
+    "removeColor": "Remove color"
+  },
+  "dependencies": {
+    "empty": "No other tasks."
+  },
+  "derivedColumns": {
+    "deletedAgent": "(deleted agent) {{id}}",
+    "unassigned": "Unassigned",
+    "untagged": "Untagged"
+  },
+  "filters": {
+    "activeCount_one": "{{count}} filter",
+    "activeCount_other": "{{count}} filters",
+    "agent": "Agent",
+    "clear": "Clear",
+    "clearAll": "Clear all filters",
+    "column": "Column",
+    "dependencies": {
+      "blocked": "Blocked (waiting on dependency)",
+      "ready": "Ready (dependencies complete)"
+    },
+    "dependency": "Dependency",
+    "noOptions": "No options",
+    "noTags": "No tasks have tags",
+    "priority": "Priority",
+    "review": {
+      "bounced": "Returned from review",
+      "exhausted": "Verification budget exhausted"
+    },
+    "reviewLabel": "Verification",
+    "searchPlaceholder": "search…  /",
+    "tag": "Tag",
+    "unassigned": "Unassigned"
+  },
+  "form": {
+    "assignee": "Agent (assignee)",
+    "assigneePlaceholder": "Select an agent (optional)",
+    "attachments": "Attachments — Artifact references",
+    "confirmDelete": "Delete \"{{title}}\"?",
+    "copyId": "Copy ID",
+    "dependencies": "Dependencies — tasks that must be completed first",
+    "description": "Description",
+    "errors": {
+      "titleOrDescriptionRequired": "A title or description is required"
+    },
+    "flow": "Flow (optional)",
+    "generateTitle": "Generate a title from the description with AI",
+    "noFlow": "No flow",
+    "priority": "Priority",
+    "status": "Status (column)",
+    "tagPlaceholder": "+ tag",
+    "tags": "Tags",
+    "titlePlaceholder": "Title (generated from the description if empty)",
+    "toasts": {
+      "archived": "Task archived",
+      "copied": "Copied to clipboard",
+      "created": "Task created",
+      "deleted": "Task deleted",
+      "restored": "Task restored from archive",
+      "updated": "Task updated"
+    }
+  },
+  "priorities": {
+    "critical": "Critical",
+    "high": "High",
+    "low": "Low",
+    "medium": "Medium",
+    "none": "No priority"
+  },
+  "reviewGate": {
+    "exhaustedDescription": "Another review round is not converging. Narrow the card to the part that passed and move the rejected part to a new card, or ask the user to decide.",
+    "exhaustedHeading": "Verification budget exhausted ({{label}})",
+    "exhaustedTitle_one": "Verification budget exhausted: this card returned from review {{count}} time (budget {{budget}}). Narrow the card or decide instead of starting another reviewer round.",
+    "exhaustedTitle_other": "Verification budget exhausted: this card returned from review {{count}} times (budget {{budget}}). Narrow the card or decide instead of starting another reviewer round.",
+    "warningDescription": "Review the scope contract: an out-of-scope finding should not block the card and should be opened as a new card.",
+    "warningHeading_one": "Returned from review {{count}} time ({{label}})",
+    "warningHeading_other": "Returned from review {{count}} times ({{label}})",
+    "warningTitle_one": "This card returned from review {{count}} time (budget {{budget}}).",
+    "warningTitle_other": "This card returned from review {{count}} times (budget {{budget}})."
+  },
+  "taskCount_one": "{{count}} task",
+  "taskCount_other": "{{count}} tasks",
+  "views": {
+    "builtinSection": "Built-in",
+    "builtins": {
+      "all": "All",
+      "blocked": "Blocked",
+      "unassigned": "Unassigned"
+    },
+    "deleteConfirm": "Delete the \"{{label}}\" view?",
+    "emptySaved": "No saved views yet — apply filters and press \"Save\".",
+    "errors": {
+      "cannotOverwriteBuiltin": "Built-in views cannot be overwritten — use \"Save as new\"",
+      "emptyName": "View name cannot be empty"
+    },
+    "groupBy": {
+      "agent": "Agent",
+      "priority": "Priority",
+      "status": "Status",
+      "tag": "Tag"
+    },
+    "groupByTitle": "Choose how to split columns",
+    "namePrompt": "View name",
+    "newNamePrompt": "New view name",
+    "overwriteConfirm": "Overwrite this view?\n\nOK = overwrite · Cancel = save as new",
+    "revert": "Revert to the saved view",
+    "savedSection": "Saved",
+    "sort": {
+      "deps": "Dependency order",
+      "priority": "Priority",
+      "title": "Title",
+      "updated": "Last updated"
+    },
+    "sortTitle": "Sort within columns",
+    "unsavedChanges": "Unsaved changes"
+  }
+}

@@ -3,6 +3,7 @@ import type { ToolVisibility, WorkspaceTool } from '@/types'
 import { toolSource, toolServer, toolLabel, visibilityMeta, type ParamRow } from './toolMeta'
 import { toolIcon } from '@/shared/lib/toolIcons'
 import { VisibilityBadge, VisibilitySelector } from './VisibilityControls'
+import { useTranslation } from 'react-i18next'
 
 // ToolDetail renders the right-hand detail view for one selected tool.
 export function ToolDetail({
@@ -20,6 +21,7 @@ export function ToolDetail({
   onToggle: () => void
   onSetVisibility: (tier: ToolVisibility) => void
 }) {
+  const { t } = useTranslation('tools')
   // Memoised so the icon component identity is stable across renders; a fresh
   // identity every render would remount the icon subtree.
   const ToolIcon = useMemo(() => toolIcon(tool.name), [tool.name])
@@ -37,7 +39,9 @@ export function ToolDetail({
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
-              {toolSource(tool) === 'mcp' ? `MCP · ${toolServer(tool)}` : 'Yerleşik'}
+              {toolSource(tool) === 'mcp'
+                ? t('detail.mcpSource', { server: toolServer(tool) })
+                : t('detail.builtin')}
             </span>
             <span
               className={`rounded px-1.5 py-0.5 text-xs ${
@@ -46,7 +50,7 @@ export function ToolDetail({
                   : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
               }`}
             >
-              {tool.enabled ? 'Aktif' : 'Devre dışı'}
+              {tool.enabled ? t('status.enabled') : t('status.disabled')}
             </span>
             <VisibilityBadge visibility={tool.visibility} />
           </div>
@@ -62,7 +66,7 @@ export function ToolDetail({
                 : 'bg-[var(--color-accent)] text-[var(--color-on-accent)] hover:opacity-90'
             }`}
           >
-            {tool.enabled ? 'Devre dışı bırak' : 'Etkinleştir'}
+            {tool.enabled ? t('actions.disable') : t('actions.enable')}
           </button>
         </div>
       </div>
@@ -77,7 +81,7 @@ export function ToolDetail({
 
       <section>
         <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Bağlam görünürlüğü
+          {t('detail.contextVisibility')}
         </h3>
         <VisibilitySelector value={tool.visibility} busy={visBusy} onSelect={onSetVisibility} />
         <p className="mt-2 text-xs text-[var(--color-text-dim)]">
@@ -87,19 +91,21 @@ export function ToolDetail({
 
       <section>
         <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Açıklama
+          {t('detail.description')}
         </h3>
         <p className="whitespace-pre-wrap text-sm leading-relaxed">
-          {tool.description || <span className="text-[var(--color-text-dim)]">Açıklama yok.</span>}
+          {tool.description || (
+            <span className="text-[var(--color-text-dim)]">{t('detail.noDescription')}</span>
+          )}
         </p>
       </section>
 
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Parametreler ({params.length})
+          {t('detail.parameters', { count: params.length })}
         </h3>
         {params.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-dim)]">Bu araç parametre almıyor.</p>
+          <p className="text-sm text-[var(--color-text-dim)]">{t('detail.noParameters')}</p>
         ) : (
           <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
             {params.map((p) => (
@@ -109,7 +115,7 @@ export function ToolDetail({
                   <span className="text-xs text-[var(--color-text-dim)]">{p.type}</span>
                   {p.required && (
                     <span className="rounded bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-danger)]">
-                      zorunlu
+                      {t('detail.required')}
                     </span>
                   )}
                 </div>
@@ -125,11 +131,11 @@ export function ToolDetail({
       {examples.length > 0 && (
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Örnek çağrılar ({examples.length})
+            {t('detail.examples', { count: examples.length })}
           </h3>
           <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-            Şemanın ifade edemediği kullanım kalıpları (tarih/ID biçimi, birlikte gelen alanlar).
-            Bunlar yalnızca <b>Tam</b> görünürlükte (tam şemayla) modele gider.
+            {t('detail.examplesHintBefore')} <b>{t('visibility.full.label')}</b>{' '}
+            {t('detail.examplesHintAfter')}
           </p>
           <div className="space-y-2">
             {examples.map((ex, i) => (

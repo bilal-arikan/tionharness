@@ -1,0 +1,36 @@
+{
+  "title": "Logs",
+  "groupedSummary": "{{rows}} rows · {{records}} records",
+  "recordCount_one": "{{count}} record",
+  "recordCount_other": "{{count}} records",
+  "copyPath": "Copy log file path",
+  "download": "Download",
+  "downloadHint": "Download filtered logs as JSON",
+  "refresh": "Refresh",
+  "refreshHint": "Refresh logs",
+  "filters": {
+    "allLevels": "All",
+    "componentHint": "Filter by component",
+    "allComponents": "Component: all",
+    "uiNotifications": "{{component}} (UI notifications)",
+    "rangeHint": "Filter by time range",
+    "searchPlaceholder": "Search (message/field)…",
+    "group": "Group",
+    "live": "Live"
+  },
+  "range": {
+    "all": "All",
+    "minutes15": "15 min",
+    "hour1": "1 hour",
+    "hours24": "24 hours"
+  },
+  "pendingHint": "Load new records received while live follow was off",
+  "pending_one": "{{count}} new record — Refresh",
+  "pending_other": "{{count}} new records — Refresh",
+  "empty": "No records.",
+  "filterByComponent": "Filter by component: {{component}}",
+  "repeated_one": "Repeated {{count}} time ({{first}} → {{last}})",
+  "repeated_other": "Repeated {{count}} times ({{first}} → {{last}})",
+  "copyLine": "Copy line",
+  "jumpToBottom": "Jump to bottom"
+}

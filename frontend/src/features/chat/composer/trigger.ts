@@ -1,4 +1,5 @@
 import type { Agent, Artifact, SlashCommand } from '@/types'
+import { i18next } from '@/i18n'
 
 // Trigger detection: what (if any) autocomplete menu the caret is currently in.
 // "@" inserts a NAME REFERENCE to an agent into the message text — it does NOT
@@ -60,7 +61,12 @@ export function buildMenuItems(
   if (trigger.mode === 'artifact') {
     return artifacts
       .filter((a) => a.title.toLowerCase().includes(q))
-      .map((a): MenuItem => ({ key: a.id, label: a.title || 'İsimsiz', sub: a.kind, artifact: a }))
+      .map((a): MenuItem => ({
+        key: a.id,
+        label: a.title || i18next.t('autocomplete.untitled', { ns: 'chatControls' }),
+        sub: i18next.t(`autocomplete.artifactKinds.${a.kind}`, { ns: 'chatControls' }),
+        artifact: a,
+      }))
   }
   return commands
     .filter((c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))

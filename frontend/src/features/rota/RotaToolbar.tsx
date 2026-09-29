@@ -1,14 +1,9 @@
 // Rota toolbar: the idle-lane window. Live lanes always stay; idle ones drop
 // out of the canvas once their last activity is older than the window.
+import { useTranslation } from 'react-i18next'
 export type IdleCutoff = 3600 | 21600 | 86400 | 259200 | 0
 
-const OPTIONS: { value: IdleCutoff; label: string }[] = [
-  { value: 3600, label: '1 sa' },
-  { value: 21600, label: '6 sa' },
-  { value: 86400, label: '24 sa' },
-  { value: 259200, label: '3 gün' },
-  { value: 0, label: 'tümü' },
-]
+const OPTIONS: IdleCutoff[] = [3600, 21600, 86400, 259200, 0]
 
 interface Props {
   cutoff: IdleCutoff
@@ -29,22 +24,23 @@ export function RotaToolbar({
   normalizeBars,
   onNormalizeBars,
 }: Props) {
+  const { t } = useTranslation('rota')
   return (
     <>
-      <span className="flex items-center gap-1" title="Boşta şeritleri bu pencerede tut">
-        <span className="text-[var(--color-text-dim)]">pencere</span>
-        {OPTIONS.map((o) => (
+      <span className="flex items-center gap-1" title={t('toolbar.windowTitle')}>
+        <span className="text-[var(--color-text-dim)]">{t('toolbar.window')}</span>
+        {OPTIONS.map((value) => (
           <button
-            key={o.value}
+            key={value}
             type="button"
-            onClick={() => onCutoff(o.value)}
+            onClick={() => onCutoff(value)}
             className={`rounded px-1.5 py-0.5 ${
-              cutoff === o.value
+              cutoff === value
                 ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
                 : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
             }`}
           >
-            {o.label}
+            {t(`toolbar.windowOptions.${value}`)}
           </button>
         ))}
       </span>
@@ -53,28 +49,28 @@ export function RotaToolbar({
         role="switch"
         aria-checked={collapseGaps}
         onClick={() => onCollapseGaps(!collapseGaps)}
-        title="Hiçbir şeritte iş olmayan zaman aralıklarını kırp"
+        title={t('toolbar.collapseGapsTitle')}
         className={`rounded px-1.5 py-0.5 ${
           collapseGaps
             ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
             : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
         }`}
       >
-        boşluk kırp
+        {t('toolbar.collapseGaps')}
       </button>
       <button
         type="button"
         role="switch"
         aria-checked={normalizeBars}
         onClick={() => onNormalizeBars(!normalizeBars)}
-        title="Uzun süreleri logaritmik ölçekte göster — kısa oturumlar okunur kalır, başlangıç/bitiş noktaları tam yerinde durur"
+        title={t('toolbar.logDurationTitle')}
         className={`rounded px-1.5 py-0.5 ${
           normalizeBars
             ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
             : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
         }`}
       >
-        süre log
+        {t('toolbar.logDuration')}
       </button>
     </>
   )

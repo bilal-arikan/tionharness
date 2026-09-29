@@ -1,3 +1,4 @@
+import { i18next } from '@/i18n'
 // useSessionsController owns the workspace-scoped chat data model: the agent
 // roster, the session list, the open transcript, and every action that mutates
 // them (select/create/rename/archive/pin/delete, per-message actions, agent
@@ -638,7 +639,7 @@ export function useSessionsController({
             return
           const session = items.find((item) => item.id === id)
           if (!session) {
-            setError('Session not found.')
+            setError(i18next.t('shell.sessionNotFound'))
             return
           }
           setSessions((prev) => mergeSelectedSession(prev, session))
@@ -708,7 +709,7 @@ export function useSessionsController({
     async (id: string) => {
       try {
         const { path } = await api.sessionPath(id)
-        await copyToClipboard(path, 'Yolu kopyalayın (Ctrl+C, Enter):')
+        await copyToClipboard(path, i18next.t('shell.copyPathPrompt'))
       } catch (e) {
         setError((e as Error).message)
       }
@@ -925,7 +926,7 @@ export function useSessionsController({
     // agent, which the backend will not accept as a session's agent.
     const aid = defaultAgentId ?? sessionStartAgents[0]?.id
     if (!aid) {
-      setError('Create an agent before starting a new session.')
+      setError(i18next.t('shell.createAgentFirst'))
       return
     }
     // Discard the previous new chat if it was left empty, before opening another.

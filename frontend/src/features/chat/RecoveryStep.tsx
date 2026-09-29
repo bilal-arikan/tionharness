@@ -1,5 +1,6 @@
 import type { TurnStep } from '@/types'
 import { STEP_KIND_MAP } from '@/shared/stepKinds'
+import { useTranslation } from 'react-i18next'
 
 const HeaderIcon = STEP_KIND_MAP.recovery.Icon
 
@@ -11,7 +12,8 @@ interface Props {
 // the tool-iteration cap) as a subtle, single-line notice — distinct from
 // regular narration so the user understands why a turn ended early.
 export function RecoveryStep({ step }: Props) {
-  const text = step.text?.trim() || step.reason || 'Kurtarma'
+  const { t } = useTranslation('chatStatus')
+  const text = step.text?.trim() || step.reason || t('recovery.fallback')
   return (
     <div className="flex items-center gap-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-3 py-1.5 text-xs text-[var(--color-warning)]">
       <HeaderIcon size={14} className="shrink-0" />

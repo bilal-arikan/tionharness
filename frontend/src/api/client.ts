@@ -2,6 +2,8 @@
 // and the active-workspace header that scopes each request to its isolated
 // backend database.
 
+import { sharedText } from '@/shared/lib/sharedI18n'
+
 const WS_KEY = 'tionharness.workspaceId'
 let activeWorkspaceId: string | null = localStorage.getItem(WS_KEY)
 
@@ -39,22 +41,22 @@ function describeHttpError(status: number): string {
     case 502:
     case 503:
     case 504:
-      return `Sunucuya ulaşılamıyor (HTTP ${status}). TionHarness backend yanıt vermiyor — geliştirme sunucusunun (go run ./cmd/tionharness, 127.0.0.1:8090) çalıştığından emin ol.`
+      return sharedText('api.http.backendUnavailable', { status })
     case 500:
-      return 'Sunucu hatası (HTTP 500). İşlem sırasında bir şeyler ters gitti; ayrıntı için Loglar ekranına bak.'
+      return sharedText('api.http.serverError')
     case 408:
-      return 'İstek zaman aşımına uğradı (HTTP 408). Sunucu zamanında yanıt vermedi, tekrar dene.'
+      return sharedText('api.http.timeout')
     case 429:
-      return 'Çok fazla istek (HTTP 429). Lütfen biraz bekleyip tekrar dene.'
+      return sharedText('api.http.tooManyRequests')
     case 404:
-      return 'Bulunamadı (HTTP 404). İstenen kayıt silinmiş veya adres geçersiz olabilir.'
+      return sharedText('api.http.notFound')
     case 401:
     case 403:
-      return `Yetki reddedildi (HTTP ${status}). Bu işlem için izin yok.`
+      return sharedText('api.http.forbidden', { status })
     case 400:
-      return 'Geçersiz istek (HTTP 400). Gönderilen veri sunucu tarafından kabul edilmedi.'
+      return sharedText('api.http.badRequest')
     default:
-      return `Beklenmeyen sunucu yanıtı (HTTP ${status}).`
+      return sharedText('api.http.unexpected', { status })
   }
 }
 
@@ -82,10 +84,7 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (error) {
     if (init?.signal?.aborted) throw error
     // fetch rejects (no response at all) when the dev server / network is down.
-    throw new Error(
-      "Sunucuya bağlanılamadı. Ağ bağlantını ve backend'in çalışıp çalışmadığını kontrol et.",
-      { cause: error },
-    )
+    throw new Error(sharedText('api.network.connectionFailed'), { cause: error })
   }
   if (!res.ok) {
     if (res.status === 409) {
@@ -99,10 +98,10 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
           .join('\n')
         if (
           !window.confirm(
-            `Save changes to "${body.agentName}"?\n\nThis shared agent affects these workspaces:\n${names}\n\nThe central profile will be updated for all of them.`,
+            sharedText('api.sharedAgent.confirm', { agentName: body.agentName, workspaces: names }),
           )
         ) {
-          throw new Error('Changes were not saved. Shared-agent update cancelled.')
+          throw new Error(sharedText('api.sharedAgent.cancelled'))
         }
         return req<T>(path, {
           ...init,

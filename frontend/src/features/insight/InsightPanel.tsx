@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   RefreshCw,
   Play,
@@ -39,14 +40,14 @@ interface Props {
 type Tab = 'findings' | 'lessons' | 'saved-lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
 
 // Left-rail sub-pages (Settings-style vertical nav), each with an icon.
-const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
-  { key: 'findings', label: 'Bulgular', icon: Bug },
-  { key: 'lessons', label: 'Öz-iyileşme', icon: ShieldCheck },
-  { key: 'saved-lessons', label: 'Dersler', icon: GraduationCap },
-  { key: 'lenses', label: 'Lensler', icon: ScanSearch },
-  { key: 'fleet', label: 'Fleet', icon: Boxes },
-  { key: 'runs', label: 'Geçmiş', icon: History },
-  { key: 'settings', label: 'Ayarlar', icon: Settings },
+const TABS: { key: Tab; icon: LucideIcon }[] = [
+  { key: 'findings', icon: Bug },
+  { key: 'lessons', icon: ShieldCheck },
+  { key: 'saved-lessons', icon: GraduationCap },
+  { key: 'lenses', icon: ScanSearch },
+  { key: 'fleet', icon: Boxes },
+  { key: 'runs', icon: History },
+  { key: 'settings', icon: Settings },
 ]
 
 // InsightPanel is the retrospective-scanner triage cockpit: run scans, review the
@@ -54,6 +55,7 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
 // the fleet backlog + scan-run history. A left sub-page rail (Settings-style) holds
 // the scan actions on top + the sub-pages below.
 export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange }: Props) {
+  const { t } = useTranslation('insight')
   const [localTab, setLocalTab] = useState<Tab>('findings')
   // Left sub-page column: the standard collapsible list pane (persisted, default open).
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.insightListOpen')
@@ -111,7 +113,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
         .then((s) => {
           if (!s.scanning) {
             setScanning(false)
-            setScanNote('Tarama tamamlandı — bulgular güncellendi.')
+            setScanNote(t('scan.completed'))
             loadFindings()
           }
         })
@@ -121,19 +123,19 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current)
     }
-  }, [scanning, loadFindings])
+  }, [scanning, loadFindings, t])
 
   const runScan = async (lensIds?: string[]) => {
     setScanNote(null)
     try {
       await api.runInsightScan(lensIds ? { lensIds } : {})
       setScanning(true)
-      setScanNote('Tarama arka planda başladı — bittiğinde bulgular otomatik güncellenir.')
+      setScanNote(t('scan.started'))
     } catch (e) {
       const msg = (e as Error).message
       if (msg.includes('zaten çalışıyor') || msg.includes('409')) {
         setScanning(true)
-        setScanNote('Bir tarama zaten çalışıyor — tamamlanması bekleniyor.')
+        setScanNote(t('scan.alreadyRunning'))
       } else {
         onError(msg)
       }
@@ -168,15 +170,15 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
         widthKey="tionharness.insightListWidth"
         defaultWidth={208}
         minWidth={176}
-        label="İçgörü"
+        label={t('title')}
         testId="insight-list-toggle"
       >
         {/* Header: label + refresh + collapse — same chrome as every list column. */}
-        <SidebarHeader title="İçgörü" onCollapse={toggleList}>
+        <SidebarHeader title={t('title')} onCollapse={toggleList}>
           <button
             onClick={load}
             className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-            title="Yenile"
+            title={t('actions.refresh')}
           >
             <RefreshCw size={14} className={scanning ? 'animate-spin' : ''} />
           </button>
@@ -188,23 +190,23 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
             onClick={() => runScan()}
             disabled={scanning}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
-            title="Retrospektif tarama başlat"
+            title={t('scan.startTitle')}
           >
-            <Play size={15} /> {scanning ? 'Taranıyor…' : 'Tara'}
+            <Play size={15} /> {scanning ? t('scan.scanning') : t('scan.scan')}
           </button>
         </div>
 
         <div className="min-w-0 px-3 pb-2 pt-1">
           <label className="block min-w-0">
             <span className="mb-1 block truncate text-xs text-[var(--color-text-dim)]">
-              Analiz ajanı
+              {t('scan.analysisAgent')}
             </span>
             <div className="min-w-0 [&>div]:w-full [&_[data-testid=agent-picker-trigger]]:w-full [&_[data-testid=agent-picker-trigger]]:min-w-0">
               <AgentPicker
                 agents={agents}
                 value={settings.autoScanAgentId ?? ''}
                 onChange={selectAnalysisAgent}
-                placeholder="Ajan seç"
+                placeholder={t('scan.selectAgent')}
               />
             </div>
           </label>
@@ -212,20 +214,20 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
 
         {/* Sub-page rail. */}
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {TABS.map((t) => {
-            const Icon = t.icon
-            const active = tab === t.key
+          {TABS.map((tabItem) => {
+            const Icon = tabItem.icon
+            const active = tab === tabItem.key
             return (
               <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
+                key={tabItem.key}
+                onClick={() => setTab(tabItem.key)}
                 className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition ${
                   active
                     ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
                     : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
                 }`}
               >
-                <Icon size={15} /> {t.label}
+                <Icon size={15} /> {t(`tabs.${tabItem.key}`)}
               </button>
             )
           })}
@@ -236,8 +238,8 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
           sub-page content, like Tools / Skills. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <PaneHeader
-          title="İçgörü"
-          subtitle={'· ' + (TABS.find((t) => t.key === tab)?.label ?? '')}
+          title={t('title')}
+          subtitle={'· ' + t(`tabs.${tab}`)}
           listOpen={listOpen}
           onToggleList={toggleList}
         />
@@ -249,7 +251,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
           {(scanNote || scanning) && (
             <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-sm">
               {scanning && <RefreshCw className="h-4 w-4 animate-spin" />}
-              <span>{scanning ? (scanNote ?? 'Tarama çalışıyor…') : scanNote}</span>
+              <span>{scanning ? (scanNote ?? t('scan.running')) : scanNote}</span>
             </div>
           )}
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BookOpen, Globe } from 'lucide-react'
 import { siGithub } from 'simple-icons'
 import type { VersionInfo } from '@/types'
@@ -16,12 +17,17 @@ const GithubIcon = ({ size }: { size?: number }) => <BrandIcon icon={siGithub} s
  * the docs path there is the same landing page this links to.
  */
 const PROJECT_LINKS = [
-  { label: 'Web sitesi', href: 'https://tionharness.com', icon: Globe },
-  { label: 'Dokümantasyon', href: 'https://tionharness.com/docs', icon: BookOpen },
-  { label: 'GitHub', href: 'https://github.com/bilal-arikan/tionharness', icon: GithubIcon },
+  { labelKey: 'about.links.website', href: 'https://tionharness.com', icon: Globe },
+  { labelKey: 'about.links.docs', href: 'https://tionharness.com/docs', icon: BookOpen },
+  {
+    labelKey: 'about.links.github',
+    href: 'https://github.com/bilal-arikan/tionharness',
+    icon: GithubIcon,
+  },
 ] as const
 
 export function AboutPanel() {
+  const { t } = useTranslation('settingsMain')
   const [info, setInfo] = useState<VersionInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,20 +51,20 @@ export function AboutPanel() {
         <img src="/favicon.svg" alt="TionHarness" className="h-10 w-10 rounded-xl" />
         <div>
           <div className="text-base font-semibold text-[var(--color-text)]">TionHarness</div>
-          <div className="text-[var(--color-text-dim)]">Çok-ajanlı AI runtime</div>
+          <div className="text-[var(--color-text-dim)]">{t('about.tagline')}</div>
         </div>
       </div>
 
       {/* Version table */}
       <div className="rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)]">
-        <AboutRow label="Sürüm">
+        <AboutRow label={t('about.version')}>
           {loading ? (
-            <span className="text-[var(--color-text-dim)]">yükleniyor…</span>
+            <span className="text-[var(--color-text-dim)]">{t('shared.loading')}</span>
           ) : error ? (
-            <span className="text-[var(--color-danger)]">Alınamadı</span>
+            <span className="text-[var(--color-danger)]">{t('about.unavailable')}</span>
           ) : isDev ? (
             <span className="rounded bg-[var(--color-warning)]/15 px-1.5 py-0.5 text-[var(--color-warning)] font-mono text-xs">
-              dev build
+              {t('about.devBuild')}
             </span>
           ) : (
             <span className="font-mono">{info!.version}</span>
@@ -66,18 +72,18 @@ export function AboutPanel() {
         </AboutRow>
 
         {info && info.commit !== 'dev' && (
-          <AboutRow label="Commit">
+          <AboutRow label={t('about.commit')}>
             <span className="font-mono text-xs">{info.commit}</span>
           </AboutRow>
         )}
 
         {info && info.buildDate !== 'dev' && (
-          <AboutRow label="Build tarihi">
+          <AboutRow label={t('about.buildDate')}>
             <span>{formatDate(new Date(info.buildDate), { dateStyle: 'medium' })}</span>
           </AboutRow>
         )}
 
-        <AboutRow label="Go sürümü">
+        <AboutRow label={t('about.goVersion')}>
           {loading ? (
             <span className="text-[var(--color-text-dim)]">—</span>
           ) : (
@@ -97,7 +103,7 @@ export function AboutPanel() {
             className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
           >
             <link.icon size={14} />
-            {link.label}
+            {t(link.labelKey)}
           </a>
         ))}
       </div>
@@ -105,17 +111,16 @@ export function AboutPanel() {
       {/* Güncelleme notu */}
       <div className="rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-[var(--color-text-dim)]">
         <span className="mr-1.5 text-[var(--color-warning)]">⚠</span>
-        Yeni sürüm çıktığında uygulama üstte bir bildirim şeridi gösterir, ancak güncellemeyi
-        kendisi kurmaz — indirme ve kurulum elle yapılır.
+        {t('about.updateNote')}
       </div>
 
       {/* Depolama açıklaması */}
       <p className="text-[var(--color-text-dim)] leading-relaxed">
-        Uygulama ayarları{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">settings.json</code>, workspace
-        ayarları her workspace&apos;in{' '}
+        {t('about.storage.prefix')}{' '}
+        <code className="rounded bg-[var(--color-surface-2)] px-1">settings.json</code>{' '}
+        {t('about.storage.between')}{' '}
         <code className="rounded bg-[var(--color-surface-2)] px-1">ws-settings.json</code>{' '}
-        dosyasında saklanır. Veritabanı kullanılmaz; tüm veriler düz dosyalardır.
+        {t('about.storage.suffix')}
       </p>
     </div>
   )

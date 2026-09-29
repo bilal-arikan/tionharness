@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { LayoutGrid, Repeat, Sparkles, X, Zap } from 'lucide-react'
 import { api } from '@/api'
 import type {
@@ -65,6 +66,7 @@ export function AutomationModal({
   onDelete,
   onError,
 }: Props) {
+  const { t } = useTranslation('schedules')
   const isBoardKind = kind === 'board'
   const isTokenKind = kind === 'token'
   const isTrajKind = kind === 'phase' || kind === 'trajectory_end'
@@ -112,22 +114,19 @@ export function AutomationModal({
   // Required-field errors, mirroring db.ValidateAutomationShape. Record order is
   // the blocking priority; useFieldErrors gates each behind a submit attempt.
   const { markAttempted, firstError, errorFor } = useFieldErrors({
-    tag:
-      kind === 'tag' && !triggerTag.trim()
-        ? 'Tetikleyici etiket zorunlu (boş etiket hiç tetiklenmez)'
-        : '',
+    tag: kind === 'tag' && !triggerTag.trim() ? t('validation.triggerTagRequired') : '',
     token:
       isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD
-        ? `Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`
+        ? t('validation.tokenThreshold', { min: MIN_TOKEN_THRESHOLD })
         : '',
     moveTarget:
       isBoardKind && boardAction === 'move' && !boardMoveToState
-        ? 'Taşıma hedef sütunu zorunlu'
+        ? t('validation.moveTargetRequired')
         : '',
     target: missingTarget
       ? targetMode === 'flow'
-        ? 'Hedef akış zorunlu'
-        : 'Hedef ajan zorunlu'
+        ? t('validation.targetFlowRequired')
+        : t('validation.targetAgentRequired')
       : '',
   })
 
@@ -144,7 +143,7 @@ export function AutomationModal({
     markAttempted()
     // Prompt is required for every rule except an archive board rule (no LLM call).
     if (!isTargetlessAction && !promptTemplate.trim()) {
-      onError('Prompt şablonu zorunlu')
+      onError(t('validation.promptTemplateRequired'))
       return
     }
     // Shape guards, mirroring db.ValidateAutomationShape. The inline messages under
@@ -155,7 +154,7 @@ export function AutomationModal({
     }
     const expUnix = localInputToUnix(expiresAt)
     if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
-      onError('Son tarih gelecekte olmalı')
+      onError(t('validation.expiryFuture'))
       return
     }
     const body = buildAutomationPayload({
@@ -196,39 +195,37 @@ export function AutomationModal({
         })
         onSaved(created, true)
       }
-      toast.success(editing ? 'Otomasyon güncellendi' : 'Otomasyon oluşturuldu')
+      toast.success(editing ? t('automationModal.updated') : t('automationModal.created'))
       onClose()
     } catch (e) {
       onError((e as Error).message)
     }
   }
 
-  const kindLabel = isBoardKind
-    ? 'pano otomasyonu'
-    : isTokenKind
-      ? 'token otomasyonu'
-      : 'etiket otomasyonu'
+  const kindLabel = t(`automationKinds.${kind}`)
 
   return (
     <FormModal
-      title={`${editing ? 'Düzenle' : 'Yeni'} — ${kindLabel}`}
+      title={t(editing ? 'automationModal.editTitle' : 'automationModal.newTitle', {
+        kind: kindLabel,
+      })}
       icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : Repeat}
       accent={
         isBoardKind ? COLUMN_ACCENT.board : isTokenKind ? COLUMN_ACCENT.token : COLUMN_ACCENT.tag
       }
-      submitLabel={editing ? 'Kaydet' : '+ Otomasyon'}
+      submitLabel={editing ? t('common.save') : t('automationModal.add')}
       onSubmit={submit}
       onClose={onClose}
       onDelete={editing ? onDelete : undefined}
       deleteTestId="automation-delete"
       testId={`automation-${kind}-modal`}
     >
-      <Field label="Ad (opsiyonel)">
+      <Field label={t('common.nameOptional')}>
         <div className="flex items-center gap-2">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Otomasyonun adı"
+            placeholder={t('automationModal.namePlaceholder')}
             className={inputCls}
           />
           {editing && (
@@ -242,7 +239,7 @@ export function AutomationModal({
                   // so Cancel still discards it.
                   const { title } = await api.generateAutomationTitle(editing.id)
                   setName(title)
-                  toast.success('Başlık önerildi — kaydetmeyi unutma')
+                  toast.success(t('common.titleSuggested'))
                 } catch (e) {
                   onError((e as Error).message)
                 } finally {
@@ -250,16 +247,16 @@ export function AutomationModal({
                 }
               }}
               className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              title="AI ile başlık oluştur"
+              title={t('common.generateTitle')}
             >
               <Sparkles size={14} className={generatingTitle ? 'animate-pulse' : ''} />
-              {generatingTitle ? '...' : 'Oluştur'}
+              {generatingTitle ? '...' : t('common.generate')}
             </button>
           )}
         </div>
       </Field>
 
-      <Field label="Tetikleyici">
+      <Field label={t('fields.trigger')}>
         {isBoardKind ? (
           <BoardTriggerFields
             op={boardOp}
@@ -305,7 +302,7 @@ export function AutomationModal({
           <input
             value={triggerTag}
             onChange={(e) => setTriggerTag(e.target.value)}
-            placeholder="tetikleyici etiket (ör. loop)"
+            placeholder={t('automationModal.triggerTagPlaceholder')}
             className={`${inputCls} font-mono ${errorFor('tag') ? 'border-[var(--color-danger)]' : ''}`}
           />
         )}
@@ -316,16 +313,16 @@ export function AutomationModal({
       {isTargetlessAction ? (
         <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
           {boardAction === 'archive' ? (
-            <>Arşiv aksiyonu kartı panodan gizler — hedef ajan/akış ya da prompt gerekmez.</>
+            <>{t('automationModal.archiveActionDescription')}</>
           ) : (
             <label className="flex items-center gap-2">
-              Hedef sütun
+              {t('automationModal.targetColumn')}
               <select
                 value={boardMoveToState}
                 onChange={(e) => setBoardMoveToState(e.target.value)}
                 className={inputCls}
               >
-                <option value="">Seçin</option>
+                <option value="">{t('common.select')}</option>
                 {columns.map((column) => (
                   <option key={column.key} value={column.key}>
                     {column.label}
@@ -338,7 +335,7 @@ export function AutomationModal({
         </div>
       ) : (
         <>
-          <Field label="Hedef" hint="Tetiklendiğinde çalışacak ajan ya da akış.">
+          <Field label={t('fields.target')} hint={t('automationModal.targetHint')}>
             <div className="flex flex-wrap items-center gap-2">
               <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
               {targetMode === 'flow' ? (
@@ -351,15 +348,12 @@ export function AutomationModal({
           </Field>
 
           {targetMode === 'agent' && (
-            <Field
-              label="Oturum"
-              hint="Her tetiklemede yeni bir oturum mu açılsın, yoksa aynı kalıcı oturum sürdürülüp önceki konuşma okunsun mu?"
-            >
+            <Field label={t('fields.session')} hint={t('automationModal.sessionHint')}>
               <div className="inline-flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
                 {(
                   [
-                    ['spawn', 'Yeni oturum'],
-                    ['continue', 'Aynı oturum · sürdür'],
+                    ['spawn', t('automationModal.sessionSpawn')],
+                    ['continue', t('automationModal.sessionContinue')],
                   ] as [SessionMode, string][]
                 ).map(([m, label]) => (
                   <button
@@ -378,8 +372,7 @@ export function AutomationModal({
               </div>
               {sessionMode === 'continue' && (
                 <p className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-                  Aynı oturum: ajan her tetikte önceki thread'i görür (cron benzeri kalıcı iş);
-                  etiket döngüsü tohumlanmaz.
+                  {t('automationModal.continueDescription')}
                 </p>
               )}
             </Field>
@@ -391,7 +384,7 @@ export function AutomationModal({
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-          Maks. iter.
+          {t('automationModal.maxIterations')}
           <input
             type="number"
             min={1}
@@ -399,35 +392,35 @@ export function AutomationModal({
             value={maxIterations}
             onChange={(e) => setMaxIterations(e.target.value)}
             className="w-20 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-            title={`1 ile ${MAX_ITERATIONS_HARD_CAP} arası olmalı. 0 (sınırsız) kabul edilmiyor — sonsuz döngü riski. Sunucu da bu aralığı doğrular.`}
+            title={t('automationModal.maxIterationsHint', { max: MAX_ITERATIONS_HARD_CAP })}
           />
         </label>
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-          Bekleme (sn)
+          {t('automationModal.cooldownSeconds')}
           <input
             type="number"
             min={0}
             value={cooldownSec}
             onChange={(e) => setCooldownSec(e.target.value)}
             className="w-20 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-            title="İki tetik arası minimum saniye"
+            title={t('automationModal.cooldownHint')}
           />
         </label>
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-          Son tarih (ops.)
+          {t('common.expiresOptionalShort')}
           <input
             type="datetime-local"
             value={expiresAt}
             onChange={(e) => setExpiresAt(e.target.value)}
             className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
-            title="Bu tarihten sonra otomasyon tetiklenmez (opsiyonel)"
+            title={t('automationModal.expiryHint')}
           />
           {expiresAt && (
             <button
               type="button"
               onClick={() => setExpiresAt('')}
               className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
-              title="Son tarihi temizle"
+              title={t('common.clearExpiry')}
             >
               <X size={13} />
             </button>
@@ -437,18 +430,18 @@ export function AutomationModal({
 
       {kind === 'tag' && !editing && (
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-dim)]">
-          Şablon:
+          {t('automationModal.template')}:
           <button
             type="button"
             onClick={applyStuckTemplate}
             className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-0.5 font-medium text-[var(--color-text)] hover:border-[var(--color-accent)]"
-            title="Formu 'stuck oturum onarıcısı' olarak doldurur: stuck etiketli (üst üste turları hata veren) oturumun BAŞARISIZ turunda tetiklenir, teşhis+onarım yapan bir fixer başlatır; fixer başarıyla bitince stuck etiketi + sayaç otomatik temizlenir ve otonomi yeniden açılır. Fixer'a stuck etiketi verilmez (döngü olmaz). Hedef ajanı seçmeyi unutma."
+            title={t('automationModal.stuckTemplateHint')}
           >
-            🩹 Stuck oturum onarıcısı
+            🩹 {t('automationModal.stuckTemplate')}
           </button>
           {spawnTagsOverride !== null && (
             <span className="text-[var(--color-warning)]">
-              şablon aktif: fixer oturumu etiketsiz başlar (döngüsüz)
+              {t('automationModal.stuckTemplateActive')}
             </span>
           )}
         </div>

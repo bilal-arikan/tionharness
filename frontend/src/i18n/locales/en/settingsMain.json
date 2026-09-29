@@ -1,0 +1,677 @@
+{
+  "shared": {
+    "active": "Active",
+    "add": "Add",
+    "appliesAll": "Applies to all workspaces after saving.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "deleting": "Deleting…",
+    "inactive": "Inactive",
+    "loading": "Loading…",
+    "off": "Off",
+    "on": "On",
+    "refresh": "Refresh",
+    "retry": "Try again",
+    "save": "Save",
+    "saving": "Saving…",
+    "secondsShort": "s"
+  },
+  "about": {
+    "tagline": "Multi-agent AI runtime",
+    "version": "Version",
+    "devBuild": "dev build",
+    "unavailable": "Unavailable",
+    "commit": "Commit",
+    "buildDate": "Build date",
+    "goVersion": "Go version",
+    "links": { "website": "Website", "docs": "Documentation", "github": "GitHub" },
+    "updateNote": "When a new version is available, the app shows a notification banner at the top, but does not install the update. Download and installation are manual.",
+    "storage": {
+      "prefix": "Application settings are stored in",
+      "workspacePrefix": "and workspace settings are stored in each workspace's",
+      "between": ", while workspace settings are stored in each workspace's",
+      "suffix": "file. No database is used; all data is stored in flat files."
+    }
+  },
+  "agentRoster": {
+    "searchLabel": "Search agents",
+    "searchPlaceholder": "Search name, model or workspace…",
+    "kinds": { "all": "All", "custom": "Custom", "services": "Services", "workers": "Workers" },
+    "workspaceFilter": "Filter by workspace",
+    "allWorkspaces": "All workspaces",
+    "unassigned": "Unassigned",
+    "workspaceCount_one": "{{count}} workspace",
+    "workspaceCount_other": "{{count}} workspaces",
+    "badges": { "builtIn": "Built-in", "role": "Role", "custom": "Custom", "disabled": "Disabled" },
+    "inherits": "Inherits from {{name}}",
+    "empty": "No agents match these filters."
+  },
+  "assignments": {
+    "label": "Workspace assignments",
+    "removeConfirm": "Remove “{{agent}}” from “{{workspace}}”?\n\nChat history and the central profile will be kept. Scheduled work using this assignment cannot run until it is assigned again.",
+    "builtInHint": "Built-in agents are available in every workspace automatically.",
+    "syncHint": "Profile edits stay synchronized across assigned workspaces.",
+    "removeFrom": "Remove from {{workspace}}",
+    "assignTo": "Assign to {{workspace}}",
+    "archived": "archived",
+    "unavailable": "unavailable",
+    "empty": "Create a workspace to assign agents."
+  },
+  "anthropic": {
+    "description": "These options apply only to supported Anthropic API models, not Claude CLI.",
+    "extendedCache": {
+      "label": "Extended prompt cache (1 hour)",
+      "hint": "Keep reusable prompt prefixes cached for longer."
+    },
+    "contextEditing": {
+      "label": "Server-side context editing",
+      "hint": "Trim older tool results while preserving the cached prefix."
+    },
+    "toolSearch": {
+      "label": "Native tool search",
+      "hint": "Let supported Anthropic models discover deferred tools on the server."
+    },
+    "programmaticTools": {
+      "label": "Programmatic tool calls",
+      "hint": "Run tool orchestration in the provider container. Local code mode is a separate capability; permission checks still apply."
+    },
+    "webTools": {
+      "label": "Server-side web tools",
+      "hint": "Enable provider-hosted search and page retrieval for agents with tools enabled. Usage may incur additional charges."
+    },
+    "compaction": {
+      "label": "Server-side compaction",
+      "hint": "Compact long tool loops on the server. Client-side conversation compaction remains separate."
+    },
+    "refusalFallback": {
+      "label": "Refusal fallback",
+      "hint": "Use the configured API fallback for supported Fable/Mythos requests."
+    },
+    "taskBudget": {
+      "label": "Autonomous task budget (tokens)",
+      "hint": "0 disables the API task budget. Supported adaptive models use at least 20,000 tokens when enabled."
+    }
+  },
+  "tools": {
+    "shell": {
+      "label": "Shell access",
+      "hint": "Allow agents to run commands through the application shell. Applies to all workspaces after saving."
+    },
+    "codeMode": {
+      "label": "Local code mode",
+      "hint": "Let the native agent loop call MCP tools through generated Python bindings. Requires shell access; tool permission checks still apply.",
+      "warningTitle": "Code mode requires shell access.",
+      "warningBody": "Enable Shell access above to make this capability available."
+    }
+  },
+  "appearance": {
+    "saved": "Appearance saved",
+    "resetSuccess": "Reset to global appearance",
+    "scope": {
+      "prefix": "These appearance settings apply",
+      "emphasis": "only to this workspace",
+      "suffix": ". The theme changes when you switch workspaces. Changes are previewed immediately; choose Save to make them permanent."
+    },
+    "theme": {
+      "label": "Theme color",
+      "hint": "Choose a color and its light or dark variant; the entire interface updates immediately."
+    },
+    "colors": {
+      "violet": "Violet",
+      "blue": "Blue",
+      "green": "Green",
+      "orange": "Orange",
+      "rose": "Rose",
+      "slate": "Slate"
+    },
+    "dark": "Dark",
+    "light": "Light",
+    "resetTitle": "Return this workspace's appearance to the application-wide default",
+    "reset": "Reset to global",
+    "customStatus": "This workspace uses a custom appearance",
+    "globalStatus": "Using the application-wide appearance"
+  },
+  "autonomous": {
+    "description": "These controls apply to autonomous work. Interactive conversations are unaffected.",
+    "confine": {
+      "label": "Confine autonomous file operations",
+      "hint": "Restrict supported file tools to the working directory and block git push. Shell commands and arbitrary scripts can still access other paths; this is not a sandbox."
+    },
+    "checklist": {
+      "label": "Autonomous startup checklist",
+      "hint": "Remind autonomous agents to orient themselves, verify a baseline, complete one task and close the loop."
+    },
+    "continue": {
+      "label": "Continue unfinished autonomous work",
+      "hint": "Resume unfinished autonomous turns automatically. Manually stopped or guard-limited runs are excluded."
+    },
+    "maxTurns": { "label": "Maximum continuation turns", "hint": "0 uses the built-in default." }
+  },
+  "background": {
+    "description": "Productive work has no total duration cap. Idle windows detect stalled runs.",
+    "concurrent": {
+      "label": "Concurrent background sessions",
+      "hint": "Maximum background sessions running at the same time (1–128)."
+    },
+    "queued": {
+      "label": "Queued background sessions",
+      "hint": "Maximum sessions waiting for available capacity (1–128)."
+    },
+    "flowRetention": {
+      "label": "Completed flow runs to retain",
+      "hint": "Completed run trees kept per flow. 0 means unlimited; older runs are removed periodically."
+    },
+    "perTurn": {
+      "label": "Background sessions per turn",
+      "hint": "Maximum sessions an agent can start in one turn (1–64)."
+    },
+    "idle": {
+      "label": "Background idle window (minutes)",
+      "hint": "Cancel a background, worker or scheduled run after this long without meaningful progress. Productive runs have no total duration cap."
+    },
+    "chatIdle": {
+      "label": "Chat idle window (minutes)",
+      "hint": "Cancel an interactive turn with no meaningful steps. Network heartbeats do not count. 0 disables the limit."
+    },
+    "codexIdle": {
+      "label": "Codex output idle window (seconds)",
+      "hint": "Idle window for the Codex subprocess output stream."
+    },
+    "recovery": {
+      "label": "Idle recovery attempts",
+      "hint": "Maximum automatic resume attempts after an idle interruption."
+    },
+    "watchdog": {
+      "label": "Turn watchdog window (minutes)",
+      "hint": "Idle window used by the turn watchdog."
+    }
+  },
+  "cli": {
+    "hooks": {
+      "label": "Forward hooks to Claude CLI",
+      "hint": "Run workspace hooks through the CLI. Commands must be compatible with the CLI shell."
+    },
+    "sessionMode": {
+      "label": "Claude CLI session mode",
+      "persistent": {
+        "label": "Persistent process",
+        "hint": "Keep one CLI process alive per session and send only new messages."
+      },
+      "resume": {
+        "label": "Resume",
+        "hint": "Start a process per turn and resume the previous CLI session. Available for single-agent conversations."
+      },
+      "off": {
+        "label": "Off",
+        "hint": "Start a new process with the full transcript each turn. Useful for diagnostics; increases input usage."
+      }
+    },
+    "promptFile": {
+      "label": "Pass the system prompt through a file",
+      "hint": "Use a temporary file to avoid command-line length limits with large prompts."
+    },
+    "toolAllowlist": {
+      "label": "Limit Claude CLI built-in tools",
+      "hint": "Expose only the built-in tools needed by the bridge to reduce prompt overhead."
+    },
+    "researchAgents": {
+      "label": "Claude CLI research agents",
+      "hint": "Allow native Explore and Plan agents. Delegation to TionHarness agents stays separate."
+    },
+    "auxRouting": {
+      "label": "Use Anthropic API for auxiliary calls",
+      "hint": "Route supported title, summary and other tool-free system calls through an available Anthropic API instance. These calls use API billing instead of the CLI subscription."
+    }
+  },
+  "commands": {
+    "intro": {
+      "prefix": "Type",
+      "middle": "in the chat box to open the command palette. To send a command as plain text, enclose it in quotation marks:"
+    },
+    "empty": "No registered commands.",
+    "deterministic": "This command is deterministic. It does not use a model or prompt; the result is generated directly at runtime.",
+    "autoTitle": "Automatic title",
+    "autoTitleHint": "Not a command — generates conversation and task titles"
+  },
+  "contextHandoff": {
+    "description": "Resume long autonomous tasks in a fresh context. Manual handoff remains available independently.",
+    "auto": {
+      "label": "Automatic context handoff",
+      "hint": "Start a fresh session when an autonomous turn reaches the context limit. Manual chat is unaffected."
+    },
+    "maxChain": {
+      "label": "Maximum handoff chain",
+      "hint": "Maximum consecutive resets before falling back to regular compaction."
+    },
+    "writeFile": {
+      "label": "Write a handoff file",
+      "hint": "Also write .tionharness/handoff.md in the working directory."
+    }
+  },
+  "contextProgress": {
+    "save": {
+      "label": "Save progress to disk",
+      "hint": "Persist the task checklist so it can be reused across sessions."
+    },
+    "restore": {
+      "label": "Restore progress in new sessions",
+      "hint": "Load unfinished progress when a new session has no checklist of its own."
+    }
+  },
+  "contextRecovery": {
+    "description": "Recovery controls for the native provider loop. CLI providers manage their own loops.",
+    "compact": {
+      "label": "Compact after context overflow",
+      "hint": "Summarize older messages and retry when the context window overflows."
+    },
+    "continue": {
+      "label": "Output continuation attempts",
+      "hint": "Continue responses that reach the output limit. 0 keeps the partial response without retrying."
+    },
+    "recent": {
+      "label": "Recent messages to retain on recovery",
+      "hint": "Messages retained verbatim during reactive compaction (2–50)."
+    },
+    "outputLimit": {
+      "label": "Output token limit",
+      "hint": "0 selects a model-specific limit. A positive value applies a fixed cap."
+    },
+    "retries": {
+      "label": "Provider retry budget",
+      "hint": "Retry temporary provider errors within a turn (0–5). Permanent authentication or quota errors are not retried."
+    }
+  },
+  "coordinatorLimits": {
+    "description": "Worker capacity and nesting limits for multi-agent coordination. Automatic turns and total subtree sessions remain unlimited.",
+    "workers": {
+      "label": "Workers per coordinator",
+      "hint": "Maximum active workers for each coordinator (1–64)."
+    },
+    "depth": {
+      "label": "Coordinator depth",
+      "hint": "Root depth is 0. Use -1 for unlimited nesting."
+    },
+    "grace": {
+      "label": "Report grace period (seconds)",
+      "hint": "Wait this long after a branch becomes idle before sending a missing completion report. Allow enough time for synthesis."
+    }
+  },
+  "coordinatorRecovery": {
+    "detect": {
+      "label": "Detect stalled coordinators",
+      "hint": "Use a judge and periodic checks to recover coordinators that claim to have started workers without actually starting them."
+    },
+    "window": {
+      "label": "Stall check window (minutes)",
+      "hint": "0 uses the default window; -1 disables periodic checks while retaining the turn-end guard."
+    },
+    "nudges": {
+      "label": "Consecutive recovery nudges",
+      "hint": "Maximum corrective nudges before reporting a visible failure. 0 uses the default."
+    },
+    "notes": {
+      "label": "Show recovery notes in chat",
+      "hint": "Only controls visibility. Recovery notes are always recorded and passed to the coordinator."
+    }
+  },
+  "delegation": {
+    "description": "Limits for synchronous agent delegation. Individual tool availability is managed in the Tools screen.",
+    "depth": {
+      "label": "Maximum delegation depth",
+      "hint": "Maximum nesting for synchronous agent delegation (1–10)."
+    },
+    "perTurn": {
+      "label": "Delegations per turn",
+      "hint": "Maximum synchronous delegation calls in one user turn (1–100)."
+    }
+  },
+  "diagnostics": {
+    "record": {
+      "label": "Record diagnostic events",
+      "hint": "Record per-session timing, token usage, tool outcomes and recovery events."
+    },
+    "retain": {
+      "label": "Diagnostic events to retain",
+      "hint": "Keep the newest events per session. 0 uses the default of 5,000."
+    }
+  },
+  "execution": {
+    "delegation": "Delegation",
+    "background": "Background runs and idle limits",
+    "toolLimits": "Tool execution limits",
+    "coordinatorLimits": "Coordinator limits",
+    "coordinatorRecovery": "Coordinator recovery",
+    "autonomous": "Autonomous work"
+  },
+  "general": {
+    "keepAwake": {
+      "label": "Keep screen awake",
+      "hint": "Prevent the screen from sleeping while the app is open. Applies to all workspaces after saving."
+    },
+    "autoTitle": {
+      "label": "Generate titles automatically",
+      "hint": "Name new conversations and tasks automatically."
+    },
+    "autoTag": {
+      "label": "Tag sessions automatically",
+      "hint": "Add tags for errors, goals, completion and archival. Manual and agent-applied tags remain available."
+    }
+  },
+  "createAgent": {
+    "description": "Create a central profile, then assign it to your workspaces.",
+    "name": "Name",
+    "reasoning": "Reasoning",
+    "creating": "Creating…",
+    "submit": "Create agent"
+  },
+  "lessons": {
+    "deleted": "Lesson deleted",
+    "title": "Saved lessons",
+    "empty": "No lessons yet. They appear here after an unsuccessful turn. The five newest lessons are automatically injected into each turn's context.",
+    "seen": "Seen {{count}}×",
+    "deleteTitle": "Delete lesson (it will no longer be injected)"
+  },
+  "auth": {
+    "loginFailed": "Login could not be completed",
+    "loggedIn": "Logged in.",
+    "currentlyLoggedIn": "Currently logged in.",
+    "success": "Login successful",
+    "connecting": "Getting connection…",
+    "startBrowser": "Start login (open browser)",
+    "reopen": "Open again",
+    "verifying": "Verifying…",
+    "complete": "Complete login",
+    "signIn": "Sign in",
+    "claude": {
+      "title": "claude-cli authentication",
+      "description": "Sign in to {{provider}}'s isolated config directory with your Max/Pro account.",
+      "codePlaceholder": "code#state",
+      "pasteCode": "Paste the code from the browser",
+      "auto": "Automatic (recommended)",
+      "manual": "Manual code",
+      "remoteWarning": "Automatic login works only when the browser and server are on the same machine. Use Manual code for remote access.",
+      "waiting": "Waiting for you to sign in in the browser.",
+      "reopenLogin": "Open login page again"
+    },
+    "codex": {
+      "title": "codex-cli authentication",
+      "description": "Authorize {{provider}}'s isolated codex-home without using a terminal.",
+      "browserTab": "Browser login",
+      "apiKeyTab": "API key",
+      "successDetail": "Credentials were written to this provider instance's codex-home.",
+      "browserDescription": "Sign in with your ChatGPT account in the browser. A verification code is generated; after you approve it in the browser, credentials are written directly to this provider instance's codex-home.",
+      "stepOpen": "Open the page in your browser.",
+      "stepCode": "Enter and approve the code below:",
+      "copyCode": "Copy code",
+      "copied": "Copied to clipboard",
+      "waiting": "Waiting for browser approval. This dialog will update automatically.",
+      "apiKeyDescription": "Paste an API key from platform.openai.com. It is written to this provider instance's codex-home and is never shown again by the app.",
+      "apiKeyLabel": "API key",
+      "apiKeyRequired": "API key is required",
+      "errors": {
+        "expired": "The code expired. Try again.",
+        "cancelled": "Login was cancelled.",
+        "inProgress": "A login is already in progress for this workspace.",
+        "cliMissing": "codex CLI was not found (set its path under Providers)."
+      }
+    }
+  },
+  "plugins": {
+    "scanError": "Marketplace scan failed",
+    "importSuccess": "{{name}} copied — {{count}} plugins available",
+    "importError": "Import failed",
+    "marketplaces": "Marketplaces",
+    "empty": "No marketplaces yet. Scan this machine below or add your own local or Git source.",
+    "removeMarketplace": "Remove {{name}} marketplace",
+    "enabled": "Enabled plugins",
+    "addSource": "Add your own source",
+    "namePlaceholder": "name (letters, numbers, _ -)",
+    "gitSourcePlaceholder": "owner/repo or URL",
+    "sourceTypes": { "local": "Local", "git": "Git" },
+    "discoveredTitle": "Codex plugins on this machine",
+    "scanning": "Scanning…",
+    "scan": "Scan",
+    "discoveryDescription": "A discovered marketplace is copied into this workspace and saved under a new name. Codex refuses to add its reserved names from another source. Bundled plugins are proprietary OpenAI files and are copied only when you request it.",
+    "noneFound": "No marketplace was found on this machine.",
+    "reservedName": "reserved name",
+    "pluginCount_one": "{{count}} plugin",
+    "pluginCount_other": "{{count}} plugins",
+    "import": "Import"
+  },
+  "hooks": {
+    "commandRequired": "Command is required",
+    "updated": "Hook updated",
+    "added": "Hook added",
+    "deleteConfirm": "Permanently delete this hook?",
+    "deleted": "Hook deleted",
+    "title": "Tool hooks (PreToolUse / PostToolUse)",
+    "description": "Hooks run an external command around tool calls in the native provider loop. PreToolUse can change, approve or block input; PostToolUse can transform output or add context. The command reads JSON from stdin and returns JSON on stdout; exit 2 blocks the call. Claude CLI hooks also run in the CLI's own shell when forwarding is enabled.",
+    "codexWarningTitle": "Hooks do not run for codex-cli agents",
+    "codexWarningBody": "codex-cli runs its tool loop in a separate process and does not support hook forwarding. These hooks will not fire for codex tools or TionHarness tools called through the MCP bridge. PostToolUse token optimizers such as sqz are therefore unavailable to codex-cli agents.",
+    "empty": "No hooks yet.",
+    "matcher": "Matcher",
+    "allTools": "* (all tools)",
+    "add": "Add hook",
+    "edit": "Edit hook",
+    "new": "New hook",
+    "event": "Event",
+    "toolEvents": "Tool (native loop only)",
+    "beforeCall": "before call",
+    "afterCall": "after call",
+    "lifecycleEvents": "Lifecycle (native + claude-cli)",
+    "eventHints": {
+      "userPrompt": "before prompt — add context or block",
+      "sessionStart": "first turn of session",
+      "stop": "main agent turn ended",
+      "subagentStop": "subagent ended",
+      "preCompact": "before compaction",
+      "notification": "notification",
+      "sessionEnd": "session deleted"
+    },
+    "options": {
+      "preToolUse": "PreToolUse (before call)",
+      "postToolUse": "PostToolUse (after call)",
+      "userPromptSubmit": "UserPromptSubmit (before prompt — add context or block)",
+      "sessionStart": "SessionStart (first turn of session)",
+      "stop": "Stop (main agent turn ended)",
+      "subagentStop": "SubagentStop (subagent ended)",
+      "preCompact": "PreCompact (before compaction)",
+      "notification": "Notification (notification)",
+      "sessionEnd": "SessionEnd (session deleted)"
+    },
+    "matcherHint": "Tool events: tool-name glob (empty = all, e.g. Bash, Write, http_*). SessionStart: source (startup|resume). PreCompact: trigger (manual|auto). Other lifecycle events: leave empty.",
+    "command": "Command",
+    "commandHint": "Shell command (Windows: PowerShell). Reads JSON from stdin and returns JSON on stdout.",
+    "timeout": "Timeout (seconds)",
+    "timeoutHint": "Between 1 and 120.",
+    "builtins": {
+      "title": "Built-in behaviors (read-only)",
+      "description": "Hooks automatically injected around the TionHarness tool loop. They cannot be edited; some can be toggled by their related setting.",
+      "setting": "setting"
+    }
+  },
+  "context": {
+    "heading": "Context window",
+    "floor": {
+      "label": "Maximum context tokens — FLOOR",
+      "hint": "The lower bound for the budget: it can only raise the budget, never lower it. To shrink the window, lower the Budget ceiling instead."
+    },
+    "recent": { "label": "Recent messages kept", "hint": "Always sent verbatim." },
+    "ceil": {
+      "label": "Budget ceiling (tokens) — UPPER LIMIT",
+      "hint": "The upper bound for the budget and the setting to change when shrinking the context window. Lowering it clips the effective budget; raising it keeps more raw history at the cost of recall precision."
+    },
+    "fraction": {
+      "label": "Window fraction",
+      "hint": "Share allocated to the transcript (0–1). 0 selects the recommended adaptive value for the model family."
+    },
+    "formula": {
+      "prefix": "Effective budget = clamp(window × fraction,",
+      "floor": "floor",
+      "ceil": "ceiling",
+      "suffix": "). A fraction of 0 is adaptive; an unknown window uses the floor."
+    },
+    "preview": {
+      "heading": "Effective budget preview (using your values)",
+      "model1m": "1M model (Opus/Sonnet/Fable)",
+      "model200k": "200K model (Haiku)"
+    },
+    "bound": {
+      "ceil": "clipped to ceiling",
+      "floor": "raised to floor",
+      "fraction": "window × fraction"
+    },
+    "compaction": {
+      "label": "Automatic compaction mode",
+      "rolling": {
+        "label": "Rolling (TionHarness)",
+        "hint": "When the budget is exceeded, the oldest turns are folded into TionHarness's rolling summary while the rest of the transcript is sent verbatim."
+      },
+      "native": {
+        "label": "Native (CLI)",
+        "hint": "Leave compaction to the CLI provider. Native compaction drops the warm CLI session, so the next turn starts cold."
+      },
+      "auto": {
+        "label": "Automatic",
+        "hint": "Use native compaction when the provider supports it and a warm CLI session is live; otherwise use rolling compaction."
+      }
+    },
+    "sections": {
+      "handoff": "Context handoff",
+      "progress": "Persistent progress",
+      "recovery": "Recovery and output limits"
+    }
+  },
+  "backup": {
+    "runSuccess": "Backed up {{count}} workspaces, {{failures}} failures → {{dir}}",
+    "runError": "Backup failed: {{error}}",
+    "restoreActiveSuccess": "Restored: {{archive}}. Refreshing the active workspace…",
+    "restoreSuccess": "Restored: {{archive}}.",
+    "restoreError": "Restore failed: {{error}}",
+    "deleteSuccess": "Deleted: {{archive}}",
+    "deleteError": "Delete failed: {{error}}",
+    "never": "never",
+    "scope": {
+      "title": "Application-wide setting:",
+      "body": "This setting applies to all workspaces. Each workspace's data is periodically saved to its own zip archive. Older archives are pruned automatically. Backups are written to the backups/ folder in the data directory by default."
+    },
+    "auto": {
+      "label": "Automatic backups",
+      "hint": "When enabled, every workspace is backed up at the selected interval. The first backup runs after one interval."
+    },
+    "interval": {
+      "label": "Backup interval (hours)",
+      "hint": "Time between automatic backups (at least 1 hour). 24 means once per day."
+    },
+    "retain": {
+      "label": "Backups to retain",
+      "hint": "Number of newest archives kept per workspace; older ones are pruned (at least 1)."
+    },
+    "folder": {
+      "label": "Backup folder",
+      "hint": "Leave empty to use backups/ in the data directory. You can enter an absolute path.",
+      "placeholder": "empty = <data directory>/backups"
+    },
+    "status": {
+      "label": "Status:",
+      "lastBackup": "Last backup",
+      "folder": "Folder",
+      "lastError": "Last error"
+    },
+    "running": "Backing up…",
+    "runNow": "Back up now",
+    "note": "Changes to interval and retention settings apply after Save. Back up now uses the saved settings.",
+    "archives": {
+      "title": "Available backups ({{count}})",
+      "warning": "Restoring replaces all current data in the selected workspace with the archive and cannot be undone. The workspace is closed and reopened from the archive during the operation.",
+      "empty": "No backups yet. Use Back up now to create the first one.",
+      "count_one": "{{count}} archive",
+      "count_other": "{{count}} archives"
+    },
+    "restoring": "Restoring…",
+    "confirmRestore": "Yes, restore",
+    "confirmDelete": "Yes, delete",
+    "restore": "Restore",
+    "deleteArchive": "Delete this archive"
+  },
+  "externalTools": {
+    "categories": {
+      "provider": "LLM provider CLIs",
+      "token": "Token / context optimization",
+      "dev": "Development tools",
+      "render": "Rendering / diagrams",
+      "design": "Design",
+      "voice": "Voice (TTS / STT)"
+    },
+    "description": "Checks whether optional CLI tools used with TionHarness are installed on this device. Path overrides are checked first, then PATH. Tools are not installed, run or modified. Hook tools can be connected with one click; MCP and CLI tools are shown with an information badge.",
+    "version": "v{{version}}",
+    "noOutput": "(no output)",
+    "copied": "Copied to clipboard",
+    "checking": "Checking…",
+    "checkInstalled": "Check installed tools",
+    "updateCheckHint": "Compare installed tools with the latest GitHub releases. Results are cached for 6 hours.",
+    "fetchingVersions": "Fetching versions…",
+    "checkUpdates": "Check for updates",
+    "bypassCacheHint": "Skip the cache and query GitHub again",
+    "bypassCache": "Skip cache",
+    "installed": "installed",
+    "notFound": "not found",
+    "versionUnreadable": "version unavailable",
+    "latestRelease": "Latest release: {{version}}{{stale}}",
+    "cachedSuffix": " (cached — GitHub unavailable)",
+    "latestVersion": "Latest version",
+    "upToDate": "up to date",
+    "versionCompareFailed": "version comparison failed",
+    "toggleHookHint": "Toggle the TionHarness hook connection",
+    "createHookHint": "Create and enable a TionHarness hook for this tool",
+    "connect": "Connect",
+    "settingWireHint": "This tool is connected through a workspace setting. Only measured test and build commands are rewritten.",
+    "mcpHint": "MCP-based — add it under Settings ▸ MCP",
+    "providerHint": "Runs an LLM provider — configure it under Settings ▸ Providers",
+    "provider": "Provider",
+    "cliHint": "Plain CLI invoked directly by agents",
+    "commandToRun": "Command to run: {{command}}",
+    "updating": "Updating…",
+    "update": "Update",
+    "repository": "repo",
+    "manualUpdate": "{{version}} released — update manually.",
+    "releasePage": "release page",
+    "updateComplete": "Update complete",
+    "updateFailed": "Update failed",
+    "copyUpdateCommand": "Copy update command",
+    "cbm": {
+      "title": "codebase-memory integration:",
+      "description": "When the MCP server is added, TionHarness provides agents with workspace-isolated code graph search and indexes the working directory automatically.",
+      "mustBeOnPath": "This tool must first be found on PATH",
+      "removeHint": "Remove MCP server",
+      "addHint": "Add MCP server automatically",
+      "remove": "Remove MCP",
+      "add": "Add MCP automatically",
+      "notOnPath": "Tool not found on PATH.",
+      "connected": "MCP server added — agents can use it.",
+      "disconnected": "MCP server is not added."
+    },
+    "token": {
+      "title": "Token optimization integration:",
+      "description": "When rtk or sqz is connected, TionHarness tells the agent that output is shortened automatically. Hook matchers must cover Bash and PowerShell.",
+      "enableBoth": "Enabling both is recommended",
+      "enableBothDetail": "— rtk shapes the command before execution and sqz compresses the output afterwards; measurements show that stacking performs best.",
+      "matcherMissing": "matcher {{matcher}} does not cover PowerShell",
+      "fixMatcherHint": "Add PowerShell to the matcher",
+      "fixMatcher": "Fix matcher"
+    },
+    "maintenance": {
+      "title": "Maintenance and savings report",
+      "gain": "gain",
+      "refreshed": "Report refreshed.",
+      "refreshHint": "Fetch rtk gain / sqz gain output again",
+      "description": "The values below are the tools' own gain reports; TionHarness does not recalculate them.",
+      "emptyReport": "(empty report — no data yet)",
+      "cacheCleared": "sqz dedup cache cleared.",
+      "clearCacheHint": "Clear the sqz dedup cache while keeping statistics.",
+      "clearCache": "Clear sqz dedup cache",
+      "configMissing": "the file does not exist yet; rtk is using built-in defaults. Create it in a terminal with",
+      "machineWide": "This file is machine-wide, not workspace-specific. Changing it affects every workspace."
+    }
+  }
+}

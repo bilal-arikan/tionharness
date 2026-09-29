@@ -20,6 +20,7 @@ import {
 import type { PendingItem } from './PendingTray'
 
 import { withAdded, withRemoved } from './chatStreamHelpers'
+import { i18next } from '@/i18n'
 
 // TurnEntry mirrors internal/turnqueue.Entry: one turn holding (or queued for) the
 // session's admission slot. `kind` names the entry path, so the tray can say WHAT a
@@ -32,17 +33,13 @@ interface TurnEntry {
 
 // turnKindLabel renders an admission-queue entry for the tray.
 function turnKindLabel(e: TurnEntry): string {
-  const byKind: Record<string, string> = {
-    coordinator: 'Worker bildirimi işleniyor',
-    worker: 'Worker görevi çalışıyor',
-    wake: 'Zamanlanmış tur çalışıyor',
-    peer: 'Ajan mesajı işleniyor',
-    spawn: 'Spawn turu çalışıyor',
-    automation: 'Otomasyon turu çalışıyor',
-    command: 'Komut çalışıyor',
-  }
-  const base = byKind[e.kind] ?? 'Tur çalışıyor'
-  return e.label && e.kind === 'command' ? `${e.label} çalışıyor` : base
+  const knownKinds = ['coordinator', 'worker', 'wake', 'peer', 'spawn', 'automation', 'command']
+  const base = knownKinds.includes(e.kind)
+    ? i18next.t(`queue.kind.${e.kind}`, { ns: 'chat' })
+    : i18next.t('queue.kind.generic', { ns: 'chat' })
+  return e.label && e.kind === 'command'
+    ? i18next.t('queue.runningLabel', { ns: 'chat', label: e.label })
+    : base
 }
 
 // Interaction ids already announced (sound + OS toast), so the SAME pending
@@ -60,16 +57,19 @@ function askCueText(ask: PendingAsk): { title: string; body: string } {
   switch (ask.kind) {
     case 'permission':
       return {
-        title: 'İzin bekleniyor',
+        title: i18next.t('notification.permissionTitle', { ns: 'chat' }),
         body: ask.tool ? `${ask.tool}: ${ask.cmd ?? ask.risk ?? ''}`.trim() : (ask.cmd ?? ''),
       }
     case 'plan':
       return {
-        title: 'Plan onayı bekleniyor',
-        body: first || 'Ajan hazırladığı planın onayını bekliyor.',
+        title: i18next.t('notification.planTitle', { ns: 'chat' }),
+        body: first || i18next.t('notification.planBody', { ns: 'chat' }),
       }
     default:
-      return { title: 'Ajan bir soru sordu', body: first || 'Ajan yanıtını bekliyor.' }
+      return {
+        title: i18next.t('notification.questionTitle', { ns: 'chat' }),
+        body: first || i18next.t('notification.questionBody', { ns: 'chat' }),
+      }
   }
 }
 

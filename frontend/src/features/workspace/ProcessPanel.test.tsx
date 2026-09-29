@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessEntry } from '@/types'
+import { setLocale } from '@/i18n'
 import { ProcessPanel } from './ProcessPanel'
 
 const apiMock = vi.hoisted(() => ({
@@ -66,7 +67,8 @@ describe('ProcessPanel', () => {
   // The `process` SSE callback the panel registers, so the test can fire frames.
   let onProcessEvent: () => void
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await setLocale('tr')
     vi.clearAllMocks()
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
@@ -118,6 +120,16 @@ describe('ProcessPanel', () => {
     expect(container.textContent).toContain('go test ./...')
     expect(container.textContent).toContain('4242')
     expect(container.textContent).toContain('PM')
+  })
+
+  it('renders process chrome in English when the UI locale is English', async () => {
+    await setLocale('en')
+    await render()
+
+    expect(cell(0, 'process-status')).toBe('Running')
+    expect(cell(1, 'process-status')).toBe('Failed')
+    expect(container.textContent).toContain('Processes')
+    expect(container.textContent).toContain('Running only')
   })
 
   it('links the owner session and its parent, but leaves a deleted session as text', async () => {

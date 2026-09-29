@@ -3,6 +3,7 @@ import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { LucideIcon } from 'lucide-react'
 import { Search } from 'lucide-react'
 import { ModalOverlay } from './ModalOverlay'
+import { useTranslation } from 'react-i18next'
 
 // A single palette entry. `run` is fired on select; the palette closes first so
 // navigation/side-effects happen against a clean UI.
@@ -28,7 +29,9 @@ interface Props {
 // list (navigate to a view, switch workspace, …) and the open/close state; the
 // palette handles filtering, keyboard navigation and rendering. Substring match
 // (not a heavy fuzzy lib) keeps it dependency-free and predictable.
-export function CommandPalette({ open, onClose, commands, placeholder = 'Komut ara…' }: Props) {
+export function CommandPalette({ open, onClose, commands, placeholder }: Props) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedPlaceholder = placeholder ?? t('commandPalette.search')
   const [q, setQ] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -90,7 +93,7 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Komut a
     <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
-        aria-label="Komut paleti"
+        aria-label={t('commandPalette.label')}
         className="flex max-h-[70vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
       >
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3">
@@ -100,15 +103,15 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Komut a
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKey}
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             className="flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-[var(--color-text-dim)]"
-            aria-label={placeholder}
+            aria-label={resolvedPlaceholder}
           />
         </div>
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1">
           {filtered.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-[var(--color-text-dim)]">
-              Eşleşme yok
+              {t('commandPalette.noMatches')}
             </div>
           ) : (
             filtered.map((c, i) => {

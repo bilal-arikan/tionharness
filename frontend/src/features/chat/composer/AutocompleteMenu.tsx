@@ -1,6 +1,7 @@
 import { Hash } from 'lucide-react'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import type { MenuItem, Trigger } from './trigger'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // The open trigger; its mode picks the menu heading. Never null when rendered.
@@ -11,20 +12,21 @@ interface Props {
   onChoose: (index: number) => void
 }
 
-const HEADINGS: Record<Props['mode'], string> = {
-  agent: 'Ajanlar (referans)',
-  artifact: 'Artifactlar',
-  command: 'Komutlar',
+const HEADING_KEYS: Record<Props['mode'], string> = {
+  agent: 'autocomplete.agents',
+  artifact: 'autocomplete.artifacts',
+  command: 'autocomplete.commands',
 }
 
 // AutocompleteMenu is the "@/#//" picker dropdown anchored above the composer
 // input. Each row shows an agent avatar (name reference), an artifact hash, or a
 // command glyph.
 export function AutocompleteMenu({ mode, items, sel, onHover, onChoose }: Props) {
+  const { t } = useTranslation('chatControls')
   return (
     <div className="absolute bottom-full left-6 mb-2 max-h-64 w-80 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
       <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-        {HEADINGS[mode]}
+        {t(HEADING_KEYS[mode])}
       </div>
       {items.map((it, i) => (
         <button

@@ -5,12 +5,14 @@
 // Interaction: click selects (→ side panel), double-click opens the entity,
 // ↑/↓ move the selection across lanes (Harita contract).
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { RotaBar, RotaEdge, RotaLayout, RotaMark, RotaRow } from './rotaLayout'
 import { laneOriginGlyph } from './rotaLabels'
 import { buildTimeScale, formatGapSpan } from './rotaTimeScale'
 import { formatWait } from './rotaWaits'
 import { formatSegments } from './rotaSegments'
 import { ROTA_FUTURE_W, ROTA_LABEL_W, ROTA_PAD_R, rotaPastWidth } from './rotaActivityGap'
+import { formatDateTime } from '@/shared/lib/intl'
 
 // What the side panel can project from either canvas: a session / flow run
 // bar, a whole trajectory (phase header click), an automation ghost.
@@ -104,6 +106,7 @@ export function RotaCanvas({
   normalizeBars = true,
   zoom = 1,
 }: Props) {
+  const { t } = useTranslation('rota')
   const { rows, bars, edges, marks, future, t0, now, t1 } = layout
   // Past window fills what is left after the label column and the future
   // strip; never below a minimum so a very long history still scrolls.
@@ -142,7 +145,7 @@ export function RotaCanvas({
       height={height}
       className="select-none text-[11px]"
       role="img"
-      aria-label="Rota zaman çizelgesi"
+      aria-label={t('canvas.ariaLabel')}
       onClick={(e) => {
         if (e.target === e.currentTarget) onSelect(null)
       }}
@@ -202,7 +205,9 @@ export function RotaCanvas({
               stroke="var(--color-border)"
               strokeDasharray="2 3"
             />
-            <title>{`${formatGapSpan(seg.end - seg.start)} boş · kırpıldı`}</title>
+            <title>
+              {t('canvas.gapTrimmed', { duration: formatGapSpan(seg.end - seg.start) })}
+            </title>
           </g>
         ))}
 
@@ -216,7 +221,7 @@ export function RotaCanvas({
         opacity={0.25}
       />
       <text x={xNow + 6} y={TOP_H - 9} fill="var(--color-text-dim)">
-        gelecek
+        {t('canvas.future')}
       </text>
       {future.map((f) => (
         <g key={f.id}>
@@ -230,7 +235,7 @@ export function RotaCanvas({
             opacity={0.6}
           />
           <text x={x(f.at) + 3} y={TOP_H - 9} fill="var(--color-text)">
-            <title>{`${f.label} · ${new Date(f.schedule.fireAt * 1000).toLocaleString()}`}</title>⏰{' '}
+            <title>{`${f.label} · ${formatDateTime(f.schedule.fireAt * 1000)}`}</title>⏰{' '}
             {f.label.slice(0, 14)}
           </text>
         </g>
@@ -242,7 +247,7 @@ export function RotaCanvas({
         {scale.collapsedSec > 0 && (
           <tspan fill="var(--color-text-dim)">
             {' '}
-            · {formatGapSpan(scale.collapsedSec)} kırpıldı
+            · {t('canvas.trimmed', { duration: formatGapSpan(scale.collapsedSec) })}
           </tspan>
         )}
       </text>
@@ -267,7 +272,7 @@ export function RotaCanvas({
             strokeDasharray={back ? '4 3' : undefined}
             opacity={0.9}
           >
-            <title>{`${e.kind}: ${e.from} → ${e.to}`}</title>
+            <title>{`${t(`edge.${e.kind}`, { defaultValue: e.kind })}: ${e.from} → ${e.to}`}</title>
           </path>
         )
       })}
@@ -300,7 +305,7 @@ export function RotaCanvas({
               else onOpenSession?.(b.rowId)
             }}
           >
-            <title>{`${b.label} · ${b.state} · ${fmtClock(b.start)} → ${b.live ? 'şimdi' : fmtClock(b.end)}${
+            <title>{`${b.label} · ${t(`state.${b.state}`, { defaultValue: b.state })} · ${fmtClock(b.start)} → ${b.live ? t('canvas.now') : fmtClock(b.end)}${
               b.segments ? ` · ${formatSegments(b.segments, b.start)}` : ''
             }`}</title>
             {b.segments ? (
@@ -429,7 +434,7 @@ export function RotaCanvas({
         opacity={0.7}
       />
       <text x={xNow - 26} y={TOP_H - 9} fill="var(--color-text)">
-        şimdi
+        {t('canvas.now')}
       </text>
     </svg>
   )
@@ -444,13 +449,14 @@ function RowLabel({
   onClick: () => void
   onOpenTrajectory?: (id: string) => void
 }) {
+  const { t } = useTranslation('rota')
   const s = row.session
   const y = TOP_H + row.y * ROW_H + ROW_H / 2 + 3.5
   const indent = row.depth === 0 ? 8 : 26
   const label = (s.title || s.id).slice(0, row.depth === 0 ? 22 : 19)
   return (
     <text x={indent} y={y} fill="var(--color-text)" className="cursor-pointer" onClick={onClick}>
-      <title>{`${s.id} · ${s.kind}${s.origin ? ` · ${s.origin.kind}` : ''}${row.trajectory ? ` · rota ${row.trajectory.trajectoryId} rev ${row.trajectory.revision}` : ''}`}</title>
+      <title>{`${s.id} · ${t(`sessionKind.${s.kind}`, { defaultValue: s.kind })}${s.origin ? ` · ${t(`origin.${s.origin.kind}`, { defaultValue: s.origin.kind })}` : ''}${row.trajectory ? ` · ${t('common.trajectory')} ${row.trajectory.trajectoryId} rev ${row.trajectory.revision}` : ''}`}</title>
       <tspan fill="var(--color-text-dim)">{laneOriginGlyph(s)} </tspan>
       {label}
       {row.trajectory && (

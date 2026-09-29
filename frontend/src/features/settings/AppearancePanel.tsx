@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/api'
 import { THEME_COLORS, type ThemeColorVariant } from '@/shared/lib/themePresets'
 import { applyAppearance, resolveAppearance, type Appearance } from '@/shared/lib/theme'
@@ -20,6 +21,7 @@ export function AppearancePanel({
   onError: (msg: string) => void
   onAppearanceSaved?: (a: Appearance) => void
 }) {
+  const { t } = useTranslation('settingsMain')
   // The app-global appearance acts as the inherited default for empty fields.
   const [globalAppearance, setGlobalAppearance] = useState<Appearance>(FALLBACK_APPEARANCE)
   const [draft, setDraft] = useState<Appearance>(FALLBACK_APPEARANCE)
@@ -80,7 +82,7 @@ export function AppearancePanel({
       setHasOverride(true)
       revertRef.current = draft
       onAppearanceSaved?.(draft)
-      toast.success('Görünüm kaydedildi')
+      toast.success(t('appearance.saved'))
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -99,7 +101,7 @@ export function AppearancePanel({
       revertRef.current = globalAppearance
       applyAppearance(globalAppearance)
       onAppearanceSaved?.(globalAppearance)
-      toast.success('Genele sıfırlandı')
+      toast.success(t('appearance.resetSuccess'))
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -107,20 +109,18 @@ export function AppearancePanel({
     }
   }
 
-  if (loading) return <LoadingState label="Yükleniyor…" />
+  if (loading) return <LoadingState label={t('shared.loading')} />
 
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Bu görünüm ayarları{' '}
-        <span className="font-medium text-[var(--color-text)]">yalnızca bu workspace</span> için
-        geçerlidir. Workspace değiştirdiğinde tema da değişir. Değişiklikler anında önizlenir;
-        kalıcı olması için <span className="font-medium text-[var(--color-text)]">Kaydet</span> de.
+        {t('appearance.scope.prefix')}{' '}
+        <span className="font-medium text-[var(--color-text)]">
+          {t('appearance.scope.emphasis')}
+        </span>{' '}
+        {t('appearance.scope.suffix')}
       </div>
-      <Field
-        label="Tema rengi"
-        hint="Bir renk ve onun açık/koyu varyantını seç; tüm arayüz anında yeniden renklenir."
-      >
+      <Field label={t('appearance.theme.label')} hint={t('appearance.theme.hint')}>
         <div className="space-y-2.5">
           {THEME_COLORS.map((c) => {
             const variant = (v: ThemeColorVariant, label: string) => {
@@ -130,7 +130,7 @@ export function AppearancePanel({
                   key={v.id}
                   type="button"
                   onClick={() => update({ themePreset: v.id })}
-                  title={`${c.label} · ${label}`}
+                  title={`${t(`appearance.colors.${c.id}`, { defaultValue: c.label })} · ${label}`}
                   className={`flex items-center gap-2.5 rounded-lg border-2 px-3.5 py-2.5 text-left transition ${
                     sel
                       ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] ring-2 ring-[var(--color-accent)]/40 shadow-sm'
@@ -154,11 +154,11 @@ export function AppearancePanel({
             return (
               <div key={c.id} className="flex items-center gap-4">
                 <span className="w-20 shrink-0 text-sm font-semibold text-[var(--color-text)]">
-                  {c.label}
+                  {t(`appearance.colors.${c.id}`, { defaultValue: c.label })}
                 </span>
                 <div className="flex gap-2.5">
-                  {variant(c.dark, 'Koyu')}
-                  {variant(c.light, 'Açık')}
+                  {variant(c.dark, t('appearance.dark'))}
+                  {variant(c.light, t('appearance.light'))}
                 </div>
               </div>
             )
@@ -167,20 +167,18 @@ export function AppearancePanel({
       </Field>
       <div className="flex items-center gap-3 pt-2">
         <Button size="lg" onClick={save} disabled={!dirty || saving}>
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          {saving ? t('shared.saving') : t('shared.save')}
         </Button>
         <button
           onClick={resetToGlobal}
           disabled={saving || !hasOverride}
           className="rounded-lg border-2 border-[var(--color-border)] px-4 py-2 text-sm font-medium hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)] disabled:opacity-30"
-          title="Bu workspace'in görünümünü uygulama-geneli varsayılana döndür"
+          title={t('appearance.resetTitle')}
         >
-          Genele sıfırla
+          {t('appearance.reset')}
         </button>
         <span className="text-xs text-[var(--color-text-dim)]">
-          {hasOverride
-            ? 'Bu workspace özel görünüm kullanıyor'
-            : 'Uygulama-geneli görünüm kullanılıyor'}
+          {hasOverride ? t('appearance.customStatus') : t('appearance.globalStatus')}
         </span>
       </div>
     </>

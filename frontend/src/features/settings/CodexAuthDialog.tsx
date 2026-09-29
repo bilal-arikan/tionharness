@@ -4,6 +4,7 @@
 //     one-time code, poll status until the user approves in their browser.
 //   - API key: piped to `codex login --with-api-key` over stdin, never logged.
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { KeyRound, Globe, ExternalLink, Loader2, Check, Copy } from 'lucide-react'
 import { api } from '@/api'
 import { copyToClipboard } from '@/shared/lib/clipboard'
@@ -21,15 +22,15 @@ interface Props {
 }
 
 // codexDeviceErrorLabel maps a device-flow terminal state to a Turkish message.
-function codexDeviceErrorLabel(state: string, detail?: string): string {
+function codexDeviceErrorLabel(state: string, t: (key: string) => string, detail?: string): string {
   switch (state) {
     case 'expired':
-      return 'Kodun süresi doldu. Tekrar dene.'
+      return t('auth.codex.errors.expired')
     case 'cancelled':
-      return 'Giriş iptal edildi.'
+      return t('auth.codex.errors.cancelled')
     case 'failed':
     default:
-      return detail || 'Giriş tamamlanamadı.'
+      return detail || t('auth.loginFailed')
   }
 }
 
@@ -40,6 +41,7 @@ export function CodexAuthDialog({
   onClose,
   onLoggedIn,
 }: Props) {
+  const { t } = useTranslation('settingsMain')
   const [method, setMethod] = useState<Method>('device')
 
   // Device-auth flow state.
@@ -71,7 +73,7 @@ export function CodexAuthDialog({
           setDeviceDone(true)
         } else if (r.state === 'failed' || r.state === 'expired' || r.state === 'cancelled') {
           stopPolling()
-          setDeviceErr(codexDeviceErrorLabel(r.state, r.error))
+          setDeviceErr(codexDeviceErrorLabel(r.state, t, r.error))
         }
         // 'pending' → keep polling
       } catch {
@@ -105,9 +107,9 @@ export function CodexAuthDialog({
       if (tab && !tab.closed) tab.close()
       const msg = (e as Error).message
       if (msg.includes('409')) {
-        setDeviceErr('Bu workspace için zaten devam eden bir giriş var.')
+        setDeviceErr(t('auth.codex.errors.inProgress'))
       } else if (msg.includes('400')) {
-        setDeviceErr('codex CLI bulunamadı (Sağlayıcılar altında yolunu belirt).')
+        setDeviceErr(t('auth.codex.errors.cliMissing'))
       } else {
         setDeviceErr(msg)
       }
@@ -144,7 +146,7 @@ export function CodexAuthDialog({
   const copyCode = async () => {
     if (await copyToClipboard(code)) {
       setCopied(true)
-      toast.info('Panoya kopyalandı')
+      toast.info(t('auth.codex.copied'))
       setTimeout(() => setCopied(false), 1500)
     }
   }
@@ -158,7 +160,7 @@ export function CodexAuthDialog({
   const submitApiKey = async () => {
     const k = apiKey.trim()
     if (!k) {
-      setApiErr('API anahtarı gerekli')
+      setApiErr(t('auth.codex.apiKeyRequired'))
       apiKeyRef.current?.focus()
       return
     }
@@ -166,14 +168,12 @@ export function CodexAuthDialog({
     setApiErr(null)
     try {
       await api.codexAPIKeyLogin(providerId, k)
-      toast.success('Giriş yapıldı')
+      toast.success(t('auth.loggedIn'))
       onLoggedIn()
       onClose()
     } catch (e) {
       const msg = (e as Error).message
-      setApiErr(
-        msg.includes('400') ? 'codex CLI bulunamadı (Sağlayıcılar altında yolunu belirt).' : msg,
-      )
+      setApiErr(msg.includes('400') ? t('auth.codex.errors.cliMissing') : msg)
     } finally {
       setApiBusy(false)
     }
@@ -197,27 +197,28 @@ export function CodexAuthDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="codex-cli kimlik doğrulama"
+        aria-label={t('auth.codex.title')}
         data-testid="codex-auth-modal"
         className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold">codex-cli kimlik doğrulama</h2>
+        <h2 className="mb-1 text-base font-semibold">{t('auth.codex.title')}</h2>
         <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          <span className="font-medium text-[var(--color-text)]">{providerLabel}</span> örneğinin
-          izole codex-home'unu yetkilendir — terminal gerekmez.
+          {t('auth.codex.description', { provider: providerLabel })}
           {isLoggedIn && (
-            <span className="ml-1 text-[var(--color-success)]">✓ Şu an giriş yapılmış.</span>
+            <span className="ml-1 text-[var(--color-success)]">
+              ✓ {t('auth.currentlyLoggedIn')}
+            </span>
           )}
         </p>
 
         {/* Method tabs */}
         <div className="mb-4 flex gap-2">
           <button onClick={() => setMethod('device')} className={tabCls('device')}>
-            <Globe size={14} /> Tarayıcıyla giriş
+            <Globe size={14} /> {t('auth.codex.browserTab')}
           </button>
           <button onClick={() => setMethod('apikey')} className={tabCls('apikey')}>
-            <KeyRound size={14} /> API anahtarı
+            <KeyRound size={14} /> {t('auth.codex.apiKeyTab')}
           </button>
         </div>
 
@@ -226,9 +227,9 @@ export function CodexAuthDialog({
             {deviceDone ? (
               <div className="flex flex-col items-center gap-2 rounded-lg border border-[var(--color-success)]/40 bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-4 py-6 text-center">
                 <Check size={28} className="text-[var(--color-success)]" />
-                <p className="text-sm font-medium text-[var(--color-text)]">Giriş başarılı</p>
+                <p className="text-sm font-medium text-[var(--color-text)]">{t('auth.success')}</p>
                 <p className="text-xs text-[var(--color-text-dim)]">
-                  Bu sağlayıcı örneğinin codex-home'una kimlik yazıldı.
+                  {t('auth.codex.successDetail')}
                 </p>
                 <Button
                   onClick={() => {
@@ -238,15 +239,13 @@ export function CodexAuthDialog({
                   size="lg"
                   className="mt-2"
                 >
-                  Kapat
+                  {t('shared.close')}
                 </Button>
               </div>
             ) : !verifyUrl ? (
               <>
                 <p className="text-xs text-[var(--color-text-dim)]">
-                  ChatGPT hesabınla tarayıcıdan giriş yap. Bir doğrulama kodu üretilir; kodu
-                  tarayıcıda onaylayınca kimlik doğrudan bu sağlayıcı örneğinin codex-home'una
-                  yazılır.
+                  {t('auth.codex.browserDescription')}
                 </p>
                 <Button onClick={startDeviceLogin} size="lg" disabled={deviceBusy}>
                   {deviceBusy ? (
@@ -254,7 +253,7 @@ export function CodexAuthDialog({
                   ) : (
                     <Globe size={15} />
                   )}
-                  {deviceBusy ? 'Bağlantı alınıyor…' : 'Giriş başlat (tarayıcıyı aç)'}
+                  {deviceBusy ? t('auth.connecting') : t('auth.startBrowser')}
                 </Button>
               </>
             ) : (
@@ -263,21 +262,21 @@ export function CodexAuthDialog({
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[10px] font-semibold text-[var(--color-accent)]">
                     1
                   </span>
-                  Tarayıcıda sayfayı aç.
+                  {t('auth.codex.stepOpen')}
                   <a
                     href={verifyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ml-auto inline-flex items-center gap-1 text-[var(--color-accent)] hover:underline"
                   >
-                    <ExternalLink size={12} /> Tekrar aç
+                    <ExternalLink size={12} /> {t('auth.reopen')}
                   </a>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[10px] font-semibold text-[var(--color-accent)]">
                     2
                   </span>
-                  Aşağıdaki kodu gir ve onayla:
+                  {t('auth.codex.stepCode')}
                 </div>
                 <div className="flex items-stretch gap-1">
                   <code
@@ -288,7 +287,7 @@ export function CodexAuthDialog({
                   </code>
                   <button
                     onClick={copyCode}
-                    title="Kodu kopyala"
+                    title={t('auth.codex.copyCode')}
                     className="shrink-0 rounded-lg border border-[var(--color-border)] px-2 hover:bg-[var(--color-surface-2)]"
                   >
                     {copied ? (
@@ -300,14 +299,12 @@ export function CodexAuthDialog({
                 </div>
                 <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-3 text-xs text-[var(--color-text-dim)]">
                   <Loader2 size={14} className="shrink-0 animate-spin text-[var(--color-accent)]" />
-                  <span className="flex-1">
-                    Tarayıcıda onaylamanı bekliyorum — onaylayınca otomatik döner.
-                  </span>
+                  <span className="flex-1">{t('auth.codex.waiting')}</span>
                   <button
                     onClick={cancelDeviceLogin}
                     className="shrink-0 text-[var(--color-danger)] hover:underline"
                   >
-                    İptal
+                    {t('shared.cancel')}
                   </button>
                 </div>
               </div>
@@ -316,7 +313,7 @@ export function CodexAuthDialog({
               <div className="space-y-2">
                 <p className="text-xs text-[var(--color-danger)]">{deviceErr}</p>
                 <Button onClick={retryDeviceLogin} size="lg" disabled={deviceBusy}>
-                  Tekrar dene
+                  {t('shared.retry')}
                 </Button>
               </div>
             )}
@@ -324,10 +321,11 @@ export function CodexAuthDialog({
         ) : (
           <div className="mb-2 space-y-2">
             <p className="text-xs text-[var(--color-text-dim)]">
-              platform.openai.com'dan bir API anahtarı yapıştır. Anahtar bu sağlayıcı örneğinin
-              codex-home'una yazılır, uygulamaya asla geri gösterilmez.
+              {t('auth.codex.apiKeyDescription')}
             </p>
-            <label className="mb-1 block text-xs text-[var(--color-text-dim)]">API anahtarı</label>
+            <label className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              {t('auth.codex.apiKeyLabel')}
+            </label>
             <input
               ref={apiKeyRef}
               type="password"
@@ -344,10 +342,10 @@ export function CodexAuthDialog({
                 onClick={close}
                 className="rounded-lg px-3 py-2 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
               >
-                İptal
+                {t('shared.cancel')}
               </button>
               <Button onClick={submitApiKey} size="lg" disabled={apiBusy}>
-                {apiBusy ? 'Kaydediliyor…' : 'Giriş yap'}
+                {apiBusy ? t('shared.saving') : t('auth.signIn')}
               </Button>
             </div>
           </div>

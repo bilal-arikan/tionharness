@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewGraphResult, ViewRef } from '@/types'
+import { i18next } from '@/i18n'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -84,7 +85,8 @@ function latestGraphProps(): GraphProps {
   return props
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18next.changeLanguage('tr')
   localStorage.clear()
   mocks.viewGraph.mockReset()
   mocks.viewGraph.mockResolvedValue(graph)

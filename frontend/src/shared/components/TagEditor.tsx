@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 // TagEditor — an inline chips editor for free-form tags on sessions, flows and
 // schedules. Adding a tag (Enter or comma) or removing one (×) calls onChange
@@ -15,13 +16,9 @@ interface Props {
   className?: string
 }
 
-export function TagEditor({
-  tags,
-  onChange,
-  placeholder = 'Etiket ekle…',
-  disabled,
-  className = '',
-}: Props) {
+export function TagEditor({ tags, onChange, placeholder, disabled, className = '' }: Props) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedPlaceholder = placeholder ?? t('tags.add')
   const [draft, setDraft] = useState('')
   // A save is in flight: the input is locked so the same tag cannot be committed
   // twice (Enter then blur), and the draft survives a failed save.
@@ -71,7 +68,7 @@ export function TagEditor({
               type="button"
               onClick={() => remove(tag)}
               className="opacity-70 hover:opacity-100"
-              aria-label={`${tag} etiketini kaldır`}
+              aria-label={t('tags.remove', { tag })}
             >
               <X size={11} />
             </button>
@@ -85,7 +82,7 @@ export function TagEditor({
           onKeyDown={onKeyDown}
           onBlur={() => void commit()}
           disabled={saving}
-          placeholder={tags.length === 0 ? placeholder : ''}
+          placeholder={tags.length === 0 ? resolvedPlaceholder : ''}
           className="min-w-[80px] flex-1 bg-transparent text-[12px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-dim)]"
         />
       )}

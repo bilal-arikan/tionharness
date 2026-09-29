@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { STEP_KIND_MAP } from '@/shared/stepKinds'
@@ -15,6 +16,7 @@ interface Props {
 // ActivityCard and ThinkingBlock so the turn stays compact. Collapsed: a one-
 // line truncated preview. Expanded: the full markdown.
 export function TextStep({ text, onOpenFile }: Props) {
+  const { t } = useTranslation('chatStatus')
   const [open, setOpen] = useState(false)
   const preview = text.replace(/\s+/g, ' ').trim()
 
@@ -25,7 +27,7 @@ export function TextStep({ text, onOpenFile }: Props) {
         className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
       >
         <HeaderIcon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
-        <span className="shrink-0 font-medium text-[var(--color-text)]">Düşünce</span>
+        <span className="shrink-0 font-medium text-[var(--color-text)]">{t('steps.thought')}</span>
         {!open && preview && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">{preview}</span>
         )}

@@ -9,14 +9,13 @@
 // session — and disappears the moment a message is sent (ChatView gates it on
 // the transcript being empty and no turn pending).
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Loader2, Users, X } from 'lucide-react'
 import { api } from '@/api'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { InfoPopover } from '@/shared/components/InfoPopover'
-import {
-  CoordinatorWorkflowPicker,
-  WORKFLOW_HELP,
-} from '@/shared/components/CoordinatorWorkflowPicker'
+import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
+import { workflowHelp } from '@/shared/components/coordinatorWorkflowText'
 
 interface Props {
   sessionId: string
@@ -37,6 +36,7 @@ export function SessionStartPanel({
   onDismiss,
   onOpenSkill,
 }: Props) {
+  const { t } = useTranslation('chatStatus')
   // Seeded from the server rather than assumed off: an agent configured as a
   // coordinator (Ajanlar ▸ Koordinatör) opens every new session already in
   // coordinator mode, recipe included (db.createSessionLocked).
@@ -111,14 +111,14 @@ export function SessionStartPanel({
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 pb-2 pt-2.5 shadow-lg">
         <div className="flex items-center gap-1.5">
           <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            <Users size={12} className="shrink-0" /> Başlangıç ayarları
+            <Users size={12} className="shrink-0" /> {t('sessionStart.title')}
           </span>
           {loading && <Loader2 size={11} className="animate-spin text-[var(--color-text-dim)]" />}
           <button
             type="button"
             onClick={onDismiss}
-            title="Bu oturum için gizle"
-            aria-label="Başlangıç panelini kapat"
+            title={t('sessionStart.dismissTitle')}
+            aria-label={t('sessionStart.dismissLabel')}
             data-testid="session-start-dismiss"
             className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
           >
@@ -143,11 +143,9 @@ export function SessionStartPanel({
           ) : (
             <Users size={13} className="shrink-0" />
           )}
-          {coordinator
-            ? "Koordinatör modu açık — bu oturum paralel worker'ları yönetir"
-            : "Koordinatör modunu aç (paralel worker'ları yönet)"}
+          {coordinator ? t('sessionStart.coordinatorOn') : t('sessionStart.coordinatorOff')}
           <span className="ml-auto shrink-0 text-[10px] text-[var(--color-text-dim)]">
-            {coordinator ? 'Kapat' : 'Aç'}
+            {coordinator ? t('sessionStart.disable') : t('sessionStart.enable')}
           </span>
         </button>
 
@@ -155,8 +153,8 @@ export function SessionStartPanel({
         {coordinator && (
           <div className="mt-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-2">
             <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-              <span>Workflow</span>
-              <InfoPopover text={WORKFLOW_HELP} label="Workflow nedir?" fixed />
+              <span>{t('sessionStart.workflow')}</span>
+              <InfoPopover text={workflowHelp()} label={t('sessionStart.workflowLabel')} fixed />
               {savingWf && <Loader2 size={11} className="animate-spin" />}
             </div>
             <div className="mt-1">
@@ -172,8 +170,8 @@ export function SessionStartPanel({
         )}
 
         <p className="mt-1.5 px-0.5 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-          İlk mesajı gönderdiğinde bu panel kapanır. Ayarlar yalnız bu oturuma aittir ve sonradan
-          oturum panelindeki <strong>Koordinasyon</strong> bölümünden değiştirilebilir.
+          {t('sessionStart.footerBefore')} <strong>{t('sessionStart.coordination')}</strong>{' '}
+          {t('sessionStart.footerAfter')}
         </p>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Loader2, Copy, RefreshCw, X, ChevronLeft } from 'lucide-react'
 import { api } from '@/api'
@@ -8,6 +9,9 @@ import type { ViewLevel, ViewRef, ViewResult } from '@/types'
 import { formatTime } from '@/shared/lib/intl'
 
 const LEVELS: ViewLevel[] = ['tiny', 'card', 'full']
+const SUMMARY_GLYPH = String.fromCharCode(0x25f1)
+const HANDLE_GLYPH = String.fromCharCode(0x21b3)
+const SEND_GLYPH = String.fromCharCode(0x2913)
 
 interface Props {
   // The entity to project. Changing it resets the drill-down trail.
@@ -44,6 +48,7 @@ interface Props {
 //   - The token estimate and the asOf stamp are always on screen, so an expensive
 //     or stale view is obvious rather than something to discover later.
 export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fillHeight }: Props) {
+  const { t } = useTranslation('view')
   const [trail, setTrail] = useState<ViewRef[]>([target])
   const [level, setLevel] = useState<ViewLevel>('card')
   const [result, setResult] = useState<ViewResult | null>(null)
@@ -115,21 +120,22 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
       const combined = blocks
         .map(
           (b) =>
-            `[${b.names.join(' = ')} — ~${b.r.tokens} tok · asOf ${formatTime(new Date(b.r.asOf), {
-              timeStyle: 'medium',
-            })}]\n${b.r.text}`,
+            `[${b.names.join(' = ')} — ${t('copy.tokenCount', { count: b.r.tokens })} · ${t('asOf')} ${formatTime(
+              new Date(b.r.asOf),
+              {
+                timeStyle: 'medium',
+              },
+            )}]\n${b.r.text}`,
         )
         .join('\n\n')
       await navigator.clipboard.writeText(combined)
       toast.info(
-        blocks.length === 1
-          ? 'Panoya kopyalandı (üç seviye de aynı içeriği veriyor)'
-          : `${blocks.length} farklı seviye panoya kopyalandı`,
+        blocks.length === 1 ? t('copy.sameLevels') : t('copy.levels', { count: blocks.length }),
       )
     } catch {
       // Fallback: copy just the current level if the others fail.
       await navigator.clipboard.writeText(result.text)
-      toast.info('Panoya kopyalandı')
+      toast.info(t('copy.done'))
     }
   }
 
@@ -146,13 +152,15 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
           <button
             type="button"
             onClick={() => setTrail((t) => t.slice(0, -1))}
-            title="Geri"
+            title={t('back')}
             className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
           >
             <ChevronLeft size={15} />
           </button>
         )}
-        <span className="truncate text-sm font-medium">◱ Özet</span>
+        <span className="truncate text-sm font-medium">
+          {SUMMARY_GLYPH} {t('title')}
+        </span>
         <span className="truncate font-mono text-xs text-[var(--color-text-dim)]">
           {refToString(ref)}
         </span>
@@ -160,7 +168,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
           <button
             type="button"
             onClick={onClose}
-            title="Kapat"
+            title={t('close')}
             className="ml-auto text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
           >
             <X size={15} />
@@ -182,24 +190,26 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
                   : 'text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
               }`}
             >
-              {l}
+              {t(`level.${l}`)}
             </button>
           ))}
         </div>
         <button
           type="button"
           onClick={() => void load()}
-          title="Yenile"
+          title={t('refresh')}
           className="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
         </button>
         {result && (
           <span className="ml-auto flex items-center gap-2 text-[var(--color-text-dim)]">
-            <span title={`Kaynak sürüm: ${result.source}`}>
-              asOf {formatTime(new Date(result.asOf), { timeStyle: 'medium' })}
+            <span title={t('sourceVersion', { source: result.source })}>
+              {t('asOf')} {formatTime(new Date(result.asOf), { timeStyle: 'medium' })}
             </span>
-            <span title="Yaklaşık token maliyeti (karakter/4)">~{result.tokens} tok</span>
+            <span title={t('tokenEstimateHint')}>
+              {t('tokenEstimate', { count: result.tokens })}
+            </span>
           </span>
         )}
       </div>
@@ -218,7 +228,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
             {result.text}
           </pre>
         ) : (
-          <p className="text-xs text-[var(--color-text-dim)]">Yükleniyor…</p>
+          <p className="text-xs text-[var(--color-text-dim)]">{t('loading')}</p>
         )}
       </div>
 
@@ -228,8 +238,10 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
               items misleads whoever reads it, model or human. */}
           {result.elided > 0 && (
             <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-              {result.elided} {result.elidedUnit || 'öğe'} gizlendi — daha fazlası için seviyeyi
-              yükselt veya bir bağlantıyı aç.
+              {t('elided', {
+                count: result.elided,
+                unit: result.elidedUnit || t('item'),
+              })}
             </p>
           )}
           {!hideHandles && (result.handles ?? []).length > 0 && (
@@ -244,7 +256,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
                   }}
                   className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                 >
-                  ↳ {h.label}
+                  {HANDLE_GLYPH} {h.label}
                 </button>
               ))}
             </div>
@@ -256,7 +268,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
               className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             >
               <Copy size={13} />
-              Kopyala
+              {t('copy.button')}
             </button>
             {onSend && (
               <button
@@ -264,7 +276,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
                 onClick={() => onSend(result.text, ref)}
                 className="rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
               >
-                ⤓ Ajana gönder
+                {SEND_GLYPH} {t('sendToAgent')}
               </button>
             )}
           </div>

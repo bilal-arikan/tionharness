@@ -2,15 +2,14 @@ import type { Agent, BranchMatchMode, Flow, FlowNode } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { PromptEditor } from '@/shared/components'
 import { InfoPopover } from '@/shared/components/InfoPopover'
-import {
-  CoordinatorWorkflowPicker,
-  WORKFLOW_HELP,
-} from '@/shared/components/CoordinatorWorkflowPicker'
+import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
+import { workflowHelp } from '@/shared/components/coordinatorWorkflowText'
 import { Workflow } from 'lucide-react'
 import { NumberField } from '@/features/settings/primitives'
 import { chromeFor, nodeHeaderForeground } from './nodeStyles'
 import { FlowVarsButton } from './FlowVarsButton'
 import { JudgeFields } from './JudgeFields'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   node: FlowNode
@@ -43,6 +42,7 @@ export function NodeInspector({
   onDuplicate,
   onDelete,
 }: Props) {
+  const { t } = useTranslation('flows')
   const chrome = chromeFor(node.type)
   // Spawn nodes in this flow, for the join node's "which spawn to await" picker.
   const spawnNodes = allNodes.filter((n) => n.type === 'spawn')
@@ -61,12 +61,16 @@ export function NodeInspector({
           <button
             onClick={onDuplicate}
             className="text-xs text-[var(--color-accent)]"
-            title="Çoğalt"
+            title={t('actions.duplicate')}
           >
-            ⧉ Çoğalt
+            ⧉ {t('actions.duplicate')}
           </button>
-          <button onClick={onDelete} className="text-xs text-[var(--color-danger)]" title="Sil">
-            ✕ Sil
+          <button
+            onClick={onDelete}
+            className="text-xs text-[var(--color-danger)]"
+            title={t('actions.delete')}
+          >
+            ✕ {t('actions.delete')}
           </button>
         </div>
       </div>
@@ -81,15 +85,17 @@ export function NodeInspector({
           <chrome.Icon size={14} />
         </span>
         <span className="text-sm font-medium">{chrome.label}</span>
-        <span className="text-[11px] text-[var(--color-text-dim)]">(tür sabit)</span>
+        <span className="text-[11px] text-[var(--color-text-dim)]">{t('inspector.typeFixed')}</span>
       </div>
 
       <label className="block">
-        <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Başlık</span>
+        <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+          {t('inspector.title')}
+        </span>
         <input
           value={node.title ?? ''}
           onChange={(e) => onPatch({ title: e.target.value })}
-          placeholder="başlık"
+          placeholder={t('inspector.titlePlaceholder')}
           className={input}
         />
       </label>
@@ -97,18 +103,20 @@ export function NodeInspector({
       {node.type === 'agent' && (
         <>
           <div className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Ajan</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              {t('inspector.agent')}
+            </span>
             <AgentPicker
               agents={agents}
               value={node.agentId ?? ''}
               onChange={(id) => onPatch({ agentId: id })}
-              placeholder="— ajan seç —"
+              placeholder={t('inspector.agentPlaceholder')}
               clearable
             />
           </div>
           <div className="block">
             <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>Prompt</span>
+              <span>{t('inspector.prompt')}</span>
               <FlowVarsButton
                 nodeRefs={nodeRefs}
                 onInsert={(t) => onPatch({ prompt: (node.prompt ?? '') + t })}
@@ -130,9 +138,9 @@ export function NodeInspector({
               onChange={(e) => onPatch({ fresh: e.target.checked })}
             />
             <span>
-              Taze bağlam{' '}
+              {t('inspector.freshContext')}{' '}
               <span className="text-[var(--color-text-dim)]">
-                (birikmiş konuşmayı görmez — yalnız "Bağlamı biriktir" açıkken etkili)
+                {t('inspector.freshContextHint')}
               </span>
             </span>
           </label>
@@ -143,19 +151,19 @@ export function NodeInspector({
         <>
           <div className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              Koordinatör ajan
+              {t('inspector.coordinatorAgent')}
             </span>
             <AgentPicker
               agents={agents}
               value={node.agentId ?? ''}
               onChange={(id) => onPatch({ agentId: id })}
-              placeholder="— ajan seç —"
+              placeholder={t('inspector.agentPlaceholder')}
               clearable
             />
           </div>
           <div className="block">
             <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>Görev (koordinatöre verilen hedef)</span>
+              <span>{t('inspector.coordinatorGoal')}</span>
               <FlowVarsButton
                 nodeRefs={nodeRefs}
                 onInsert={(t) => onPatch({ prompt: (node.prompt ?? '') + t })}
@@ -175,8 +183,8 @@ export function NodeInspector({
           <div className="block">
             <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
               <Workflow size={12} />
-              <span>Koordinasyon türü (workflow)</span>
-              <InfoPopover text={WORKFLOW_HELP} label="Workflow nedir?" fixed />
+              <span>{t('inspector.workflow')}</span>
+              <InfoPopover text={workflowHelp()} label={t('inspector.workflowHelp')} fixed />
             </div>
             <CoordinatorWorkflowPicker
               value={node.workflow}
@@ -185,26 +193,23 @@ export function NodeInspector({
             />
           </div>
           <NumberField
-            label="En çok koordinatör turu"
-            hint="0 = reçetenin kendi sınırı, yoksa workspace varsayılanı"
+            label={t('inspector.coordinatorTurns')}
+            hint={t('inspector.coordinatorTurnsHint')}
             min={0}
             step={1}
             value={node.maxTurns ?? 0}
             onChange={(v) => onPatch({ maxTurns: Math.round(v) })}
           />
           <NumberField
-            label="Zaman aşımı (saniye)"
-            hint="0 = 30 dk varsayılan"
+            label={t('inspector.timeout')}
+            hint={t('inspector.timeoutDefault')}
             min={0}
             step={1}
             value={node.timeoutSec ?? 0}
             onChange={(v) => onPatch({ timeoutSec: Math.round(v) })}
           />
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            Ajan kendi koordinatör oturumunda çalışır ve{' '}
-            <b>kaç worker açacağına anlık karar verir</b>. Düğüm, tüm workerlar bitip koordinatör
-            susana kadar bloklar; son yanıtı çıktı olur. Zaman aşımında çalışan workerlar durdurulur
-            ve akış hata verir.
+            {t('inspector.coordinatorDescription')}
           </p>
         </>
       )}
@@ -212,27 +217,29 @@ export function NodeInspector({
       {node.type === 'branch' && (
         <div className="space-y-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Eşleşme</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              {t('inspector.match')}
+            </span>
             <select
               value={node.matchMode ?? 'contains'}
               onChange={(e) => onPatch({ matchMode: e.target.value as BranchMatchMode })}
               className={input}
             >
-              <option value="contains">İçerir (substring)</option>
-              <option value="equals">Eşittir (tam)</option>
-              <option value="regex">Regex</option>
-              <option value="judge">Karar modeli (judge)</option>
+              <option value="contains">{t('inspector.matchContains')}</option>
+              <option value="equals">{t('inspector.matchEquals')}</option>
+              <option value="regex">{t('inspector.matchRegex')}</option>
+              <option value="judge">{t('inspector.matchJudge')}</option>
             </select>
           </label>
           {node.matchMode === 'judge' && (
             <JudgeFields
               question={node.judgeQuestion ?? ''}
               onQuestion={(judgeQuestion) => onPatch({ judgeQuestion })}
-              hint="Her dal bir seçeneği düz cümleyle tarif eder; karar modeli son çıktının hangisine uyduğunu seçer. Emin değilse ya da cevap veremezse varsayılan (boş) dala gider. Ayarlar → Karar Mercileri'nde açık olmalı."
+              hint={t('inspector.branchHint')}
             />
           )}
           <span className="block text-xs text-[var(--color-text-dim)]">
-            Dallar (hedef için kenar çiz)
+            {t('inspector.branches')}
           </span>
           {(node.branches ?? []).map((b, bi) => (
             <div key={bi} className="flex items-center gap-2">
@@ -245,12 +252,12 @@ export function NodeInspector({
                 }}
                 placeholder={
                   (node.matchMode ?? 'contains') === 'equals'
-                    ? 'eşittir… (boş = varsayılan)'
+                    ? t('inspector.exactPlaceholder')
                     : (node.matchMode ?? 'contains') === 'regex'
-                      ? 'regex… (boş = varsayılan)'
+                      ? t('inspector.regexPlaceholder')
                       : node.matchMode === 'judge'
-                        ? 'seçeneği tarif et… (boş = varsayılan)'
-                        : 'içeriyorsa… (boş = varsayılan)'
+                        ? t('inspector.untilJudgePlaceholder')
+                        : t('inspector.untilContainsPlaceholder')
                 }
                 className={input}
               />
@@ -271,28 +278,27 @@ export function NodeInspector({
             }
             className="text-xs text-[var(--color-accent)]"
           >
-            + dal ekle
+            {t('actions.addBranch')}
           </button>
         </div>
       )}
 
       {node.type === 'parallel' && (
-        <p className="text-xs text-[var(--color-text-dim)]">
-          Eşzamanlı ajan node'larını alttaki <b>fan</b> tutamağından, join hedefini sağdaki{' '}
-          <b>join</b> tutamağından kenar çizerek bağla.
-        </p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('inspector.parallelDescription')}</p>
       )}
 
       {node.type === 'subflow' && (
         <div className="space-y-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Alt-akış</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              {t('inspector.subflow')}
+            </span>
             <select
               value={node.flowRef ?? ''}
               onChange={(e) => onPatch({ flowRef: e.target.value })}
               className={input}
             >
-              <option value="">— akış seç —</option>
+              <option value="">{t('inspector.subflowPlaceholder')}</option>
               {flows.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.emoji ? `${f.emoji} ` : ''}
@@ -303,7 +309,7 @@ export function NodeInspector({
           </label>
           <div className="block">
             <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>Girdi şablonu</span>
+              <span>{t('inspector.inputTemplate')}</span>
               <FlowVarsButton
                 nodeRefs={nodeRefs}
                 onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
@@ -312,15 +318,14 @@ export function NodeInspector({
             <PromptEditor
               value={node.template ?? ''}
               onChange={(v) => onPatch({ template: v })}
-              placeholder="boş = {{last}} · alt-akışa geçilecek girdi"
+              placeholder={t('inspector.subflowInputPlaceholder')}
               rows={3}
               mono
               textareaClassName="min-h-12 text-xs"
             />
           </div>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            Alt-akış <b>await-input</b>'a düşerse bu akış da askıya alınır; girdi verilince alt-akış
-            devam eder (propagasyon).
+            {t('inspector.subflowDescription')}
           </p>
         </div>
       )}
@@ -329,11 +334,13 @@ export function NodeInspector({
         <div className="space-y-2">
           <div className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              Async akışlar (birden çok seç)
+              {t('inspector.spawnFlows')}
             </span>
             <div className="max-h-40 space-y-1 overflow-auto rounded bg-[var(--color-surface-2)] p-1.5">
               {flows.length === 0 && (
-                <div className="text-[11px] text-[var(--color-text-dim)]">başka akış yok</div>
+                <div className="text-[11px] text-[var(--color-text-dim)]">
+                  {t('inspector.noOtherFlows')}
+                </div>
               )}
               {flows.map((f) => {
                 const selected = (node.spawnFlows ?? []).includes(f.id)
@@ -365,7 +372,7 @@ export function NodeInspector({
           </div>
           <div className="block">
             <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>Girdi şablonu (her çocuğa)</span>
+              <span>{t('inspector.inputTemplateEach')}</span>
               <FlowVarsButton
                 nodeRefs={nodeRefs}
                 onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
@@ -374,15 +381,14 @@ export function NodeInspector({
             <PromptEditor
               value={node.template ?? ''}
               onChange={(v) => onPatch({ template: v })}
-              placeholder="boş = {{last}}"
+              placeholder={t('inspector.emptyLastPlaceholder')}
               rows={2}
               mono
               textareaClassName="min-h-10 text-xs"
             />
           </div>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            Akışları <b>bloklamadan</b> başlatır; sonuçları bir <b>join</b> toplar. Async çocuklar
-            interaktif olmamalı (await-input'a düşen çocuk join'i başarısız yapar).
+            {t('inspector.spawnDescription')}
           </p>
         </div>
       )}
@@ -391,14 +397,14 @@ export function NodeInspector({
         <div className="space-y-2">
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              Beklenecek spawn node
+              {t('inspector.joinSpawn')}
             </span>
             <select
               value={node.spawnRef ?? ''}
               onChange={(e) => onPatch({ spawnRef: e.target.value })}
               className={input}
             >
-              <option value="">tümü (tüm bekleyen spawn'lar)</option>
+              <option value="">{t('inspector.joinSpawnAll')}</option>
               {spawnNodes.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.title || n.id} ({n.id})
@@ -407,8 +413,8 @@ export function NodeInspector({
             </select>
           </label>
           <NumberField
-            label="Zaman aşımı (saniye)"
-            hint="0 = süresiz"
+            label={t('inspector.timeout')}
+            hint={t('inspector.timeoutUnlimited')}
             min={0}
             step={1}
             value={node.joinTimeoutSec ?? 0}
@@ -420,18 +426,18 @@ export function NodeInspector({
               checked={!!node.joinPartial}
               onChange={(e) => onPatch({ joinPartial: e.target.checked })}
             />
-            Kısmi mod (başarısız/bekleyen/zaman aşımına uğrayan çocuğu düşür, join'i düşürme)
+            {t('inspector.joinPartial')}
           </label>
           <span className="block text-[11px] text-[var(--color-text-dim)]">
-            Spawn edilen child run'ları bekler, çıktılarını birleştirip {'{{last}}'}'e koyar.
+            {t('inspector.joinDescription')}
           </span>
         </div>
       )}
 
       {node.type === 'delay' && (
         <NumberField
-          label="Bekleme (saniye)"
-          hint="Bekledikten sonra sonraki node'a geçer (en çok 5 dk)."
+          label={t('inspector.delay')}
+          hint={t('inspector.delayHint')}
           min={0}
           max={300}
           step={0.5}
@@ -443,7 +449,7 @@ export function NodeInspector({
       {node.type === 'transform' && (
         <div className="block">
           <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-            <span>Şablon (çıktı)</span>
+            <span>{t('inspector.template')}</span>
             <FlowVarsButton
               nodeRefs={nodeRefs}
               onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
@@ -452,7 +458,7 @@ export function NodeInspector({
           <PromptEditor
             value={node.template ?? ''}
             onChange={(v) => onPatch({ template: v })}
-            placeholder="{{input}}, {{last}}, {{node.<id>}} — LLM çağırmadan çıktı üretir"
+            placeholder={t('inspector.templatePlaceholder')}
             rows={8}
             mono
             textareaClassName="min-h-32 text-xs"
@@ -462,13 +468,10 @@ export function NodeInspector({
 
       {node.type === 'loop' && (
         <div className="space-y-2">
-          <p className="text-xs text-[var(--color-text-dim)]">
-            Gövdeyi (alttaki <b>gövde</b> tutamağı) yinele; bitince <b>çıkış</b> tutamağındaki
-            node'a geç. Gövde node'ları <code>{'{{iteration}}'}</code> (0-tabanlı) kullanabilir.
-          </p>
+          <p className="text-xs text-[var(--color-text-dim)]">{t('inspector.loopDescription')}</p>
           <NumberField
-            label="En çok iterasyon"
-            hint={'0 = yalnız "çıkış koşulu"na göre biter (biri gerekli).'}
+            label={t('inspector.maxIterations')}
+            hint={t('inspector.maxIterationsHint')}
             min={0}
             step={1}
             value={node.maxIters ?? 0}
@@ -476,37 +479,39 @@ export function NodeInspector({
           />
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              Çıkış koşulu (eşleşince biter)
+              {t('inspector.exitCondition')}
             </span>
             <input
               value={node.until ?? ''}
               onChange={(e) => onPatch({ until: e.target.value })}
               placeholder={
                 node.untilMode === 'judge'
-                  ? 'koşulu düz cümleyle yaz (ör. İnceleme değişikliği onayladı)'
-                  : 'boş = yalnız iterasyon sınırı'
+                  ? t('inspector.exitJudgePlaceholder')
+                  : t('inspector.exitLimitPlaceholder')
               }
               className={input}
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Eşleşme</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              {t('inspector.match')}
+            </span>
             <select
               value={node.untilMode ?? 'contains'}
               onChange={(e) => onPatch({ untilMode: e.target.value as BranchMatchMode })}
               className={input}
             >
-              <option value="contains">İçerir (substring)</option>
-              <option value="equals">Eşittir (tam)</option>
-              <option value="regex">Regex</option>
-              <option value="judge">Karar modeli (judge)</option>
+              <option value="contains">{t('inspector.matchContains')}</option>
+              <option value="equals">{t('inspector.matchEquals')}</option>
+              <option value="regex">{t('inspector.matchRegex')}</option>
+              <option value="judge">{t('inspector.matchJudge')}</option>
             </select>
           </label>
           {node.untilMode === 'judge' && (
             <JudgeFields
               question={node.judgeQuestion ?? ''}
               onQuestion={(judgeQuestion) => onPatch({ judgeQuestion })}
-              hint="Karar modeli her turdan sonra çıkış koşulunun sağlanıp sağlanmadığına bakar. Cevap veremezse döngü iterasyon sınırına kadar sürer; sınır yoksa akış hata verir."
+              hint={t('inspector.loopJudgeHint')}
             />
           )}
         </div>

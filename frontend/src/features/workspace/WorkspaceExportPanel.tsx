@@ -5,6 +5,7 @@
 // (name/description/version). Secrets and session history are never included
 // (server-enforced). A live preview + dependency warnings reflect the selection.
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Boxes,
   GitBranch,
@@ -65,6 +66,7 @@ function selectionToIds(picked: Set<string>, all: PickEntry[]): string[] | null 
 }
 
 export function WorkspaceExportPanel({ ws, onError }: Props) {
+  const { t } = useTranslation('workspace')
   const [agents, setAgents] = useState<Agent[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
@@ -167,19 +169,19 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         id: a.id,
         label: a.name || a.id,
         sub: a.flowId
-          ? `akış · ${flows.find((f) => f.id === a.flowId)?.name ?? a.flowId}`
+          ? `${t('export.flow')} · ${flows.find((f) => f.id === a.flowId)?.name ?? a.flowId}`
           : agentName(a.targetAgentId),
       })),
-    [automations, agentName, flows],
+    [automations, agentName, flows, t],
   )
   const scheduleEntries: PickEntry[] = useMemo(
     () =>
       schedules.map((s) => ({
         id: s.id,
-        label: s.prompt?.trim() || '(prompt yok)',
+        label: s.prompt?.trim() || t('export.noPrompt'),
         sub: `${agentName(s.agentId)} · ${s.cronExpr}`,
       })),
-    [schedules, agentName],
+    [schedules, agentName, t],
   )
 
   // Agent ids each flow's graph references (agent-type nodes only).
@@ -211,8 +213,10 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       if (missing.length > 0) {
         out.push({
           key: `flow:${flow.id}`,
-          label: `Akış “${flow.name || flow.id}”`,
-          detail: `hariç bırakılan ajan(lar)a bağlı — dışa aktarımda kopuk referans kalır: ${missing.map(agentName).join(', ')}`,
+          label: t('export.warnings.flowLabel', { name: flow.name || flow.id }),
+          detail: t('export.warnings.excludedAgents', {
+            agents: missing.map(agentName).join(', '),
+          }),
         })
       }
     }
@@ -221,8 +225,10 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       if (!pickedAgents.has(sc.agentId)) {
         out.push({
           key: `sched:${sc.id}`,
-          label: `Zamanlama “${sc.prompt?.slice(0, 32) || sc.id}”`,
-          detail: `hariç bırakılan ajana bağlı (${agentName(sc.agentId)}) — dışa aktarıma dahil edilmez`,
+          label: t('export.warnings.scheduleLabel', {
+            name: sc.prompt?.slice(0, 32) || sc.id,
+          }),
+          detail: t('export.warnings.excludedAgent', { agent: agentName(sc.agentId) }),
         })
       }
     }
@@ -231,14 +237,14 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       if (au.targetAgentId && !pickedAgents.has(au.targetAgentId)) {
         out.push({
           key: `auto:${au.id}`,
-          label: `Otomasyon “${au.name || au.id}”`,
-          detail: `hariç bırakılan ajana bağlı (${agentName(au.targetAgentId)}) — dışa aktarıma dahil edilmez`,
+          label: t('export.warnings.automationLabel', { name: au.name || au.id }),
+          detail: t('export.warnings.excludedAgent', { agent: agentName(au.targetAgentId) }),
         })
       } else if (au.flowId && !pickedFlows.has(au.flowId)) {
         out.push({
           key: `auto:${au.id}`,
-          label: `Otomasyon “${au.name || au.id}”`,
-          detail: 'hariç bırakılan bir akışa bağlı — dışa aktarıma dahil edilmez',
+          label: t('export.warnings.automationLabel', { name: au.name || au.id }),
+          detail: t('export.warnings.excludedFlow'),
         })
       }
     }
@@ -253,6 +259,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     schedules,
     automations,
     agents,
+    t,
   ])
 
   // Live preview: the exact contents the current selection would produce. Schedules
@@ -276,26 +283,51 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       packId: `workspace-${slug}`,
       willOverwrite: slug === (slugify(ws.name) || ws.id.toLowerCase()),
       items: [
-        { icon: Boxes, label: 'Ajan', count: pickedAgents.size, on: pickedAgents.size > 0 },
-        { icon: GitBranch, label: 'Akış', count: pickedFlows.size, on: pickedFlows.size > 0 },
-        { icon: Clock, label: 'Zamanlama', count: schedEffective, on: schedEffective > 0 },
-        { icon: Zap, label: 'Otomasyon', count: autoEffective, on: autoEffective > 0 },
-        { icon: Sparkles, label: 'Skill', count: pickedSkills.size, on: pickedSkills.size > 0 },
+        {
+          icon: Boxes,
+          label: t('export.preview.items.agent'),
+          count: pickedAgents.size,
+          on: pickedAgents.size > 0,
+        },
+        {
+          icon: GitBranch,
+          label: t('export.preview.items.flow'),
+          count: pickedFlows.size,
+          on: pickedFlows.size > 0,
+        },
+        {
+          icon: Clock,
+          label: t('export.preview.items.schedule'),
+          count: schedEffective,
+          on: schedEffective > 0,
+        },
+        {
+          icon: Zap,
+          label: t('export.preview.items.automation'),
+          count: autoEffective,
+          on: autoEffective > 0,
+        },
+        {
+          icon: Sparkles,
+          label: t('export.preview.items.skill'),
+          count: pickedSkills.size,
+          on: pickedSkills.size > 0,
+        },
         {
           icon: FileText,
-          label: 'Talimat',
+          label: t('export.preview.items.instructions'),
           count: cats.instructions && hasInstructions ? 1 : 0,
           on: cats.instructions && hasInstructions,
         },
         {
           icon: FileText,
-          label: 'Prompt/README',
+          label: t('export.preview.items.prompts'),
           count: cats.prompts ? promptsCount : 0,
           on: cats.prompts && promptsCount > 0,
         },
         {
           icon: Columns3,
-          label: 'Pano sütunu',
+          label: t('export.preview.items.boardColumn'),
           count: cats.boardColumns ? boardCount : 0,
           on: cats.boardColumns && boardCount > 0,
         },
@@ -317,6 +349,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     hasInstructions,
     promptsCount,
     boardCount,
+    t,
   ])
 
   const doExport = async () => {
@@ -342,7 +375,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       const pack = await api.publishPack('workspace', ws.id, include, meta)
       setMsg({
         ok: true,
-        text: `“${pack.name}” şablon olarak dışa aktarıldı (id: ${pack.id}). Artık market ve workspace oluşturma ekranında görünür.`,
+        text: t('export.success', { name: pack.name, id: pack.id }),
       })
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message })
@@ -352,24 +385,23 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
   }
 
   if (loading) {
-    return <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+    return <div className="text-sm text-[var(--color-text-dim)]">{t('actions.loading')}</div>
   }
 
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5 text-xs text-[var(--color-text-dim)]">
-        <span className="font-medium text-[var(--color-text)]">{ws.name}</span> workspace’ini
-        taşınabilir bir
-        <span className="font-medium text-[var(--color-text)]"> şablon paketine</span> dönüştür.
-        Aşağıdan neyin dahil edileceğini seç.{' '}
-        <span className="font-medium text-[var(--color-text)]">
-          Sırlar ve oturum geçmişi asla dahil edilmez.
-        </span>
+        {t('export.intro.beforeName')}
+        <span className="font-medium text-[var(--color-text)]">{ws.name}</span>
+        {t('export.intro.afterName')}
+        <span className="font-medium text-[var(--color-text)]">{t('export.intro.pack')}</span>
+        {t('export.intro.afterPack')}{' '}
+        <span className="font-medium text-[var(--color-text)]">{t('export.secrets')}</span>
       </div>
 
       {/* Pack metadata */}
       <div className="space-y-2">
-        <Field label="Şablon adı">
+        <Field label={t('export.metadata.name')}>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -377,16 +409,16 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
             className={inputCls}
           />
         </Field>
-        <Field label="Açıklama" hint="Boş bırakılırsa otomatik bir açıklama üretilir.">
+        <Field label={t('export.metadata.description')} hint={t('export.metadata.descriptionHint')}>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            placeholder={`“${ws.name}” workspace'inden dışa aktarıldı.`}
+            placeholder={t('export.metadata.descriptionPlaceholder', { name: ws.name })}
             className={`${inputCls} resize-y`}
           />
         </Field>
-        <Field label="Sürüm" hint="Örn. 1.0.0 — boş bırakılırsa 1.0.0 kullanılır.">
+        <Field label={t('export.metadata.version')} hint={t('export.metadata.versionHint')}>
           <input
             value={version}
             onChange={(e) => setVersion(e.target.value)}
@@ -399,75 +431,75 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       {/* Item selections — agents / flows / skills / schedules */}
       <div className="mt-2 space-y-4 border-t border-[var(--color-border)] pt-3">
         <ExportPickList
-          title="Ajanlar"
+          title={t('export.sections.agents.title')}
           icon={Boxes}
           entries={agentEntries}
           picked={pickedAgents}
           setPicked={setPickedAgents}
-          emptyHint="Bu workspace’te ajan yok — dışa aktarım için en az bir ajan gerekir."
+          emptyHint={t('export.sections.agents.empty')}
         />
         <ExportPickList
-          title="Akışlar (Flows)"
+          title={t('export.sections.flows.title')}
           icon={GitBranch}
           entries={flowEntries}
           picked={pickedFlows}
           setPicked={setPickedFlows}
-          emptyHint="Bu workspace’te akış yok."
-          note="Ajan düğümleri taşınabilir anahtarlara yeniden yazılır."
+          emptyHint={t('export.sections.flows.empty')}
+          note={t('export.sections.flows.note')}
         />
         <ExportPickList
-          title="Workspace skill’leri"
+          title={t('export.sections.skills.title')}
           icon={Sparkles}
           entries={skillEntries}
           picked={pickedSkills}
           setPicked={setPickedSkills}
-          emptyHint="Bu workspace’e özel skill yok (global/gömülü skill’ler paylaşımlıdır, dahil edilmez)."
-          note="SKILL.md + ekli dosyalar birebir gömülür."
+          emptyHint={t('export.sections.skills.empty')}
+          note={t('export.sections.skills.note')}
         />
         <ExportPickList
-          title="Zamanlamalar"
+          title={t('export.sections.schedules.title')}
           icon={Clock}
           entries={scheduleEntries}
           picked={pickedSchedules}
           setPicked={setPickedSchedules}
-          emptyHint="Bu workspace’te zamanlama yok."
-          note="Yalnızca seçili ajana bağlı zamanlamalar dışa aktarılır (diğerleri düşer)."
+          emptyHint={t('export.sections.schedules.empty')}
+          note={t('export.sections.schedules.note')}
         />
         <ExportPickList
-          title="Otomasyonlar"
+          title={t('export.sections.automations.title')}
           icon={Zap}
           entries={automationEntries}
           picked={pickedAutomations}
           setPicked={setPickedAutomations}
-          emptyHint="Bu workspace’e özel otomasyon yok (gömülü pano varsayılanları her workspace’te kendiliğinden oluşur, dahil edilmez)."
-          note="Hedefi seçili ajana/akışa bağlı olanlar taşınır; kurulumda hepsi PASİF gelir."
+          emptyHint={t('export.sections.automations.empty')}
+          note={t('export.sections.automations.note')}
         />
       </div>
 
       {/* File categories */}
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Dosyalar
+        {t('export.files.title')}
       </div>
       <div className="space-y-2">
         <Toggle
-          label={`Workspace talimatları${hasInstructions ? '' : ' (boş)'}`}
-          hint="config/instructions.md içeriği."
+          label={`${t('export.files.instructions')}${hasInstructions ? '' : ` ${t('export.files.emptySuffix')}`}`}
+          hint={t('export.files.instructionsHint')}
           checked={cats.instructions}
           onChange={(v) => setCat('instructions', v)}
         />
         <Toggle
-          label={`Promptlar & README${promptsCount ? ` (${promptsCount})` : ' (varsayılan)'}`}
+          label={`${t('export.files.prompts')}${promptsCount ? ` (${promptsCount})` : ` ${t('export.files.defaultSuffix')}`}`}
           hint={
             promptsCount
-              ? `Yalnızca varsayılandan farklı runtime promptları${hasReadme ? ' + README' : ''} dahil edilir. Dokunulmamış promptlar hedefte güncel varsayılanı korur.`
-              : 'Tüm runtime promptları varsayılan ve README boş — dahil edilecek bir şey yok.'
+              ? t('export.files.promptsHintCustom', { readme: hasReadme ? ' + README' : '' })
+              : t('export.files.promptsHintEmpty')
           }
           checked={cats.prompts}
           onChange={(v) => setCat('prompts', v)}
         />
         <Toggle
-          label={`Pano sütunları${boardCount ? ` (${boardCount})` : ''}`}
-          hint="Kanban sütun düzeni."
+          label={`${t('export.files.boardColumns')}${boardCount ? ` (${boardCount})` : ''}`}
+          hint={t('export.files.boardColumnsHint')}
           checked={cats.boardColumns}
           onChange={(v) => setCat('boardColumns', v)}
         />
@@ -477,11 +509,12 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       <div className="mt-2 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            <PackageCheck size={13} className="text-[var(--color-accent)]" /> Önizleme
+            <PackageCheck size={13} className="text-[var(--color-accent)]" />{' '}
+            {t('export.preview.title')}
           </span>
           <span className="truncate text-xs text-[var(--color-text-dim)]">
-            <span className="font-medium text-[var(--color-text)]">{preview.resolvedName}</span> · v
-            {preview.version} ·{' '}
+            <span className="font-medium text-[var(--color-text)]">{preview.resolvedName}</span>
+            {t('export.preview.identityVersion', { version: preview.version })}
             <code className="rounded bg-[var(--color-surface-2)] px-1">{preview.packId}</code>
           </span>
         </div>
@@ -494,7 +527,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
                   ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
                   : 'border-[var(--color-border)] text-[var(--color-text-dim)] line-through opacity-60'
               }`}
-              title={it.on ? '' : 'Dahil edilmiyor'}
+              title={it.on ? '' : t('export.preview.excluded')}
             >
               <it.icon size={12} /> {it.count} {it.label}
             </span>
@@ -502,9 +535,9 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         </div>
         <div className="text-[11px] text-[var(--color-text-dim)]">
           {preview.willOverwrite
-            ? `“${preview.packId}” zaten varsa üzerine yazılır (aynı slug).`
-            : `Yeni pack id oluşturulur: “${preview.packId}”.`}{' '}
-          Sırlar ve oturum geçmişi asla dahil edilmez.
+            ? t('export.preview.overwrite', { id: preview.packId })
+            : t('export.preview.newId', { id: preview.packId })}{' '}
+          {t('export.secrets')}
         </div>
       </div>
 
@@ -512,7 +545,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       {depWarnings.length > 0 && (
         <div className="mt-2 space-y-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#f59e0b)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#f59e0b)_8%,transparent)] px-3 py-2.5">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-warning,#f59e0b)]">
-            <AlertTriangle size={14} /> Bağımlılık uyarısı ({depWarnings.length})
+            <AlertTriangle size={14} /> {t('export.warnings.title', { count: depWarnings.length })}
           </div>
           <ul className="space-y-1 text-xs text-[var(--color-text-dim)]">
             {depWarnings.map((w) => (
@@ -527,16 +560,15 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       {/* Action */}
       <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5">
         <span className="text-xs text-[var(--color-text-dim)]">
-          {canExport
-            ? 'Seçili içerik bir şablon paketine yazılır.'
-            : 'Dışa aktarmak için en az bir ajan seç.'}
+          {canExport ? t('export.action.ready') : t('export.action.selectAgent')}
         </span>
         <button
           onClick={doExport}
           disabled={busy || !canExport}
           className="flex shrink-0 items-center gap-1.5 rounded border border-[var(--color-accent)] px-3 py-1.5 text-xs text-[var(--color-accent)] transition hover:bg-[var(--color-accent-soft)] disabled:opacity-50"
         >
-          <PackageCheck size={14} /> {busy ? 'Dışa aktarılıyor…' : 'Şablon olarak dışa aktar'}
+          <PackageCheck size={14} />{' '}
+          {busy ? t('export.action.exporting') : t('export.action.export')}
         </button>
       </div>
       {msg && (

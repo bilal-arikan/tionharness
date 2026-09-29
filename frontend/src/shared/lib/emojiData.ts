@@ -4,6 +4,8 @@
 // search keywords. This keeps the bundle lean and matches the project's
 // minimal-dependency ethos.
 
+import { sharedText } from './sharedI18n'
+
 export interface EmojiEntry {
   /** The emoji character itself. */
   char: string
@@ -14,7 +16,7 @@ export interface EmojiEntry {
 export interface EmojiCategory {
   /** Stable id for the category tab. */
   id: string
-  /** Turkish label shown in the tab strip. */
+  /** Localized label shown in the tab strip. */
   label: string
   /** Representative glyph for the tab button. */
   icon: string
@@ -24,7 +26,9 @@ export interface EmojiCategory {
 export const EMOJI_CATEGORIES: EmojiCategory[] = [
   {
     id: 'smileys',
-    label: 'Yüzler',
+    get label() {
+      return sharedText('emoji.smileys')
+    },
     icon: '🙂',
     emojis: [
       { char: '😀', keywords: 'grin smile happy face' },
@@ -67,7 +71,9 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: 'people',
-    label: 'İnsan',
+    get label() {
+      return sharedText('emoji.people')
+    },
     icon: '🧠',
     emojis: [
       { char: '🧠', keywords: 'brain mind think smart' },
@@ -100,7 +106,9 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: 'nature',
-    label: 'Doğa',
+    get label() {
+      return sharedText('emoji.nature')
+    },
     icon: '🐝',
     emojis: [
       { char: '🐝', keywords: 'bee swarm bug honey' },
@@ -137,7 +145,9 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: 'objects',
-    label: 'Nesne',
+    get label() {
+      return sharedText('emoji.objects')
+    },
     icon: '⚙️',
     emojis: [
       { char: '⚙️', keywords: 'gear settings config cog' },
@@ -188,7 +198,9 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: 'symbols',
-    label: 'Sembol',
+    get label() {
+      return sharedText('emoji.symbols')
+    },
     icon: '🎯',
     emojis: [
       { char: '🎯', keywords: 'target goal aim dart' },

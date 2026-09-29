@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Play, Pencil, X } from 'lucide-react'
 import { api } from '@/api'
 import type { InsightLens } from '@/types'
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onError }: Props) {
+  const { t } = useTranslation('insight')
   const [editId, setEditId] = useState<string | null>(null)
 
   return (
@@ -28,8 +30,8 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
             type="button"
             role="switch"
             aria-checked={l.enabled}
-            aria-label={`${l.name} lensini ${l.enabled ? 'kapat' : 'aç'}`}
-            title={l.enabled ? 'Lensi kapat' : 'Lensi aç'}
+            aria-label={t(l.enabled ? 'lenses.disableAria' : 'lenses.enableAria', { name: l.name })}
+            title={t(l.enabled ? 'lenses.disable' : 'lenses.enable')}
             onClick={() => onToggle(l.id, !l.enabled)}
             className={`flex h-4 w-8 shrink-0 items-center rounded-full p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] ${
               l.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'
@@ -55,15 +57,15 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
             onClick={() => onScanLens(l.id)}
             disabled={scanning}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-[var(--color-surface-2)] disabled:opacity-50"
-            title="Sadece bu lensle tara"
+            title={t('lenses.scanOnlyTitle')}
           >
-            <Play className="h-3.5 w-3.5" /> Tara
+            <Play className="h-3.5 w-3.5" /> {t('scan.scan')}
           </button>
           <button
             onClick={() => setEditId(l.id)}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-[var(--color-surface-2)]"
           >
-            <Pencil className="h-3.5 w-3.5" /> Düzenle
+            <Pencil className="h-3.5 w-3.5" /> {t('actions.edit')}
           </button>
           {/* Shipped lenses only: the automatic re-seed refreshes a lens ONLY
               when it can prove nobody edited it, so an edited (or pre-ledger)
@@ -78,7 +80,9 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
           )}
         </div>
       ))}
-      {lenses.length === 0 && <div className="text-sm text-[var(--color-text-dim)]">Lens yok.</div>}
+      {lenses.length === 0 && (
+        <div className="text-sm text-[var(--color-text-dim)]">{t('lenses.empty')}</div>
+      )}
 
       {editId && (
         <LensEditor
@@ -106,6 +110,7 @@ function LensEditor({
   onSaved: () => void
   onError: (msg: string) => void
 }) {
+  const { t } = useTranslation('insight')
   const [raw, setRaw] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -126,7 +131,7 @@ function LensEditor({
     try {
       await api.updateLens(id, raw)
       onSaved()
-      toast.success('Lens kaydedildi')
+      toast.success(t('lenses.saved'))
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -138,8 +143,12 @@ function LensEditor({
     <ModalOverlay onClose={onClose}>
       <div className="flex max-h-[85vh] w-[min(800px,95vw)] flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-semibold">Lens düzenle — {id}</h3>
-          <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-surface-2)]">
+          <h3 className="font-semibold">{t('lenses.editTitle', { id })}</h3>
+          <button
+            onClick={onClose}
+            className="rounded p-1 hover:bg-[var(--color-surface-2)]"
+            aria-label={t('actions.close')}
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -154,14 +163,14 @@ function LensEditor({
             onClick={onClose}
             className="rounded-md px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
           >
-            İptal
+            {t('actions.cancel')}
           </button>
           <button
             onClick={save}
             disabled={saving || raw === null}
             className="rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)] disabled:opacity-50"
           >
-            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+            {saving ? t('actions.saving') : t('actions.save')}
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { Agent } from '@/types'
 import { AgentAvatar } from './AgentAvatar'
 import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
+import { useTranslation } from 'react-i18next'
 
 // AgentLike is the minimal shape needed to render an agent's identity. id + name
 // are required; the rest are optional so callers can pass a full Agent or a thin
@@ -69,6 +70,7 @@ export function AgentIdentity({
   mobileIconOnly,
   className,
 }: Props) {
+  const { t } = useTranslation('sharedUi')
   const catalog = useCatalog()
   const s = SIZES[size]
 
@@ -105,7 +107,7 @@ export function AgentIdentity({
               guess (or to quietly show nothing). */}
           {agent.deleted && (
             <span className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px text-[10px] font-medium text-[var(--color-text-dim)]">
-              silinmiş
+              {t('agents.deleted')}
             </span>
           )}
         </span>

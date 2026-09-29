@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/api'
 import type { ViewGraphResult, ViewRef } from '@/types'
 import { parseRef, refToString } from '@/types'
@@ -11,7 +12,14 @@ import {
 } from './explorerFilter'
 import { augmentLive, panelRefFor } from './explorerLive'
 import { seedLayout } from './explorerSeed'
-import { graphToVis, kindColor, resolveExplorerTheme, ROOT_KEY, ROOT_REF } from './explorerVis'
+import {
+  displayLabel,
+  graphToVis,
+  kindColor,
+  resolveExplorerTheme,
+  ROOT_KEY,
+  ROOT_REF,
+} from './explorerVis'
 import type { ExplorerBucket } from './ExplorerFilters'
 
 const EMPTY_FILTER = emptyExplorerFilter()
@@ -43,6 +51,7 @@ export function useExplorerGraph({
   initialFocus,
   onFocus,
 }: Options) {
+  const { t } = useTranslation('explorer')
   const [graph, setGraph] = useState<ViewGraphResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -90,7 +99,7 @@ export function useExplorerGraph({
   // URL navigation (back/forward, a pasted link) is external state: mirror it
   // into selection + focus. An unparsable ref falls back to the root and reports.
   const [deepLinkError, setDeepLinkError] = useState<string | undefined>(() =>
-    initialFocus && !parsedInitial ? `Geçersiz odak bağlantısı: ${initialFocus}` : undefined,
+    initialFocus && !parsedInitial ? t('errors.invalidFocus', { focus: initialFocus }) : undefined,
   )
   useEffect(() => {
     if (!initialFocus) {
@@ -100,7 +109,7 @@ export function useExplorerGraph({
     }
     const next = parseRef(initialFocus)
     if (!next) {
-      setDeepLinkError(`Geçersiz odak bağlantısı: ${initialFocus}`)
+      setDeepLinkError(t('errors.invalidFocus', { focus: initialFocus }))
       setSelectedRef(ROOT_REF)
       return
     }
@@ -108,7 +117,7 @@ export function useExplorerGraph({
     const key = refToString(next)
     setSelectedRef((current) => (refToString(current) === key ? current : next))
     setFocus((current) => (current.key === key ? current : { key, tick: current.tick + 1 }))
-  }, [initialFocus])
+  }, [initialFocus, t])
 
   // Live layer (avatar nodes off executing sessions) over the raw map, then the
   // filter over that. Both are pure and cheap relative to the physics.
@@ -132,7 +141,7 @@ export function useExplorerGraph({
       .filter((e) => refToString(e.source) === ROOT_KEY)
       .map((e) => byKey.get(refToString(e.target)))
       .filter((h): h is NonNullable<typeof h> => !!h)
-      .map((h) => ({ key: refToString(h.ref), label: h.label, color: kindColor(h.ref) }))
+      .map((h) => ({ key: refToString(h.ref), label: displayLabel(h), color: kindColor(h.ref) }))
   }, [graph])
 
   // A deep-linked node that the loaded map does not contain is an error the user
@@ -145,7 +154,7 @@ export function useExplorerGraph({
   }, [live])
   const missingFocus =
     graph !== null && initialFocus && !deepLinkError && !refByKey.has(selectedKey)
-      ? `Odak düğümü haritada yok: ${selectedKey}`
+      ? t('errors.missingFocus', { focus: selectedKey })
       : undefined
 
   const select = useCallback(

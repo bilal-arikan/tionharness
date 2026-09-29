@@ -3,6 +3,7 @@ import { Wrench, X } from 'lucide-react'
 import { api } from '@/api'
 import type { AgentToolAccess } from '@/types'
 import { ServerList, ToolList } from './ToolAccessList'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // The composer's selected agent — tool access is per-agent (workspace catalog
@@ -26,6 +27,7 @@ type Tab = 'eager' | 'lazy' | 'servers'
 //
 // Nothing here changes configuration — that lives on the Tools screen.
 export function ToolAccessPanel({ agentId, onClose }: Props) {
+  const { t } = useTranslation('chatControls')
   const [data, setData] = useState<AgentToolAccess | null>(null)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('eager')
@@ -72,8 +74,8 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
   const hiddenCount = data?.lazy.filter((t) => !t.inContext).length ?? 0
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'eager', label: 'Bağlamda', count: data?.eager.length },
-    { id: 'lazy', label: 'Talep üzerine', count: data?.lazy.length },
+    { id: 'eager', label: t('tools.tabs.inContext'), count: data?.eager.length },
+    { id: 'lazy', label: t('tools.tabs.onDemand'), count: data?.lazy.length },
     { id: 'servers', label: 'MCP', count: data?.servers.length },
   ]
 
@@ -85,16 +87,16 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
     >
       <div className="mb-2 flex items-center gap-2">
         <Wrench size={16} className="text-[var(--color-accent)]" />
-        <span className="text-sm font-medium">Araçlar</span>
+        <span className="text-sm font-medium">{t('tools.title')}</span>
         <span className="truncate text-xs text-[var(--color-text-dim)]">
-          {data ? `${data.agentName} · salt bilgi` : 'salt bilgi'}
+          {data ? t('tools.readOnlyAgent', { name: data.agentName }) : t('tools.readOnly')}
         </span>
         <div className="flex-1" />
         <button
           type="button"
           onClick={onClose}
-          title="Kapat"
-          aria-label="Kapat"
+          title={t('common.close')}
+          aria-label={t('common.close')}
           data-testid="tool-access-close"
           className="text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
         >
@@ -108,7 +110,7 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
         </div>
       )}
       {!data && !error && (
-        <div className="px-1 py-3 text-xs text-[var(--color-text-dim)]">Yükleniyor…</div>
+        <div className="px-1 py-3 text-xs text-[var(--color-text-dim)]">{t('common.loading')}</div>
       )}
 
       {data && (
@@ -134,36 +136,25 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ara…"
-              aria-label="Araç ara"
+              placeholder={t('tools.searchPlaceholder')}
+              aria-label={t('tools.searchLabel')}
               data-testid="tool-access-search"
               className="w-28 rounded-lg border border-[var(--color-border)] bg-transparent px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-text-dim)]"
             />
           </div>
 
           <p className="mb-2 text-[11px] leading-4 text-[var(--color-text-dim)]">
-            {tab === 'eager' &&
-              'Bu araçların tam şeması her turda modele gönderilir — anında çağırabilir.'}
-            {tab === 'lazy' &&
-              `Bu araçların şeması turda gönderilmez; ajan gerektiğinde tool_search / activate_tools ile yükler. ${hiddenCount} tanesi "Gizli" tier'da: katalogda tek tek listelenmez, bağlamda yalnız "bunlar da var, tool_search ile bul" notu durur — bilinmez değil, ucuzdur.`}
-            {tab === 'servers' &&
-              'Workspace’teki (özel dâhil) tüm MCP sunucuları ve araçlarının bağlama girip girmediği: yeşil = promptta, sarı/gri = değil (sebebi rozetin üstünde). 🔗 = şu an açık canlı bağlantı. Satıra tıklayıp o sunucunun araçlarını açabilirsin; arama kutusu açık satırları süzer. Ayarlar Araçlar ekranından değiştirilir.'}
+            {tab === 'eager' && t('tools.descriptions.inContext')}
+            {tab === 'lazy' && t('tools.descriptions.onDemand', { hiddenCount })}
+            {tab === 'servers' && t('tools.descriptions.servers')}
           </p>
 
           <div className="max-h-[22rem] overflow-y-auto pr-1">
             {tab === 'eager' && (
-              <ToolList
-                tools={data.eager}
-                query={query}
-                empty="Bu ajana her tur şeması gönderilen araç yok."
-              />
+              <ToolList tools={data.eager} query={query} empty={t('tools.empty.inContext')} />
             )}
             {tab === 'lazy' && (
-              <ToolList
-                tools={data.lazy}
-                query={query}
-                empty="Talep üzerine yüklenebilecek araç yok — tüm araçlar zaten bağlamda."
-              />
+              <ToolList tools={data.lazy} query={query} empty={t('tools.empty.onDemand')} />
             )}
             {tab === 'servers' && (
               <ServerList
@@ -180,12 +171,12 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
               title={data.blocked.join(', ')}
               className="mt-2 truncate border-t border-[var(--color-border)] pt-2 text-[11px] text-[var(--color-text-dim)]"
             >
-              Yasaklı ({data.blocked.length}): {data.blocked.join(', ')}
+              {t('tools.blocked', { value: data.blocked.length })}: {data.blocked.join(', ')}
             </div>
           )}
           {!data.mcpEnabled && (
             <div className="mt-2 text-[11px] text-[var(--color-warning)]">
-              Bu ajanda MCP kapalı — MCP sunucularının araçları sunulmuyor.
+              {t('tools.mcpDisabled')}
             </div>
           )}
         </>

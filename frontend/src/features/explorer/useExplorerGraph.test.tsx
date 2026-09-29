@@ -4,6 +4,7 @@ import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewGraphResult, ViewRef } from '@/types'
+import { i18next } from '@/i18n'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -56,7 +57,8 @@ async function mount(options: Options) {
   return { render, root }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18next.changeLanguage('tr')
   mocks.viewGraph.mockReset()
   mocks.viewGraph.mockResolvedValue(graph)
   latest = null

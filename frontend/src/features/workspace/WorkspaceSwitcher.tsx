@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ExternalLink, Trash2, Star } from 'lucide-react'
 import type { Workspace } from '@/types'
 import { buildRoute } from '@/app/url'
@@ -61,6 +62,7 @@ export function WorkspaceSwitcher({
   onOpenSettings,
   trailing,
 }: Props) {
+  const { t } = useTranslation('workspace')
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   // Close the dropdown when clicking anywhere outside it (detached while closed).
@@ -91,7 +93,9 @@ export function WorkspaceSwitcher({
           data-testid="workspace-switcher"
           aria-haspopup="listbox"
           aria-expanded={open}
-          aria-label={active?.name ? `Workspace: ${active.name}` : 'Workspace seç'}
+          aria-label={
+            active?.name ? t('switcher.activeAria', { name: active.name }) : t('switcher.select')
+          }
           className="flex min-w-0 flex-1 items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
         >
           <span className="flex min-w-0 items-center gap-2">
@@ -109,11 +113,7 @@ export function WorkspaceSwitcher({
                   className={`absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)] ${
                     hasOtherBusy ? 'animate-pulse' : ''
                   }`}
-                  title={
-                    hasOtherBusy
-                      ? 'Başka workspace’te işlem sürüyor'
-                      : 'Başka workspace’te yeni etkinlik'
-                  }
+                  title={hasOtherBusy ? t('switcher.otherBusy') : t('switcher.otherActivity')}
                 />
               )}
             </span>
@@ -124,18 +124,18 @@ export function WorkspaceSwitcher({
                 {activeDirty && (
                   <span
                     className="h-2 w-2 rounded-full bg-[var(--color-warning)]"
-                    title="Kaydedilmemiş değişiklik"
+                    title={t('switcher.unsavedChanges')}
                   />
                 )}
                 {activeBusy && (
                   <span
                     className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
-                    title="İşlem sürüyor"
+                    title={t('switcher.busy')}
                   />
                 )}
               </span>
             )}
-            <span className="truncate font-medium">{active?.name || 'Workspace seç'}</span>
+            <span className="truncate font-medium">{active?.name || t('switcher.select')}</span>
           </span>
           <span className="text-xs text-[var(--color-text-dim)]">▾</span>
         </button>
@@ -145,7 +145,7 @@ export function WorkspaceSwitcher({
       {open && (
         <div
           role="listbox"
-          aria-label="Workspace listesi"
+          aria-label={t('switcher.listAria')}
           data-testid="workspace-menu"
           className="absolute left-3 z-20 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl"
         >
@@ -168,7 +168,9 @@ export function WorkspaceSwitcher({
                 role="option"
                 aria-selected={w.id === activeId}
                 data-testid="workspace-switch"
-                aria-label={`Workspace’e geç: ${w.name || 'İsimsiz'}`}
+                aria-label={t('switcher.switchAria', {
+                  name: w.name || t('switcher.unnamed'),
+                })}
                 className="flex flex-1 items-center gap-2 rounded px-3 py-2 text-left"
               >
                 <span
@@ -182,7 +184,7 @@ export function WorkspaceSwitcher({
                   {w.icon || '⬡'}
                 </span>
                 <span className="flex-1 truncate">
-                  {w.name || 'İsimsiz'}
+                  {w.name || t('switcher.unnamed')}
                   {/* Faint workspace id next to the name — a quick reference for
                       routing / debugging without cluttering the primary label. */}
                   <span className="ml-1.5 font-mono text-[10px] text-[var(--color-text-dim)] opacity-60">
@@ -200,30 +202,30 @@ export function WorkspaceSwitcher({
                 {w.degraded ? (
                   <span
                     className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-danger)]"
-                    title={w.degradedReason || 'Workspace açılamadı'}
+                    title={w.degradedReason || t('switcher.degradedTitle')}
                   >
                     <span className="h-2 w-2 rounded-full bg-[var(--color-danger)]" />
-                    bozuk
+                    {t('switcher.degraded')}
                   </span>
                 ) : busyIds?.has(w.id) ? (
                   <span
                     className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-success)]"
-                    title="İşlem sürüyor"
+                    title={t('switcher.busy')}
                   >
                     <span className="relative flex h-2 w-2">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
                       <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
                     </span>
-                    çalışıyor
+                    {t('switcher.running')}
                   </span>
                 ) : (
                   unreadIds.has(w.id) && (
                     <span
                       className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-accent)]"
-                      title="Tamamlandı — görülmemiş etkinlik"
+                      title={t('switcher.completedTitle')}
                     >
                       <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />
-                      tamamlandı
+                      {t('switcher.completed')}
                     </span>
                   )
                 )}
@@ -232,7 +234,7 @@ export function WorkspaceSwitcher({
                 <button
                   onClick={() => onToggleFavorite(w.id)}
                   title={
-                    favoriteId === w.id ? 'Başlangıç workspace’i (kaldır)' : 'Başlangıçta bunu aç'
+                    favoriteId === w.id ? t('switcher.favoriteRemove') : t('switcher.favoriteAdd')
                   }
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition hover:bg-[var(--color-surface)] ${
                     favoriteId === w.id
@@ -249,7 +251,7 @@ export function WorkspaceSwitcher({
               )}
               <button
                 onClick={() => openInNewWindow(w.id)}
-                title="Ayrı pencerede aç"
+                title={t('switcher.openWindow')}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-text-dim)] opacity-0 transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] focus:opacity-100 group-hover:opacity-100"
               >
                 <ExternalLink size={14} strokeWidth={2} />
@@ -259,7 +261,7 @@ export function WorkspaceSwitcher({
                   onOpenSettings(w.id)
                   setOpen(false)
                 }}
-                title="Workspace’i sil — ayarlar ekranından"
+                title={t('switcher.deleteViaSettings')}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-text-dim)] opacity-0 transition hover:bg-[var(--color-surface)] hover:text-[var(--color-danger)] focus:opacity-100 group-hover:opacity-100"
               >
                 <Trash2 size={14} strokeWidth={2} />
@@ -272,10 +274,10 @@ export function WorkspaceSwitcher({
           <button
             onClick={() => setShowCreate(true)}
             data-testid="workspace-create"
-            aria-label="Yeni workspace"
+            aria-label={t('switcher.create')}
             className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
           >
-            <span>+</span> Yeni workspace
+            <span>+</span> {t('switcher.create')}
           </button>
         </div>
       )}

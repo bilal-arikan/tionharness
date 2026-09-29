@@ -1,0 +1,483 @@
+{
+  "title": "Ayarlar",
+  "section": {
+    "settings": "Ayarlar",
+    "help": "Yardım"
+  },
+  "common": {
+    "add": "Ekle",
+    "cancel": "Vazgeç",
+    "copy": "Kopyala",
+    "create": "Kur",
+    "delete": "Sil",
+    "edit": "Düzenle",
+    "hide": "Gizle",
+    "loading": "Yükleniyor…",
+    "refresh": "Yenile",
+    "save": "Kaydet",
+    "saved": "Kayıtlı",
+    "saving": "Kaydediliyor…",
+    "show": "Göster",
+    "unsaved": "Kaydedilmemiş",
+    "unsavedChanges": "Kaydedilmemiş değişiklik",
+    "update": "Güncelle"
+  },
+  "categories": {
+    "general": "Genel",
+    "profile": "Profil",
+    "sound": "Ses ve bildirimler",
+    "providers": "Sağlayıcılar",
+    "secrets": "Sırlar",
+    "context": "Bağlam ve bellek",
+    "tools": "Araç izinleri",
+    "execution": "Ajan yürütme",
+    "sysagents": "Ajan kütüphanesi",
+    "decider": "Karar mercileri",
+    "hooks": "Hook'lar",
+    "exttools": "Harici araçlar",
+    "diagnostics": "Tanılama",
+    "backup": "Yedekleme",
+    "reference": "Başvuru",
+    "about": "Hakkında"
+  },
+  "validation": {
+    "requiredNumber": "Boş bırakılamaz — bir değer gir.",
+    "invalidNumber": "Geçerli bir sayı değil.",
+    "minimum": "En az {{min}} olabilir.",
+    "maximum": "En çok {{max}} olabilir."
+  },
+  "promptDetails": {
+    "system": "Sistem",
+    "userTurn": "Kullanıcı turu"
+  },
+  "profile": {
+    "intro": "Bu bilgiler ajanların yanıtlarını sana göre kişiselleştirmesi için sohbet bağlamına eklenir.",
+    "name": "Ad",
+    "nameHint": "Ajan sana nasıl hitap etsin.",
+    "namePlaceholder": "örn. Ada",
+    "timezone": "Saat dilimi",
+    "timezoneHint": "‘Yarın’, ‘gelecek hafta’ gibi göreli tarihler için.",
+    "timezonePlaceholder": "örn. Europe/Istanbul",
+    "city": "Şehir",
+    "cityPlaceholder": "örn. İstanbul",
+    "country": "Ülke",
+    "countryPlaceholder": "örn. Türkiye",
+    "notes": "Notlar",
+    "notesHint": "Tercihlerini anlatan serbest metin; talimatlar ve çalışma şekli gibi.",
+    "notesPlaceholder": "Ajanların bilmesi gereken tercihlerin…"
+  },
+  "notifications": {
+    "title": "Masaüstü bildirimleri",
+    "scope": "Tüm workspace'ler · hemen kaydedilir. Tarayıcının da bildirimlere izin vermesi gerekir.",
+    "masterLabel": "Masaüstü bildirimleri",
+    "masterHint": "Uygulama arka plandayken bildirim göster.",
+    "typesTitle": "Bildirim türleri",
+    "typesHint": "Yalnız bu cihaz · hemen uygulanır. Bu tercihler masaüstü bildirimleri açıkken geçerlidir. Bir türü sessize almak sesini kapatmaz; aşağıdaki Ses efektlerini kullan.",
+    "types": {
+      "chat": {
+        "label": "Sohbet yanıtı",
+        "hint": "Asistan yanıtı tamamlandı; yanıt-hazır bildirimi ve sesi."
+      },
+      "prompt": {
+        "label": "Onay / soru",
+        "hint": "Ajan bir onay, izin ya da soru için senden yanıt bekliyor."
+      },
+      "schedule": {
+        "label": "Zamanlamalar",
+        "hint": "Zamanlanmış prompt çalıştı ya da başarısız oldu."
+      },
+      "flow": { "label": "Akışlar", "hint": "Akış çalışması tamamlandı ya da başarısız oldu." },
+      "spawned": {
+        "label": "Spawn",
+        "hint": "Alt oturum çalışması tamamlandı ya da başarısız oldu."
+      },
+      "worker": { "label": "Worker", "hint": "Koordinatör worker durumu değişti." },
+      "coordination": {
+        "label": "Koordinasyon",
+        "hint": "Koordinatör tur limiti gibi koordinasyon uyarıları."
+      },
+      "rota": {
+        "label": "Rota",
+        "hint": "Bir rota başladı, bitti, başarısız oldu ya da insan yanıtı bekliyor."
+      },
+      "automation": { "label": "Otomasyonlar", "hint": "Etiket ya da pano otomasyonu tetiklendi." },
+      "artifact": {
+        "label": "Artifact'ler",
+        "hint": "Bir artifact oluşturuldu ya da güncellendi."
+      },
+      "board": {
+        "label": "Görevler (pano)",
+        "hint": "Kanban görevi oluşturuldu, taşındı, güncellendi ya da silindi."
+      },
+      "agent": {
+        "label": "Ajan bildirimi",
+        "hint": "Ajanın notify aracıyla gönderdiği genel bildirim."
+      },
+      "anomaly": {
+        "label": "Anomaliler",
+        "hint": "Oturum uyarısı: düşük cache isabeti, sık kırılım, araç hatası ve benzerleri."
+      },
+      "agent-model-changed": {
+        "label": "Model değişimi",
+        "hint": "Bir ajanın modeli değiştirildi. Prompt cache soğuyacak."
+      }
+    }
+  },
+  "providerOptions": {
+    "title": "Gelişmiş sağlayıcı seçenekleri",
+    "description": "Bu seçenekler ilgili sağlayıcıyı kullanan tüm workspace'lere uygulanır. Değişiklikleri burada kaydet; yukarıdaki sağlayıcı bağlantıları kendi formlarıyla ayrı kaydedilir.",
+    "anthropic": "Anthropic API",
+    "cli": "CLI oturumları ve yardımcı çağrılar"
+  },
+  "providers": {
+    "authKindMismatch": "Beklenen sağlayıcı türü {{expected}}, gelen {{actual}}",
+    "deleteConfirm": "“{{label}}” sağlayıcı örneği silinsin mi?",
+    "deletedWithAgents_one": "Sağlayıcı silindi, ancak {{count}} ajan hâlâ bu örneğe bağlıydı. Bu ajanı yeniden yapılandır.",
+    "deletedWithAgents_other": "Sağlayıcı silindi, ancak {{count}} ajan hâlâ bu örneğe bağlıydı. Bu ajanları yeniden yapılandır.",
+    "deleted": "Sağlayıcı örneği silindi",
+    "updated": "Sağlayıcı örneği güncellendi",
+    "added": "Sağlayıcı örneği eklendi",
+    "add": "+ Yeni sağlayıcı örneği",
+    "title": "Sağlayıcı örnekleri",
+    "description": "Her sağlayıcı örneği kendi yapılandırmasını ve CLI girişini taşır. Değişiklikler hemen kaydedilir."
+  },
+  "providerFields": {
+    "savedPlaceholder": "(kayıtlı — değiştirmek için yaz)",
+    "select": "seç…",
+    "savedEncrypted": "✓ kayıtlı (şifreli)"
+  },
+  "providerForm": {
+    "noKinds": "Tüm sağlayıcı taslakları için zaten birer örnek var ve bu taslaklar çoklu örneğe izin vermiyor.",
+    "editTitle": "Düzenle: {{label}}",
+    "newTitle": "Yeni sağlayıcı örneği",
+    "labelPlaceholder": "Etiket (örn. Anthropic — iş hesabı)",
+    "enabled": "Etkin",
+    "defaultModelPlaceholder": "boş = sağlayıcı oturum modeli",
+    "modelsPlaceholder": "model kimlikleri — virgülle ayrılmış (opsiyonel)"
+  },
+  "providerList": {
+    "empty": "Henüz sağlayıcı örneği yok. Yukarıdan bir taslak seçip ekle.",
+    "disabled": "devre dışı",
+    "offline": "⚠ sunucu kapalı",
+    "offlineHint": "Yerel model sunucusu yanıt vermiyor. LM Studio / Bionic açık ve yerel sunucusu başlatılmış olmalı.",
+    "configured": "✓ yapılandırıldı",
+    "missingField": "⚠ eksik alan",
+    "id": "kimlik",
+    "model": "model",
+    "authChecking": "durum kontrol ediliyor…",
+    "authError": "durum alınamadı: {{error}}",
+    "loggedIn": "✓ giriş yapılmış{{tier}}",
+    "loggedOut": "giriş yok",
+    "status": "Durum",
+    "signIn": "Giriş yap",
+    "delete": "{{label}} sağlayıcısını sil"
+  },
+  "reference": {
+    "loadError": "Prompt ayrıntıları yüklenemedi.",
+    "description": "Salt okunur yardım. Burada kaydedilecek ayar yok.",
+    "sectionsAria": "Başvuru bölümleri",
+    "commands": "Komutlar",
+    "stepKinds": "Aktivite adımı türleri"
+  },
+  "saveBar": {
+    "invalid": "Geçersiz sayı — kaydetmeden önce düzelt"
+  },
+  "searchIndex": {
+    "title": "Arama indeksi durumu",
+    "reloadTitle": "Listeyi yeniden oku",
+    "description": "TionHarness'in ajan adına yönettiği arama indeksleri; her (araç, kök) çifti için bir satır. Liste süreç genelidir: aynı depoyu açan iki workspace diskte tek bir store paylaşır. Yenile mevcut vektörleri koruyarak yeniden gömer, Yeniden kur store'u silip baştan kurar, Sil ise kök yolunu yazdıktan sonra indeksi diskten kaldırır. codebase-memory için yenile artımlı indeksler; yeniden kur ve sil projeyi sunucunun kendi deposundan kaldırır.",
+    "empty": "Henüz yönetilen bir indeks yok. zvec-grep ya da codebase-memory MCP sunucusu yapılandırılmış bir oturum açıldığında çalışma dizini arka planda indekslenir ve burada görünür.",
+    "refreshTitle": "Mevcut store'u koruyarak yeniden göm",
+    "busyTitle": "Bu indeks için bir çalışma zaten sürüyor",
+    "rebuildTitle": "Store'u silip baştan kur — gömme modeli değiştiyse gereklidir",
+    "rebuild": "Yeniden kur",
+    "dropTitle": "İndeksi diskten sil; kök yolunu yazarak onay ister",
+    "dropConfirm": "Bu indeks diskten silinecek ve yeniden kurulması dakikalar sürebilir. Onaylamak için kök yolunu birebir yaz:",
+    "dropButton": "İndeksi sil",
+    "phases": {
+      "ready": "hazır",
+      "indexing": "indeksleniyor…",
+      "stale": "bayat",
+      "failed": "başarısız",
+      "missing": "yok"
+    },
+    "actions": {
+      "refresh": "yenileme",
+      "rebuild": "yeniden kurma",
+      "drop": "silme",
+      "create": "kurma"
+    },
+    "notices": {
+      "rebuildStarted": "Yeniden kurma başlatıldı — tamamlanması dakikalar sürebilir.",
+      "createStarted": "Kurulum başlatıldı — tamamlanması dakikalar sürebilir.",
+      "refreshStarted": "Yenileme başlatıldı — tamamlanması dakikalar sürebilir.",
+      "dropped": "İndeks silindi."
+    }
+  },
+  "secrets": {
+    "intro": "API anahtarları, token'lar ve şifreler bu workspace'in <strong>şifreli kasasında</strong> (AES-GCM) saklanır. Bu workspace'teki ajanlar bunlara <secretList>secret_list</secretList> ve <secretGet>secret_get</secretGet> araçlarıyla erişebilir. Değerler listede gizlidir; göstermek için göz ikonunu kullan.",
+    "title": "Sırlar",
+    "introPrefix": "API anahtarları, token'lar ve şifreler bu workspace'in",
+    "encryptedVault": "şifreli kasasında",
+    "introMiddle": "saklanır. Bu workspace'teki ajanlar bunlara",
+    "introSuffix": "araçlarıyla erişebilir. Değerler listede gizlidir; göstermek için göz ikonunu kullan.",
+    "and": "ve",
+    "newTitle": "Yeni sır ekle",
+    "editTitle": "Sırrı güncelle: {{name}}",
+    "namePlaceholder": "Ad (örn. OPENAI_API_KEY)",
+    "descriptionPlaceholder": "Açıklama (opsiyonel)",
+    "valuePlaceholder": "Değer",
+    "newValuePlaceholder": "Yeni değer (değiştirmek için)",
+    "nameRulePrefix": "Ad bir harfle başlamalı; harf, rakam,",
+    "nameRuleSuffix": "karakterlerini içerebilir.",
+    "stored": "Saklanan sırlar",
+    "empty": "Henüz sır eklenmedi. Yukarıdaki formla bir API anahtarı ya da şifre ekle.",
+    "updated": "Sır güncellendi",
+    "added": "Sır eklendi",
+    "copied": "Panoya kopyalandı",
+    "deleteConfirm": "“{{name}}” sırrı silinsin mi? Bu işlem geri alınamaz.",
+    "deleted": "Sır silindi"
+  },
+  "sound": {
+    "deviceOnlyPrefix": "Aşağıdaki ses tercihleri",
+    "deviceOnly": "yalnız bu cihazda",
+    "deviceOnlySuffix": "geçerlidir ve hemen uygulanır. Kaydetmek gerekmez.",
+    "effectsTitle": "Ses efektleri",
+    "effectsLabel": "Ses efektleri",
+    "effectsHint": "Ajan yanıtı bitince çalınan sesi, mikrofon başlatma ve durdurma seslerini ve ajanın soru, onay ya da izin istediğinde çalan uyarıları denetler.",
+    "sttTitle": "Sesli giriş (STT)",
+    "ttsTitle": "Sesli okuma (TTS)",
+    "autoReadLabel": "Yanıtları sesli oku",
+    "autoReadHint": "Ajan yanıtı tamamlanınca metni sesli okur; kod blokları, tablolar ve bağlantılar atlanır.",
+    "autoReadEnabledSample": "Sesli okuma açık."
+  },
+  "stt": {
+    "language": "Mikrofon dili",
+    "languageHint": "Sesle yazma için tanıma dili. Composer'daki mikrofon bu dili kullanır ve aktif dil butonun ipucunda görünür.",
+    "engine": "Tanıma motoru",
+    "model": "Whisper modeli",
+    "modelHint_one": "{{count}} model yüklü. Büyük modeller daha doğru ama daha yavaştır (base < small < medium).",
+    "modelHint_other": "{{count}} model yüklü. Büyük modeller daha doğru ama daha yavaştır (base < small < medium).",
+    "autoModel": "Otomatik (ilk yüklü model)",
+    "engines": {
+      "auto": {
+        "label": "Otomatik",
+        "hint": "Sunucuda Whisper varsa onu, yoksa tarayıcı tanımasını kullanır."
+      },
+      "browser": {
+        "label": "Tarayıcı",
+        "hint": "Web Speech API; Chromium'da anlık ara sonuç verir."
+      },
+      "server": {
+        "label": "Sunucu (Whisper)",
+        "hint": "Kaydı sunucuya yükler; whisper.cpp çevrimdışı olarak yazıya döker ve WebView2'de de çalışır."
+      }
+    }
+  },
+  "tts": {
+    "engine": "Seslendirme motoru",
+    "serverVoice": "Sunucu sesi (Piper)",
+    "serverVoiceHint_one": "{{count}} ses yüklü. Sunucuda üretilir; telefon dahil her cihazda aynı ses kullanılır.",
+    "serverVoiceHint_other": "{{count}} ses yüklü. Sunucuda üretilir; telefon dahil her cihazda aynı ses kullanılır.",
+    "autoServerVoice": "Otomatik (ilk yüklü ses)",
+    "browserVoice": "Tarayıcı sesi",
+    "browserVoiceHint_one": "{{count}} ses (☁ = çevrimiçi). Boş bırakılırsa dile göre otomatik seçilir. Daha fazlası için Windows dil paketi ekleyin.",
+    "browserVoiceHint_other": "{{count}} ses (☁ = çevrimiçi). Boş bırakılırsa dile göre otomatik seçilir. Daha fazlası için Windows dil paketi ekleyin.",
+    "browserVoiceEmpty": "Ses listesi yükleniyor ya da cihazda TTS sesi yok.",
+    "autoBrowserVoice": "Otomatik (dile göre)",
+    "defaultVoice": "varsayılan",
+    "volume": "Ses seviyesi",
+    "rate": "Hız",
+    "pitch": "Ton",
+    "test": "Sesi dene",
+    "sample": "Merhaba, bu bir sesli okuma örneğidir.",
+    "engines": {
+      "auto": {
+        "label": "Otomatik",
+        "hint": "Sunucuda Piper varsa onu, yoksa tarayıcı sesini kullanır."
+      },
+      "browser": {
+        "label": "Tarayıcı",
+        "hint": "Cihazın kendi speechSynthesis seslerini kullanır."
+      },
+      "server": {
+        "label": "Sunucu (Piper)",
+        "hint": "Sunucuda üretilir; telefon dahil her cihazda aynı ses kullanılır."
+      }
+    }
+  },
+  "toolLimits": {
+    "defaultTimeout": "Varsayılan shell zaman aşımı (saniye)",
+    "defaultTimeoutHint": "Shell komutu süre belirtmediğinde kullanılan zaman aşımı.",
+    "maxTimeout": "En yüksek shell zaman aşımı (saniye)",
+    "maxTimeoutHint": "Komuta özel shell zaman aşımının üst sınırı.",
+    "outputLimit": "Araç çıktı sınırı (KB)",
+    "outputLimitHint": "MCP çıktısı dahil olmak üzere bu boyutu aşan araç çıktısını kısalt."
+  },
+  "systemAgents": {
+    "loading": "Ajan kütüphanesi yükleniyor…",
+    "agentCount_one": "{{count}} ajan",
+    "agentCount_other": "{{count}} ajan",
+    "refresh": "Kütüphaneyi yenile",
+    "newAgent": "Yeni ajan",
+    "closeNew": "Yeni ajanı kapat",
+    "deleteConfirm": "“{{name}}” kütüphaneden ve atandığı tüm workspace'lerden silinsin mi?\n\nSohbet geçmişi korunur. Bu ajanı kullanan zamanlanmış işler artık çalışmaz.",
+    "restoreConfirm": "“{{name}}” için tüm özel ayarlar sıfırlansın mı?",
+    "selectAgent": "Profilini ve workspace atamalarını düzenlemek için bir ajan seç."
+  },
+  "stepKinds": {
+    "introPrefix": "Bir asistan turunun aktivite izi",
+    "introMiddle": "farklı",
+    "types": "türlerden",
+    "introSuffix": " oluşur. Aşağıda her türün anlamı, kalıcı mı yalnız canlı mı olduğu ve şu anda etkin olup olmadığı listelenir.",
+    "source": "Kaynak",
+    "status": { "active": "aktif", "legacy": "eski oturum uyumu", "infra": "altyapı hazır" },
+    "persisted": "kalıcı",
+    "liveOnly": "yalnız canlı",
+    "items": {
+      "text": {
+        "label": "Metin",
+        "description": "Modelin araç çağrıları arasında ürettiği ara anlatım metni."
+      },
+      "thinking": {
+        "label": "Düşünme",
+        "description": "Sağlayıcı sunduğunda modelin akıl yürütme içeriği."
+      },
+      "tool": {
+        "label": "Araç",
+        "description": "Girdi ve sonucuyla tek bir araç çağrısı. Edit ve Write çıktısı diff olarak gösterilir."
+      },
+      "delta": {
+        "label": "Akış parçası",
+        "description": "Yanıt token token üretilirken gelen anlık metin parçası. Geçicidir; tam metin mesaja yazılır."
+      },
+      "ask": {
+        "label": "Soru",
+        "description": "ask_user aracı kullanıcıya soru sorup yanıt bekler ve turu askıya alır. Geçicidir; yanıt gelince kalıcı araç adımına dönüşür."
+      },
+      "permission": {
+        "label": "İzin onayı",
+        "description": "Yazma ya da komut aracından önce izin bekleyen onay kapısı. Geçicidir; karardan sonra araç çalışır ya da permission_denied hatası yazılır."
+      },
+      "plan": {
+        "label": "Plan onayı",
+        "description": "Claude CLI ajanı ExitPlanMode ile planını sunup onay bekler. Onaydan sonra tur sürer; reddedilirse model planı gözden geçirir."
+      },
+      "todo": {
+        "label": "Görev listesi",
+        "description": "todo_write aracının çalışma kontrol listesi; birinci sınıf kart olarak gösterilir."
+      },
+      "recovery": {
+        "label": "Kurtarma",
+        "description": "Döngü, örneğin iterasyon sınırına ulaşınca normal yolun dışına çıktı. Reason makine etiketi taşır."
+      },
+      "error": {
+        "label": "Hata",
+        "description": "Sağlayıcı hatası, bütçe aşımı ya da iptal gibi tur düzeyi hata; araç hatasından ayrıdır."
+      },
+      "steer": {
+        "label": "Yönlendirme",
+        "description": "Çalışan tura canlı eklenen kullanıcı yönlendirmesi; model çıktısından ayrı gösterilir."
+      },
+      "tool_delta": {
+        "label": "Araç çıktı akışı",
+        "description": "Yalnız eski kalıcı oturumları okumak için korunur. Yeni araç çıktı parçaları genel Append sözleşmesini kullanır."
+      },
+      "tombstone": {
+        "label": "Geri çekme",
+        "description": "İptal ya da panic nedeniyle final kartı gelemeyecek canlı adımı kaldırır. Tombstone'un kendisi gösterilmez."
+      },
+      "diff": {
+        "label": "Dosya değişikliği",
+        "description": "Write ya da Edit ile yapılan dosya değişikliği; yol, eklenen ve silinen satır sayıları ve açılabilir unified diff ile gösterilir."
+      },
+      "hook": {
+        "label": "Hook",
+        "description": "Kullanıcı tanımlı PreToolUse ya da PostToolUse hook'u araç çağrısı çevresinde çalışıp girdiyi veya çıktıyı değiştirdi, onayladı, bağlam ekledi ya da çağrıyı engelledi."
+      },
+      "context_change": {
+        "label": "Bağlam değişikliği",
+        "description": "Oturumun donmuş persona, talimat, skill ya da araç kataloğu değişti. Cache'lenen prefix bir sonraki bağlam yenilemesine kadar oturum başı snapshot'ını korur."
+      },
+      "cache_break": {
+        "label": "Cache kırılması",
+        "description": "Bu tur oturumun sıcak prompt-cache prefix'ini kaybedip yeniden ödedi. Model, sistem promptu ya da araç şeması değişiklikleri için kart gösterilir."
+      },
+      "compaction": {
+        "label": "Bağlam sıkıştırma",
+        "description": "Oturum geçmişi bağlam bütçesinde kalmak için yuvarlanan özete katlandı. Ham mesajlar diskte değişmeden kalır."
+      },
+      "subagent": {
+        "label": "Alt ajan",
+        "description": "İzole alt ajan temiz bir bağlamda görevi yürütüp yalnız final sonucunu döndürür; kendi iç içe izi açılabilir kartta görülebilir."
+      }
+    }
+  },
+  "workspaceFiles": {
+    "locationPrefix": "Bu dosyalar",
+    "locationSuffix": "altındadır. Hem buradan hem doğrudan diskten düzenleyebilirsin.",
+    "title": "Workspace dosyaları",
+    "instructions": "Talimatlar (instructions.md)",
+    "instructionsHint": "Bu workspace'teki tüm ajanlara eklenen yönergeler. Genel sekmesindeki talimatlarla senkronizedir.",
+    "instructionsPlaceholder": "Örn. Tüm cevapları Türkçe ver; commit at ama push'lama.",
+    "runtimePrompts": "Runtime promptları",
+    "systemPromptsPrefix": "Başlık, compaction, insight ve alt ajan profilleri gibi sistem ajanı promptları kendi ajanlarında yaşar. Bunları",
+    "systemAgentsPath": "Ayarlar ▸ Ajan kütüphanesi",
+    "systemPromptsSuffix": "ekranından doğrudan ya da kalıtım alan bir özelleştirme üzerinden düzenle.",
+    "openAgents": "Ajanlar ekranını aç",
+    "requiredPlaceholders": "Zorunlu yer tutucular: {{placeholders}}.",
+    "emptyUsesDefault": "Boş bırakırsan gömülü varsayılan kullanılır.",
+    "resetDefault": "Varsayılana dön",
+    "default": "varsayılan",
+    "customized": "özelleştirildi",
+    "epochHint": "Bu prompt cache'lenen statik sistem prefix'ine girer; değişiklik yeni oturum ya da epoch'larda etkili olur.",
+    "newSessions": "yeni oturumlarda etkili",
+    "missingPlaceholder": "eksik yer tutucu: {{placeholders}} — varsayılana düşer"
+  },
+  "workspace": {
+    "introPrefix": "Bu ayarlar yalnızca",
+    "introSuffix": "workspace'ine özeldir. Her ajanın sağlayıcı ve modeli açıkça belirtilir; yeni ajanlar mevcut ilk ajanın kurulumunu miras alır.",
+    "stats": { "agents": "Ajan", "sessions": "Oturum", "tasks": "Görev", "created": "Oluşturma" },
+    "name": "Workspace adı",
+    "icon": "İkon (emoji)",
+    "responseStyle": "Yanıt stili",
+    "terseLabel": "Terse mod (caveman)",
+    "terseHint": "Bu workspace'teki her ajanın statik sistem promptuna kısa yanıt talimatı ekler. Dolgu sözcükleri, nezaket kalıplarını ve hedging'i azaltırken kod, komut, yol ve hata metinlerini korur. Promptu Promptlar ▸ Terse (caveman) yanıt stili altında düzenleyebilirsin. Değişiklikler açık oturumlara /refresh-context sonrası ya da yeni oturumda yansır.",
+    "codebaseMemoryTitle": "Kod bilgi grafiği (codebase-memory)",
+    "codebaseMemoryLabel": "codebase-memory yeteneği",
+    "codebaseMemoryHint": "Bu workspace'te codebase-memory MCP sunucusu varsa ajanlara bilgi grafiği ipucu ekler, workspace'e özel izole indeks deposu kullanır, oturum çalışma dizinlerini otomatik indeksler ve codebase_workspace_search aracını sunar. Kapalı konumu entegrasyonu tümüyle devre dışı bırakır.",
+    "zvecTitle": "Anlamsal arama (zvec-grep)",
+    "zvecLabel": "zvec-grep yeteneği",
+    "zvecHint": "Bu workspace'te zvec-grep MCP sunucusu varsa ajanlara anlamsal arama rehberi ekler, aracı ajan allowlist'inden muaf tutar ve eksik çalışma dizini indekslerini arka planda kurar. Kapalı konumu entegrasyonu devre dışı bırakır; yapılandırılmış MCP araçları görünmeye devam eder.",
+    "codexPluginsTitle": "Codex plugin desteği",
+    "codexPluginsLabel": "Codex plugin'leri",
+    "codexPluginsHint": "Açıkken codex-cli turları yapılandırılmış marketplace ve plugin'leri kullanır. Her kalıcı sohbet evine bir kez kurulur. Yardımcı başlık, özet ve insight çağrıları plugin kurmaz. TionHarness kendi marketplace'iyle gelmez.",
+    "promptEpochTitle": "Prompt cache — donmuş bağlam (prompt epoch)",
+    "promptEpochLabel": "Prompt epoch (donmuş bağlam snapshot'ı)",
+    "promptEpochHint": "Oturumun statik sistem promptunu ve araç şemalarını başlangıçta dondurur; oturum ortasındaki skill, ayar, talimat ve MCP değişiklikleri prompt cache'i kırmaz. Bunlar compaction, model değişimi, /refresh-context ya da yeni oturumda uygulanır.",
+    "sqzTitle": "Shell çıktısı sıkıştırma (sqz)",
+    "sqzLabel": "Büyük shell çıktısını sqz ile sıkıştır",
+    "sqzHint": "Bash ya da PowerShell komut çıktısını modele gitmeden önce süreç içinde sıkıştırır. Canlı arayüz ham çıktıyı korur. Otomatik konumu sqz hook'unu izler; Açık için sqz binary gerekir; Kapalı devre dışı bırakır.",
+    "sqzAuto": "Otomatik (sqz hook bağlıysa)",
+    "rtkTitle": "Shell komutu yeniden yazma (rtk)",
+    "rtkLabel": "Test ve build komutlarını rtk ile çalıştır",
+    "rtkHint": "Ölçülmüş test, build, lint ve seçili Git komutlarını çalıştırmadan önce daha az çıktı üretecek biçimde yeniden yazar. Ajan, hataları dosya ve satır konumlarıyla koruyan bir özet alır. Otomatik konumu rtk hook'unu izler; Açık için rtk binary gerekir; Kapalı devre dışı bırakır.",
+    "rtkAuto": "Otomatik (rtk hook bağlıysa)",
+    "forceOn": "Açık (zorla)",
+    "off": "Kapalı",
+    "deleteHint": "Bu workspace'i ve tüm verisini kalıcı olarak sil.",
+    "delete": "Workspace'i sil"
+  },
+  "zvec": {
+    "title": "zvec-grep entegrasyonu",
+    "description": "Bir <code>zvec-grep</code> MCP sunucusu eklendiğinde TionHarness ajan bağlamına <strong>anlamsal workspace araması mevcut</strong> bloğunu ekler, eksik <code>root</code> değerini çalışma dizininden doldurur, aracı ajan allowlist'inden muaf tutar ve gerektiğinde oturum çalışma dizinini arka planda indeksler. İndeks <code>.zvec-grep/</code> altına yazılır, <code>.git/info/exclude</code> ile hariç tutulur ve <code>local/potion-code-16m-v2</code> modeliyle kurulur. Bunu <strong>Ayarlar ▸ Bu workspace</strong> altından açıp kapatabilirsin.",
+    "installFirst": "Önce zg PATH'te bulunmalı ve yukarıda kurulu görünmeli",
+    "removeTitle": "MCP sunucusunu kaldır",
+    "addTitle": "MCP sunucusunu otomatik ekle (zg server --stdio)",
+    "remove": "MCP'yi kaldır",
+    "add": "MCP'yi otomatik ekle",
+    "notFound": "zg PATH'te bulunamadı.",
+    "connected": "MCP sunucusu ekli ({{name}}) — ajanlar kullanabilir.",
+    "notConnected": "MCP sunucusu ekli değil."
+  }
+}

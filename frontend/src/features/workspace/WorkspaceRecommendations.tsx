@@ -7,6 +7,7 @@
 // dismissing a card (X) records its key in the workspace's ignoredRecommendations so
 // it is never re-offered; the workspace tab can review and un-ignore later.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Lightbulb, X } from 'lucide-react'
 import { api } from '@/api'
@@ -28,6 +29,7 @@ export function WorkspaceRecommendations({
   onNavigateSettings,
   onError,
 }: Props) {
+  const { t } = useTranslation('workspace')
   const [recs, setRecs] = useState<Rec[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   // The workspace's persisted ignore list, kept in sync so dismiss can append to it.
@@ -135,7 +137,7 @@ export function WorkspaceRecommendations({
             </div>
             <button
               onClick={() => ignore(rec.key)}
-              title="Yok say (bir daha gösterme)"
+              title={t('recommendations.toast.ignoreTitle')}
               data-testid={`workspace-rec-ignore-${rec.key}`}
               className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >

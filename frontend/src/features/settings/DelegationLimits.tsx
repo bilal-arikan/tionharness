@@ -1,24 +1,23 @@
+import { useTranslation } from 'react-i18next'
 import { NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function DelegationLimits({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Limits for synchronous agent delegation. Individual tool availability is managed in the
-        Tools screen.
-      </p>
+      <p className="text-xs text-[var(--color-text-dim)]">{t('delegation.description')}</p>
       <NumberField
-        label="Maximum delegation depth"
-        hint="Maximum nesting for synchronous agent delegation (1–10)."
+        label={t('delegation.depth.label')}
+        hint={t('delegation.depth.hint')}
         min={1}
         max={10}
         value={draft.delegationMaxDepth}
         onChange={(v) => set('delegationMaxDepth', v)}
       />
       <NumberField
-        label="Delegations per turn"
-        hint="Maximum synchronous delegation calls in one user turn (1–100)."
+        label={t('delegation.perTurn.label')}
+        hint={t('delegation.perTurn.hint')}
         min={1}
         max={100}
         value={draft.delegationMaxCalls}

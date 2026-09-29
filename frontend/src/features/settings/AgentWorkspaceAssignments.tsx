@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Info, Layers, Plus, X } from 'lucide-react'
 import { agentCatalogApi, type CatalogAgent, type CatalogWorkspace } from '@/api/agentCatalog'
 
@@ -9,6 +10,7 @@ interface Props {
   onError: (message: string) => void
 }
 export function AgentWorkspaceAssignments({ entry, workspaces, onChanged, onError }: Props) {
+  const { t } = useTranslation('settingsMain')
   const [busy, setBusy] = useState<string | null>(null)
   const assigned = new Map(entry.assignments.map((link) => [link.workspaceId, link]))
   const toggle = async (workspace: CatalogWorkspace) => {
@@ -16,7 +18,7 @@ export function AgentWorkspaceAssignments({ entry, workspaces, onChanged, onErro
     if (
       removing &&
       !confirm(
-        `Remove "${entry.agent.name}" from "${workspace.name}"?\n\nChat history and the central profile will be kept. Scheduled work using this assignment cannot run until it is assigned again.`,
+        t('assignments.removeConfirm', { agent: entry.agent.name, workspace: workspace.name }),
       )
     )
       return
@@ -34,27 +36,19 @@ export function AgentWorkspaceAssignments({ entry, workspaces, onChanged, onErro
   return (
     <section
       className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5"
-      aria-label="Workspace assignments"
+      aria-label={t('assignments.label')}
     >
       <div className="flex items-center gap-1.5 text-xs font-medium">
         <Layers size={13} className="text-[var(--color-accent)]" />
-        Workspace assignments
+        {t('assignments.label')}
         <span className="text-[10px] font-normal text-[var(--color-text-dim)]">
           ({entry.assignments.length})
         </span>
         <span
           tabIndex={0}
           role="note"
-          aria-label={
-            entry.agent.locked
-              ? 'Built-in agents are available in every workspace automatically.'
-              : 'Profile edits stay synchronized across assigned workspaces.'
-          }
-          title={
-            entry.agent.locked
-              ? 'Built-in agents are available in every workspace automatically.'
-              : 'Profile edits stay synchronized across assigned workspaces.'
-          }
+          aria-label={entry.agent.locked ? t('assignments.builtInHint') : t('assignments.syncHint')}
+          title={entry.agent.locked ? t('assignments.builtInHint') : t('assignments.syncHint')}
           className="text-[var(--color-text-dim)]"
         >
           <Info size={12} />
@@ -67,7 +61,9 @@ export function AgentWorkspaceAssignments({ entry, workspaces, onChanged, onErro
             <button
               key={workspace.id}
               disabled={!!busy || workspace.degraded || !!entry.agent.locked}
-              aria-label={`${link ? 'Remove from' : 'Assign to'} ${workspace.name}`}
+              aria-label={t(link ? 'assignments.removeFrom' : 'assignments.assignTo', {
+                workspace: workspace.name,
+              })}
               aria-pressed={!!link}
               onClick={() => void toggle(workspace)}
               title={workspace.degradedReason || workspace.name}
@@ -75,16 +71,14 @@ export function AgentWorkspaceAssignments({ entry, workspaces, onChanged, onErro
             >
               {link ? <Check size={12} /> : <Plus size={12} />}
               <span className="max-w-40 truncate">{workspace.name}</span>
-              {link?.archived && <span>(archived)</span>}
-              {workspace.degraded && <span>(unavailable)</span>}
+              {link?.archived && <span>({t('assignments.archived')})</span>}
+              {workspace.degraded && <span>({t('assignments.unavailable')})</span>}
               {busy === workspace.id ? '…' : link && !entry.agent.locked ? <X size={11} /> : null}
             </button>
           )
         })}
         {workspaces.length === 0 && (
-          <span className="text-xs text-[var(--color-text-dim)]">
-            Create a workspace to assign agents.
-          </span>
+          <span className="text-xs text-[var(--color-text-dim)]">{t('assignments.empty')}</span>
         )}
       </div>
     </section>

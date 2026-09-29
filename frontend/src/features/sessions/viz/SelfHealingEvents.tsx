@@ -2,24 +2,25 @@ import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
 import { buildSelfHealingSummary } from './flowVizData'
 import { formatTime } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
 
-const KIND_META: Record<string, { label: string; cls: string }> = {
+const KIND_META: Record<string, { labelKey: string; cls: string }> = {
   // Every hue maps onto a theme token (accent/warning/success/info) so the badges
   // re-theme with presets and stay legible in the light theme.
   recovery: {
-    label: 'kurtarma',
+    labelKey: 'visualization.selfHealing.kind.recovery',
     cls: 'bg-[color-mix(in_srgb,var(--color-info)_15%,transparent)] text-[var(--color-info)]',
   },
   repair: {
-    label: 'onarım',
+    labelKey: 'visualization.selfHealing.kind.repair',
     cls: 'bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)]',
   },
   guardrail: {
-    label: 'guardrail',
+    labelKey: 'visualization.selfHealing.kind.guardrail',
     cls: 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]',
   },
   lesson: {
-    label: 'ders',
+    labelKey: 'visualization.selfHealing.kind.lesson',
     cls: 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]',
   },
 }
@@ -29,11 +30,12 @@ const KIND_META: Record<string, { label: string; cls: string }> = {
 // journal — the visibility face of _Docs/56. Renders nothing for a session
 // that healed nothing (the healthy common case).
 export function SelfHealingEvents({ events }: { events: SessionDebugEvent[] }) {
+  const { t } = useTranslation('sessions')
   const model = useMemo(() => buildSelfHealingSummary(events), [events])
   if (!model) {
     return (
       <p className="text-[10px] text-[var(--color-text-dim)]">
-        Bu oturumda self-healing olayı yok (sağlıklı).
+        {t('visualization.selfHealing.empty')}
       </p>
     )
   }
@@ -47,7 +49,7 @@ export function SelfHealingEvents({ events }: { events: SessionDebugEvent[] }) {
               key={kind}
               className={`rounded px-1.5 py-px text-[10px] font-medium ${KIND_META[kind].cls}`}
             >
-              {KIND_META[kind].label}: {n}
+              {t(KIND_META[kind].labelKey)}: {n}
             </span>
           ))}
       </div>
@@ -57,7 +59,7 @@ export function SelfHealingEvents({ events }: { events: SessionDebugEvent[] }) {
             <span
               className={`mt-px shrink-0 rounded px-1 py-px font-medium ${KIND_META[it.kind].cls}`}
             >
-              {KIND_META[it.kind].label}
+              {t(KIND_META[it.kind].labelKey)}
             </span>
             <span className="text-[var(--color-text-dim)]">
               {formatTime(new Date(it.ts), { timeStyle: 'medium' })}

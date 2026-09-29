@@ -13,6 +13,8 @@ import { fmtUsd } from './chartFormat'
 import { ViewButton } from '@/features/view/ViewButton'
 import { formatTime } from '@/shared/lib/intl'
 import { CommitHeatmap } from './CommitHeatmap'
+import { useTranslation } from 'react-i18next'
+import { count } from '@/shared/lib/format'
 
 const RANGES = [7, 14, 30, 90]
 
@@ -39,6 +41,7 @@ export function DashboardPanel({
   onError?: (msg: string) => void
   nav?: DashboardNav
 }) {
+  const { t } = useTranslation('dashboard')
   const [days, setDays] = useState(14)
   const [data, setData] = useState<Dashboard | null>(null)
   const [loading, setLoading] = useState(true)
@@ -99,7 +102,7 @@ export function DashboardPanel({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <PaneHeader
-        title="Panel"
+        title={t('title')}
         right={
           <>
             <div className="flex overflow-hidden rounded-md border border-[var(--color-border)] text-xs">
@@ -114,18 +117,18 @@ export function DashboardPanel({
                       : 'text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
                   }`}
                 >
-                  {d}g
+                  {t('rangeDays', { count: d })}
                 </button>
               ))}
             </div>
             <button
               type="button"
               onClick={() => void load()}
-              title="Yenile"
+              title={t('refresh')}
               className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             >
               {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              Yenile
+              {t('refresh')}
             </button>
           </>
         }
@@ -140,7 +143,7 @@ export function DashboardPanel({
 
         {!data ? (
           <p className="text-sm text-[var(--color-text-dim)]">
-            {loading ? 'Yükleniyor…' : 'Veri yok.'}
+            {loading ? t('loading') : t('noData')}
           </p>
         ) : (
           <div className="flex flex-col gap-4">
@@ -162,16 +165,19 @@ export function DashboardPanel({
             {/* The projection: the agent's own summary, shown raw. */}
             <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
               <div className="mb-2 flex flex-wrap items-baseline gap-2">
-                <span className="text-sm font-medium">◱ Workspace özeti</span>
+                <span className="text-sm font-medium">{t('workspaceSummary.heading')}</span>
                 <span className="text-[11px] text-[var(--color-text-dim)]">
-                  ajanların <code>get_view</code> ile aldığı metnin aynısı
+                  {t('workspaceSummary.descriptionBefore')} <code>get_view</code>{' '}
+                  {t('workspaceSummary.descriptionAfter')}
                 </span>
                 <span
                   className="ml-auto text-[11px] text-[var(--color-text-dim)]"
-                  title="Yaklaşık token maliyeti (karakter/4)"
+                  title={t('workspaceSummary.tokenEstimateHint')}
                 >
-                  ~{data.summary.tokens} tok · asOf{' '}
-                  {formatTime(new Date(data.asOf), { timeStyle: 'medium' })}
+                  {t('workspaceSummary.meta', {
+                    tokens: count(data.summary.tokens),
+                    time: formatTime(new Date(data.asOf), { timeStyle: 'medium' }),
+                  })}
                 </span>
               </div>
               <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
@@ -195,14 +201,14 @@ export function DashboardPanel({
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                 <DayBars
                   points={data.sessionsByDay}
-                  label="Açılan oturum"
+                  label={t('trends.openedSessions')}
                   delta={data.deltas.sessions}
                 />
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                 <DayBars
                   points={data.runsByDay}
-                  label="Akış koşusu"
+                  label={t('trends.flowRuns')}
                   color="#a855f7"
                   delta={data.deltas.runs}
                 />
@@ -210,7 +216,7 @@ export function DashboardPanel({
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                 <DayBars
                   points={data.tokensByDay}
-                  label="Token"
+                  label={t('trends.tokens')}
                   color="#06b6d4"
                   delta={data.deltas.tokens}
                 />
@@ -219,7 +225,7 @@ export function DashboardPanel({
                 {/* Cost trend: up is the bad direction, so its delta inverts. */}
                 <DayBars
                   points={data.costByDay}
-                  label="Maliyet"
+                  label={t('trends.cost')}
                   color="#22c55e"
                   delta={data.deltas.cost}
                   invert
@@ -230,21 +236,21 @@ export function DashboardPanel({
 
             <div className="grid gap-4 lg:grid-cols-2">
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <StackedBar items={data.boardByColumn} label="Pano sütunları" />
+                <StackedBar items={data.boardByColumn} label={t('breakdowns.boardColumns')} />
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <StackedBar items={data.runsByStatus} label="Koşu durumları" />
+                <StackedBar items={data.runsByStatus} label={t('breakdowns.runStatuses')} />
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <StackedBar items={data.sessionsByKind} label="Oturum türleri" />
+                <StackedBar items={data.sessionsByKind} label={t('breakdowns.sessionKinds')} />
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <RankBars items={data.topAgents} label="En yoğun ajanlar (oturum sayısı)" />
+                <RankBars items={data.topAgents} label={t('breakdowns.busiestAgents')} />
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                 <CostRankBars
                   items={data.topAgentsCost}
-                  label="En maliyetli ajanlar"
+                  label={t('breakdowns.costliestAgents')}
                   estimated={data.cost.estimated}
                 />
               </section>

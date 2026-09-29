@@ -56,6 +56,7 @@ import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 import { sessionMatchesQuery } from './sessionSearch'
 import { countLiveDescendantWorkers } from './liveWorkerCounts'
 import { sessionListModel } from './sessionListModel'
+import { useTranslation } from 'react-i18next'
 
 const SIDEBAR_WIDTH_KEY = 'tionharness.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 200
@@ -149,6 +150,7 @@ export function SessionsSidebar({
   onSetPinned,
   onQueryChange,
 }: Props) {
+  const { t } = useTranslation('sessions')
   // One flat list filtered by multi-select kind, worker and live chips. The
   // archive view is selected separately. The chip selection lives above this
   // component because the session list request carries it — the server pages
@@ -272,7 +274,7 @@ export function SessionsSidebar({
   const bulkDelete = () => {
     const ids = selectedIds()
     if (ids.length === 0) return
-    if (confirm(`${ids.length} oturum silinsin mi? Bu işlem geri alınamaz.`)) {
+    if (confirm(t('sidebar.confirmBulkDelete', { count: ids.length }))) {
       ids.forEach((id) => onDeleteSession(id))
       sel.clear()
     }
@@ -332,7 +334,7 @@ export function SessionsSidebar({
     >
       <div className="flex items-center justify-between px-3 pt-4 pb-1">
         <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          {showArchived ? 'Arşiv' : 'Oturumlar'}
+          {showArchived ? t('sidebar.archive') : t('sidebar.title')}
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <ArchiveViewToggle
@@ -342,12 +344,12 @@ export function SessionsSidebar({
               sel.clear()
               onToggleArchived()
             }}
-            backLabel="Liste"
+            backLabel={t('sidebar.list')}
           />
           <button
             onClick={onRefresh}
             className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-            title="Sohbet geçmişini yenile"
+            title={t('sidebar.refresh')}
           >
             <RefreshCw size={14} />
           </button>
@@ -359,8 +361,8 @@ export function SessionsSidebar({
         <ArchiveViewBanner
           testId="sessions-archive-banner"
           count={totalSessions ?? 0}
-          noun="oturum"
-          restoreHint="seçip “Arşivden çıkar”a bas."
+          noun={t('sidebar.sessionNoun')}
+          restoreHint={t('sidebar.restoreHint')}
         />
       ) : (
         <div className="px-3 pb-1 pt-1">
@@ -368,9 +370,9 @@ export function SessionsSidebar({
             onClick={onNewSession}
             disabled={newDisabled}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
-            title="Yeni oturum (varsayılan ajanla)"
+            title={t('sidebar.newTitle')}
           >
-            <Plus size={15} /> Yeni Sohbet
+            <Plus size={15} /> {t('sidebar.newConversation')}
           </button>
         </div>
       )}
@@ -384,13 +386,13 @@ export function SessionsSidebar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Oturum adı, ID veya mesaj ara…"
+          placeholder={t('sidebar.searchPlaceholder')}
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-7 pr-7 text-xs outline-none focus:border-[var(--color-accent)]"
         />
         {query && (
           <button
             onClick={() => setQuery('')}
-            title="Temizle"
+            title={t('actions.clear')}
             className="absolute right-4 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
           >
             <X size={13} />
@@ -400,7 +402,9 @@ export function SessionsSidebar({
 
       {/* Multi-select chips: every session kind plus the Worker and live scopes.
           All start selected — unticking a chip hides that slice. */}
-      <div className="px-3 pb-1 text-[10px] text-[var(--color-text-dim)] opacity-70">Filtreler</div>
+      <div className="px-3 pb-1 text-[10px] text-[var(--color-text-dim)] opacity-70">
+        {t('sidebar.filters')}
+      </div>
       <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
         {SESSION_LIST_CHIPS.map((f) => {
           const on = chipSet.has(f.key)
@@ -409,7 +413,10 @@ export function SessionsSidebar({
             <button
               key={f.key}
               onClick={(e) => clickChip(f.key, e)}
-              title={`${f.label}: ${chipCounts.get(f.key) ?? 0} oturum — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle`}
+              title={t('sidebar.filterTitle', {
+                label: f.label,
+                count: chipCounts.get(f.key) ?? 0,
+              })}
               aria-pressed={on}
               data-chip={f.key}
               className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
@@ -491,7 +498,7 @@ export function SessionsSidebar({
                             // over the unread dot.
                             <span
                               className="relative flex h-2 w-2 shrink-0"
-                              title="Yanıt üretiliyor"
+                              title={t('sidebar.generating')}
                             >
                               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
                               <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
@@ -503,7 +510,7 @@ export function SessionsSidebar({
                             // unread dot for the same reason a live turn does.
                             <span
                               className="relative flex h-2 w-2 shrink-0"
-                              title={`${liveWorkers} worker çalışıyor`}
+                              title={t('sidebar.workersRunning', { count: liveWorkers })}
                             >
                               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-warning)] opacity-75" />
                               <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-warning)]" />
@@ -512,7 +519,7 @@ export function SessionsSidebar({
                             s.unread && (
                               <span
                                 className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]"
-                                title="Okunmadı"
+                                title={t('sidebar.unread')}
                               />
                             )
                           )}
@@ -522,7 +529,7 @@ export function SessionsSidebar({
                           {hasDraft && (
                             <span
                               className="flex shrink-0 text-[var(--color-accent)]"
-                              title="Gönderilmemiş taslak mesaj var"
+                              title={t('sidebar.unsentDraft')}
                             >
                               <PencilLine size={11} />
                             </span>
@@ -543,11 +550,13 @@ export function SessionsSidebar({
                               className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
                               title={
                                 s.parentSessionId
-                                  ? 'Bir devralma (handoff) ile oluşturuldu'
-                                  : 'Spawn ile oluşturuldu'
+                                  ? t('sidebar.createdByHandoff')
+                                  : t('sidebar.createdBySpawn')
                               }
                             >
-                              {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
+                              {s.parentSessionId
+                                ? `↩ ${t('sidebar.handoff')}`
+                                : `✦ ${t('sidebar.spawn')}`}
                             </span>
                           )}
                           {/* Finished task/flow runs carry a pass/fail pill. */}
@@ -570,21 +579,25 @@ export function SessionsSidebar({
                           {displayedModel && (
                             <span
                               className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[9px] text-[var(--color-text-dim)]"
-                              title={`Model: ${displayedModel}`}
+                              title={t('sidebar.model', { model: displayedModel })}
                             >
                               {modelDisplayName(displayedModel)}
                             </span>
                           )}
                           {isStreaming ? (
                             <span className="truncate font-medium text-[var(--color-success)]">
-                              yazıyor…
+                              {t('sidebar.writing')}
                             </span>
                           ) : (
                             <span className="truncate opacity-60">
-                              · {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                              · {relativeTime(s.updatedAt)} ·{' '}
+                              {t('sidebar.messages', { count: s.messageCount })}
                             </span>
                           )}
-                          <span className="ml-auto shrink-0 font-mono opacity-50" title="Oturum ID">
+                          <span
+                            className="ml-auto shrink-0 font-mono opacity-50"
+                            title={t('sidebar.sessionId')}
+                          >
                             {s.id}
                           </span>
                         </span>
@@ -597,7 +610,7 @@ export function SessionsSidebar({
           ))}
         {!loading && !showArchived && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
-            {chipsOff.length === 0 ? 'Oturum yok. + ile başlat.' : 'Seçili çiplerde oturum yok.'}
+            {chipsOff.length === 0 ? t('sidebar.empty') : t('sidebar.emptyFiltered')}
           </p>
         )}
 
@@ -618,7 +631,7 @@ export function SessionsSidebar({
               data-testid="sessions-load-more"
               className="mx-1 mt-2 flex w-[calc(100%-0.5rem)] items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs font-medium text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             >
-              Daha fazla yükle
+              {t('sidebar.loadMore')}
               {totalSessions !== undefined && (
                 <span className="opacity-60">
                   ({sessions.length}/{totalSessions})
@@ -632,10 +645,13 @@ export function SessionsSidebar({
           <div className="mt-2 border-t border-[var(--color-border)] pt-2">
             <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
               <MessageSquareText size={11} />
-              Mesajlarda{searching ? '…' : hits.length ? ` (${hits.length})` : ''}
+              {t('sidebar.inMessages')}
+              {searching ? '…' : hits.length ? ` (${hits.length})` : ''}
             </div>
             {!searching && hits.length === 0 && (
-              <p className="px-3 py-1.5 text-xs text-[var(--color-text-dim)]">Eşleşen mesaj yok.</p>
+              <p className="px-3 py-1.5 text-xs text-[var(--color-text-dim)]">
+                {t('sidebar.noMessageMatches')}
+              </p>
             )}
             {hits.map((h) => (
               <button
@@ -645,10 +661,14 @@ export function SessionsSidebar({
               >
                 <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
                   <span className="rounded bg-[var(--color-surface-2)] px-1 py-px text-[9px] uppercase tracking-wide">
-                    {h.role === 'assistant' ? 'ajan' : h.role === 'user' ? 'kullanıcı' : h.role}
+                    {h.role === 'assistant'
+                      ? t('sidebar.role.agent')
+                      : h.role === 'user'
+                        ? t('sidebar.role.user')
+                        : h.role}
                   </span>
                   <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-text)]">
-                    {h.sessionTitle || 'Yeni sohbet'}
+                    {h.sessionTitle || t('sidebar.newConversation')}
                   </span>
                   <span className="shrink-0">{relativeTime(h.createdAt)}</span>
                 </span>
@@ -668,25 +688,25 @@ export function SessionsSidebar({
         onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
       >
         <SelectionBarButton icon={<Sparkles size={13} />} onClick={bulkTitle}>
-          AI başlık
+          {t('sidebar.bulk.aiTitle')}
         </SelectionBarButton>
         <SelectionBarButton icon={<Pin size={13} />} onClick={() => bulkPin(true)}>
-          Sabitle
+          {t('sidebar.bulk.pin')}
         </SelectionBarButton>
         {showArchived ? (
           <SelectionBarButton
             icon={<ArchiveRestore size={13} />}
             onClick={() => bulkArchive(false)}
           >
-            Arşivden çıkar
+            {t('sidebar.bulk.unarchive')}
           </SelectionBarButton>
         ) : (
           <SelectionBarButton icon={<Archive size={13} />} onClick={() => bulkArchive(true)}>
-            Arşivle
+            {t('sidebar.bulk.archive')}
           </SelectionBarButton>
         )}
         <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
-          Sil
+          {t('sidebar.bulk.delete')}
         </SelectionBarButton>
       </SelectionBar>
 

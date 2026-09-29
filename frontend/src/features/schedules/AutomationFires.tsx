@@ -2,6 +2,7 @@
 // folded into an automation card: every attempt, fired / skipped (with the
 // reason) / failed, newest first. Loaded on demand so the board stays cheap.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '@/api'
 import type { AutomationFireRecord } from '@/types'
@@ -17,6 +18,7 @@ interface Props {
 const LIMIT = 25
 
 export function AutomationFires({ automationId, refreshKey }: Props) {
+  const { t } = useTranslation('schedules')
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<AutomationFireRecord[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -43,20 +45,20 @@ export function AutomationFires({ automationId, refreshKey }: Props) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
-        title="Ateşleme defteri: her deneme (ateşlendi / atlandı + sebep / başarısız)"
+        title={t('fires.title')}
         data-testid="automation-fires-toggle"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        Ateşlemeler
+        {t('fires.label')}
       </button>
       {open && (
         <div className="mt-1 max-h-40 overflow-auto rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1">
           {error ? (
             <div className="text-[var(--color-danger)]">{error}</div>
           ) : rows === null ? (
-            <div className="text-[var(--color-text-dim)]">Yükleniyor…</div>
+            <div className="text-[var(--color-text-dim)]">{t('common.loading')}</div>
           ) : rows.length === 0 ? (
-            <div className="text-[var(--color-text-dim)]">Henüz deneme kaydı yok.</div>
+            <div className="text-[var(--color-text-dim)]">{t('fires.empty')}</div>
           ) : (
             <ul className="flex flex-col gap-0.5">
               {rows.map((f, i) => (
@@ -74,7 +76,9 @@ export function AutomationFires({ automationId, refreshKey }: Props) {
                   </span>
                   <span className="text-[var(--color-text-dim)]">{fmtTime(f.at)}</span>
                   {f.triggerKind && (
-                    <span className="text-[var(--color-text-dim)]">{f.triggerKind}</span>
+                    <span className="text-[var(--color-text-dim)]">
+                      {t(`triggerKinds.${f.triggerKind}`, { defaultValue: f.triggerKind })}
+                    </span>
                   )}
                   {f.outcome === 'skipped' && f.reason && (
                     <span title={f.reason}>{SKIP_REASON_LABEL[f.reason] ?? f.reason}</span>
@@ -85,8 +89,11 @@ export function AutomationFires({ automationId, refreshKey }: Props) {
                     </span>
                   )}
                   {f.sessionId && (
-                    <span className="font-mono text-[var(--color-text-dim)]" title="Açılan oturum">
-                      → {f.sessionId}
+                    <span
+                      className="font-mono text-[var(--color-text-dim)]"
+                      title={t('fires.openedSession')}
+                    >
+                      {t('common.targetArrow', { target: f.sessionId })}
                     </span>
                   )}
                   {f.iteration !== undefined && f.iteration > 0 && (

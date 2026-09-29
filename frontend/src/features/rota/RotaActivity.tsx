@@ -1,9 +1,11 @@
 // Right-hand strip of the Rota skeleton: the workspace's trajectories, latest
 // automation fires and coordination facts from the lane store, newest first.
 import { Badge } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 import type { LaneState } from '@/shared/lib/laneModel'
 import type { TrajectoryStatus } from '@/types/trajectory'
-import { STATUS_LABEL, STATUS_TONE } from './trajectoryStatus'
+import { STATUS_TONE, trajectoryStatusLabel } from './trajectoryStatus'
+import { formatTime } from '@/shared/lib/intl'
 
 interface Props {
   lanes: LaneState
@@ -13,6 +15,7 @@ interface Props {
 const STRIP_LIMIT = 30
 
 export function RotaActivity({ lanes, onOpenTrajectory }: Props) {
+  const { t } = useTranslation('rota')
   const fires = lanes.fires.slice(-STRIP_LIMIT).reverse()
   const activity = lanes.activity.slice(-STRIP_LIMIT).reverse()
   const trajectories = [...lanes.trajectories.values()]
@@ -22,35 +25,37 @@ export function RotaActivity({ lanes, onOpenTrajectory }: Props) {
   return (
     <aside className="flex w-full shrink-0 flex-col gap-3 overflow-auto p-3 text-xs">
       <section>
-        <h3 className="mb-1 font-medium">Rotalar</h3>
+        <h3 className="mb-1 font-medium">{t('activity.trajectories')}</h3>
         {trajectories.length === 0 ? (
-          <p className="text-[var(--color-text-dim)]">
-            Henüz rota yok. Bir koordinatör worker açtığında veya reçeteyle başladığında burada
-            belirir.
-          </p>
+          <p className="text-[var(--color-text-dim)]">{t('activity.noTrajectories')}</p>
         ) : (
           <ul className="flex flex-col gap-1">
-            {trajectories.map((t) => {
-              const root = lanes.sessions.get(t.rootSessionId)
-              const status = (t.status ?? 'planned') as TrajectoryStatus
+            {trajectories.map((trajectory) => {
+              const root = lanes.sessions.get(trajectory.rootSessionId)
+              const status = (trajectory.status ?? 'planned') as TrajectoryStatus
               return (
-                <li key={t.trajectoryId}>
+                <li key={trajectory.trajectoryId}>
                   <button
                     type="button"
-                    onClick={() => onOpenTrajectory?.(t.trajectoryId)}
+                    onClick={() => onOpenTrajectory?.(trajectory.trajectoryId)}
                     className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left hover:bg-[var(--color-surface-2)]"
-                    title={`${t.trajectoryId} · ${t.templateRef || 'plansız'} · rev ${t.revision} · ${t.nodeCount} düğüm`}
+                    title={t('activity.trajectoryTitle', {
+                      id: trajectory.trajectoryId,
+                      template: trajectory.templateRef || t('common.unplanned'),
+                      revision: trajectory.revision,
+                      count: trajectory.nodeCount,
+                    })}
                   >
                     <span className="text-[var(--color-accent)]">◈</span>
                     <span className="min-w-0 flex-1 truncate">
-                      {root?.title || t.rootSessionId}
+                      {root?.title || trajectory.rootSessionId}
                       <span className="text-[var(--color-text-dim)]">
                         {' '}
-                        · {t.templateRef || 'plansız'}
+                        · {trajectory.templateRef || t('common.unplanned')}
                       </span>
                     </span>
                     <Badge tone={STATUS_TONE[status] ?? 'muted'}>
-                      {STATUS_LABEL[status] ?? status}
+                      {trajectoryStatusLabel(status)}
                     </Badge>
                   </button>
                 </li>
@@ -60,9 +65,9 @@ export function RotaActivity({ lanes, onOpenTrajectory }: Props) {
         )}
       </section>
       <section>
-        <h3 className="mb-1 font-medium">Tetikler</h3>
+        <h3 className="mb-1 font-medium">{t('activity.triggers')}</h3>
         {fires.length === 0 ? (
-          <p className="text-[var(--color-text-dim)]">Henüz tetik yok.</p>
+          <p className="text-[var(--color-text-dim)]">{t('activity.noTriggers')}</p>
         ) : (
           <ul className="flex flex-col gap-0.5">
             {fires.map((f) => (
@@ -82,9 +87,9 @@ export function RotaActivity({ lanes, onOpenTrajectory }: Props) {
         )}
       </section>
       <section>
-        <h3 className="mb-1 font-medium">Koordinasyon</h3>
+        <h3 className="mb-1 font-medium">{t('activity.coordination')}</h3>
         {activity.length === 0 ? (
-          <p className="text-[var(--color-text-dim)]">Henüz olay yok.</p>
+          <p className="text-[var(--color-text-dim)]">{t('activity.noEvents')}</p>
         ) : (
           <ul className="flex flex-col gap-0.5">
             {activity.map((a) => (
@@ -99,14 +104,14 @@ export function RotaActivity({ lanes, onOpenTrajectory }: Props) {
         )}
       </section>
       <section>
-        <h3 className="mb-1 font-medium">Kurulu zamanlayıcılar</h3>
+        <h3 className="mb-1 font-medium">{t('activity.armedSchedules')}</h3>
         {lanes.armed.size === 0 ? (
-          <p className="text-[var(--color-text-dim)]">Kurulu zamanlayıcı yok.</p>
+          <p className="text-[var(--color-text-dim)]">{t('activity.noArmedSchedules')}</p>
         ) : (
           <ul className="flex flex-col gap-0.5">
             {[...lanes.armed.values()].map((s) => (
               <li key={s.scheduleId} className="truncate">
-                ⏰ {s.name || s.scheduleId} · {new Date(s.fireAt * 1000).toLocaleTimeString()}
+                ⏰ {s.name || s.scheduleId} · {formatTime(s.fireAt * 1000)}
               </li>
             ))}
           </ul>

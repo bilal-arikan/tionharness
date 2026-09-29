@@ -6,8 +6,9 @@
 // changes — only the columns it is handed, and the field a drop mutates.
 
 import type { Agent, BoardColumnDef, BoardGroupBy, Task, TaskPatch } from '@/types'
-import { PRIORITY_LABELS, PRIORITY_ORDER } from './boardViewTypes'
+import { PRIORITY_ORDER, priorityLabel } from './boardViewTypes'
 import { compareText } from '@/shared/lib/intl'
+import { i18next } from '@/i18n'
 
 // Column key used for "this card has no value on the current axis".
 export const NONE_KEY = '__none__'
@@ -78,20 +79,27 @@ export function deriveColumns(
       // Cards owned by an agent that no longer exists would otherwise vanish.
       for (const id of used) {
         if (!cols.some((c) => c.key === id)) {
-          cols.push({ key: id, label: `(silinmiş ajan) ${id.slice(0, 8)}`, color: '' })
+          cols.push({
+            key: id,
+            label: i18next.t('derivedColumns.deletedAgent', {
+              ns: 'tasks',
+              id: id.slice(0, 8),
+            }),
+            color: '',
+          })
         }
       }
-      if (needsNone) cols.push(noneCol('Atanmamış'))
+      if (needsNone) cols.push(noneCol(i18next.t('derivedColumns.unassigned', { ns: 'tasks' })))
       return cols
     }
 
     case 'priority': {
       const cols: DerivedColumn[] = PRIORITY_ORDER.map((p) => ({
         key: p,
-        label: PRIORITY_LABELS[p],
+        label: priorityLabel(p),
         color: PRIORITY_COLORS[p] ?? '',
       }))
-      if (needsNone) cols.push(noneCol(PRIORITY_LABELS['']))
+      if (needsNone) cols.push(noneCol(priorityLabel('')))
       return cols
     }
 
@@ -103,7 +111,7 @@ export function deriveColumns(
       const cols: DerivedColumn[] = [...counts.keys()]
         .sort((a, b) => compareText(a, b))
         .map((tag) => ({ key: tag, label: `#${tag}`, color: '' }))
-      if (needsNone) cols.push(noneCol('Etiketsiz'))
+      if (needsNone) cols.push(noneCol(i18next.t('derivedColumns.untagged', { ns: 'tasks' })))
       return cols
     }
   }

@@ -3,6 +3,7 @@ import type { SkillDetail, SkillInput } from '@/types'
 import { api } from '@/api'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { Button, PromptEditor, ModalOverlay } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   mode: 'create' | 'edit'
@@ -19,6 +20,7 @@ interface Props {
 // name + slug, description, when-to-use, on-demand access, and the markdown
 // body. It posts to the skill API and hands the saved skill back to the panel.
 export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Props) {
+  const { t } = useTranslation('skills')
   const [name, setName] = useState(initial?.name ?? '')
   const [slug, setSlug] = useState('')
   const [icon, setIcon] = useState(initial?.icon ?? '')
@@ -35,7 +37,7 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
 
   const save = async () => {
     if (!name.trim()) {
-      setErr('Skill adı boş olamaz.')
+      setErr(t('editor.nameRequired'))
       return
     }
     setSaving(true)
@@ -68,7 +70,7 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Skill düzenleyici"
+        aria-label={t('editor.ariaLabel')}
         data-testid="skill-editor-modal"
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -80,10 +82,12 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">
-              {mode === 'create' ? 'Yeni skill' : name || 'Skill'}
+              {mode === 'create' ? t('editor.newTitle') : name || t('editor.fallbackTitle')}
             </h2>
             <p className="text-xs text-[var(--color-text-dim)]">
-              {mode === 'create' ? 'Workspace skill oluştur' : `Skill düzenle · ${initial?.slug}`}
+              {mode === 'create'
+                ? t('editor.createSubtitle')
+                : t('editor.editSubtitle', { slug: initial?.slug })}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -91,10 +95,10 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
               onClick={onClose}
               className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
             >
-              İptal
+              {t('actions.cancel')}
             </button>
             <Button onClick={save} disabled={saving}>
-              {saving ? 'Kaydediliyor…' : 'Kaydet'}
+              {saving ? t('actions.saving') : t('actions.save')}
             </Button>
           </div>
         </div>
@@ -102,54 +106,54 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
         {/* Body */}
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div className="flex gap-4">
-            <Field label="Simge (emoji)">
+            <Field label={t('editor.iconLabel')}>
               <EmojiField value={icon} onChange={setIcon} clearLabel="✨" />
             </Field>
-            <Field label="Ad" className="flex-1">
+            <Field label={t('editor.nameLabel')} className="flex-1">
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="ör. Görev Planlayıcı"
+                placeholder={t('editor.namePlaceholder')}
                 className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
               />
             </Field>
           </div>
 
           {mode === 'create' && (
-            <Field label="Slug (opsiyonel — boşsa addan türetilir)">
+            <Field label={t('editor.slugLabel')}>
               <input
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                placeholder="gorev-planlayici"
+                placeholder={t('editor.slugPlaceholder')}
                 className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
               />
             </Field>
           )}
 
-          <Field label="Açıklama">
+          <Field label={t('editor.descriptionLabel')}>
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Skill'in tek satırlık özeti (katalogda görünür)"
+              placeholder={t('editor.descriptionPlaceholder')}
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
             />
           </Field>
 
-          <Field label="Ne zaman kullanılır (opsiyonel)">
+          <Field label={t('editor.whenToUseLabel')}>
             <input
               value={whenToUse}
               onChange={(e) => setWhenToUse(e.target.value)}
-              placeholder="ör. yeni bir görev planlanırken"
+              placeholder={t('editor.whenToUsePlaceholder')}
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
             />
           </Field>
 
-          <Field label="Grup (opsiyonel — beceriler bu başlık altında katlanır)">
+          <Field label={t('editor.groupLabel')}>
             <input
               value={group}
               onChange={(e) => setGroup(e.target.value)}
               list="skill-group-suggestions"
-              placeholder="ör. Geliştirme, Araştırma, Otomasyon"
+              placeholder={t('editor.groupPlaceholder')}
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
             />
             <datalist id="skill-group-suggestions">
@@ -166,17 +170,17 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
               onChange={(e) => setShared(e.target.checked)}
               className="h-4 w-4 accent-[var(--color-accent)]"
             />
-            <span>Gerektiğinde (paylaşımlı) — tüm ajanlar atama gerekmeden kullanabilir</span>
+            <span>{t('editor.sharedLabel')}</span>
           </label>
 
-          <Field label="İçerik (Markdown talimatları)">
+          <Field label={t('editor.bodyLabel')}>
             <PromptEditor
               value={body}
               onChange={setBody}
               rows={12}
               mono
               autoSizeMax={560}
-              placeholder="# Skill&#10;&#10;Talimatları buraya yaz…"
+              placeholder={t('editor.bodyPlaceholder')}
             />
           </Field>
 

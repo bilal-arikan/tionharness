@@ -5,6 +5,7 @@
 import type { Edge, Node as RFNode } from '@xyflow/react'
 import type { FlowGraph, FlowNode, FlowNodeType } from '@/types'
 import type { ChildProgress } from './runTree'
+import { i18next } from '@/i18n'
 
 export type FlowRFNode = RFNode<{
   node: FlowNode
@@ -71,7 +72,7 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
           add(n.id, b.next, {
             slot: `b${i}`,
             sourceHandle: `b${i}`,
-            label: b.contains || 'varsayılan',
+            label: b.contains || i18next.t('nodes.defaultBranch', { ns: 'flows' }),
             animated: false,
           }),
         )
@@ -83,8 +84,16 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
         add(n.id, n.joinNext ?? '', { slot: 'join', sourceHandle: 'join', label: 'join' })
         break
       case 'loop':
-        add(n.id, n.body ?? '', { slot: 'body', sourceHandle: 'body', label: 'gövde' })
-        add(n.id, n.loopNext ?? '', { slot: 'loop', sourceHandle: 'loop', label: 'çıkış' })
+        add(n.id, n.body ?? '', {
+          slot: 'body',
+          sourceHandle: 'body',
+          label: i18next.t('inspector.loopBody', { ns: 'flows', defaultValue: 'body' }),
+        })
+        add(n.id, n.loopNext ?? '', {
+          slot: 'loop',
+          sourceHandle: 'loop',
+          label: i18next.t('inspector.loopExit', { ns: 'flows', defaultValue: 'exit' }),
+        })
         break
     }
   }
@@ -232,8 +241,19 @@ function round(v: number): number {
 export function ensureStartNode(graph: FlowGraph): FlowGraph {
   if (graph.nodes.some((n) => n.type === 'start')) return graph
   const id = graph.nodes.some((n) => n.id === 'start') ? `start_${graph.nodes.length}` : 'start'
-  const startNode: FlowNode = { id, type: 'start', title: 'Başlangıç', next: graph.start || '' }
+  const startNode: FlowNode = {
+    id,
+    type: 'start',
+    title: defaultNodeTitle('start'),
+    next: graph.start || '',
+  }
   return { ...graph, start: id, nodes: [startNode, ...graph.nodes] }
+}
+
+// defaultNodeTitle resolves a title only when a new node is created. Existing
+// saved/user titles remain stored data and are never rewritten on locale changes.
+export function defaultNodeTitle(type: FlowNodeType): string {
+  return i18next.t(`nodeTypes.${type}`, { ns: 'flows' })
 }
 
 // nextNodeId returns the smallest unused "n<i>" id for a new node.
@@ -267,31 +287,31 @@ export function blankNode(id: string, type: FlowNodeType, defaultAgentId = ''): 
     node.untilMode = 'contains'
   } else if (type === 'await-input') {
     node.next = ''
-    node.title = 'Girdi bekle'
+    node.title = defaultNodeTitle(type)
   } else if (type === 'subflow') {
     node.flowRef = ''
     node.template = '{{last}}'
     node.next = ''
-    node.title = 'Alt-akış'
+    node.title = defaultNodeTitle(type)
   } else if (type === 'start') {
     node.next = ''
-    node.title = 'Başlangıç'
+    node.title = defaultNodeTitle(type)
   } else if (type === 'end') {
-    node.title = 'Bitiş'
+    node.title = defaultNodeTitle(type)
   } else if (type === 'spawn') {
     node.spawnFlows = []
     node.template = '{{last}}'
     node.next = ''
-    node.title = 'Spawn'
+    node.title = defaultNodeTitle(type)
   } else if (type === 'join') {
     node.spawnRef = ''
     node.next = ''
-    node.title = 'Join'
+    node.title = defaultNodeTitle(type)
   } else if (type === 'coordinator') {
     node.agentId = defaultAgentId
     node.prompt = '{{last}}'
     node.next = ''
-    node.title = 'Koordinatör'
+    node.title = defaultNodeTitle(type)
   } else {
     node.parallel = []
     node.joinNext = ''

@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { LoadingState } from '@/shared/components'
 
 interface Props {
@@ -41,6 +42,7 @@ export function BoardColumn({
   testId,
   children,
 }: Props) {
+  const { t } = useTranslation('schedules')
   return (
     <section
       data-testid={testId}
@@ -68,7 +70,7 @@ export function BoardColumn({
           {stat && (
             <div
               className="mt-1 inline-flex items-center gap-1 rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]"
-              title="Bu workspace’in şu anki değeri — kuralların izlediği metrik (canlı)"
+              title={t('board.liveMetricTitle')}
             >
               {stat}
             </div>

@@ -1,0 +1,122 @@
+{
+  "title": "Artifactlar",
+  "newArtifactTitle": "Yeni artifact",
+  "kind": {
+    "markdown": "Markdown",
+    "code": "Kod",
+    "html": "HTML",
+    "text": "Metin",
+    "svg": "SVG",
+    "mermaid": "Mermaid",
+    "image": "Görsel",
+    "video": "Video",
+    "audio": "Ses",
+    "file": "Dosya"
+  },
+  "origin": {
+    "all": "Tümü",
+    "chat": "Sohbet eki",
+    "manual": "Manuel",
+    "agent": "Ajan",
+    "tool": "Tool",
+    "plan": "Plan"
+  },
+  "status": {
+    "archived": "Arşivlendi"
+  },
+  "actions": {
+    "new": "Yeni Artifact",
+    "newTitle": "Yeni artifact oluştur",
+    "edit": "Düzenle",
+    "content": "İçerik",
+    "copyContentTitle": "İçeriği kopyala",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…",
+    "cancel": "İptal",
+    "closeEsc": "Kapat (Esc)",
+    "copyPath": "Yolu kopyala",
+    "openSourceChat": "Kaynak sohbete git",
+    "archive": "Arşivle",
+    "restore": "Arşivden çıkar",
+    "delete": "Sil"
+  },
+  "bulk": {
+    "groupPlaceholder": "Grup ata…",
+    "moveToGroupTitle": "Seçili artifactları “{{group}}” grubuna taşı",
+    "ungroupTitle": "Seçili artifactları grupsuz yap",
+    "assign": "Ata",
+    "restoreTitle": "Seçili artifactları arşivden çıkar",
+    "archiveTitle": "Seçili artifactları arşivle"
+  },
+  "group": {
+    "ungrouped": "Grupsuz",
+    "expand": "Grubu aç",
+    "collapse": "Grubu katla",
+    "expandAll": "Tüm grupları aç",
+    "collapseAll": "Tüm grupları katla"
+  },
+  "editor": {
+    "titlePlaceholder": "Başlık",
+    "languagePlaceholder": "dil (ör. go)",
+    "groupPlaceholder": "Grup (opsiyonel)",
+    "groupTitle": "Bu artifact'in grubu — boş bırakırsan grupsuz olur",
+    "mediaReadOnly": "Medya dosyasının içeriği düzenlenemez — yalnız başlığı değiştirebilirsin.",
+    "contentPlaceholder": "İçerik…",
+    "saveHint": "Kaydedince içerik yerinde güncellenir."
+  },
+  "list": {
+    "loading": "Artifactlar yükleniyor…",
+    "noMatches": "Filtreyle eşleşen artifact yok.",
+    "empty": "Henüz artifact yok. Bir oturumda dosya veya doküman ürettiğinde otomatik buraya düşer. Yeni ile elle ekleyebilir ya da resim, video, ses ve diğer dosyaları buraya sürükleyip bırakabilirsin.",
+    "loadingMore": "Yükleniyor…",
+    "loadMore": "Daha fazla yükle ({{loaded}}/{{total}})",
+    "titleCount": "Artifactlar · {{loaded}} / {{total}}",
+    "kindUpdated": "{{kind}} · {{time}}"
+  },
+  "filters": {
+    "searchPlaceholder": "Başlıkta ara…",
+    "clear": "Temizle",
+    "showActive": "Aktif artifactlara dön",
+    "showArchived": "Arşivlenen artifactları göster",
+    "archiveView": "Arşiv görünümü",
+    "archiveCount": "Arşiv ({{count}})",
+    "archive": "Arşiv"
+  },
+  "detail": {
+    "selectPrompt": "Görüntülemek için bir artifact seç."
+  },
+  "import": {
+    "importing": "Ekleniyor…",
+    "dropFiles": "Dosyaları bırak — resim, video, ses veya başka bir dosya"
+  },
+  "view": {
+    "htmlTitle": "HTML çıktısı",
+    "imageAlt": "Görsel artifact",
+    "openDownload": "Aç / indir",
+    "storedFile": "Çalışma alanında saklı dosya",
+    "missingMedia": "Medya dosyası bulunamadı (kaynak yol eksik)."
+  },
+  "preview": {
+    "loading": "Yükleniyor…",
+    "failed": "Önizlenemedi: {{error}}",
+    "fileTooLarge": "Dosya önizlemek için çok büyük",
+    "openFullTitle": "Artifactlar ekranında aç",
+    "openFull": "Ekranda aç",
+    "loadFailed": "Artifact yüklenemedi."
+  },
+  "confirm": {
+    "delete": "Bu artifact kalıcı olarak silinsin mi?",
+    "bulkDelete_one": "{{count}} artifact kalıcı olarak silinsin mi?",
+    "bulkDelete_other": "{{count}} artifact kalıcı olarak silinsin mi?",
+    "discard": "Kaydedilmemiş değişiklikler var, atılsın mı?"
+  },
+  "toast": {
+    "deleted": "Artifact silindi",
+    "saved": "Kaydedildi",
+    "copied": "Panoya kopyalandı"
+  },
+  "errors": {
+    "imageTooLarge": "Görsel 20 MB sınırını aşıyor.",
+    "importFailed": "“{{name}}” eklenemedi: {{error}}"
+  }
+}

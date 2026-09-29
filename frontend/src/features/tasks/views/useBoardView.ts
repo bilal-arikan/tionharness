@@ -11,10 +11,12 @@
 // derived, so a view saved in another window shows up without a sync effect.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/api'
 import type { BoardFilter, BoardGroupBy, BoardSort, BoardViewDef } from '@/types'
 import {
-  BUILTIN_VIEWS,
+  DEFAULT_BUILTIN_VIEW_ID,
+  getBuiltinViews,
   isBuiltinId,
   resolveView,
   sameView,
@@ -26,13 +28,13 @@ import {
 const SELECTION_KEY = 'tionharness.board.viewId'
 
 function loadSelection(): string {
-  return localStorage.getItem(SELECTION_KEY) ?? BUILTIN_VIEWS[0].id
+  return localStorage.getItem(SELECTION_KEY) ?? DEFAULT_BUILTIN_VIEW_ID
 }
 
 export interface BoardViewState {
   /** Built-ins followed by the workspace's saved views — the full menu. */
   allViews: BoardViewDef[]
-  /** The view actually in effect (falls back to "Tümü" if the stored id is gone). */
+  /** The view actually in effect (falls back to the built-in "all" view if the stored id is gone). */
   selectedId: string
   /** The view the board is rendering, including unsaved edits. */
   live: ResolvedView
@@ -62,18 +64,20 @@ export function useBoardView(
   onSavedChange: (views: BoardViewDef[]) => void,
   onError: (msg: string) => void,
 ): BoardViewState {
+  const { t } = useTranslation('tasks')
   const [storedId, setStoredId] = useState<string>(loadSelection)
   // Unsaved edits. null = "no edits", so the selected view's definition shows
   // through — including one that only arrives once settings load.
   const [edits, setEdits] = useState<ResolvedView | null>(null)
 
-  const allViews = useMemo(() => [...BUILTIN_VIEWS, ...saved], [saved])
+  const builtinViews = useMemo(() => getBuiltinViews(), [])
+  const allViews = useMemo(() => [...builtinViews, ...saved], [builtinViews, saved])
 
   // A view deleted in another window leaves this one pointing at nothing; fall
-  // back to "Tümü" rather than rendering an empty board under a stale name.
+  // back to the built-in "all" view rather than rendering an empty board under a stale name.
   const selectedDef = useMemo(
-    () => allViews.find((v) => v.id === storedId) ?? BUILTIN_VIEWS[0],
-    [allViews, storedId],
+    () => allViews.find((v) => v.id === storedId) ?? builtinViews[0],
+    [allViews, builtinViews, storedId],
   )
   const selectedId = selectedDef.id
 
@@ -118,7 +122,7 @@ export function useBoardView(
   const saveAsNew = useCallback(
     async (label: string) => {
       const trimmed = label.trim()
-      if (!trimmed) throw new Error('Görünüm adı boş olamaz')
+      if (!trimmed) throw new Error(t('views.errors.emptyName'))
       const id = uniqueViewID(slugifyViewLabel(trimmed), new Set(allViews.map((v) => v.id)))
       await persist([
         ...saved,
@@ -128,12 +132,12 @@ export function useBoardView(
       setEdits(null)
       return id
     },
-    [allViews, live, persist, saved],
+    [allViews, live, persist, saved, t],
   )
 
   const saveOverwrite = useCallback(async () => {
     if (isBuiltinId(selectedId)) {
-      throw new Error('Hazır görünümlerin üzerine yazılamaz — "Yeni olarak kaydet" kullanın')
+      throw new Error(t('views.errors.cannotOverwriteBuiltin'))
     }
     await persist(
       saved.map((v) =>
@@ -143,21 +147,21 @@ export function useBoardView(
       ),
     )
     setEdits(null)
-  }, [live, persist, saved, selectedId])
+  }, [live, persist, saved, selectedId, t])
 
   const renameView = useCallback(
     async (id: string, label: string) => {
       const trimmed = label.trim()
-      if (!trimmed) throw new Error('Görünüm adı boş olamaz')
+      if (!trimmed) throw new Error(t('views.errors.emptyName'))
       await persist(saved.map((v) => (v.id === id ? { ...v, label: trimmed } : v)))
     },
-    [persist, saved],
+    [persist, saved, t],
   )
 
   const deleteView = useCallback(
     async (id: string) => {
       await persist(saved.filter((v) => v.id !== id))
-      if (id === selectedId) selectView(BUILTIN_VIEWS[0].id)
+      if (id === selectedId) selectView(DEFAULT_BUILTIN_VIEW_ID)
     },
     [persist, saved, selectView, selectedId],
   )

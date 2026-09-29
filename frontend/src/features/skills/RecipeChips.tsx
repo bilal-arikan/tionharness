@@ -3,6 +3,7 @@
 // phase ids, watchers / optimizer, and the parse error when the block is
 // invalid (the recipe then still runs as prose but seeds no trajectory).
 import type { Skill } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   skill: Skill
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function RecipeChips({ skill: sk, compact = false }: Props) {
+  const { t } = useTranslation('skills')
   if (sk.kind !== 'coordinator-workflow') return null
   const r = sk.recipe
   const phases = r?.phases ?? []
@@ -22,20 +24,21 @@ export function RecipeChips({ skill: sk, compact = false }: Props) {
         {sk.recipeError ? (
           <span
             className={`${chip} bg-[color-mix(in_srgb,var(--color-danger)_16%,transparent)] text-[var(--color-danger)]`}
-            title={`Faz bloğu geçersiz: ${sk.recipeError}`}
+            title={t('recipe.invalidBlock', { error: sk.recipeError })}
           >
-            ⚠ reçete
+            ⚠ {t('recipe.recipe')}
           </span>
         ) : (
           <span
             className={muted}
             title={
               phases.length
-                ? `Fazlar: ${phases.map((p) => p.id).join(' → ')}`
-                : 'Yapısal faz bloğu yok (düz yazı reçete)'
+                ? t('recipe.phases', { phases: phases.map((p) => p.id).join(' → ') })
+                : t('recipe.noStructuredPhases')
             }
           >
-            reçete{phases.length ? ` · ${phases.length} faz` : ''}
+            {t('recipe.recipe')}
+            {phases.length ? ` · ${t('recipe.phaseCount', { count: phases.length })}` : ''}
           </span>
         )}
       </span>
@@ -44,15 +47,12 @@ export function RecipeChips({ skill: sk, compact = false }: Props) {
   return (
     <>
       {sk.version && (
-        <span
-          className={muted}
-          title="Reçete sürümü (frontmatter version); rota TemplateRef'inde slug@version olarak kaydedilir"
-        >
-          v{sk.version}
+        <span className={muted} title={t('recipe.versionHint')}>
+          {t('recipe.version', { version: sk.version })}
         </span>
       )}
       {sk.pattern && (
-        <span className={muted} title="Orkestrasyon deseni">
+        <span className={muted} title={t('recipe.patternHint')}>
           {sk.pattern}
         </span>
       )}
@@ -61,7 +61,7 @@ export function RecipeChips({ skill: sk, compact = false }: Props) {
           className={`${chip} bg-[color-mix(in_srgb,var(--color-danger)_16%,transparent)] text-[var(--color-danger)]`}
           title={sk.recipeError}
         >
-          ⚠ faz bloğu geçersiz: {sk.recipeError.slice(0, 60)}
+          ⚠ {t('recipe.invalidBlockShort', { error: sk.recipeError.slice(0, 60) })}
         </span>
       ) : phases.length > 0 ? (
         <span
@@ -69,36 +69,33 @@ export function RecipeChips({ skill: sk, compact = false }: Props) {
           title={phases
             .map(
               (p) =>
-                `${p.id}${p.profile ? ` (${p.profile})` : ''}${p.gate ? ` · kapı ${p.gate.kind}` : ''}${p.optional ? ' · isteğe bağlı' : ''}`,
+                `${p.id}${p.profile ? ` (${p.profile})` : ''}${p.gate ? ` · ${t('recipe.gate')} ${p.gate.kind}` : ''}${p.optional ? ` · ${t('recipe.optional')}` : ''}`,
             )
             .join('\n')}
         >
-          ◈ {phases.map((p) => p.label || p.id).join(' → ')}
+          {t('recipe.phasePlan', { phases: phases.map((p) => p.label || p.id).join(' → ') })}
         </span>
       ) : (
-        <span
-          className={muted}
-          title="Bu reçete düz yazı: rota tohumlanmaz, koordinatör kendi planını trajectory{plan} ile ilan eder"
-        >
-          faz bloğu yok
+        <span className={muted} title={t('recipe.proseHint')}>
+          {t('recipe.noPhaseBlock')}
         </span>
       )}
       {r?.watchers?.length ? (
-        <span className={muted} title="Rota sonunda ateşlenecek izleyici otomasyonlar">
+        <span className={muted} title={t('recipe.watchersHint')}>
           ⚡ {r.watchers.join(', ')}
         </span>
       ) : null}
       {r?.optimizer && (
-        <span className={muted} title="Rota sonunda koşacak optimizer">
-          ✦ {r.optimizer}
+        <span className={muted} title={t('recipe.optimizerHint')}>
+          {t('recipe.optimizer', { optimizer: r.optimizer })}
         </span>
       )}
       {r?.autoPrune && (
         <span
           className={`${chip} bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]`}
-          title="auto_prune: true — optimizer'ın budama önerileri (izleyici çöz, faz kaldır, isteğe bağlı yap) otomatik uygulanır; eklemeler yine insan onayı bekler"
+          title={t('recipe.autoPruneHint')}
         >
-          ✂ oto-budama
+          ✂ {t('recipe.autoPrune')}
         </span>
       )}
     </>

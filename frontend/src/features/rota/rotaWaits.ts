@@ -15,6 +15,7 @@
 // _Docs/78 §13.
 import type { LaneSession, LaneState } from '@/shared/lib/laneModel'
 import { laneMembers } from '@/shared/lib/laneModel'
+import { i18next } from '@/i18n'
 
 /** A stretch of a coordinator's bar spent waiting on its workers. */
 export interface RotaWait {
@@ -97,6 +98,13 @@ export function clipWaits(waits: RotaWait[], barStart: number, barEnd: number): 
 /** "2 worker · 18 dk" — what one wait segment hides. */
 export function formatWait(w: RotaWait): string {
   const m = Math.round((w.end - w.start) / 60)
-  const dur = m < 60 ? `${m} dk` : `${Math.floor(m / 60)} sa ${m % 60} dk`
-  return `${w.peak} worker · ${dur} bekleme`
+  const dur =
+    m < 60
+      ? i18next.t('duration.minutes', { ns: 'rota', count: m })
+      : i18next.t('duration.hoursMinutes', {
+          ns: 'rota',
+          hours: Math.floor(m / 60),
+          minutes: m % 60,
+        })
+  return i18next.t('canvas.waitSummary', { ns: 'rota', count: w.peak, duration: dur })
 }

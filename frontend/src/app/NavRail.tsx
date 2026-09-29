@@ -91,15 +91,16 @@ function NavDots({
   dirty?: boolean
   collapsed?: boolean
 }) {
+  const { t } = useTranslation()
   if (!busy && !unread && !dirty) return null
-  const accentTitle = busy ? 'İşlem sürüyor' : 'Yeni etkinlik'
+  const accentTitle = busy ? t('shell.busy') : t('shell.newActivity')
   if (collapsed) {
     return (
       <>
         {dirty && (
           <span
             className="absolute left-1 top-1 h-2 w-2 rounded-full bg-[var(--color-warning)] ring-2 ring-[var(--color-surface)]"
-            title="Kaydedilmemiş değişiklik"
+            title={t('shell.unsaved')}
           />
         )}
         {(busy || unread) && (
@@ -118,7 +119,7 @@ function NavDots({
       {dirty && (
         <span
           className="h-2 w-2 rounded-full bg-[var(--color-warning)]"
-          title="Kaydedilmemiş değişiklik"
+          title={t('shell.unsaved')}
         />
       )}
       {(busy || unread) && (
@@ -214,7 +215,7 @@ export function NavRail({
         {collapsed ? (
           <button
             onClick={expand}
-            title={active?.name ?? 'Workspace seç'}
+            title={active?.name ?? t('shell.chooseWorkspace')}
             className="relative mx-2 mb-2 flex h-9 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-sm font-medium hover:opacity-90"
             style={
               active?.color
@@ -229,22 +230,20 @@ export function NavRail({
                   anyOtherBusy ? 'animate-pulse' : ''
                 }`}
                 title={
-                  anyOtherBusy
-                    ? 'Başka workspace’te işlem sürüyor'
-                    : 'Başka workspace’te yeni etkinlik'
+                  anyOtherBusy ? t('shell.otherWorkspaceBusy') : t('shell.otherWorkspaceActivity')
                 }
               />
             )}
             {anyDirty && (
               <span
                 className="absolute left-1 top-1 h-2 w-2 rounded-full bg-[var(--color-warning)] ring-2 ring-[var(--color-surface-2)]"
-                title="Kaydedilmemiş değişiklik"
+                title={t('shell.unsaved')}
               />
             )}
             {anyBusy && (
               <span
                 className="absolute bottom-1 right-1 h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]"
-                title="İşlem sürüyor"
+                title={t('shell.busy')}
               />
             )}
           </button>
@@ -270,8 +269,8 @@ export function NavRail({
             trailing={
               <button
                 onClick={collapse}
-                title="Daralt"
-                aria-label="Navbarı daralt"
+                title={t('shell.collapse')}
+                aria-label={t('shell.collapseNavigation')}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
               >
                 <ChevronLeft size={18} />
@@ -298,7 +297,7 @@ export function NavRail({
                 aria-current={isActive ? 'page' : undefined}
                 title={
                   collapsed
-                    ? `${label}${busy ? ' · işlem sürüyor' : unread ? ' · yeni etkinlik' : ''}`
+                    ? `${label}${busy ? ` · ${t('shell.busy')}` : unread ? ` · ${t('shell.newActivity')}` : ''}`
                     : undefined
                 }
                 className={navItemClass(isActive, collapsed)}
@@ -317,29 +316,33 @@ export function NavRail({
           <button
             onClick={() => selectView('workspace')}
             data-testid="nav-workspace"
-            aria-label="Workspace"
+            aria-label={t('navigation.workspace')}
             aria-current={view === 'workspace' ? 'page' : undefined}
             title={
-              collapsed ? (active?.name ? `Workspace · ${active.name}` : 'Workspace') : undefined
+              collapsed
+                ? active?.name
+                  ? t('shell.workspaceNamed', { name: active.name })
+                  : t('navigation.workspace')
+                : undefined
             }
             className={`w-full ${navItemClass(view === 'workspace', collapsed)}`}
           >
             {view === 'workspace' && <ActiveBar />}
             <Boxes size={18} strokeWidth={2} className="shrink-0" />
-            {!collapsed && <span>Workspace</span>}
+            {!collapsed && <span>{t('navigation.workspace')}</span>}
             <NavDots dirty={dirtyViews?.has('workspace')} collapsed={collapsed} />
           </button>
           <button
             onClick={() => selectView('settings')}
             data-testid="nav-settings"
-            aria-label="Ayarlar"
+            aria-label={t('navigation.settings')}
             aria-current={view === 'settings' ? 'page' : undefined}
-            title={collapsed ? 'Ayarlar' : undefined}
+            title={collapsed ? t('navigation.settings') : undefined}
             className={`w-full ${navItemClass(view === 'settings', collapsed)}`}
           >
             {view === 'settings' && <ActiveBar />}
             <Settings size={18} strokeWidth={2} className="shrink-0" />
-            {!collapsed && <span>Ayarlar</span>}
+            {!collapsed && <span>{t('navigation.settings')}</span>}
             <NavDots dirty={dirtyViews?.has('settings')} collapsed={collapsed} />
           </button>
         </div>

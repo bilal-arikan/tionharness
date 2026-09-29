@@ -1,43 +1,43 @@
+import { useTranslation } from 'react-i18next'
 import { Toggle, NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function ContextRecovery({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Recovery controls for the native provider loop. CLI providers manage their own loops.
-      </p>
+      <p className="text-xs text-[var(--color-text-dim)]">{t('contextRecovery.description')}</p>
       <Toggle
-        label="Compact after context overflow"
-        hint="Summarize older messages and retry when the context window overflows."
+        label={t('contextRecovery.compact.label')}
+        hint={t('contextRecovery.compact.hint')}
         checked={draft.reactiveCompact}
         onChange={(v) => set('reactiveCompact', v)}
       />
       <NumberField
-        label="Output continuation attempts"
-        hint="Continue responses that reach the output limit. 0 keeps the partial response without retrying."
+        label={t('contextRecovery.continue.label')}
+        hint={t('contextRecovery.continue.hint')}
         min={0}
         value={draft.maxTokenRetries}
         onChange={(v) => set('maxTokenRetries', v)}
       />
       <NumberField
-        label="Recent messages to retain on recovery"
-        hint="Messages retained verbatim during reactive compaction (2–50)."
+        label={t('contextRecovery.recent.label')}
+        hint={t('contextRecovery.recent.hint')}
         min={2}
         max={50}
         value={draft.reactiveKeepRecent}
         onChange={(v) => set('reactiveKeepRecent', v)}
       />
       <NumberField
-        label="Output token limit"
-        hint="0 selects a model-specific limit. A positive value applies a fixed cap."
+        label={t('contextRecovery.outputLimit.label')}
+        hint={t('contextRecovery.outputLimit.hint')}
         min={0}
         value={draft.maxOutputTokens}
         onChange={(v) => set('maxOutputTokens', v)}
       />
       <NumberField
-        label="Provider retry budget"
-        hint="Retry temporary provider errors within a turn (0–5). Permanent authentication or quota errors are not retried."
+        label={t('contextRecovery.retries.label')}
+        hint={t('contextRecovery.retries.hint')}
         min={0}
         max={5}
         value={draft.maxProviderRetries}

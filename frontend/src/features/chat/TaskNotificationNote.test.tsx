@@ -2,7 +2,8 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { i18next } from '@/i18n'
 import type { Message } from '@/types'
 import { TaskNotificationNote } from './TaskNotificationNote'
 
@@ -12,6 +13,10 @@ const reactTestEnvironment = globalThis as typeof globalThis & {
 reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: Root[] = []
+
+beforeEach(async () => {
+  await i18next.changeLanguage('en')
+})
 
 function notification(taskId = 'SES9') {
   return `<task-notification>
@@ -57,7 +62,7 @@ afterEach(() => {
 describe('TaskNotificationNote', () => {
   it('opens the worker session from agent identity without expanding the result', () => {
     const { container, onSelectSession } = renderNote()
-    const agentButton = container.querySelector('button[aria-label="Ada worker oturumunu aç"]')!
+    const agentButton = container.querySelector('button[aria-label="Open Ada worker session"]')!
 
     click(agentButton)
 
@@ -68,7 +73,7 @@ describe('TaskNotificationNote', () => {
   it('uses the running-worker identity row surface without nesting controls', () => {
     const { container } = renderNote()
     const agentButton = container.querySelector(
-      'button[aria-label="Ada worker oturumunu aç"]',
+      'button[aria-label="Open Ada worker session"]',
     ) as HTMLButtonElement
 
     expect(agentButton.className).toContain('bg-[var(--color-surface-2)]')
@@ -79,7 +84,7 @@ describe('TaskNotificationNote', () => {
 
   it('expands the result from the dedicated chevron control', () => {
     const { container } = renderNote()
-    const expandButton = container.querySelector('button[aria-label="Worker sonucunu genişlet"]')!
+    const expandButton = container.querySelector('button[aria-label="Expand worker result"]')!
 
     click(expandButton)
 
@@ -92,15 +97,15 @@ describe('TaskNotificationNote', () => {
     const cluster = container.querySelector('[data-testid="task-status-meta"]')!
 
     expect(cluster.className).toContain('items-end')
-    expect(cluster.textContent).toContain('tamamlandı')
-    expect(cluster.textContent).toContain('4 araç')
+    expect(cluster.textContent).toContain('completed')
+    expect(cluster.textContent).toContain('4 tools')
     expect(cluster.textContent).toMatch(/2[.,]5 ?s(n)?/)
   })
 
   it('keeps legacy notifications without task id non-navigable', () => {
     const { container, onSelectSession } = renderNote('')
 
-    expect(container.querySelector('button[aria-label="Ada worker oturumunu aç"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Open Ada worker session"]')).toBeNull()
     expect(container.textContent).toContain('Ada')
     expect(onSelectSession).not.toHaveBeenCalled()
   })

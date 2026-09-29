@@ -7,6 +7,7 @@ import type {
   TrajectoryNode,
   TrajectoryNodeState,
 } from '@/types/trajectory'
+import { i18next } from '@/i18n'
 
 interface TrajColumn {
   // Phase node id ("p:plan") or UNASSIGNED_COL for nodes bound to no phase.
@@ -91,7 +92,10 @@ export function layoutTrajectory(t: Trajectory): TrajLayout {
   if (needsUnassigned || columns.length === 0) {
     columns.push({
       id: UNASSIGNED_COL,
-      label: columns.length === 0 ? 'faz yok' : 'fazsız',
+      label: i18next.t(
+        columns.length === 0 ? 'trajectory.noPhaseColumn' : 'trajectory.unassigned',
+        { ns: 'rota' },
+      ),
       state: 'none',
       index: columns.length,
     })

@@ -2,8 +2,9 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AskPrompt } from './AskPrompt'
+import { setLocale } from '@/i18n'
 
 const reactTestEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT: boolean
@@ -11,6 +12,8 @@ const reactTestEnvironment = globalThis as typeof globalThis & {
 reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: ReturnType<typeof createRoot>[] = []
+
+beforeAll(() => setLocale('tr'))
 
 function renderPrompt(props: Parameters<typeof AskPrompt>[0]) {
   const container = document.createElement('div')
@@ -83,5 +86,16 @@ describe('AskPrompt option tones', () => {
     act(() => option(container, 'İptal').click())
     act(() => option(container, 'Gönder').click())
     expect(onAnswer).toHaveBeenCalledWith(JSON.stringify(['Onayla', 'İptal']))
+  })
+
+  it('renders composer controls in the active UI language', async () => {
+    await setLocale('en')
+    try {
+      const container = renderPrompt({ ask: { question: 'Continue?' }, onAnswer: vi.fn() })
+      expect(container.querySelector('input')?.placeholder).toBe('Write your answer…')
+      expect(option(container, 'Send')).toBeTruthy()
+    } finally {
+      await setLocale('tr')
+    }
   })
 })

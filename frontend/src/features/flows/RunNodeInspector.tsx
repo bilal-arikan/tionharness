@@ -21,18 +21,20 @@ import { TurnSteps } from '@/features/chat/TurnSteps'
 import { subscribeFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
 import type { NodeStatus } from './flowGraph'
 import { parseJudgeLabel } from './judgeLabel'
+import { useTranslation } from 'react-i18next'
 
 // CopyButton copies `text` to the clipboard, surfacing success through the
 // app-wide toast (single feedback channel). A tiny local control so the node
 // output can be lifted out without the full chat message footer (which is
 // session/message-bound).
 function CopyButton({ text, title }: { text: string; title: string }) {
+  const { t } = useTranslation('flows')
   return (
     <button
       type="button"
       title={title}
       onClick={() => {
-        void navigator.clipboard?.writeText(text).then(() => toast.info('Panoya kopyalandı'))
+        void navigator.clipboard?.writeText(text).then(() => toast.info(t('run.clipboardCopied')))
       }}
       className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
     >
@@ -44,10 +46,11 @@ function CopyButton({ text, title }: { text: string; title: string }) {
 // AssistantBubble renders an assistant/model reply the same left-aligned way the
 // chat does, with a hover copy action.
 function AssistantBubble({ text }: { text: string }) {
+  const { t } = useTranslation('flows')
   return (
     <div className="group relative rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-sm leading-relaxed">
       <div className="absolute right-1.5 top-1.5 opacity-0 transition group-hover:opacity-100">
-        <CopyButton text={text} title="Kopyala" />
+        <CopyButton text={text} title={t('actions.copy')} />
       </div>
       <Markdown>{text}</Markdown>
     </div>
@@ -58,6 +61,7 @@ function AssistantBubble({ text }: { text: string }) {
 // as prior context (thread[:threadLen]) — collapsed by default so the node's own
 // exchange stays the focus, expandable to reveal what the agent actually read.
 function PriorThread({ msgs, agents }: { msgs: FlowMsg[]; agents: Agent[] }) {
+  const { t } = useTranslation('flows')
   const [open, setOpen] = useState(false)
   if (msgs.length === 0) return null
   return (
@@ -68,8 +72,8 @@ function PriorThread({ msgs, agents }: { msgs: FlowMsg[]; agents: Agent[] }) {
         className="flex w-full items-center gap-1 px-2 py-1.5 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
       >
         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        <span>Önceki bağlam (biriken konuşma)</span>
-        <span className="ml-auto opacity-70">{msgs.length} mesaj</span>
+        <span>{t('run.priorContext')}</span>
+        <span className="ml-auto opacity-70">{t('run.priorMessages', { count: msgs.length })}</span>
       </button>
       {open && (
         <div className="space-y-2 px-2 pb-2">
@@ -90,6 +94,7 @@ function PriorThread({ msgs, agents }: { msgs: FlowMsg[]; agents: Agent[] }) {
 // evaluated, the match mode, every arm, and which one matched (from the trace
 // output label "→ <label>"). Turns "why did the flow go here?" into a glance.
 function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | undefined }) {
+  const { t } = useTranslation('flows')
   const value = entry?.input ?? ''
   const rawLabel = (entry?.output ?? '').replace(/^→\s*/, '') // matched arm's `contains`, or "default"
   const mode = node.matchMode ?? 'contains'
@@ -99,24 +104,30 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
   const arms = node.branches ?? []
   const modeLabel =
     mode === 'equals'
-      ? 'eşittir'
+      ? t('inspector.matchEquals')
       : mode === 'regex'
         ? 'regex'
         : mode === 'judge'
-          ? 'karar modeli'
-          : 'içerir'
+          ? t('inspector.matchJudge')
+          : t('inspector.matchContains')
   return (
     <div className="space-y-3">
       <div className="rounded bg-[var(--color-surface-2)] p-3 text-sm">
         <div className="mb-1 text-xs text-[var(--color-text-dim)]">
-          Değerlendirilen değer{node.jsonField ? ` (JSON alanı: ${node.jsonField})` : ''} · eşleşme:{' '}
-          {modeLabel}
+          {t('run.branchEvaluated', {
+            field: node.jsonField ? t('run.branchJsonField', { field: node.jsonField }) : '',
+            mode: modeLabel,
+          })}
         </div>
         <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
-          {value || <span className="italic text-[var(--color-text-dim)]">boş</span>}
+          {value || (
+            <span className="italic text-[var(--color-text-dim)]">{t('run.branchEmpty')}</span>
+          )}
         </div>
         {judgeNote && (
-          <div className="mt-2 text-xs text-[var(--color-text-dim)]">Karar: {judgeNote}</div>
+          <div className="mt-2 text-xs text-[var(--color-text-dim)]">
+            {t('run.branchDecision', { note: judgeNote })}
+          </div>
         )}
       </div>
       <div className="space-y-1">
@@ -139,7 +150,9 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
               )}
               <span className="min-w-0 flex-1 truncate">
                 {isDefault ? (
-                  <span className="italic text-[var(--color-text-dim)]">varsayılan</span>
+                  <span className="italic text-[var(--color-text-dim)]">
+                    {t('nodes.defaultBranch')}
+                  </span>
                 ) : (
                   b.contains
                 )}
@@ -153,7 +166,7 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
           )
         })}
         {arms.length === 0 && (
-          <div className="text-xs italic text-[var(--color-text-dim)]">Tanımlı dal yok.</div>
+          <div className="text-xs italic text-[var(--color-text-dim)]">{t('run.branchNone')}</div>
         )}
       </div>
     </div>
@@ -174,6 +187,7 @@ function ParallelFanout({
   traceByNode: Record<string, FlowTraceEntry>
   onSelectNode: (id: string) => void
 }) {
+  const { t: tr } = useTranslation('flows')
   const children = node.parallel ?? []
   // The fan-out's time window across children that recorded bounds.
   const timed = children
@@ -186,8 +200,10 @@ function ParallelFanout({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-        <span>{children.length} eşzamanlı dal</span>
-        {timed.length > 0 && <span className="ml-auto">toplam {fmtDur(span)}</span>}
+        <span>{tr('run.parallelCount', { count: children.length })}</span>
+        {timed.length > 0 && (
+          <span className="ml-auto">{tr('run.parallelTotal', { duration: fmtDur(span) })}</span>
+        )}
       </div>
       {children.map((cid) => {
         const t = traceByNode[cid]
@@ -214,12 +230,12 @@ function ParallelFanout({
                     width: `${widthPct}%`,
                     background: isCritical ? 'var(--color-danger)' : 'var(--color-accent)',
                   }}
-                  title={`${fmtDur(dur)}${isCritical ? ' — kritik yol' : ''}`}
+                  title={`${fmtDur(dur)}${isCritical ? tr('run.parallelCritical') : ''}`}
                 />
               </span>
             ) : (
               <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
-                {t?.output ?? <span className="italic">çıktı yok</span>}
+                {t?.output ?? <span className="italic">{tr('run.noOutput')}</span>}
               </span>
             )}
             {hasBar && (
@@ -232,7 +248,7 @@ function ParallelFanout({
         )
       })}
       {children.length === 0 && (
-        <div className="text-xs italic text-[var(--color-text-dim)]">Tanımlı paralel dal yok.</div>
+        <div className="text-xs italic text-[var(--color-text-dim)]">{tr('run.parallelNone')}</div>
       )}
     </div>
   )
@@ -274,6 +290,7 @@ export function RunNodeInspector({
   onClose,
   onSelectNode,
 }: Props) {
+  const { t } = useTranslation('flows')
   const isAgent = node.type === 'agent'
   const running = status === 'running'
   // `steps` = the persisted sidecar (authoritative once the node finishes).
@@ -357,22 +374,22 @@ export function RunNodeInspector({
                   const ws = getActiveWorkspace()
                   window.location.hash = `#/w/${ws ?? ''}/rota/${r.trajectoryId}`
                 })
-                .catch(() => toast.warning('Bu koordinatör düğümünün henüz rotası yok'))
+                .catch(() => toast.warning(t('run.coordinatorNoRota')))
             }}
-            title="Bu koordinatörün rotasını Rota ekranında aç"
+            title={t('run.coordinatorOpenRota')}
             className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
             data-testid="run-node-rota"
           >
-            <Waypoints size={12} /> Rota
+            <Waypoints size={12} /> {t('run.rota')}
           </button>
         )}
         <button
           type="button"
           onClick={onClose}
-          title="Tüm adımlara dön"
+          title={t('run.allSteps')}
           className="ml-auto flex items-center gap-1 rounded px-2 py-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
         >
-          <X size={13} /> Tüm adımlar
+          <X size={13} /> {t('run.allSteps')}
         </button>
       </div>
 
@@ -390,20 +407,16 @@ export function RunNodeInspector({
               <UserBubble text={input} agents={agents} />
             ) : (
               <div className="text-xs italic text-[var(--color-text-dim)]">
-                Girdi kaydı yok (bu düğüm henüz tamamlanmadı veya eski bir koşu).
+                {t('run.inputMissing')}
               </div>
             )}
             {running && (
               <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
-                <Loader2 size={13} className="animate-spin" /> Koordinatör çalışıyor — workerlar
-                bekleniyor…
+                <Loader2 size={13} className="animate-spin" /> {t('run.coordinatorRunning')}
               </div>
             )}
             {output && <AssistantBubble text={output} />}
-            <p className="text-[11px] text-[var(--color-text-dim)]">
-              Worker adımları koordinatörün kendi oturumunda; Oturumlar ekranından (“Akış
-              Koordinatörü”) izlenebilir.
-            </p>
+            <p className="text-[11px] text-[var(--color-text-dim)]">{t('run.coordinatorSteps')}</p>
           </>
         ) : !isAgent ? (
           // Other non-agent nodes (delay/transform/loop/…): plain output card.
@@ -412,7 +425,7 @@ export function RunNodeInspector({
               <div className="whitespace-pre-wrap break-words">{output}</div>
             ) : (
               <span className="italic text-[var(--color-text-dim)]">
-                Bu düğüm tipinde ({node.type}) mesaj alışverişi yok.
+                {t('run.noExchange', { type: node.type })}
               </span>
             )}
           </div>
@@ -426,7 +439,7 @@ export function RunNodeInspector({
               <UserBubble text={input} agents={agents} />
             ) : (
               <div className="text-xs italic text-[var(--color-text-dim)]">
-                Girdi kaydı yok (bu düğüm henüz tamamlanmadı veya eski bir koşu).
+                {t('run.inputMissing')}
               </div>
             )}
 
@@ -434,13 +447,13 @@ export function RunNodeInspector({
                 Live while running, then from the persisted sidecar. */}
             {loading && shownSteps.length === 0 && (
               <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-                <Loader2 size={13} className="animate-spin" /> Adımlar yükleniyor…
+                <Loader2 size={13} className="animate-spin" /> {t('run.stepsLoading')}
               </div>
             )}
             {shownSteps.length > 0 && <TurnSteps steps={shownSteps} />}
             {running && (
               <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
-                <Loader2 size={13} className="animate-spin" /> Çalışıyor…
+                <Loader2 size={13} className="animate-spin" /> {t('actions.running')}
               </div>
             )}
 

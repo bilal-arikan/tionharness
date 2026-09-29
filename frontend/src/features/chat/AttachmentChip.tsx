@@ -1,6 +1,7 @@
 import { Pencil, X } from 'lucide-react'
 import type { Attachment } from '@/types'
 import { attachmentMeta, formatBytes, imageURL } from '@/shared/lib/attachments'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   attachment: Attachment
@@ -29,16 +30,17 @@ export function AttachmentChip({
   onClick,
   onEdit,
 }: Props) {
+  const { t } = useTranslation('chat')
   const { Icon, label, tint } = attachmentMeta(attachment.kind)
   const img = previewURL ?? imageURL(attachment)
 
   const Tag = onClick ? 'button' : 'div'
   const clickTitle =
     attachment.source === 'artifact'
-      ? 'Artifactı aç'
+      ? t('attachment.openArtifact')
       : attachment.kind === 'image'
-        ? 'Görseli aç'
-        : 'Dosyayı aç'
+        ? t('attachment.openImage')
+        : t('attachment.openFile')
   const clickProps = onClick ? { type: 'button' as const, onClick, title: clickTitle } : {}
 
   return (
@@ -77,8 +79,8 @@ export function AttachmentChip({
         <button
           type="button"
           onClick={onEdit}
-          title="Görseli düzenle"
-          aria-label="Görseli düzenle"
+          title={t('attachment.editImage')}
+          aria-label={t('attachment.editImage')}
           className="absolute right-1 bottom-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/30 bg-black/65 text-white opacity-0 shadow transition group-hover:opacity-100 focus:opacity-100"
         >
           <Pencil size={12} />
@@ -89,7 +91,7 @@ export function AttachmentChip({
         <button
           type="button"
           onClick={onRemove}
-          title="Eki kaldır"
+          title={t('attachment.remove')}
           className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-dim)] opacity-0 transition group-hover:opacity-100 hover:text-[var(--color-danger)]"
         >
           <X size={12} />

@@ -22,6 +22,8 @@ import {
   phaseLook,
   refreshVerb,
 } from '@/shared/lib/searchIndexState'
+import { useTranslation } from 'react-i18next'
+import { localeMeta, currentLocale } from '@/i18n'
 
 // How often to re-read the list while a run is in flight. Indexing takes
 // minutes and the endpoint is an in-memory read, so this is cheap; polling stops
@@ -33,6 +35,7 @@ interface Props {
 }
 
 export function SearchIndexPanel({ onError }: Props) {
+  const { t } = useTranslation('settings')
   const [rows, setRows] = useState<SearchIndexStatus[] | null>(null)
   const [loading, setLoading] = useState(true)
   // Key of the row with a request in flight, so only its buttons go busy.
@@ -105,17 +108,17 @@ export function SearchIndexPanel({ onError }: Props) {
       row,
       () => api.refreshSearchIndex(row.tool, row.root, rebuild),
       rebuild
-        ? 'Yeniden kurma başlatıldı — tamamlanması dakikalar sürebilir.'
+        ? t('searchIndex.notices.rebuildStarted')
         : refreshVerb(row) === 'Create'
-          ? 'Kurulum başlatıldı — tamamlanması dakikalar sürebilir.'
-          : 'Yenileme başlatıldı — tamamlanması dakikalar sürebilir.',
+          ? t('searchIndex.notices.createStarted')
+          : t('searchIndex.notices.refreshStarted'),
     )
 
   const drop = async (row: SearchIndexStatus) => {
     await act(
       row,
       () => api.dropSearchIndex(row.tool, row.root, confirmText.trim()),
-      'İndeks silindi.',
+      t('searchIndex.notices.dropped'),
     )
     setConfirming(null)
     setConfirmText('')
@@ -127,36 +130,24 @@ export function SearchIndexPanel({ onError }: Props) {
       className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-[var(--color-text)]">🗂 Search index durumu</span>
+        <span className="font-medium text-[var(--color-text)]">🗂 {t('searchIndex.title')}</span>
         <button
           type="button"
           data-testid="search-index-reload"
           disabled={loading}
           onClick={load}
           className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] hover:text-[var(--color-text)] disabled:opacity-50"
-          title="Listeyi yeniden oku"
+          title={t('searchIndex.reloadTitle')}
         >
           <ScanSearch size={11} />
-          {loading ? '…' : 'Yenile'}
+          {loading ? '…' : t('common.refresh')}
         </button>
       </div>
-      <p className="mt-1">
-        TionHarness'in ajan adına yönettiği arama indeksleri — <code>(araç, kök)</code> çifti başına
-        bir satır. Liste <span className="font-medium text-[var(--color-text)]">süreç geneli</span>:
-        aynı depoyu açan iki workspace diskte tek bir store paylaşır.{' '}
-        <span className="font-medium text-[var(--color-text)]">Yenile</span> mevcut vektörleri
-        koruyarak yeniden gömer,{' '}
-        <span className="font-medium text-[var(--color-text)]">Yeniden kur</span> store'u silip
-        baştan kurar (gömme modeli değiştiyse tek çare),{' '}
-        <span className="font-medium text-[var(--color-text)]">Sil</span> ise indeksi diskten
-        kaldırır ve kök yolunun elle yazılmasını ister. codebase-memory satırlarında yenile artımlı
-        yeniden indeksler, yeniden kur ve sil projeyi sunucunun kendi deposundan kaldırır.
-      </p>
+      <p className="mt-1">{t('searchIndex.description')}</p>
 
       {rows && rows.length === 0 && (
         <p data-testid="search-index-empty" className="mt-2">
-          Henüz yönetilen bir indeks yok. zvec-grep veya codebase-memory MCP sunucusu ekliyken bir
-          oturum açıldığında çalışma dizininin indeksi arka planda kurulur ve burada görünür.
+          {t('searchIndex.empty')}
         </p>
       )}
 
@@ -188,11 +179,11 @@ export function SearchIndexPanel({ onError }: Props) {
                         backgroundColor: `color-mix(in srgb, ${look.tone} 14%, transparent)`,
                       }}
                     >
-                      {look.label}
+                      {t(`searchIndex.phases.${row.phase}`, { defaultValue: look.label })}
                     </span>
                     {row.action && (
                       <span className="font-mono text-[10px] text-[var(--color-text-dim)]">
-                        {row.action}
+                        {t(`searchIndex.actions.${row.action}`, { defaultValue: row.action })}
                       </span>
                     )}
                   </div>
@@ -202,7 +193,7 @@ export function SearchIndexPanel({ onError }: Props) {
                       className="font-mono text-[10px]"
                       title={row.updatedAt ?? ''}
                     >
-                      {formatIndexTime(row.updatedAt)}
+                      {formatIndexTime(row.updatedAt, localeMeta(currentLocale()).intl)}
                     </span>
                     <button
                       type="button"
@@ -211,14 +202,16 @@ export function SearchIndexPanel({ onError }: Props) {
                       disabled={rowBusy || !actionable}
                       onClick={() => refresh(row, false)}
                       title={
-                        actionable
-                          ? 'Mevcut store korunarak yeniden gömülür'
-                          : 'Bu indeks için bir çalışma zaten sürüyor'
+                        actionable ? t('searchIndex.refreshTitle') : t('searchIndex.busyTitle')
                       }
                       className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] hover:text-[var(--color-text)] disabled:opacity-50"
                     >
                       <RefreshCw size={10} />
-                      {rowBusy ? '…' : refreshVerb(row) === 'Create' ? 'Kur' : 'Yenile'}
+                      {rowBusy
+                        ? '…'
+                        : refreshVerb(row) === 'Create'
+                          ? t('common.create')
+                          : t('common.refresh')}
                     </button>
                     <button
                       type="button"
@@ -226,11 +219,11 @@ export function SearchIndexPanel({ onError }: Props) {
                       data-root={row.root}
                       disabled={rowBusy || !actionable}
                       onClick={() => refresh(row, true)}
-                      title="Store silinip baştan kurulur — gömme modeli değiştiyse gerekli"
+                      title={t('searchIndex.rebuildTitle')}
                       className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] hover:text-[var(--color-text)] disabled:opacity-50"
                     >
                       <Hammer size={10} />
-                      {rowBusy ? '…' : 'Yeniden kur'}
+                      {rowBusy ? '…' : t('searchIndex.rebuild')}
                     </button>
                     <button
                       type="button"
@@ -242,11 +235,11 @@ export function SearchIndexPanel({ onError }: Props) {
                         setConfirmText('')
                         setNotice(null)
                       }}
-                      title="İndeksi diskten sil (kök yolunu yazarak onay ister)"
+                      title={t('searchIndex.dropTitle')}
                       className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] disabled:opacity-50"
                     >
                       <Trash2 size={10} />
-                      Sil
+                      {t('common.delete')}
                     </button>
                   </div>
                 </div>
@@ -283,8 +276,7 @@ export function SearchIndexPanel({ onError }: Props) {
                     className="mt-1.5 rounded border border-[color-mix(in_srgb,var(--color-danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-2 py-1.5"
                   >
                     <p className="text-[11px] text-[var(--color-text)]">
-                      Bu indeks diskten silinecek ve yeniden kurulması dakikalar sürer. Onaylamak
-                      için kök yolunu birebir yaz:
+                      {t('searchIndex.dropConfirm')}
                     </p>
                     <code className="mt-1 block break-all text-[10px]">{row.root}</code>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -303,7 +295,7 @@ export function SearchIndexPanel({ onError }: Props) {
                         onClick={() => drop(row)}
                         className="rounded bg-[var(--color-danger)] px-2 py-1 text-[11px] font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-40"
                       >
-                        {rowBusy ? '…' : 'İndeksi sil'}
+                        {rowBusy ? '…' : t('searchIndex.dropButton')}
                       </button>
                       <button
                         type="button"
@@ -314,7 +306,7 @@ export function SearchIndexPanel({ onError }: Props) {
                         }}
                         className="rounded px-2 py-1 text-[11px] hover:text-[var(--color-text)]"
                       >
-                        Vazgeç
+                        {t('common.cancel')}
                       </button>
                     </div>
                   </div>

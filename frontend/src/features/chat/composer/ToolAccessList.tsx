@@ -3,20 +3,29 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { ToolAccessEntry, ToolAccessServer, ToolAccessServerStatus } from '@/types'
-import { visibilityMeta } from '@/features/tools/toolMeta'
 import { filterTools, sortTools, toolsForServer } from './toolAccessGroups'
+import { useTranslation } from 'react-i18next'
+
+const VISIBILITY_COLORS: Record<ToolAccessEntry['visibility'], string> = {
+  full: 'var(--color-success)',
+  summary: 'var(--color-info)',
+  'name-only': 'var(--color-warning)',
+  hidden: 'var(--color-text-dim)',
+}
 
 // TierBadge shows the tool's effective visibility tier (Tam / Özet / İsim / Gizli)
 // — i.e. how much of its schema reaches the model, which is the real cost driver.
 function TierBadge({ visibility }: { visibility: ToolAccessEntry['visibility'] }) {
-  const meta = visibilityMeta(visibility)
+  const { t } = useTranslation('chatControls')
+  const key = visibility === 'name-only' ? 'nameOnly' : visibility
+  const color = VISIBILITY_COLORS[visibility]
   return (
     <span
-      title={meta.hint}
+      title={t(`tools.visibility.${key}.hint`)}
       className="shrink-0 rounded-md border px-1 text-[10px] leading-4"
-      style={{ borderColor: meta.color, color: meta.labelColor ?? meta.color }}
+      style={{ borderColor: color, color }}
     >
-      {meta.label}
+      {t(`tools.visibility.${key}.label`)}
     </span>
   )
 }
@@ -28,53 +37,54 @@ function TierBadge({ visibility }: { visibility: ToolAccessEntry['visibility'] }
 // context altogether — the prompt still carries a one-line pointer telling the
 // agent they exist and how to find them. Calling that "bağlam dışı" would read as
 // "unavailable", which is wrong.
-const STATUS_META: Record<ToolAccessServerStatus, { label: string; hint: string; color: string }> =
-  {
-    'in-context': {
-      label: 'bağlamda',
-      hint: 'Bu sunucunun araçları ajanın promptunda — çağırabilir.',
-      color: 'var(--color-success)',
-    },
-    'hidden-only': {
-      label: 'katalog dışı',
-      hint: 'Araçları "Gizli" tier\'da: katalogda tek tek listelenmez (bağlamda yalnız "N araç daha var, tool_search ile bul" notu durur), aktive edilince normal çağrılır.',
-      color: 'var(--color-warning)',
-    },
-    disabled: {
-      label: 'kapalı',
-      hint: "Sunucu bu workspace'te devre dışı — Araçlar ekranından açılabilir.",
-      color: 'var(--color-text-dim)',
-    },
-    'agent-mcp-off': {
-      label: 'ajanda MCP kapalı',
-      hint: 'Sunucu etkin ama bu ajanın MCP anahtarı kapalı — hiçbir MCP aracı sunulmuyor.',
-      color: 'var(--color-warning)',
-    },
-    'no-tools': {
-      label: 'araç yok',
-      hint: 'Sunucu etkin ama araç gelmiyor: bağlantı kurulamamış ya da tüm araçları yasaklı olabilir.',
-      color: 'var(--color-danger)',
-    },
-  }
+const STATUS_COLORS: Record<ToolAccessServerStatus, string> = {
+  'in-context': 'var(--color-success)',
+  'hidden-only': 'var(--color-warning)',
+  disabled: 'var(--color-text-dim)',
+  'agent-mcp-off': 'var(--color-warning)',
+  'no-tools': 'var(--color-danger)',
+}
+
+const statusKey = (status: ToolAccessServerStatus) =>
+  status.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())
+
+const TOOL_CATEGORY_KEYS: Record<string, string> = {
+  files: 'files',
+  search: 'search',
+  agents: 'agents',
+  automation: 'automation',
+  interaction: 'interaction',
+  artifacts: 'artifacts',
+  'skills-mcp': 'skillsMcp',
+  config: 'config',
+  diagnostics: 'diagnostics',
+  other: 'other',
+}
 
 // Rough per-line cost of a catalogued lazy tool ("- `name` — one-line summary")
 // in the load-on-demand block. Only used to put an order of magnitude on what the
 // hidden tier saves; not a billing figure.
 const CATALOG_LINE_TOKENS = 20
 
-function hiddenHint(count: number): string {
-  return `Katalogda tek tek listelenmeyen araç sayısı — bağlamda yalnız "tool_search ile bulunabilir" notu durur (≈${count * CATALOG_LINE_TOKENS} token tasarruf, her turda).`
-}
-
 // SourceBadge names where a tool comes from — a built-in category or an MCP
 // server — as a small secondary tag on the row. It is NOT a grouping key: each
 // tab is one flat list where built-in and MCP tools mix, so this badge is the
 // only place source still shows.
-function SourceBadge({ t }: { t: ToolAccessEntry }) {
-  const label = t.source === 'mcp' ? t.server || 'MCP' : (t.category ?? 'builtin')
+function SourceBadge({ tool }: { tool: ToolAccessEntry }) {
+  const { t } = useTranslation('chatControls')
+  const category = tool.category ?? 'builtin'
+  const categoryKey = TOOL_CATEGORY_KEYS[category]
+  const label =
+    tool.source === 'mcp'
+      ? tool.server || 'MCP'
+      : categoryKey
+        ? t(`tools.categories.${categoryKey}`)
+        : category === 'builtin'
+          ? t('tools.categories.builtin')
+          : category
   return (
     <span className="shrink-0 truncate text-[10px] text-[var(--color-text-dim)] opacity-70">
-      {t.source === 'mcp' ? '🔌' : '🧩'} {label}
+      {tool.source === 'mcp' ? '🔌' : '🧩'} {label}
     </span>
   )
 }
@@ -95,11 +105,12 @@ export function ToolList({
   query: string
   empty: string
 }) {
+  const { t } = useTranslation('chatControls')
   const shown = sortTools(filterTools(tools, query))
   if (shown.length === 0) {
     return (
       <div className="px-1 py-3 text-xs text-[var(--color-text-dim)]">
-        {tools.length === 0 ? empty : 'Aramayla eşleşen araç yok.'}
+        {tools.length === 0 ? empty : t('tools.empty.noSearchMatch')}
       </div>
     )
   }
@@ -113,7 +124,7 @@ export function ToolList({
         >
           <code className="shrink-0 text-xs text-[var(--color-text)]">{t.label}</code>
           <TierBadge visibility={t.visibility} />
-          <SourceBadge t={t} />
+          <SourceBadge tool={t} />
           <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-dim)]">
             {t.description}
           </span>
@@ -140,10 +151,11 @@ export function ServerList({
   tools: { eager: ToolAccessEntry[]; lazy: ToolAccessEntry[] }
   query: string
 }) {
+  const { t } = useTranslation('chatControls')
   if (servers.length === 0) {
     return (
       <div className="px-1 py-3 text-xs text-[var(--color-text-dim)]">
-        Bu workspace'te tanımlı MCP sunucusu yok.
+        {t('tools.empty.noServers')}
       </div>
     )
   }
@@ -176,8 +188,12 @@ function ServerRow({
   tools: ToolAccessEntry[]
   query: string
 }) {
+  const { t } = useTranslation('chatControls')
   const [open, setOpen] = useState(false)
-  const st = STATUS_META[s.status]
+  const status = statusKey(s.status)
+  const color = STATUS_COLORS[s.status]
+  const statusLabel = t(`tools.serverStatus.${status}.label`)
+  const statusHint = t(`tools.serverStatus.${status}.hint`)
   const shown = filterTools(tools, query)
   return (
     <div data-testid="tool-access-server-row" data-server={s.name}>
@@ -193,28 +209,32 @@ function ServerRow({
         ) : (
           <ChevronRight size={12} className="shrink-0 text-[var(--color-text-dim)]" />
         )}
-        <span title={st.hint} className="shrink-0" style={{ color: st.color }}>
+        <span title={statusHint} className="shrink-0" style={{ color }}>
           ●
         </span>
         <span className="shrink-0 text-xs font-medium text-[var(--color-text)]">{s.name}</span>
         <span
-          title={st.hint}
+          title={statusHint}
           className="shrink-0 rounded-md border px-1 text-[10px] leading-4"
-          style={{ borderColor: st.color, color: st.color }}
+          style={{ borderColor: color, color }}
         >
-          {st.label}
+          {statusLabel}
         </span>
         <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
           {s.transport}
-          {s.scope === 'scoped' ? ' · oturum-özel' : ''}
+          {s.scope === 'scoped' ? ` · ${t('tools.server.scoped')}` : ''}
         </span>
         <div className="flex-1" />
         {s.live > 0 && (
           <span
             title={
               s.scope === 'scoped' && poolIdleSec > 0
-                ? `${s.live}/${s.total} canlı bağlantı — ${poolIdleSec}sn boşta kalırsa kapanır`
-                : `${s.live}/${s.total} canlı bağlantı`
+                ? t('tools.server.liveWithTimeout', {
+                    live: s.live,
+                    total: s.total,
+                    seconds: poolIdleSec,
+                  })
+                : t('tools.server.live', { live: s.live, total: s.total })
             }
             className="shrink-0 text-[10px] text-[var(--color-success)]"
           >
@@ -222,23 +242,26 @@ function ServerRow({
           </span>
         )}
         <span
-          title="Bu sunucudan her tur TAM şeması gönderilen araç sayısı"
+          title={t('tools.server.activeHint')}
           className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
         >
-          aktif {s.eagerCount}
+          {t('tools.server.activeCount', { value: s.eagerCount })}
         </span>
         <span
-          title="Katalogda isim/özet olarak duran, activate_tools ile açılabilen araç sayısı"
+          title={t('tools.server.catalogHint')}
           className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
         >
-          katalog {s.lazyCount}
+          {t('tools.server.catalogCount', { value: s.lazyCount })}
         </span>
         {s.hiddenCount > 0 && (
           <span
-            title={hiddenHint(s.hiddenCount)}
+            title={t('tools.server.hiddenHint', {
+              value: s.hiddenCount,
+              tokens: s.hiddenCount * CATALOG_LINE_TOKENS,
+            })}
             className="shrink-0 text-[10px] text-[var(--color-text-dim)] opacity-70"
           >
-            gizli {s.hiddenCount}
+            {t('tools.server.hiddenCount', { value: s.hiddenCount })}
           </span>
         )}
       </button>
@@ -246,7 +269,7 @@ function ServerRow({
         <div className="mb-1 ml-5 flex flex-col border-l border-[var(--color-border)] pl-2">
           {shown.length === 0 ? (
             <div className="px-1 py-1.5 text-[11px] leading-4 text-[var(--color-text-dim)]">
-              {tools.length === 0 ? st.hint : 'Aramayla eşleşen araç yok.'}
+              {tools.length === 0 ? statusHint : t('tools.empty.noSearchMatch')}
             </div>
           ) : (
             shown.map((t) => (

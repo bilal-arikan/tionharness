@@ -1,4 +1,5 @@
 import { Search, X, Layers } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { InsightLens } from '@/types'
 import type { FindingFilter } from './insightHelpers'
 
@@ -16,6 +17,7 @@ const selectCls =
   'rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm'
 
 export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Props) {
+  const { t } = useTranslation('insight')
   const active =
     filter.channel ||
     filter.status ||
@@ -31,7 +33,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
           type="text"
           value={filter.search ?? ''}
           onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-          placeholder="Bulgu ara…"
+          placeholder={t('filters.searchPlaceholder')}
           className="w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] py-1 pl-8 pr-2 text-sm"
         />
       </div>
@@ -41,10 +43,10 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         value={filter.channel ?? ''}
         onChange={(e) => setFilter({ ...filter, channel: e.target.value || undefined })}
       >
-        <option value="">Tüm kanallar</option>
-        <option value="app-fix">app-fix</option>
-        <option value="workspace-opt">workspace-opt</option>
-        <option value="recipe-opt">recipe-opt</option>
+        <option value="">{t('filters.allChannels')}</option>
+        <option value="app-fix">{t('channel.appFix')}</option>
+        <option value="workspace-opt">{t('channel.workspaceOpt')}</option>
+        <option value="recipe-opt">{t('channel.recipeOpt')}</option>
       </select>
 
       <select
@@ -52,12 +54,12 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         value={filter.status ?? ''}
         onChange={(e) => setFilter({ ...filter, status: e.target.value || undefined })}
       >
-        <option value="">Tüm statüler</option>
-        <option value="new">yeni</option>
-        <option value="accepted">kabul</option>
-        <option value="applied">uygulandı</option>
-        <option value="verified">doğrulandı</option>
-        <option value="dismissed">yoksayıldı</option>
+        <option value="">{t('filters.allStatuses')}</option>
+        <option value="new">{t('status.new')}</option>
+        <option value="accepted">{t('status.accepted')}</option>
+        <option value="applied">{t('status.applied')}</option>
+        <option value="verified">{t('status.verified')}</option>
+        <option value="dismissed">{t('status.dismissed')}</option>
       </select>
 
       <select
@@ -65,10 +67,10 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         value={filter.severity ?? ''}
         onChange={(e) => setFilter({ ...filter, severity: e.target.value || undefined })}
       >
-        <option value="">Tüm önem</option>
-        <option value="high">yüksek</option>
-        <option value="med">orta</option>
-        <option value="low">düşük</option>
+        <option value="">{t('filters.allSeverities')}</option>
+        <option value="high">{t('severity.high')}</option>
+        <option value="med">{t('severity.medium')}</option>
+        <option value="low">{t('severity.low')}</option>
       </select>
 
       <select
@@ -76,7 +78,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         value={filter.lens ?? ''}
         onChange={(e) => setFilter({ ...filter, lens: e.target.value || undefined })}
       >
-        <option value="">Tüm lensler</option>
+        <option value="">{t('filters.allLenses')}</option>
         {lenses.map((l) => (
           <option key={l.id} value={l.id}>
             {l.id}
@@ -92,7 +94,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
             : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
         }`}
       >
-        ⚠ Regresyon
+        ⚠ {t('filters.regression')}
       </button>
 
       {setCluster && (
@@ -103,9 +105,9 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
               ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
               : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
           }`}
-          title="Benzer bulguları kümele"
+          title={t('filters.clusterTitle')}
         >
-          <Layers className="h-4 w-4" /> Kümele
+          <Layers className="h-4 w-4" /> {t('filters.cluster')}
         </button>
       )}
 
@@ -114,7 +116,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
           onClick={() => setFilter({})}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
         >
-          <X className="h-4 w-4" /> Temizle
+          <X className="h-4 w-4" /> {t('filters.clear')}
         </button>
       )}
     </div>

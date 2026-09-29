@@ -3,10 +3,12 @@ import type { FlowRFNode } from './flowGraph'
 import { NodeShell } from './NodeShell'
 import { useAgent, useIsEndNode } from './nodeStyles'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
+import { useTranslation } from 'react-i18next'
 
 // AgentNode: one inbound (top) + one outbound (bottom) handle. The body shows
 // the assigned agent and a prompt preview.
 export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
+  const { t } = useTranslation('flows')
   const { node, isStart, status, output } = data
   const agent = useAgent(node.agentId)
   const isEnd = useIsEndNode(id)
@@ -23,14 +25,14 @@ export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
       selected={selected}
       status={status}
     >
-      <Handle type="target" position={Position.Top} title="Giriş" />
+      <Handle type="target" position={Position.Top} title={t('handles.input')} />
       <div className="flex items-center gap-1.5 text-xs font-medium">
         {agent ? (
           <AgentAvatar agent={agent} size={18} />
         ) : (
           <span className="inline-block h-[18px] w-[18px] shrink-0 rounded-full bg-[var(--color-surface-2)]" />
         )}
-        <span className="truncate">{agent?.name ?? '— ajan seçilmedi —'}</span>
+        <span className="truncate">{agent?.name ?? t('nodes.agentMissing')}</span>
       </div>
       {node.prompt && (
         <div className="mt-1 line-clamp-2 text-[11px] text-[var(--color-text-dim)]">
@@ -46,7 +48,7 @@ export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
           {output}
         </div>
       )}
-      <Handle type="source" position={Position.Bottom} title="Çıkış → sonraki node" />
+      <Handle type="source" position={Position.Bottom} title={t('handles.next')} />
     </NodeShell>
   )
 }

@@ -4,19 +4,15 @@ import { Activity, X } from 'lucide-react'
 import { api } from '@/api'
 import type { TurnDebug } from '@/types'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
+import { useTranslation } from 'react-i18next'
 
 // MessageDebugPanel is the small button at a message's top-left that opens a
 // popover with THAT reply's debug/cost/performance detail — token spend, latency,
 // cost and the per-tool breakdown — fetched lazily from the per-turn debug rollup
 // (correlated by the reply message id). Read-only; shown on assistant turns only.
 // Human labels for the backend's stable cache-break tags (agent.attributeCacheBreak).
-const CACHE_BREAK_LABEL: Record<string, string> = {
-  'model-changed': 'Model değişti',
-  'prompt-or-tools-changed': 'Prompt / araç şeması değişti',
-  'ttl-or-server-eviction': 'TTL doldu ya da sunucu düşürdü',
-}
-
 export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; turnId: string }) {
+  const { t } = useTranslation('chat')
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<TurnDebug | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -39,7 +35,7 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
     <div className="relative">
       <button
         onClick={toggle}
-        title="Bu mesajın debug · maliyet · performans bilgileri"
+        title={t('debug.title')}
         className={`rounded p-0.5 transition hover:text-[var(--color-accent)] ${
           open
             ? 'text-[var(--color-accent)]'
@@ -51,7 +47,7 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
       {open && (
         <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs shadow-[var(--shadow-lg)]">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-semibold">Mesaj debug</span>
+            <span className="font-semibold">{t('debug.heading')}</span>
             <button
               onClick={() => setOpen(false)}
               className="text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
@@ -59,12 +55,10 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
               <X size={13} />
             </button>
           </div>
-          {loading && <p className="text-[var(--color-text-dim)]">Yükleniyor…</p>}
+          {loading && <p className="text-[var(--color-text-dim)]">{t('debug.loading')}</p>}
           {err && <p className="text-[var(--color-danger)]">{err}</p>}
           {data && !data.found && (
-            <p className="text-[var(--color-text-dim)]">
-              Bu mesaj için debug verisi yok (debug günlüğü kapalı ya da bu mesaj önce üretilmiş).
-            </p>
+            <p className="text-[var(--color-text-dim)]">{t('debug.noData')}</p>
           )}
           {data &&
             data.found &&
@@ -85,15 +79,13 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                           ? 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]'
                           : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
                       }`}
-                      title={
-                        warm
-                          ? "Bu tur sıcak prompt cache'ini yeniden kullandı (ucuz)."
-                          : "Bu tur soğuk başladı — istem cache'e tam yazıldı (pahalı)."
-                      }
+                      title={warm ? t('debug.warmDescription') : t('debug.coldDescription')}
                     >
-                      {warm ? `🔥 sıcak · %${(hitRate * 100).toFixed(0)} cache` : '❄ soğuk'}
+                      {warm
+                        ? t('debug.warm', { percent: (hitRate * 100).toFixed(0) })
+                        : t('debug.cold')}
                     </span>
-                    {(data.cacheBreaks ?? 0) > 0 && <Tag tone="warn">cache kırıldı</Tag>}
+                    {(data.cacheBreaks ?? 0) > 0 && <Tag tone="warn">{t('debug.cacheBroken')}</Tag>}
                   </div>
                   {/* WHY it ran cold. The warm/cold split above is derivable from the
                   token counts; the attributed cause is not — it comes from the
@@ -101,10 +93,12 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                   {!!data.cacheBreakReason && (
                     <div className="rounded bg-[var(--color-surface-2)] px-2 py-1.5">
                       <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                        Kırılma sebebi
+                        {t('debug.breakReason')}
                       </div>
                       <div className="mt-0.5 font-mono text-[10px]">
-                        {CACHE_BREAK_LABEL[data.cacheBreakReason] ?? data.cacheBreakReason}
+                        {t(`debug.breakReasonValue.${data.cacheBreakReason}`, {
+                          defaultValue: data.cacheBreakReason,
+                        })}
                       </div>
                       {!!data.cacheBreakDetail && (
                         <p className="mt-1 text-[10px] leading-snug text-[var(--color-text-dim)]">
@@ -113,64 +107,77 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                       )}
                       {(data.coolingWasteUsd ?? 0) > 0 && (
                         <p className="mt-1 text-[10px] text-[var(--color-warning)]">
-                          Kaçınılabilir fazla ödeme: {fmtUSD(data.coolingWasteUsd!)}
-                          {data.coolingWasteEstimated ? ' ≈' : ''} — tur daha erken gelseydi önek
-                          sıcak kalırdı.
+                          {t('debug.avoidableWaste', {
+                            amount: fmtUSD(data.coolingWasteUsd!),
+                            estimate: data.coolingWasteEstimated ? ' ≈' : '',
+                          })}
                         </p>
                       )}
                     </div>
                   )}
                   {data.model && (
-                    <Row label="Model" value={modelDisplayName(data.model)} title={data.model} />
+                    <Row
+                      label={t('debug.model')}
+                      value={modelDisplayName(data.model)}
+                      title={data.model}
+                    />
                   )}
-                  <Row label="Süre" value={fmtMs(data.durMs)} />
+                  <Row label={t('debug.duration')} value={fmtMs(data.durMs)} />
                   <Row
-                    label="Maliyet"
+                    label={t('debug.cost')}
                     value={`${fmtUSD(data.costUSD)}${data.estimated ? ' ≈' : ''}`}
                   />
-                  <Row label="Toplam istem" value={`${fmtTok(totalPrompt)} token`} />
-                  {tokPerSec > 0 && <Row label="Çıktı hızı" value={`${tokPerSec} tok/s`} />}
+                  <Row label={t('debug.totalPrompt')} value={`${fmtTok(totalPrompt)} token`} />
+                  {tokPerSec > 0 && (
+                    <Row label={t('debug.outputSpeed')} value={`${tokPerSec} tok/s`} />
+                  )}
                   {data.savingsUSD > 0 && (
-                    <Row label="Cache tasarrufu" value={`${fmtUSD(data.savingsUSD)}`} />
+                    <Row label={t('debug.cacheSavings')} value={`${fmtUSD(data.savingsUSD)}`} />
                   )}
                   <div className="grid grid-cols-2 gap-1">
-                    <Stat label="Girdi" value={fmtTok(data.inputTokens)} />
-                    <Stat label="Çıktı" value={fmtTok(data.outputTokens)} />
+                    <Stat label={t('debug.input')} value={fmtTok(data.inputTokens)} />
+                    <Stat label={t('debug.output')} value={fmtTok(data.outputTokens)} />
                     {(data.thinkingTokens ?? 0) > 0 && data.outputTokens > 0 && (
                       <Stat
-                        label="Düşünme"
+                        label={t('debug.thinking')}
                         value={`%${Math.round(((data.thinkingTokens ?? 0) / data.outputTokens) * 100)} · ${fmtTok(data.thinkingTokens ?? 0)}`}
                       />
                     )}
-                    <Stat label="Cache oku" value={fmtTok(data.cacheReadTokens)} />
-                    <Stat label="Cache yaz" value={fmtTok(data.cacheWriteTokens)} />
+                    <Stat label={t('debug.cacheRead')} value={fmtTok(data.cacheReadTokens)} />
+                    <Stat label={t('debug.cacheWrite')} value={fmtTok(data.cacheWriteTokens)} />
                   </div>
                   {(data.errors > 0 || data.recoveries > 0 || data.compactions > 0) && (
                     <div className="flex flex-wrap gap-1">
-                      {data.errors > 0 && <Tag tone="danger">{data.errors} hata</Tag>}
-                      {data.recoveries > 0 && <Tag tone="warn">{data.recoveries} kurtarma</Tag>}
-                      {data.compactions > 0 && <Tag tone="warn">{data.compactions} sıkıştırma</Tag>}
+                      {data.errors > 0 && (
+                        <Tag tone="danger">{t('debug.errors', { count: data.errors })}</Tag>
+                      )}
+                      {data.recoveries > 0 && (
+                        <Tag tone="warn">{t('debug.recoveries', { count: data.recoveries })}</Tag>
+                      )}
+                      {data.compactions > 0 && (
+                        <Tag tone="warn">{t('debug.compactions', { count: data.compactions })}</Tag>
+                      )}
                     </div>
                   )}
                   {data.tools && data.tools.length > 0 && (
                     <div>
                       <div className="mb-1 mt-1 font-medium text-[var(--color-text-dim)]">
-                        Araçlar ({data.toolCalls})
+                        {t('debug.tools', { count: data.toolCalls })}
                       </div>
                       <ul className="max-h-40 space-y-0.5 overflow-y-auto">
-                        {data.tools.map((t, i) => (
+                        {data.tools.map((tool, i) => (
                           <li key={i} className="flex items-center justify-between gap-2">
                             <code
                               className={
-                                t.err ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'
+                                tool.err ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'
                               }
                             >
-                              {t.name}
+                              {tool.name}
                             </code>
                             <span className="shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]">
-                              {t.durMs > 0 ? `${fmtMs(t.durMs)} · ` : ''}
-                              {fmtBytes(t.outBytes)}
-                              {t.err ? ' · hata' : ''}
+                              {tool.durMs > 0 ? `${fmtMs(tool.durMs)} · ` : ''}
+                              {fmtBytes(tool.outBytes)}
+                              {tool.err ? ` · ${t('debug.error')}` : ''}
                             </span>
                           </li>
                         ))}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowDown, Copy, Download } from 'lucide-react'
 import { api } from '@/api'
 import type { LogEntry } from '@/types'
@@ -11,14 +12,6 @@ interface Props {
 }
 
 const LEVELS = ['', 'debug', 'info', 'warn', 'error'] as const
-const LEVEL_LABEL: Record<string, string> = {
-  '': 'Hepsi',
-  debug: 'Debug',
-  info: 'Info',
-  warn: 'Warn',
-  error: 'Error',
-}
-
 const LEVEL_COLOR: Record<string, string> = {
   ERROR: 'text-[var(--color-danger)]',
   WARN: 'text-[var(--color-warning)]',
@@ -33,13 +26,19 @@ const LEVEL_RANK: Record<string, number> = { DEBUG: 1, INFO: 2, WARN: 3, ERROR: 
 // Component the backend stamps on persisted error/warning toasts (POST /api/logs
 // with source "toast").
 const UI_TOAST_COMPONENT = 'ui-toast'
+const MULTIPLY_SIGN = String.fromCharCode(215)
+const LOG_FIELD_LABEL = {
+  session: 'session=',
+  agent: 'agent=',
+  workspace: 'workspace=',
+} as const
 
 // Time-window presets for the since filter (minutes; '' = all retained).
 const RANGES = [
-  { key: '', label: 'Tümü' },
-  { key: '15', label: '15 dk' },
-  { key: '60', label: '1 saat' },
-  { key: '1440', label: '24 saat' },
+  { key: '', labelKey: 'all' },
+  { key: '15', labelKey: 'minutes15' },
+  { key: '60', labelKey: 'hour1' },
+  { key: '1440', labelKey: 'hours24' },
 ] as const
 
 function clockTime(ms: number): string {
@@ -100,6 +99,7 @@ function highlight(text: string, q: string): ReactNode {
 // search with match highlighting, per-line copy, JSON export and optional
 // collapsing of consecutive identical entries into a single counted row.
 export function LogsPanel({ onError }: Props) {
+  const { t } = useTranslation('logs')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [level, setLevel] = useState<string>('')
   const [q, setQ] = useState('')
@@ -274,29 +274,29 @@ export function LogsPanel({ onError }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneHeader
-        title="Loglar"
+        title={t('title')}
         right={
           <>
             <span className="text-xs text-[var(--color-text-dim)]">
               {group && rows.length !== logs.length
-                ? `${rows.length} satır · ${logs.length} kayıt`
-                : `${logs.length} kayıt`}
+                ? t('groupedSummary', { rows: rows.length, records: logs.length })
+                : t('recordCount', { count: logs.length })}
             </span>
-            <CopyPathButton path={logPath} title="Log dosyası yolunu kopyala" />
+            <CopyPathButton path={logPath} title={t('copyPath')} />
             <button
               onClick={exportLogs}
               className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
-              title="Filtrelenmiş logları JSON olarak indir"
+              title={t('downloadHint')}
             >
               <Download size={12} />
-              <span className="hidden sm:inline">İndir</span>
+              <span className="hidden sm:inline">{t('download')}</span>
             </button>
             <button
               onClick={() => void load()}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
-              title="Logları yenile"
+              title={t('refreshHint')}
             >
-              Yenile
+              {t('refresh')}
             </button>
           </>
         }
@@ -314,7 +314,7 @@ export function LogsPanel({ onError }: Props) {
                   : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
               }`}
             >
-              {LEVEL_LABEL[l]}
+              {l ? l.charAt(0).toUpperCase() + l.slice(1) : t('filters.allLevels')}
             </button>
           ))}
         </div>
@@ -322,12 +322,12 @@ export function LogsPanel({ onError }: Props) {
           value={component}
           onChange={(e) => setComponent(e.target.value)}
           className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
-          title="Bileşene göre filtrele"
+          title={t('filters.componentHint')}
         >
-          <option value="">Bileşen: hepsi</option>
+          <option value="">{t('filters.allComponents')}</option>
           {components.map((c) => (
             <option key={c} value={c}>
-              {c === UI_TOAST_COMPONENT ? `${c} (UI bildirimleri)` : c}
+              {c === UI_TOAST_COMPONENT ? t('filters.uiNotifications', { component: c }) : c}
             </option>
           ))}
         </select>
@@ -335,35 +335,35 @@ export function LogsPanel({ onError }: Props) {
           value={range}
           onChange={(e) => setRange(e.target.value)}
           className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
-          title="Zaman aralığına göre filtrele"
+          title={t('filters.rangeHint')}
         >
           {RANGES.map((r) => (
             <option key={r.key} value={r.key}>
-              {r.label}
+              {t(`range.${r.labelKey}`)}
             </option>
           ))}
         </select>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Ara (mesaj/alan)…"
+          placeholder={t('filters.searchPlaceholder')}
           className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
         />
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
           <input type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} />
-          Grupla
+          {t('filters.group')}
         </label>
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
-          Canlı
+          {t('filters.live')}
         </label>
         {!follow && pending > 0 && (
           <button
             onClick={() => void load()}
             className="rounded-full border border-[var(--color-accent)] px-2 py-0.5 text-xs text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
-            title="Takip kapalıyken gelen yeni kayıtları yükle"
+            title={t('pendingHint')}
           >
-            {pending} yeni kayıt — Yenile
+            {t('pending', { count: pending })}
           </button>
         )}
       </div>
@@ -375,7 +375,7 @@ export function LogsPanel({ onError }: Props) {
           onScroll={onScroll}
           className="@container flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed"
         >
-          {rows.length === 0 && <p className="text-[var(--color-text-dim)]">Kayıt yok.</p>}
+          {rows.length === 0 && <p className="text-[var(--color-text-dim)]">{t('empty')}</p>}
           {rows.map((g) => {
             const e = g.entry
             return (
@@ -412,7 +412,7 @@ export function LogsPanel({ onError }: Props) {
                   <button
                     onClick={() => setComponent(e.component!)}
                     className="hidden shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] @sm:inline"
-                    title={`Bileşene göre filtrele: ${e.component}`}
+                    title={t('filterByComponent', { component: e.component })}
                   >
                     {e.component}
                   </button>
@@ -420,9 +420,14 @@ export function LogsPanel({ onError }: Props) {
                 {g.count > 1 && (
                   <span
                     className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 font-semibold text-[var(--color-accent)]"
-                    title={`${g.count} kez tekrarlandı (${clockTime(g.firstTime)} → ${clockTime(g.lastTime)})`}
+                    title={t('repeated', {
+                      count: g.count,
+                      first: clockTime(g.firstTime),
+                      last: clockTime(g.lastTime),
+                    })}
                   >
-                    ×{g.count}
+                    {MULTIPLY_SIGN}
+                    {g.count}
                   </span>
                 )}
                 <span className="min-w-0 flex-1 break-words">
@@ -431,7 +436,7 @@ export function LogsPanel({ onError }: Props) {
                   </span>
                   {e.session && (
                     <span className="ml-2 text-[var(--color-text-dim)]">
-                      session=
+                      {LOG_FIELD_LABEL.session}
                       <span className="text-[var(--color-accent)]">
                         {highlight(e.session, qDebounced)}
                       </span>
@@ -439,7 +444,7 @@ export function LogsPanel({ onError }: Props) {
                   )}
                   {e.agent && (
                     <span className="ml-2 text-[var(--color-text-dim)]">
-                      agent=
+                      {LOG_FIELD_LABEL.agent}
                       <span className="text-[var(--color-accent)]">
                         {highlight(e.agent, qDebounced)}
                       </span>
@@ -447,7 +452,7 @@ export function LogsPanel({ onError }: Props) {
                   )}
                   {e.workspace && (
                     <span className="ml-2 text-[var(--color-text-dim)]">
-                      workspace=
+                      {LOG_FIELD_LABEL.workspace}
                       <span className="text-[var(--color-accent)]">
                         {highlight(e.workspace, qDebounced)}
                       </span>
@@ -466,7 +471,7 @@ export function LogsPanel({ onError }: Props) {
                 <button
                   onClick={() => copyLine(e)}
                   className="invisible shrink-0 self-start text-[var(--color-text-dim)] hover:text-[var(--color-accent)] group-hover:visible"
-                  title="Satırı kopyala"
+                  title={t('copyLine')}
                 >
                   <Copy size={12} />
                 </button>
@@ -479,11 +484,11 @@ export function LogsPanel({ onError }: Props) {
         {follow && !atBottom && (
           <button
             onClick={scrollToBottom}
-            title="En alta in"
+            title={t('jumpToBottom')}
             className="absolute bottom-3 right-4 flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs text-[var(--color-text)] shadow-md transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
           >
             <ArrowDown size={12} />
-            En alta in
+            {t('jumpToBottom')}
           </button>
         )}
       </div>

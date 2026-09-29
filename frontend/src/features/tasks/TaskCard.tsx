@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Paperclip, ArchiveRestore, RotateCcw } from 'lucide-react'
 import type { Agent, Flow, Task } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
@@ -7,11 +8,11 @@ import { taskCardShadowClass } from './taskCardAppearance'
 import { reviewGateBadge } from './reviewGate'
 
 // Priority chip colors/labels, keyed by the stored priority slug.
-const PRIORITY_META: Record<string, { label: string; color: string }> = {
-  critical: { label: 'Kritik', color: 'var(--color-danger)' },
-  high: { label: 'Yüksek', color: 'var(--color-warning)' },
-  medium: { label: 'Orta', color: 'var(--color-accent)' },
-  low: { label: 'Düşük', color: 'var(--color-text-dim)' },
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: 'var(--color-danger)',
+  high: 'var(--color-warning)',
+  medium: 'var(--color-accent)',
+  low: 'var(--color-text-dim)',
 }
 
 // TaskCardMeta is everything the card shows that is derived rather than stored on
@@ -81,6 +82,7 @@ function TaskCardImpl({
   onMoveColumn,
   onUnarchive,
 }: Props) {
+  const { t: translate } = useTranslation('tasks')
   const { owner, flow, depIds, unmetDeps, unmetColColor, image } = meta
   // An optimistic card: created locally, still waiting for the server id/title.
   const pending = t.id.startsWith('temp-')
@@ -98,7 +100,13 @@ function TaskCardImpl({
       draggable={!pending}
       tabIndex={pending ? -1 : 0}
       role="button"
-      aria-label={`${t.title}${pending ? '' : `, görev kimliği ${t.id}`}, ${columnLabel} sütunu, ${columnIndex + 1}/${columnCount}. Taşımak için sol veya sağ ok tuşunu kullanın.`}
+      aria-label={translate('card.ariaLabel', {
+        title: t.title,
+        idPart: pending ? '' : translate('card.idPart', { id: t.id }),
+        column: columnLabel,
+        position: columnIndex + 1,
+        count: columnCount,
+      })}
       onKeyDown={(e) => {
         if (pending) return
         // Ignore arrow keys while an input/textarea/select inside the card (if
@@ -173,10 +181,10 @@ function TaskCardImpl({
               e.stopPropagation()
               onUnarchive(t)
             }}
-            title="Arşivden çıkar (panoya geri al)"
+            title={translate('card.restoreTitle')}
             className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
           >
-            <ArchiveRestore size={11} /> Geri al
+            <ArchiveRestore size={11} /> {translate('actions.restore')}
           </button>
         </div>
       )}
@@ -203,7 +211,9 @@ function TaskCardImpl({
         {t.title}
       </div>
       {pending ? (
-        <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">başlık üretiliyor…</div>
+        <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">
+          {translate('card.generatingTitle')}
+        </div>
       ) : (
         t.description && (
           <div
@@ -218,15 +228,15 @@ function TaskCardImpl({
         <div
           className={`mt-1.5 flex flex-wrap items-center gap-1 ${!hasMetadata ? idClearanceClass : ''}`}
         >
-          {t.priority && PRIORITY_META[t.priority] && (
+          {t.priority && PRIORITY_COLORS[t.priority] && (
             <span
               className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: `color-mix(in srgb, ${PRIORITY_META[t.priority].color} 14%, transparent)`,
-                color: `color-mix(in srgb, ${PRIORITY_META[t.priority].color} 75%, var(--color-text))`,
+                backgroundColor: `color-mix(in srgb, ${PRIORITY_COLORS[t.priority]} 14%, transparent)`,
+                color: `color-mix(in srgb, ${PRIORITY_COLORS[t.priority]} 75%, var(--color-text))`,
               }}
             >
-              ● {PRIORITY_META[t.priority].label}
+              ● {translate(`priorities.${t.priority}`)}
             </span>
           )}
           {/* Review-gate badge: how many verification rounds this card has
@@ -263,14 +273,14 @@ function TaskCardImpl({
           {(t.artifactIds?.length ?? 0) > 0 && (
             <span
               className="inline-flex items-center gap-0.5 rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px]"
-              title={`${t.artifactIds!.length} ek (artifact)`}
+              title={translate('card.attachmentCount', { count: t.artifactIds!.length })}
             >
               <Paperclip size={10} /> {t.artifactIds!.length}
             </span>
           )}
           {t.flowId && (
             <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]">
-              {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? 'Akış'}
+              {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? translate('card.flowFallback')}
             </span>
           )}
           {depIds.length > 0 &&
@@ -296,8 +306,8 @@ function TaskCardImpl({
                   style={chipStyle}
                   title={
                     unmetDeps.length > 0
-                      ? `${unmetDeps.length} bağımlılık tamamlanmadı`
-                      : 'Tüm bağımlılıklar tamamlandı'
+                      ? translate('card.unmetDependencies', { count: unmetDeps.length })
+                      : translate('card.dependenciesComplete')
                   }
                 >
                   🔗 {depIds.length}

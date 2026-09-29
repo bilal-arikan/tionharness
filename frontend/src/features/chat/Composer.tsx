@@ -25,6 +25,7 @@ import {
   validateClipboardImage,
   type ValidatedClipboardImage,
 } from '@/shared/lib/clipboard'
+import { useTranslation } from 'react-i18next'
 
 // Cap how much of a referenced artifact is inlined into the turn (the artifact
 // itself stays addressable; very large ones are truncated with a note).
@@ -137,6 +138,7 @@ export function Composer({
   commands,
   artifacts = [],
 }: Props) {
+  const { t } = useTranslation('chat')
   // Per-session draft: unsent text is persisted in localStorage keyed by session,
   // so it survives switching sessions and reloads. setText persists every edit;
   // sending/clearing the composer sets it to '' which removes the stored draft.
@@ -241,7 +243,9 @@ export function Composer({
     const lvl = selectedAgent?.thinkingLevel
     const resolved = lvl ? THINKING_OPTIONS.find((o) => o.value === lvl)?.label : undefined
     const options = THINKING_OPTIONS.map((o) =>
-      o.value === '' ? { ...o, label: resolved ? `Oto(${resolved})` : o.label } : o,
+      o.value === ''
+        ? { ...o, label: resolved ? t('composer.autoResolved', { label: resolved }) : o.label }
+        : o,
     )
     return thinkingOptionsForModel(
       options,
@@ -250,14 +254,16 @@ export function Composer({
       selectedAgent?.model ?? '',
       thinkingLevel,
     )
-  }, [catalog, selectedAgent, thinkingLevel])
+  }, [catalog, selectedAgent, thinkingLevel, t])
   const permissionOptions = useMemo(() => {
     const mode = selectedAgent?.permissionMode
     const resolved = mode ? PERMISSION_OPTIONS.find((o) => o.value === mode)?.label : undefined
     return PERMISSION_OPTIONS.map((o) =>
-      o.value === '' ? { ...o, label: resolved ? `Oto(${resolved})` : o.label } : o,
+      o.value === ''
+        ? { ...o, label: resolved ? t('composer.autoResolved', { label: resolved }) : o.label }
+        : o,
     )
-  }, [selectedAgent])
+  }, [selectedAgent, t])
 
   // Auto-grow the textarea with its content: reset to a single row, then expand to
   // fit the text. A CSS max-height (max-h-[12rem] ≈ 7 lines) caps the growth and
@@ -376,7 +382,8 @@ export function Composer({
         })
         .catch((error: unknown) => {
           if (mountGeneration.current !== generation) return
-          const message = error instanceof Error ? error.message : 'Görsel doğrulanamadı.'
+          const message =
+            error instanceof Error ? error.message : t('composer.imageValidationFailed')
           setPasteErrors((current) => [...current, message])
           setPasteChoices((current) =>
             current.filter(
@@ -473,7 +480,7 @@ export function Composer({
     try {
       await stageFile(choice.image.file, true, choice.image.file)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Görsel yüklenemedi.'
+      const message = error instanceof Error ? error.message : t('composer.imageUploadFailed')
       setPasteErrors((current) => [...current, message])
     } finally {
       choice.image.dispose()
@@ -500,18 +507,17 @@ export function Composer({
       }
       setEditingAttachment({ localId: item.localId, image })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Görsel doğrulanamadı.'
+      const message = error instanceof Error ? error.message : t('composer.imageValidationFailed')
       setPasteErrors((current) => [...current, message])
     }
   }
 
   const savePendingImage = async (result: AnnotatorExport) => {
     const editing = editingAttachment
-    if (!editing)
-      throw new Error('Image annotator invariant violated: active attachment is missing')
+    if (!editing) throw new Error(t('composer.imageEditorMissing'))
     const current = pendingRef.current.find((item) => item.localId === editing.localId)
     if (!current?.editableFile || !sessionId) {
-      throw new Error('Image annotator invariant violated: editable attachment is missing')
+      throw new Error(t('composer.editableImageMissing'))
     }
     const replacement = annotatedPasteFile(current.editableFile, result)
     const oldRelPath = current.attachment?.relPath
@@ -528,7 +534,7 @@ export function Composer({
         } catch (deleteError) {
           try {
             if (!attachment.relPath) {
-              throw new Error('Replacement upload is missing its deletion path', {
+              throw new Error(t('composer.replacementPathMissing'), {
                 cause: deleteError,
               })
             }
@@ -536,7 +542,7 @@ export function Composer({
           } catch (rollbackError) {
             throw new AggregateError(
               [deleteError, rollbackError],
-              'Eski görsel silinemedi ve yeni yükleme geri alınamadı.',
+              t('composer.imageRollbackFailed'),
               { cause: rollbackError },
             )
           }
@@ -822,13 +828,13 @@ export function Composer({
               {message}
               <button
                 type="button"
-                aria-label="Hatayı kapat"
+                aria-label={t('composer.dismissError')}
                 className="ml-3 underline"
                 onClick={() =>
                   setPasteErrors((current) => current.filter((_, itemIndex) => itemIndex !== index))
                 }
               >
-                Kapat
+                {t('composer.close')}
               </button>
             </div>
           ))}
@@ -926,13 +932,9 @@ export function Composer({
             onPaste={onPaste}
             disabled={sending}
             data-testid="composer-input"
-            aria-label="Mesaj yaz"
+            aria-label={t('composer.writeMessage')}
             rows={1}
-            placeholder={
-              waiting
-                ? 'Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın'
-                : 'Mesaj yaz — @ ajan adı, # artifact, / komut'
-            }
+            placeholder={waiting ? t('composer.waitingPlaceholder') : t('composer.placeholder')}
             className="max-h-[12rem] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 text-sm leading-5 outline-none placeholder:text-[var(--color-text-dim)]"
           />
 
@@ -951,8 +953,8 @@ export function Composer({
             <button
               type="button"
               onClick={toggleControls}
-              title="Tur ayarları (düşünme · izin · çalışma dizini · araçlar)"
-              aria-label="Tur ayarlarını göster/gizle"
+              title={t('composer.turnSettings')}
+              aria-label={t('composer.toggleTurnSettings')}
               aria-expanded={showControls}
               data-testid="composer-controls-toggle"
               className={`${BTN_ICON} md:hidden ${showControls ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
@@ -967,15 +969,15 @@ export function Composer({
                 value={thinkingLevel}
                 onChange={onThinkingLevelChange}
                 options={thinkingOptions}
-                header="Düşünme seviyesi"
-                title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
+                header={t('composer.thinkingLevel')}
+                title={(c) => t('composer.thinkingLevelTitle', { label: c.label, hint: c.hint })}
               />
               <ComposerPicker
                 value={permissionMode}
                 onChange={onPermissionModeChange}
                 options={permissionOptions}
-                header="İzin modu (Shift+Tab)"
-                title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
+                header={t('composer.permissionMode')}
+                title={(c) => t('composer.permissionModeTitle', { label: c.label, hint: c.hint })}
                 menuWidthClass="w-60"
                 iconOnly
               />
@@ -991,8 +993,8 @@ export function Composer({
                 type="button"
                 onClick={() => setToolsOpen((o) => !o)}
                 disabled={!agentId}
-                title="Araçlar — bu ajanın kullanabildiği araçlar ve MCP durumu (salt bilgi)"
-                aria-label="Araç bilgisi"
+                title={t('composer.toolsTitle')}
+                aria-label={t('composer.tools')}
                 aria-expanded={toolsOpen}
                 data-testid="composer-tools"
                 data-tool-access-toggle=""
@@ -1007,8 +1009,8 @@ export function Composer({
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={!sessionId}
-              title="Dosya ekle"
-              aria-label="Dosya ekle"
+              title={t('composer.attachFile')}
+              aria-label={t('composer.attachFile')}
               data-testid="composer-attach"
               className={BTN_ICON}
             >
@@ -1022,8 +1024,8 @@ export function Composer({
               type="button"
               onClick={() => setBtwOpen((o) => !o)}
               disabled={!sessionId || !agentId}
-              title="Btw — yan soru sor (geçmişe yazılmaz, ana görevi kesmez)"
-              aria-label="Btw yan soru"
+              title={t('composer.btwTitle')}
+              aria-label={t('composer.btw')}
               aria-expanded={btwOpen}
               data-testid="composer-btw"
               className={`${BTN_ICON} ${btwOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}

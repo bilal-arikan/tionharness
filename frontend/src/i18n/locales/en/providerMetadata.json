@@ -1,0 +1,393 @@
+{
+  "providers": {
+    "claudeCli": "Claude CLI (subscription · no API key)",
+    "anthropic": "Anthropic API",
+    "minimax": "MiniMax (OpenAI-compatible)",
+    "minimaxAnthropic": "MiniMax (Anthropic mode · tool use + thinking)",
+    "openRouter": "OpenRouter (OpenAI-compatible)",
+    "zai": "Z.ai GLM (Anthropic mode · tool use + thinking)",
+    "deepSeek": "DeepSeek (OpenAI-compatible)",
+    "deepSeekAnthropic": "DeepSeek (Anthropic mode · tool use + thinking)",
+    "codexCli": "Codex CLI (subscription · no API key)",
+    "openAICompatible": "OpenAI-compatible (custom)",
+    "anthropicCompatible": "Anthropic-compatible (custom)",
+    "lmStudio": "LM Studio (local)"
+  },
+  "fields": {
+    "labels": {
+      "apiKey": "API key",
+      "optionalApiKey": "API key (optional)",
+      "baseUrl": "Base URL",
+      "cliPath": "CLI path",
+      "configDir": "Configuration directory",
+      "authKind": "Authentication type",
+      "authToken": "Authentication credential"
+    },
+    "placeholders": {
+      "autoPath": "automatic (search PATH)",
+      "minimaxEndpoint": "default MiniMax endpoint"
+    },
+    "help": {
+      "anthropic": {
+        "key": "API key from Anthropic Console."
+      },
+      "anthropicCompatible": {
+        "key": "API key for the endpoint.",
+        "baseUrl": "Anthropic-compatible Messages endpoint (/messages is appended)."
+      },
+      "claudeCli": {
+        "cliPath": "Leave blank to use the claude executable found on PATH.",
+        "configDir": "Leave blank to use the workspace's claude-home directory. Set a path to give this instance its own isolated login home.",
+        "authKind": "Blank uses the default login without an override.",
+        "authToken": "Token or key for the selected authentication type."
+      },
+      "codexCli": {
+        "cliPath": "Leave blank to use the codex executable found on PATH.",
+        "configDir": "Leave blank to use the workspace's codex-home directory. Set a path to give this instance its own isolated login home."
+      },
+      "deepSeek": {
+        "key": "DeepSeek account API key.",
+        "baseUrl": "Leave blank to use DeepSeek's default API endpoint."
+      },
+      "deepSeekAnthropic": {
+        "key": "DeepSeek account API key (the same key used by the DeepSeek kind)."
+      },
+      "minimax": {
+        "key": "MiniMax account API key.",
+        "baseUrl": "Leave blank to use MiniMax's default API endpoint."
+      },
+      "minimaxAnthropic": {
+        "key": "MiniMax account API key (the same key used by the MiniMax kind)."
+      },
+      "openAICompatible": {
+        "key": "API key for the endpoint.",
+        "baseUrl": "OpenAI-compatible Chat Completions endpoint."
+      },
+      "openRouter": {
+        "key": "OpenRouter account API key.",
+        "baseUrl": "Leave blank to use OpenRouter's default API endpoint."
+      },
+      "zai": {
+        "key": "Z.ai account API key.",
+        "baseUrl": "Leave blank to use Z.ai's Anthropic-compatible endpoint."
+      },
+      "lmStudio": {
+        "key": "LM Studio does not require a key. Fill this only when the server is behind a proxy that requires key authentication.",
+        "baseUrl": "Local server address shown on LM Studio's Developer tab. Leave blank to use the default address."
+      }
+    }
+  },
+  "models": {
+    "anthropic": {
+      "fable51": {
+        "label": "Claude Fable 5.1 — frontier",
+        "description": "Most capable generally available model; 1M context, 128K output, adaptive thinking (always on), and cache reads at half the Opus price ($0.25/MTok). Same price as Fable 5. Differences: no forced tool_choice and thinking blocks are conversation-bound (TionHarness tolerates this with drop_block). Requires 30-day data retention; safety refusals fall back to Opus 4.8 (Settings)"
+      },
+      "fable5": {
+        "label": "Claude Fable 5 — previous frontier",
+        "description": "Predecessor to Fable 5.1; 1M context, adaptive thinking (always on), and agent tasks. Requires 30-day data retention, so it does not work in ZDR organizations; safety refusals fall back to Opus 4.8 (Settings)"
+      },
+      "opus5": {
+        "label": "Claude Opus 5 — most capable",
+        "description": "Newest Opus flagship (July 24, 2026); 1M context, frontier agent, coding, and computer use capabilities at unchanged Opus pricing ($5/$25)"
+      },
+      "opus48": {
+        "label": "Claude Opus 4.8 — previous generation",
+        "description": "Previous Opus flagship for complex reasoning, coding, and agent tasks"
+      },
+      "sonnet5": {
+        "label": "Claude Sonnet 5 — balanced",
+        "description": "Newest balanced generation; 1M context, strong agent and coding capabilities, and a balance of speed and quality"
+      },
+      "sonnet46": {
+        "label": "Claude Sonnet 4.6 — previous balanced model",
+        "description": "Strong and fast; previous-generation balanced model"
+      },
+      "haiku45": {
+        "label": "Claude Haiku 4.5 — fast and inexpensive",
+        "description": "Low latency and high throughput for simple tasks"
+      }
+    },
+    "claudeCli": {
+      "session": {
+        "label": "Claude session model",
+        "description": "Use the model active in the Claude session"
+      },
+      "fable": {
+        "label": "Fable — frontier",
+        "description": "The CLI's current Fable model (5.1); 1M context and adaptive thinking (always on)"
+      },
+      "opus": {
+        "label": "Opus — most capable",
+        "description": "Most capable; slowest and most expensive"
+      },
+      "sonnet": {
+        "label": "Sonnet — balanced",
+        "description": "Balanced speed and quality for everyday use"
+      },
+      "haiku": {
+        "label": "Haiku — fast",
+        "description": "Fastest and least expensive; suited to simple tasks"
+      }
+    },
+    "codexCli": {
+      "session": {
+        "label": "Codex session model",
+        "description": "Use the model active in the Codex session"
+      },
+      "gpt6Astra": {
+        "label": "GPT-6 Astra",
+        "description": "Frontier reasoning and coding. Codex effort: low through ultra; verified CLI context: 272K. Availability depends on the signed-in account."
+      },
+      "gpt6Sol": {
+        "label": "GPT-6 Sol",
+        "description": "Balanced coding and agentic workflows. Codex effort: low through ultra; verified CLI context: 272K. Availability depends on the signed-in account."
+      },
+      "gpt6Luna": {
+        "label": "GPT-6 Luna",
+        "description": "Efficient focused tasks. Codex effort: low through max; verified CLI context: 272K. Availability depends on the signed-in account."
+      },
+      "gpt56Sol": {
+        "label": "GPT-5.6 Sol",
+        "description": "Previous generation; published API context about 1.05M (long-context pricing above 272K)"
+      },
+      "gpt56Terra": {
+        "label": "GPT-5.6 Terra",
+        "description": "Previous generation; published API context about 1.05M (long-context pricing above 272K)"
+      },
+      "gpt56Luna": {
+        "label": "GPT-5.6 Luna",
+        "description": "Previous generation; published API context 400K"
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Codex CLI model"
+      },
+      "gpt54": {
+        "label": "GPT-5.4",
+        "description": "Unavailable with a ChatGPT account (API billing required)"
+      },
+      "gpt54Mini": {
+        "label": "GPT-5.4 Mini — fast",
+        "description": "Fastest and least expensive; suited to simple tasks"
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "Unavailable with a ChatGPT account (API billing required)"
+      }
+    },
+    "deepSeek": {
+      "flash": {
+        "label": "DeepSeek V4.1 Flash — fast and inexpensive",
+        "description": "1M context; thinking can be off or low/high/max ($0.15/$0.60 · 1M, cache hit $0.003; 2× during peak hours)"
+      },
+      "v4Pro": {
+        "label": "DeepSeek V4 Pro — powerful reasoning",
+        "description": "V4-Pro-0813 · 1M context; thinking can be off or low/high/max ($0.66/$1.98 · 1M, cache hit $0.022; 2× during peak hours)"
+      },
+      "v4Flash": {
+        "label": "DeepSeek V4 Flash — legacy name",
+        "description": "Temporary alias: DeepSeek routes this to V4.1 Flash at Flash pricing; choose deepseek-flash for new agents"
+      }
+    },
+    "minimax": {
+      "m3": {
+        "label": "MiniMax M3 — current flagship",
+        "description": "Newest reasoning and coding model (default)"
+      },
+      "m27": {
+        "label": "MiniMax M2.7 — previous generation",
+        "description": "Previous hosted reasoning model"
+      },
+      "m27Highspeed": {
+        "label": "MiniMax M2.7 Highspeed — fast",
+        "description": "Fast tier of M2.7"
+      },
+      "m25": {
+        "label": "MiniMax M2.5",
+        "description": "Balanced reasoning tier"
+      },
+      "m25Highspeed": {
+        "label": "MiniMax M2.5 Highspeed — fast",
+        "description": "Fast tier of M2.5"
+      },
+      "m21": {
+        "label": "MiniMax M2.1 — multilingual coding",
+        "description": "Strong multilingual coding (~60 tps)"
+      },
+      "m21Lightning": {
+        "label": "MiniMax M2.1 Lightning — fast",
+        "description": "Fast variant of M2.1 (~100 tps)"
+      },
+      "m2": {
+        "label": "MiniMax M2 — agents and reasoning",
+        "description": "Agent capabilities and advanced reasoning"
+      }
+    },
+    "minimaxAnthropic": {
+      "m3": {
+        "label": "MiniMax M3 — current flagship",
+        "description": "Anthropic mode: tool use and thinking"
+      },
+      "m27": {
+        "label": "MiniMax M2.7 — previous generation",
+        "description": "Anthropic mode: previous hosted reasoning model"
+      },
+      "m25": {
+        "label": "MiniMax M2.5",
+        "description": "Anthropic mode: balanced reasoning"
+      },
+      "m21": {
+        "label": "MiniMax M2.1 — multilingual coding",
+        "description": "Anthropic mode: tool use and thinking"
+      },
+      "m21Lightning": {
+        "label": "MiniMax M2.1 Lightning — fast",
+        "description": "Fast variant of M2.1"
+      },
+      "m2": {
+        "label": "MiniMax M2 — agents and reasoning",
+        "description": "Agent capabilities and advanced reasoning"
+      }
+    },
+    "openRouter": {
+      "claudeFable51": {
+        "label": "Claude Fable 5.1 — frontier",
+        "description": "Newest Anthropic generation; 1M context, adaptive thinking (always on), and inexpensive cache reads"
+      },
+      "claudeFable5": {
+        "label": "Claude Fable 5 — previous frontier",
+        "description": "Predecessor to Fable 5.1; 1M context and adaptive thinking (always on)"
+      },
+      "claudeOpus5": {
+        "label": "Claude Opus 5 — most capable",
+        "description": "Newest Anthropic flagship; 1M context and frontier agent, coding, and computer use capabilities"
+      },
+      "claudeOpus48": {
+        "label": "Claude Opus 4.8 — previous generation",
+        "description": "Previous Anthropic flagship for complex reasoning and agent tasks"
+      },
+      "claudeOpus48Fast": {
+        "label": "Claude Opus 4.8 (Fast)",
+        "description": "Fast variant of Opus 4.8"
+      },
+      "claudeOpus47": { "label": "Claude Opus 4.7", "description": "Previous Opus generation" },
+      "claudeSonnet5": {
+        "label": "Claude Sonnet 5 — balanced",
+        "description": "Newest balanced Anthropic generation; 1M context and strong agent and coding capabilities"
+      },
+      "claudeSonnet46": {
+        "label": "Claude Sonnet 4.6 — previous balanced model",
+        "description": "Strong and fast; previous-generation balanced model"
+      },
+      "claudeHaiku45": {
+        "label": "Claude Haiku 4.5 — fast and inexpensive",
+        "description": "Low latency and high throughput"
+      },
+      "gpt55": { "label": "GPT-5.5", "description": "OpenAI general-purpose flagship" },
+      "gpt55Pro": { "label": "GPT-5.5 Pro", "description": "Most capable GPT-5.5 tier" },
+      "gemini35Flash": {
+        "label": "Gemini 3.5 Flash — fast",
+        "description": "Google's fast multimodal model"
+      },
+      "gemini31FlashLite": {
+        "label": "Gemini 3.1 Flash Lite",
+        "description": "Very fast and inexpensive Google tier"
+      },
+      "deepSeekV41Flash": {
+        "label": "DeepSeek V4.1 Flash",
+        "description": "New DeepSeek Flash (2026-09); 1M context and leading throughput"
+      },
+      "deepSeekV4Flash": {
+        "label": "DeepSeek V4 Flash",
+        "description": "Previous open-weight Flash generation"
+      },
+      "deepSeekV4Pro": { "label": "DeepSeek V4 Pro", "description": "DeepSeek's powerful tier" },
+      "grok43": { "label": "Grok 4.3", "description": "xAI flagship model" },
+      "minimaxM3": {
+        "label": "MiniMax M3",
+        "description": "MiniMax's current reasoning and coding model"
+      },
+      "kimiK26": {
+        "label": "Kimi K2.6",
+        "description": "Moonshot model with a strong developer reputation"
+      },
+      "qwen37Max": { "label": "Qwen3.7 Max", "description": "Alibaba's most capable Qwen tier" },
+      "qwen37Plus": { "label": "Qwen3.7 Plus", "description": "Balanced Qwen tier" },
+      "nemotron3Ultra": { "label": "Nemotron 3 Ultra", "description": "NVIDIA 550B hybrid MoE" },
+      "step37Flash": { "label": "Step 3.7 Flash", "description": "StepFun's fast coding model" },
+      "glm53": {
+        "label": "GLM 5.3",
+        "description": "Z.ai flagship model (2026-08); always thinks"
+      },
+      "glm53Flash": {
+        "label": "GLM 5.3 Flash",
+        "description": "Z.ai's fast, inexpensive multimodal tier"
+      },
+      "glm52": { "label": "GLM 5.2", "description": "Previous Z.ai flagship" },
+      "mistralMedium35": { "label": "Mistral Medium 3.5", "description": "Balanced Mistral model" },
+      "tencentHy3": {
+        "label": "Tencent Hy3 (preview)",
+        "description": "Tencent Hunyuan 3 preview"
+      },
+      "mimoV25": { "label": "MiMo V2.5", "description": "Xiaomi's popular coding model" },
+      "owlAlpha": { "label": "Owl Alpha", "description": "OpenRouter community model" },
+      "claudeOpus47Fast": {
+        "label": "Claude Opus 4.7 (Fast)",
+        "description": "Fast variant of Opus 4.7"
+      },
+      "gemini3ProImage": {
+        "label": "Gemini 3 Pro (multimodal)",
+        "description": "Google Gemini 3 Pro — image and text"
+      }
+    },
+    "lmStudio": {
+      "qwen3Coder30b": {
+        "label": "Qwen3 Coder 30B A3B — local, coding",
+        "description": "256K context, MoE (3B active); recommended for reliable local tool calling. Free."
+      },
+      "qwen332b": {
+        "label": "Qwen3 32B — local, general",
+        "description": "128K context, dense model; strong for general agent tasks. Free."
+      },
+      "qwen38b": {
+        "label": "Qwen3 8B — local, lightweight",
+        "description": "128K context; fast and memory-efficient, but less reliable at tool calling. Suitable for summarizer or subagent roles. Free."
+      }
+    },
+    "zai": {
+      "glm53": {
+        "label": "GLM-5.3 — current flagship",
+        "description": "Anthropic mode: tool use and thinking (always on, low/high/max) ($1.40/$4.40 · 1M, cache $0.26)"
+      },
+      "glm53Flash": {
+        "label": "GLM-5.3 Flash — fast, inexpensive, multimodal",
+        "description": "Always thinks; 3× quota on Coding Plan ($0.15/$0.50 · 1M, cache $0.03)"
+      },
+      "glm53FlashX": {
+        "label": "GLM-5.3 FlashX — fastest",
+        "description": "The ~200 tokens/s Flash tier; not yet available on Coding Plan ($0.37/$1.25 · 1M, cache $0.075)"
+      },
+      "glm52": {
+        "label": "GLM-5.2 — previous flagship",
+        "description": "Anthropic mode: tool use and thinking ($1.40/$4.40 · 1M)"
+      },
+      "glm51": {
+        "label": "GLM-5.1 — previous generation",
+        "description": "Anthropic mode: tool use and thinking ($1.40/$4.40 · 1M)"
+      },
+      "glm5": {
+        "label": "GLM-5 — balanced base",
+        "description": "Anthropic mode ($1.00/$3.20 · 1M)"
+      },
+      "glm47": {
+        "label": "GLM-4.7 — previous coding model",
+        "description": "Anthropic mode: tool use ($0.60/$2.20 · 1M)"
+      },
+      "glm47Flash": {
+        "label": "GLM-4.7 Flash — free",
+        "description": "Low latency and high throughput (free on Z.ai)"
+      }
+    }
+  }
+}

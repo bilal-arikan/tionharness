@@ -104,7 +104,8 @@ export function AgentsView({
   onOpenExecution,
   onOpenAgentLibrary,
 }: Props) {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation('agents')
+  const { t: tc } = useTranslation('common')
   const referencedAgents = useReferencedAgents(agents, [controlledId], getActiveWorkspace())
   const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -233,12 +234,7 @@ export function AgentsView({
   const bulkDelete = async () => {
     const ids = [...sel.selected].filter((id) => regularAgents.some((a) => a.id === id))
     if (ids.length === 0) return
-    if (
-      !confirm(
-        `${ids.length} ajan silinsin mi?\n\nSohbet geçmişleri KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip oldukları görevler kalıcı olarak silinir. Bu ajanlardan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.`,
-      )
-    )
-      return
+    if (!confirm(t('view.deleteManyConfirm', { count: ids.length }))) return
     for (const id of ids) await onDeleteAgent(id)
     setBulkEditOpen(false)
     sel.clear()
@@ -291,12 +287,7 @@ export function AgentsView({
   }
 
   const restoreDefault = async (agent: Agent) => {
-    if (
-      !confirm(
-        `"${agent.name}" ajanının tüm override'ları kaldırılsın mı? Her alan yeniden ebeveyninden devralınır; bu işlem geri alınamaz.`,
-      )
-    )
-      return
+    if (!confirm(t('view.restoreDefaultsConfirm', { name: agent.name }))) return
     setSystemActionPending(true)
     try {
       await api.restoreDefaultAgent(agent.id)
@@ -346,7 +337,7 @@ export function AgentsView({
                 <>
                   {a.disabled && !a.system && (
                     <span className="ml-1.5 shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px]">
-                      devre dışı
+                      {t('view.disabled')}
                     </span>
                   )}
                   <SystemAgentStatusBadge agent={a} />
@@ -354,14 +345,14 @@ export function AgentsView({
                     <span
                       data-testid="agent-coordinator-badge"
                       className="ml-1.5 shrink-0 text-[11px]"
-                      title="Koordinatör: açtığı yeni oturumlar worker yönetebilir"
+                      title={t('view.coordinatorTitle')}
                     >
                       🕸
                     </span>
                   )}
                   <span
                     className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
-                    title="Ajan ID (klasör adı)"
+                    title={t('view.idTitle')}
                   >
                     {a.id}
                   </span>
@@ -369,7 +360,7 @@ export function AgentsView({
               }
               subtitle={
                 resolveModelLabel(catalog, a.provider, a.model) +
-                (defaultAgentId === a.id ? ' · varsayılan' : '') +
+                (defaultAgentId === a.id ? ` · ${t('view.defaultSuffix')}` : '') +
                 (lineage.length > 0 ? ` · ← ${lineage[lineage.length - 1].name}` : '')
               }
             />
@@ -379,10 +370,10 @@ export function AgentsView({
           <span
             data-testid="agent-default-indicator"
             data-agent-id={a.id}
-            title="Varsayılan ajan (ajan ayarlarından değiştirilir)"
+            title={t('view.defaultTitle')}
             className="ml-1 shrink-0 self-center p-1 text-[var(--color-accent)]"
           >
-            ★
+            {t('view.defaultIndicator')}
           </span>
         )}
       </div>
@@ -402,10 +393,10 @@ export function AgentsView({
         onToggle={toggleRoster}
         widthKey="tionharness.agentsListWidth"
         defaultWidth={256}
-        label="Ajanlar"
+        label={t('view.title')}
         testId="agents-list-toggle"
       >
-        <SidebarHeader title="Ajanlar" onCollapse={toggleRoster}>
+        <SidebarHeader title={t('view.title')} onCollapse={toggleRoster}>
           <ArchiveViewToggle
             testId="agents-archived-toggle"
             active={showArchived}
@@ -417,15 +408,15 @@ export function AgentsView({
               }
               setShowArchived((v) => !v)
             }}
-            backLabel="Ajanlar"
-            backTitle="Aktif ajanlara dön"
+            backLabel={t('view.active')}
+            backTitle={t('view.activeTitle')}
           />
           {onRefresh && (
             <button
               onClick={doRefresh}
               disabled={refreshing}
               data-testid="agents-refresh"
-              title="Yenile"
+              title={t('view.refresh')}
               className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
             >
               <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
@@ -437,8 +428,8 @@ export function AgentsView({
         {!showArchived && (
           <NewItemButton
             onClick={() => setShowForm((v) => !v)}
-            label="Yeni Ajan"
-            title="Yeni ajan"
+            label={t('view.new')}
+            title={t('view.newTitle')}
             testId="agent-create-toggle"
           />
         )}
@@ -446,8 +437,8 @@ export function AgentsView({
           <ArchiveViewBanner
             testId="agents-archive-banner"
             count={regularAgents.length}
-            noun="ajan"
-            restoreHint="arşivli ajan çalıştırılamaz; seçip “Arşivden çıkar”a bas."
+            noun={t('view.archiveNoun')}
+            restoreHint={t('view.archiveHint')}
           />
         )}
 
@@ -456,25 +447,26 @@ export function AgentsView({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ajan adı"
+              placeholder={t('view.namePlaceholder')}
               data-testid="agent-create-name-input"
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
             />
             <label className="block space-y-1 text-xs text-[var(--color-text-dim)]">
-              <span>Kalıtım (ebeveyn ajan)</span>
+              <span>{t('view.parent')}</span>
               <select
                 data-testid="agent-create-parent-select"
                 value={createParentId}
                 onChange={(e) => setCreateParentId(e.target.value)}
                 className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
               >
-                <option value="">— Sıfırdan —</option>
+                <option value="">{t('view.fromScratch')}</option>
                 {agents
                   .filter((a) => !a.deleted && !a.archived)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name}
-                      {a.locked ? ' (yerleşik)' : ''} · {a.id}
+                      {a.locked
+                        ? t('view.parentOptionBuiltin', { name: a.name, id: a.id })
+                        : t('view.parentOption', { name: a.name, id: a.id })}
                     </option>
                   ))}
               </select>
@@ -482,19 +474,12 @@ export function AgentsView({
             <PromptEditor
               value={soul}
               onChange={setSoul}
-              placeholder={
-                createParentId
-                  ? 'Soul (boş bırakırsan ebeveyninkini devralır)'
-                  : 'Karakter / sistem promptu (soul)'
-              }
+              placeholder={createParentId ? t('view.soulInherited') : t('view.soul')}
               rows={3}
               data-testid="agent-create-soul-textarea"
             />
             {createParentId ? (
-              <p className="text-xs text-[var(--color-text-dim)]">
-                Sağlayıcı, model, düşünme seviyesi, araçlar ve yetenekler ebeveynden devralınır;
-                oluşturduktan sonra ayarlar ekranında alan alan override edebilirsin.
-              </p>
+              <p className="text-xs text-[var(--color-text-dim)]">{t('view.inheritCreateHelp')}</p>
             ) : (
               <>
                 <div data-testid="agent-create-provider-wrap" className="contents">
@@ -515,9 +500,7 @@ export function AgentsView({
                     onChange={(e) => setCoordinatorMode(e.target.checked)}
                     className="mt-0.5 accent-[var(--color-accent)]"
                   />
-                  <span>
-                    Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın
-                  </span>
+                  <span>{t('view.coordinatorCreate')}</span>
                 </label>
                 {coordinatorMode && (
                   <>
@@ -530,15 +513,11 @@ export function AgentsView({
                       data-testid="agent-create-coordinator-prompt-textarea"
                       value={coordinatorPrompt}
                       onChange={setCoordinatorPrompt}
-                      placeholder="Koordinatör promptu"
+                      placeholder={t('view.coordinatorPrompt')}
                       rows={3}
                     />
                     <p className="text-xs text-[var(--color-text-dim)]">
-                      Yalnızca oturum <strong>koordinatör modundayken</strong>, ortak koordinatör el
-                      kitabının hemen ardından sistem bağlamına eklenir. Bu ajana özel delegasyon
-                      yönergesi (hangi worker'lar açılsın, iş nasıl bölünsün) buraya yazılır —
-                      soul'a değil: mod kapalıyken hiç enjekte edilmez, dolayısıyla{' '}
-                      <strong>sıfır token</strong> maliyeti olur.
+                      {t('view.coordinatorPromptHelp')}
                     </p>
                   </>
                 )}
@@ -547,11 +526,11 @@ export function AgentsView({
             <Button
               onClick={submit}
               disabled={!canSubmit}
-              title={!createParentId && model === null ? 'Önce bir model seçin' : undefined}
+              title={!createParentId && model === null ? t('view.selectModel') : undefined}
               data-testid="agent-create-submit"
               className="w-full"
             >
-              Oluştur
+              {t('view.create')}
             </Button>
           </div>
         )}
@@ -560,26 +539,18 @@ export function AgentsView({
           {regularAgents.map(rosterItem)}
           {systemGroups.services.length > 0 && (
             <>
-              {rosterSectionHeading(
-                'Sistem ajanları',
-                'Uygulamanın kendi işleri (başlık, sıkıştırma, insight) için kullandığı yerleşik ajanlar ve onların workspace özelleştirmeleri',
-              )}
+              {rosterSectionHeading(t('view.systemAgents'), t('view.systemAgentsHint'))}
               {systemGroups.services.map(rosterItem)}
             </>
           )}
           {systemGroups.workers.length > 0 && (
             <>
-              {rosterSectionHeading(
-                "Sistem worker'ları",
-                "spawn_worker ve run_subagent'ın seçtiği yerleşik worker profilleri (explore, planner, coder, …) ve onların workspace özelleştirmeleri",
-              )}
+              {rosterSectionHeading(t('view.systemWorkers'), t('view.systemWorkersHint'))}
               {systemGroups.workers.map(rosterItem)}
             </>
           )}
           {!showArchived && visibleAgents.length === 0 && (
-            <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
-              Henüz ajan yok. + ile oluştur.
-            </p>
+            <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">{t('view.empty')}</p>
           )}
         </div>
 
@@ -604,22 +575,22 @@ export function AgentsView({
           onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
         >
           <SelectionBarButton icon={<Pencil size={13} />} onClick={() => setBulkEditOpen(true)}>
-            {t('agents.bulkEdit.button')}
+            {tc('agents.bulkEdit.button')}
           </SelectionBarButton>
           {showArchived ? (
             <SelectionBarButton
               icon={<ArchiveRestore size={13} />}
               onClick={() => bulkArchive(false)}
             >
-              Arşivden çıkar
+              {t('view.restore')}
             </SelectionBarButton>
           ) : (
             <SelectionBarButton icon={<Archive size={13} />} onClick={() => bulkArchive(true)}>
-              Arşivle
+              {t('view.archive')}
             </SelectionBarButton>
           )}
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
-            Sil
+            {t('view.delete')}
           </SelectionBarButton>
         </SelectionBar>
       </ListPane>
@@ -627,22 +598,22 @@ export function AgentsView({
       {/* Content column: the title bar sits ONLY here (right of the roster), like chat. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <PaneHeader
-          title="Ajanlar"
+          title={t('view.title')}
           listOpen={rosterOpen}
           onToggleList={toggleRoster}
-          subtitle={selected ? `· ${selected.name}` : '· Ajan seçilmedi'}
+          subtitle={selected ? `· ${selected.name}` : t('view.noneSelected')}
           right={
             <>
               {onOpenAgentLibrary && (
                 <button
                   type="button"
                   onClick={onOpenAgentLibrary}
-                  title="Open Agent library"
-                  aria-label="Open Agent library"
+                  title={t('view.libraryOpen')}
+                  aria-label={t('view.libraryOpen')}
                   className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
                 >
                   <Library size={15} className="shrink-0" />
-                  <span className="hidden sm:inline">Agent library</span>
+                  <span className="hidden sm:inline">{t('view.library')}</span>
                 </button>
               )}
               {selected && (
@@ -650,7 +621,7 @@ export function AgentsView({
                   <CopyPathButton
                     testId="agent-copy-path"
                     getPath={async () => (await api.agentPath(selected.id)).path}
-                    title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
+                    title={t('view.copyPath')}
                     onError={onError}
                   />
                   {!selected.system && (
@@ -658,16 +629,12 @@ export function AgentsView({
                       type="button"
                       data-testid="agent-archive-action"
                       onClick={() => setArchived([selected.id], !selected.archived)}
-                      title={
-                        selected.archived
-                          ? 'Ajanı arşivden çıkar (yeniden çalıştırılabilir)'
-                          : 'Ajanı arşivle (silinmez; çalıştırılamaz, listeden ve haritadan gizlenir)'
-                      }
+                      title={selected.archived ? t('view.restoreTitle') : t('view.archiveTitle')}
                       className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
                     >
                       {selected.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
                       <span className="hidden sm:inline">
-                        {selected.archived ? 'Arşivden çıkar' : 'Arşivle'}
+                        {selected.archived ? t('view.restore') : t('view.archive')}
                       </span>
                     </button>
                   )}
@@ -678,7 +645,7 @@ export function AgentsView({
                 onClick={toggleActivity}
                 data-testid="agent-activity-toggle"
                 aria-pressed={activityOpen}
-                title={activityOpen ? 'Aktivite panelini gizle' : 'Aktivite panelini göster'}
+                title={activityOpen ? t('view.activityHide') : t('view.activityShow')}
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
                   activityOpen
                     ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
@@ -686,7 +653,7 @@ export function AgentsView({
                 }`}
               >
                 <Activity size={15} className="shrink-0" />
-                <span className="hidden sm:inline">Aktivite</span>
+                <span className="hidden sm:inline">{t('view.activity')}</span>
               </button>
             </>
           }
@@ -700,8 +667,7 @@ export function AgentsView({
                 className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)]"
               >
                 <Archive size={13} className="flex-shrink-0" />
-                Bu ajan arşivde: oturum açılamaz; görev, otomasyon ve zamanlamalar onu çalıştıramaz.
-                Arşivden çıkarınca yeniden kullanılabilir.
+                {t('view.archivedNotice')}
               </div>
             )}
             <div className="min-h-0 flex-1">
@@ -721,12 +687,7 @@ export function AgentsView({
                       : undefined
                   }
                   readOnly={selected.system}
-                  readOnlyNote={
-                    <>
-                      Bu bir <strong>sistem ajanı</strong>: bu ekranda yalnızca incelenir.
-                      Düzenlemek için <strong>Ayarlar → Sistem ajanları</strong> ekranını kullan.
-                    </>
-                  }
+                  readOnlyNote={<>{t('view.readOnlyNote')}</>}
                   lineage={selectedLineage}
                   parent={selectedParent}
                   parentOptions={selectedParentOptions}
@@ -735,11 +696,7 @@ export function AgentsView({
                     selected.system
                       ? undefined
                       : async () => {
-                          if (
-                            confirm(
-                              `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Bu ajandan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.`,
-                            )
-                          ) {
+                          if (confirm(t('view.deleteOneConfirm', { name: selected.name }))) {
                             await onDeleteAgent(selected.id)
                             if (!onSelectAgent) setInternalId(null)
                           }
@@ -754,7 +711,7 @@ export function AgentsView({
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-dim)]">
-                  Düzenlemek için soldan bir ajan seç.
+                  {t('view.selectToEdit')}
                 </div>
               )}
             </div>

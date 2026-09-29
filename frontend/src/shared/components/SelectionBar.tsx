@@ -1,5 +1,6 @@
 import { X, CheckSquare } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   /** Number of currently-selected items. The bar hides itself when this is 0. */
@@ -29,6 +30,7 @@ export function SelectionBar({
   onSelectAll,
   position = 'bottom',
 }: Props) {
+  const { t } = useTranslation('sharedUi')
   if (count === 0) return null
   return (
     <div
@@ -36,26 +38,26 @@ export function SelectionBar({
     >
       <button
         onClick={onClear}
-        title="Seçimi temizle (Esc)"
+        title={t('selection.clear')}
         className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
       >
         <X size={15} />
       </button>
       <span className="font-medium text-[var(--color-text)]">
-        {count} seçili
+        {t('selection.selected', { count })}
         {hiddenCount > 0 && (
           <span className="ml-1 font-normal text-[var(--color-text-dim)]">
-            (+{hiddenCount} filtre dışı)
+            {t('selection.filteredOut', { count: hiddenCount })}
           </span>
         )}
       </span>
       {onSelectAll && (
         <button
           onClick={onSelectAll}
-          title="Görünen tümünü seç"
+          title={t('selection.selectVisible')}
           className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
         >
-          <CheckSquare size={13} /> Tümü
+          <CheckSquare size={13} /> {t('selection.all')}
         </button>
       )}
       <div className="ml-auto flex flex-wrap items-center gap-1.5">{children}</div>

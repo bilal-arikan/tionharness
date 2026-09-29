@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { api } from '@/api'
 import { artifactKindForUpload } from './artifactMeta'
+import { useTranslation } from 'react-i18next'
 
 export interface ArtifactImport {
   // True while a file drag hovers the panel, and while an import is running —
@@ -30,6 +31,7 @@ export function useArtifactImport({
   reload,
   selectArtifact,
 }: UseArtifactImportOptions): ArtifactImport {
+  const { t } = useTranslation('artifacts')
   // Drag-and-drop file import state. dragDepth tracks nested dragenter/leave so
   // the overlay does not flicker when dragging over child elements.
   const [dragging, setDragging] = useState(false)
@@ -60,7 +62,7 @@ export function useArtifactImport({
             })
             if (!firstId) firstId = created.id
           } catch (e) {
-            onError(`"${file.name}" eklenemedi: ${(e as Error).message}`)
+            onError(t('errors.importFailed', { name: file.name, error: (e as Error).message }))
           }
         }
         reload()
@@ -72,7 +74,7 @@ export function useArtifactImport({
         setImporting(false)
       }
     },
-    [onError, reload, selectArtifact],
+    [onError, reload, selectArtifact, t],
   )
 
   // Drag-and-drop handlers (depth-counted so nested elements don't flicker).

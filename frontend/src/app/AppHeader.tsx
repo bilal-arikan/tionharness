@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 // AppHeader is the app-level top bar for views that don't render their own
 // in-pane header (see HEADERLESS_VIEWS). On chat it shows the session title and
 // the folder/context/debug/detail shortcuts; on workspace/settings it hosts the
@@ -49,6 +50,7 @@ export function AppHeader({
   onError,
   onOpenTrajectory,
 }: AppHeaderProps) {
+  const { t } = useTranslation()
   const activeSession = view === 'chat' ? sessions.find((s) => s.id === activeSessionId) : undefined
   const coordLabel = coordinationLabel(activeSession)
   return (
@@ -57,9 +59,9 @@ export function AppHeader({
         {view === 'chat' && (
           <button
             onClick={onToggleList}
-            aria-label="Oturum listesini aç/kapat"
+            aria-label={t('shell.toggleSessions')}
             aria-pressed={listOpen}
-            title={listOpen ? 'Oturum listesini gizle' : 'Oturum listesini göster'}
+            title={listOpen ? t('shell.hideSessions') : t('shell.showSessions')}
             data-testid="pane-list-toggle"
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
               listOpen ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'
@@ -71,9 +73,9 @@ export function AppHeader({
         {(view === 'workspace' || view === 'settings') && (
           <button
             onClick={onToggleNav}
-            aria-label="Panel listesini aç/kapat"
+            aria-label={t('shell.togglePanels')}
             aria-pressed={navOpen}
-            title={navOpen ? 'Listeyi gizle' : 'Listeyi göster'}
+            title={navOpen ? t('shell.hideList') : t('shell.showList')}
             data-testid="pane-list-toggle"
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
               navOpen ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'
@@ -89,7 +91,7 @@ export function AppHeader({
             <span className="truncate text-sm font-semibold">
               {activeSession?.title ||
                 agents.find((a) => a.id === activeAgentId)?.name ||
-                'Yeni sohbet'}
+                t('shell.newChat')}
             </span>
             {/* Part in the coordinator tree (M2) + the tree's trajectory as a
                 one-line phase strip (Rota F1b): what the session is doing
@@ -97,7 +99,7 @@ export function AppHeader({
             {coordLabel && (
               <span
                 className="hidden shrink-0 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-accent)] sm:inline"
-                title="Koordinasyon ağacındaki rolü"
+                title={t('shell.coordinationRole')}
               >
                 {coordLabel}
               </span>
@@ -116,7 +118,7 @@ export function AppHeader({
             {/* Folder path shortcut (moved here from the detail panel's Klasör card). */}
             <CopyPathButton
               getPath={async () => (await api.sessionPath(activeSessionId)).path}
-              title="Oturum klasörü yolunu kopyala"
+              title={t('shell.copySessionPath')}
               onError={onError}
             />
             {/* Coordination drawer (coordinator mode, workflow picker, worker
@@ -125,26 +127,26 @@ export function AppHeader({
                 now lives inside the "Oturum bilgisi" detail panel. */}
             <button
               onClick={onOpenCoord}
-              title="Koordinasyon panelini aç (worker'lar, workflow, ağaç)"
+              title={t('shell.openCoordination')}
               className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
             >
               <Network size={15} className="shrink-0" />
-              <span className="hidden sm:inline">Coord</span>
+              <span className="hidden sm:inline">{t('shell.coordination')}</span>
             </button>
             {/* Next-turn context preview (moved here from the detail panel). */}
             <button
               onClick={onOpenContextPreview}
-              title="Sonraki turun bağlamını önizle (debug)"
+              title={t('shell.previewContext')}
               className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
             >
               <ScanEye size={15} className="shrink-0" />
-              <span className="hidden sm:inline">Bağlam</span>
+              <span className="hidden sm:inline">{t('shell.context')}</span>
             </button>
             {/* Debug / observability lives in the "Oturum bilgisi" detail panel's
                 action list (SessionDetailPanel), not in this header. */}
             <button
               onClick={onToggleDetail}
-              title="Oturum bilgisi panelini aç/kapat"
+              title={t('shell.toggleDetails')}
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
                 detailOpen
                   ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
@@ -152,7 +154,7 @@ export function AppHeader({
               }`}
             >
               <PanelRight size={15} className="shrink-0" />
-              <span className="hidden sm:inline">Detay</span>
+              <span className="hidden sm:inline">{t('shell.details')}</span>
             </button>
           </div>
         )}

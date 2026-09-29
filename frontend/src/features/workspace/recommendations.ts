@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/api'
 import { systemApi } from '@/api/system'
+import { i18next } from '@/i18n'
 import type { HookInput } from '@/api/hooks'
 import type {
   AppSettings,
@@ -108,6 +109,23 @@ export interface Rule {
   detect: (ctx: RecContext) => RecBody | null
 }
 
+// Rule metadata is read by both the settings list and the post-create cards.
+// Getters resolve at access time so a language switch never leaves module-level
+// labels frozen in the locale that happened to load this file first.
+const recText = (key: string, options?: Record<string, unknown>): string =>
+  i18next.t(key, { ns: 'workspace', ...options })
+
+const ruleMeta = (key: string, icon: LucideIcon): RecMeta => ({
+  key,
+  icon,
+  get title() {
+    return recText(`recommendations.rules.${key}.title`)
+  },
+  get summary() {
+    return recText(`recommendations.rules.${key}.summary`)
+  },
+})
+
 // Whether any enabled hook wires a given token optimizer (rtk/sqz).
 const tokenHookLive = (hooks: Hook[], marker: string) =>
   hooks.some((h) => h.enabled && h.command.includes(marker))
@@ -122,51 +140,36 @@ export const RULES: Rule[] = [
   // rtk+sqz 1167 tokens. The card told users to disable their best configuration,
   // so it is gone rather than reworded.
   {
-    meta: {
-      key: 'no-agents',
-      icon: Bot,
-      title: 'Henüz ajan yok',
-      summary: 'Workspace’te hiç ajan yoksa oturumları yürütecek bir aktör yoktur.',
-    },
+    meta: ruleMeta('no-agents', Bot),
     detect: (ctx) => {
       if (ctx.agentsCount > 0) return null
       return {
-        desc: 'Bu workspace boş. Bir ajan oluştur ya da market’ten hazır bir şablon kur.',
-        actionLabel: 'Ajanlara git',
+        desc: recText('recommendations.rules.no-agents.desc'),
+        actionLabel: recText('recommendations.rules.no-agents.action'),
         act: () => ctx.nav.view('agents'),
       }
     },
   },
   {
-    meta: {
-      key: 'workdir',
-      icon: FolderCog,
-      title: 'Çalışma dizini belirle',
-      summary: 'Varsayılan çalışma dizini yoksa oturumlar fiziksel workspace dizininde başlar.',
-    },
+    meta: ruleMeta('workdir', FolderCog),
     detect: (ctx) => {
       if (ctx.ws.defaultWorkingDir?.trim()) return null
       return {
-        desc: 'Bir varsayılan çalışma dizini seçersen oturumlar o kök + git dalı + CLAUDE.md bağlamıyla başlar.',
-        actionLabel: 'Ayarları aç',
+        desc: recText('recommendations.rules.workdir.desc'),
+        actionLabel: recText('recommendations.rules.workdir.action'),
         act: () => ctx.nav.view('workspace'),
       }
     },
   },
   {
-    meta: {
-      key: 'cbm-add',
-      icon: Brain,
-      title: 'Kod bilgi-grafiğini ekle',
-      summary: 'codebase-memory-mcp PATH’te kuruluysa ama MCP olarak eklenmemişse.',
-    },
+    meta: ruleMeta('cbm-add', Brain),
     detect: (ctx) => {
       const cbm = ctx.tools.find((t) => t.name === CBM_TOOL && t.found)
       const added = ctx.servers.some((s) => s.command.toLowerCase().includes(CBM_TOOL))
       if (!cbm || added) return null
       return {
-        desc: 'codebase-memory-mcp kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen kod arama/gezinme sub-ms ve düşük token olur.',
-        actionLabel: 'MCP’yi ekle',
+        desc: recText('recommendations.rules.cbm-add.desc'),
+        actionLabel: recText('recommendations.rules.cbm-add.action'),
         act: async () => {
           await api.createMCPServer({
             name: CBM_TOOL,
@@ -178,18 +181,13 @@ export const RULES: Rule[] = [
     },
   },
   {
-    meta: {
-      key: 'cbm-enable',
-      icon: Brain,
-      title: 'Kod bilgi-grafiğini aç',
-      summary: 'codebase-memory MCP ekliyken workspace toggle’ı kapalıysa.',
-    },
+    meta: ruleMeta('cbm-enable', Brain),
     detect: (ctx) => {
       const added = ctx.servers.some((s) => s.command.toLowerCase().includes(CBM_TOOL))
       if (!added || ctx.ws.codebaseMemoryEnabled) return null
       return {
-        desc: 'codebase-memory MCP ekli ama bu workspace’te kapalı. Açarsan otomatik indeksleme + codebase_workspace_search devreye girer.',
-        actionLabel: 'Aç',
+        desc: recText('recommendations.rules.cbm-enable.desc'),
+        actionLabel: recText('recommendations.rules.cbm-enable.action'),
         act: async () => {
           await api.updateWorkspaceSettings({ codebaseMemoryEnabled: true })
         },
@@ -197,18 +195,13 @@ export const RULES: Rule[] = [
     },
   },
   {
-    meta: {
-      key: 'zvec-add',
-      icon: Search,
-      title: 'Anlamsal aramayı ekle',
-      summary: 'zvec-grep (zg) PATH’te kuruluysa ama MCP olarak eklenmemişse.',
-    },
+    meta: ruleMeta('zvec-add', Search),
     detect: (ctx) => {
       const zg = ctx.tools.find((t) => t.name === ZVEC_GREP_TOOL && t.found)
       if (!zg || ctx.servers.some(isZvecGrepServer)) return null
       return {
-        desc: 'zvec-grep kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen ajan adını bilmediği kodu ve dokümanı niyetle bulur; çalışma dizini arka planda indekslenir.',
-        actionLabel: 'MCP’yi ekle',
+        desc: recText('recommendations.rules.zvec-add.desc'),
+        actionLabel: recText('recommendations.rules.zvec-add.action'),
         act: async () => {
           await api.createMCPServer({
             name: ZVEC_GREP_SERVER_NAME,
@@ -221,17 +214,12 @@ export const RULES: Rule[] = [
     },
   },
   {
-    meta: {
-      key: 'zvec-enable',
-      icon: Search,
-      title: 'Anlamsal aramayı aç',
-      summary: 'zvec-grep MCP ekliyken workspace toggle’ı kapalıysa.',
-    },
+    meta: ruleMeta('zvec-enable', Search),
     detect: (ctx) => {
       if (!ctx.servers.some(isZvecGrepServer) || ctx.ws.zvecGrepEnabled) return null
       return {
-        desc: 'zvec-grep MCP ekli ama bu workspace’te kapalı. Açarsan ajanın bağlamına arama yönergesi eklenir ve çalışma dizini otomatik indekslenir.',
-        actionLabel: 'Aç',
+        desc: recText('recommendations.rules.zvec-enable.desc'),
+        actionLabel: recText('recommendations.rules.zvec-enable.action'),
         act: async () => {
           await api.updateWorkspaceSettings({ zvecGrepEnabled: true })
         },
@@ -239,12 +227,7 @@ export const RULES: Rule[] = [
     },
   },
   {
-    meta: {
-      key: 'token',
-      icon: Zap,
-      title: 'Token optimizasyonu bağla',
-      summary: 'sqz kuruluyken çıktı sıkıştırma hook’u bağlı değilse.',
-    },
+    meta: ruleMeta('token', Zap),
     detect: (ctx) => {
       // Only sqz is offered here now. rtk is wired by a workspace SETTING, not a
       // hook (see the note on RTK_HOOK's removal above), and it has its own toggle
@@ -252,8 +235,8 @@ export const RULES: Rule[] = [
       const sqz = ctx.tools.find((t) => t.name === 'sqz' && t.found)
       if (!sqz || tokenHookLive(ctx.hooks, 'sqz')) return null
       return {
-        desc: 'sqz bu cihazda kurulu ama bağlı değil. Hook olarak bağlarsan araç çıktıları kayıpsız sıkışır, token tasarrufu sağlar.',
-        actionLabel: 'sqz’i bağla',
+        desc: recText('recommendations.rules.token.desc'),
+        actionLabel: recText('recommendations.rules.token.action'),
         act: async () => {
           await api.createHook(SQZ_HOOK)
         },
@@ -261,13 +244,7 @@ export const RULES: Rule[] = [
     },
   },
   {
-    meta: {
-      key: 'shell-compress',
-      icon: Zap,
-      title: 'Shell çıktısı sıkıştırmayı aç',
-      summary:
-        'sqz kuruluyken shell çıktısı in-process sıkıştırma pasifse (hook yok, otomatik devre dışı).',
-    },
+    meta: ruleMeta('shell-compress', Zap),
     detect: (ctx) => {
       const sqz = ctx.tools.find((t) => t.name === 'sqz' && t.found)
       if (!sqz) return null
@@ -277,8 +254,8 @@ export const RULES: Rule[] = [
       // Otomatik mod yalnız bir sqz hook bağlıyken aktiftir; bağlıysa sıkıştırma zaten çalışıyor.
       if (tokenHookLive(ctx.hooks, 'sqz')) return null
       return {
-        desc: 'sqz kurulu ama bu workspace’te shell çıktısı sıkıştırma pasif. Açarsan ajanın shell çıktısı modele dönmeden in-process sqz ile kayıpsız kısaltılır — hook gerektirmez (hook yolu bridged araçta zaten çalışmaz).',
-        actionLabel: 'Aç',
+        desc: recText('recommendations.rules.shell-compress.desc'),
+        actionLabel: recText('recommendations.rules.shell-compress.action'),
         act: async () => {
           await api.updateWorkspaceSettings({ shellOutputCompression: 'on' })
         },
@@ -286,17 +263,12 @@ export const RULES: Rule[] = [
     },
   },
   {
-    meta: {
-      key: 'terse-mode',
-      icon: Scissors,
-      title: 'Terse Mode’u aç',
-      summary: 'Yanıt üslubunu sıkıştıran terse prompt’u bu workspace’te kapalıysa.',
-    },
+    meta: ruleMeta('terse-mode', Scissors),
     detect: (ctx) => {
       if (ctx.ws.terseMode) return null
       return {
-        desc: 'Terse Mode kapalı. Açarsan ajanların yanıtlarındaki dolgu metin düşer, teknik içerik (kod, komut, dosya yolu, hata metni) birebir kalır — çıktı tokenı belirgin azalır.',
-        actionLabel: 'Aç',
+        desc: recText('recommendations.rules.terse-mode.desc'),
+        actionLabel: recText('recommendations.rules.terse-mode.action'),
         act: async () => {
           await api.updateWorkspaceSettings({ terseMode: true })
         },
@@ -304,12 +276,7 @@ export const RULES: Rule[] = [
     },
   },
   {
-    meta: {
-      key: 'no-mcp',
-      icon: Plug,
-      title: 'MCP kaynağı yok',
-      summary: 'Hiç MCP sunucusu yoksa (ve codebase-memory / zvec-grep zaten önerilmiyorsa).',
-    },
+    meta: ruleMeta('no-mcp', Plug),
     detect: (ctx) => {
       if (ctx.servers.length > 0) return null
       // A specific "add this MCP" card (codebase-memory, zvec-grep) already covers
@@ -319,35 +286,25 @@ export const RULES: Rule[] = [
       )
       if (specificPending) return null
       return {
-        desc: 'Harici veri/araç bağlamak için bir MCP sunucusu ekleyebilirsin (market veya .mcp.json import).',
-        actionLabel: 'Market’i aç',
+        desc: recText('recommendations.rules.no-mcp.desc'),
+        actionLabel: recText('recommendations.rules.no-mcp.action'),
         act: () => ctx.nav.view('market'),
       }
     },
   },
   {
-    meta: {
-      key: 'backup-off',
-      icon: Archive,
-      title: 'Yedekleme kapalı',
-      summary: 'Uygulama genelinde periyodik zip yedeği kapalıysa.',
-    },
+    meta: ruleMeta('backup-off', Archive),
     detect: (ctx) => {
       if (ctx.settings.backupEnabled) return null
       return {
-        desc: 'Periyodik zip yedeği kapalı. Açarsan her workspace’in verisi düzenli yedeklenir.',
-        actionLabel: 'Yedekleme ayarları',
+        desc: recText('recommendations.rules.backup-off.desc'),
+        actionLabel: recText('recommendations.rules.backup-off.action'),
         act: () => ctx.nav.settings('backup'),
       }
     },
   },
   {
-    meta: {
-      key: 'tool-update',
-      icon: ArrowUpCircle,
-      title: 'Harici araç güncellemesi var',
-      summary: 'Kurulu bir harici aracın daha yeni bir sürümü yayımlanmışsa.',
-    },
+    meta: ruleMeta('tool-update', ArrowUpCircle),
     detect: (ctx) => {
       // Only 'outdated' counts. 'unknown' means a version could not be parsed on
       // one side or the other — nudging an upgrade on that would be a guess, and
@@ -360,29 +317,26 @@ export const RULES: Rule[] = [
       const names = stale.map((u) => `${u.name} → ${u.latest}`).join(', ')
       return {
         desc:
-          `${names} yayımlanmış. ` +
+          recText('recommendations.rules.tool-update.published', { names }) +
           (oneClick > 0
-            ? `${oneClick} tanesi tek tıkla güncellenebilir; kalanlar elle (çalışan alt-süreç ikiliyi kilitlediği için TionHarness üzerine yazmaz).`
-            : 'Bu araçlar elle güncellenir — çalışan bir alt-süreç ikiliyi kilitlediği için TionHarness üzerine yazmaz; ekranda adım adım talimat var.'),
-        actionLabel: 'Harici araçlar',
+            ? recText('recommendations.rules.tool-update.oneClick', { count: oneClick })
+            : recText('recommendations.rules.tool-update.manual')),
+        actionLabel: recText('recommendations.rules.tool-update.action'),
         variant: 'warning',
         act: () => ctx.nav.settings('exttools'),
       }
     },
   },
   {
-    meta: {
-      key: 'cli-tools',
-      icon: Wrench,
-      title: 'Kurulu CLI araçları var',
-      summary: 'PATH’te doğrudan Bash ile çağrılabilecek CLI araçları (mmdc…) varsa.',
-    },
+    meta: ruleMeta('cli-tools', Wrench),
     detect: (ctx) => {
       const cli = ctx.tools.filter((t) => t.found && t.wire === 'cli')
       if (cli.length === 0) return null
       return {
-        desc: `${cli.map((t) => t.name).join(', ')} bu cihazda kurulu — ajan geliştirmede Bash ile doğrudan çağırabilir.`,
-        actionLabel: 'Detay',
+        desc: recText('recommendations.rules.cli-tools.desc', {
+          tools: cli.map((t) => t.name).join(', '),
+        }),
+        actionLabel: recText('recommendations.rules.cli-tools.action'),
         act: () => ctx.nav.settings('exttools'),
       }
     },

@@ -3,7 +3,8 @@ import { X } from 'lucide-react'
 import type { Agent } from '@/types'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { AgentIdentity } from './AgentIdentity'
-import { ARCHIVED_AGENT_LABEL, pickableAgents } from './pickableAgents'
+import { archivedAgentLabel, pickableAgents } from './pickableAgents'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   agents: Agent[]
@@ -21,13 +22,9 @@ interface Props {
 // both in the trigger and the option list. Closes on outside click. Archived
 // agents are never offered as a new choice; a currently-selected archived agent
 // stays visible, marked "(arşivli)", so editing a record does not drop it.
-export function AgentPicker({
-  agents,
-  value,
-  onChange,
-  placeholder = 'Ajan seç',
-  clearable = false,
-}: Props) {
+export function AgentPicker({ agents, value, onChange, placeholder, clearable = false }: Props) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedPlaceholder = placeholder ?? t('agents.select')
   const [open, setOpen] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
   const options = pickableAgents(agents, value)
@@ -35,7 +32,7 @@ export function AgentPicker({
   const archivedMark = (a: Agent) =>
     a.archived ? (
       <span data-testid="agent-picker-archived" className="ml-1 text-[var(--color-text-dim)]">
-        {ARCHIVED_AGENT_LABEL}
+        {archivedAgentLabel()}
       </span>
     ) : undefined
 
@@ -60,15 +57,15 @@ export function AgentPicker({
             nameSuffix={archivedMark(selected)}
           />
         ) : (
-          <span className="text-[var(--color-text-dim)]">{placeholder}</span>
+          <span className="text-[var(--color-text-dim)]">{resolvedPlaceholder}</span>
         )}
         {clearable && selected ? (
           <span
             role="button"
             tabIndex={0}
             data-testid="agent-picker-clear"
-            title="Seçimi kaldır"
-            aria-label="Seçimi kaldır"
+            title={t('selection.remove')}
+            aria-label={t('selection.remove')}
             onClick={(e) => {
               e.stopPropagation()
               clear()
@@ -85,7 +82,7 @@ export function AgentPicker({
             <X size={13} />
           </span>
         ) : (
-          <span className="ml-auto text-[var(--color-text-dim)]">▾</span>
+          <span className="ml-auto text-[var(--color-text-dim)]">{'▾'}</span>
         )}
       </button>
       {open && (
@@ -98,11 +95,13 @@ export function AgentPicker({
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-bg)]"
             >
               <X size={14} />
-              Seçimi kaldır
+              {t('selection.remove')}
             </button>
           )}
           {options.length === 0 && (
-            <div className="px-3 py-2 text-sm text-[var(--color-text-dim)]">Ajan yok</div>
+            <div className="px-3 py-2 text-sm text-[var(--color-text-dim)]">
+              {t('agents.empty')}
+            </div>
           )}
           {options.map((a) => (
             <button

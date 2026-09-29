@@ -8,6 +8,7 @@ import {
   validateImageHeader,
   validateSourceLimits,
 } from '@/features/image-annotator/imageAnnotatorLimits'
+import { sharedText } from './sharedI18n'
 
 // copyText writes `text` to the clipboard, working in BOTH secure and insecure
 // contexts. The async Clipboard API (navigator.clipboard) is only exposed on
@@ -64,13 +65,10 @@ async function copyText(text: string): Promise<boolean> {
 // Returns true ONLY when the programmatic copy succeeded, so callers can show a
 // "Kopyalandı" confirmation on true and stay silent on false (the prompt has
 // already given the user the text).
-export async function copyToClipboard(
-  text: string,
-  promptLabel = 'Kopyalayın (Ctrl+C, Enter):',
-): Promise<boolean> {
+export async function copyToClipboard(text: string, promptLabel?: string): Promise<boolean> {
   if (!text) return false
   const ok = await copyText(text)
-  if (!ok) window.prompt(promptLabel, text)
+  if (!ok) window.prompt(promptLabel ?? sharedText('clipboard.copyPrompt'), text)
   return ok
 }
 

@@ -1,0 +1,322 @@
+{
+  "activity": {
+    "change": "Değişiklik",
+    "duration": "Süre: {{duration}}",
+    "error": "hata",
+    "input": "Girdi",
+    "lines_one": "{{count}} satır",
+    "lines_other": "{{count}} satır",
+    "operation": "İşlem: {{operation}}",
+    "output": "Çıktı",
+    "serverTruncated": "Sunucu bu çıktıyı kırptı. Tamamını getirmek için turun başındaki “tam iz” seçeneğini kullanabilirsin.",
+    "serverTruncated_withSize": "Sunucu bu çıktıyı kırptı (tamamı {{size}}). Tamamını getirmek için turun başındaki “tam iz” seçeneğini kullanabilirsin.",
+    "skill": "Skill",
+    "status": "Durum: {{status}}",
+    "target": "Hedef: {{target}}",
+    "truncated": "… (kırpıldı)"
+  },
+  "agentHeader": { "openSettings": "Ajan ayarlarını aç" },
+  "artifact": {
+    "created": "oluşturuldu",
+    "kind": {
+      "code": "Kod",
+      "html": "HTML",
+      "markdown": "Markdown",
+      "mermaid": "Mermaid",
+      "svg": "SVG",
+      "text": "Metin"
+    },
+    "saveFailed": "Artifact kaydedilemedi",
+    "updated": "güncellendi",
+    "view": "Görüntüle"
+  },
+  "ask": {
+    "answerPlaceholder": "Yanıtını yaz…",
+    "asyncHint": "Hazır olduğunda yanıtla. Bağımsız işler devam edebilir.",
+    "multipleQuestions_one": "Bir soru",
+    "multipleQuestions_other": "Birkaç soru ({{count}})",
+    "send": "Gönder"
+  },
+  "assistant": {
+    "badResponse": "Bu yanıt kötü",
+    "cancelled": "Bu yanıt manuel olarak durduruldu. O ana kadarki içerik korundu.",
+    "fullTrace": "tam iz",
+    "fullTraceDescription": "Bu turun kırpılmış araç çıktılarının tamamını sunucudan getir",
+    "goodResponse": "Bu yanıt iyi",
+    "hide": "gizle",
+    "hideTools": "Araç adımlarını gizle",
+    "interrupted": "Bu yanıt yarıda kesildi (sunucu yeniden başladı). İçerik eksik olabilir.",
+    "loadingTrace": "getiriliyor…",
+    "modelUsage": "Bu turun modeli ve token tüketimi",
+    "readAloud": "Yanıtı sesli oku",
+    "readAloudTitle": "Yanıtı sesli oku (kod atlanır)",
+    "retry": "Yeniden dene",
+    "retryTitle": "Bu turu yeniden dene",
+    "show": "göster",
+    "showTools": "Araç adımlarını göster",
+    "steps_one": "{{count}} adım",
+    "steps_other": "{{count}} adım",
+    "stopReading": "Okumayı durdur",
+    "stopReason": {
+      "maxTokens": "çıktı limiti — kesilmiş olabilir",
+      "refusal": "model reddetti",
+      "stopSequence": "durdurma dizisi"
+    },
+    "tools_one": "{{count}} araç",
+    "tools_other": "{{count}} araç",
+    "traceFailed": "tam iz alınamadı"
+  },
+  "attachment": {
+    "editImage": "Görseli düzenle",
+    "openArtifact": "Artifactı aç",
+    "openFile": "Dosyayı aç",
+    "openImage": "Görseli aç",
+    "remove": "Eki kaldır"
+  },
+  "autoPrompt": {
+    "automation": "Otomasyon tetiği",
+    "continuation": "Otomatik devam",
+    "schedule": "Zamanlanmış görev"
+  },
+  "cache": {
+    "cold": "Cache soğuk",
+    "coldDescription": "Prompt cache soğuk (1sa TTL doldu) — sonraki tur öneki baştan öder. Bekleyen bağlam değişiklikleri de bu turda bedavaya uygulanır.",
+    "coldTurns_one": "{{count}} soğuk tur",
+    "coldTurns_other": "{{count}} soğuk tur",
+    "coldTurnsDescription": "Bu oturumda cache önekini baştan ödeyen tur sayısı (ilk tur hariç). Sebebi için o mesajın debug panelini aç.",
+    "warm": "Cache sıcak · {{remaining}}",
+    "warmDescription": "Prompt cache sıcak: şimdi gönderilen tur cache'li öneki okur (ucuz). Süre dolunca önek baştan yazılır."
+  },
+  "cacheBreak": {
+    "coldPrefixSize": "Soğuk olarak yeniden ödenen önek büyüklüğü",
+    "headline": {
+      "generic": "Prompt cache kırıldı",
+      "model-changed": "Model değişti — prompt cache öneki baştan yazıldı",
+      "prompt-or-tools-changed": "Sistem promptu / araç şeması değişti — cache öneki kırıldı"
+    },
+    "modelChangedDetail": "Cache modele bağlıdır: model değişince önek kaçınılmaz olarak yeniden yazılır. Sık model değiştirmek her seferinde bu bedeli ödetir.",
+    "refresh": "Bağlamı yenile",
+    "refreshError": "Bağlam yenilenemedi: {{error}}",
+    "refreshSuccess": "Bağlam yenilendi — sonraki tur canlı prompt ve araç şemalarıyla donar.",
+    "suspiciousDetail": "Prompt epoch açıkken bu kırılımın oturum ortasında olmaması gerekir — snapshot değişikliği bilinçli bir yenilemeye kadar geri tutar. Epoch bu workspace’te kapalı olabilir ya da bir yol snapshot’ı atlıyordur (Ayarlar → Workspace → “Prompt epoch”)."
+  },
+  "changes": {
+    "close": "Kapat",
+    "copied": "Panoya kopyalandı",
+    "copyPatch": "Yamayı panoya kopyala",
+    "downloadPatch": "Yamayı .patch olarak indir",
+    "empty": "Dosya değişikliği yok.",
+    "files_one": "{{count}} dosya",
+    "files_other": "{{count}} dosya",
+    "fullSession": "Tüm oturum",
+    "loadFailed": "Alınamadı: {{error}}",
+    "loading": "Yükleniyor…",
+    "multipleChanges_one": "Bu dosya bir kez değiştirildi. Aşağıdaki yama değişikliğin yapıldığı andaki halidir.",
+    "multipleChanges_other": "Bu dosya {{count}} kez değiştirildi. Aşağıdakiler sıralı değişikliklerdir, birleştirilmiş tek bir fark değildir.",
+    "new": "yeni",
+    "newFileLines_one": "yeni dosya · {{formattedCount}} satır",
+    "newFileLines_other": "yeni dosya · {{formattedCount}} satır",
+    "noSessionContext": "Bu görünümde oturum bağlamı yok",
+    "openFile": "Dosyayı aç",
+    "showNewFile_one": "Yeni dosya · {{formattedCount}} satır — içeriği göster",
+    "showNewFile_other": "Yeni dosya · {{formattedCount}} satır — içeriği göster",
+    "snapshotNotice": "Gösterilen fark, değişikliğin yapıldığı andaki halidir — dosyanın şu anki içeriği değil.",
+    "subagent": "alt ajan",
+    "synthesized": "sentezlendi",
+    "synthesizedDescription": "Bu farkı çevre bağlamı olmadan araç girdisinden ürettik (claude-cli düzenlemeyi kendisi uyguladı).",
+    "thisTurn": "Bu tur",
+    "title": "Dosya değişiklikleri",
+    "truncated": "kırpılmış",
+    "truncatedDescription": "Sunucu bu yamayı okuma yolunda kırptı; tam iz alınamadı."
+  },
+  "changesButton": {
+    "files_one": "{{count}} dosya",
+    "files_other": "{{count}} dosya",
+    "title_one": "Bu turda değişen dosyanın farkını gör",
+    "title_other": "Bu turda değişen {{count}} dosyanın farklarını topluca gör"
+  },
+  "chatView": {
+    "anotherWindowTyping": "Başka bir pencere yazıyor…",
+    "openRunHistory": "Koşu geçmişini aç",
+    "windowsOpen_one": "Bu oturum {{count}} pencerede açık",
+    "windowsOpen_other": "Bu oturum {{count}} pencerede açık",
+    "windowsOpenAsk_one": "{{count}} pencerede açık — ilk cevaplayan geçerli",
+    "windowsOpenAsk_other": "{{count}} pencerede açık — ilk cevaplayan geçerli"
+  },
+  "commands": {
+    "board": "Görev panosunu özetle",
+    "compact": "Claude/Codex CLI'nın yerel bağlam sıkıştırmasını çalıştır",
+    "compactCustom": "Eski mesajları TionHarness rolling summary'sine katla",
+    "flows": "Akışları özetle",
+    "handoff": "Bağlamı sıfırla — temiz pencerede devam et",
+    "refreshContext": "Donmuş bağlam snapshot'ını yenile — araç/skill/talimat değişiklikleri sonraki turda görünür",
+    "rewind": "Sohbeti bir checkpoint'e geri sar — sonraki mesajları geri al",
+    "tools": "Kullanılabilir araçları listele"
+  },
+  "compaction": {
+    "complete": "Bağlam sıkıştırıldı",
+    "contextSize": "Katlama öncesi → sonrası bağlam büyüklüğü",
+    "folded_one": "Bağlam sıkıştırıldı — {{count}} mesaj özete katlandı",
+    "folded_other": "Bağlam sıkıştırıldı — {{count}} mesaj özete katlandı",
+    "provider": "Sağlayıcı",
+    "running": "CLI bağlamı sıkıştırılıyor…",
+    "sessionAction": "Oturum işlemi",
+    "sessionActionValue": {
+      "native-compact": "yerel sıkıştırma",
+      "restart-summary": "özetle yeniden başlat",
+      "resume": "oturumu sürdür"
+    },
+    "source": "Kaynak",
+    "sourceValue": { "cli-native": "CLI yerel", "tionharness": "TionHarness" },
+    "trigger": "Tetikleyici",
+    "triggerValue": {
+      "auto": "bütçe eşiği",
+      "manual": "manuel",
+      "prune": "araç çıktısı budaması",
+      "reactive": "taşma kurtarması"
+    }
+  },
+  "common": {
+    "tokenShort": "{{count}} tok"
+  },
+  "composer": {
+    "attachFile": "Dosya ekle",
+    "autoResolved": "Oto ({{label}})",
+    "btw": "Btw yan soru",
+    "btwTitle": "Btw — yan soru sor (geçmişe yazılmaz, ana görevi kesmez)",
+    "close": "Kapat",
+    "dismissError": "Hatayı kapat",
+    "editableImageMissing": "Düzenlenebilir görsel eki artık kullanılamıyor.",
+    "imageEditorMissing": "Etkin görsel düzenleyici eki artık kullanılamıyor.",
+    "imageRollbackFailed": "Eski görsel silinemedi ve yeni yükleme geri alınamadı.",
+    "imageUploadFailed": "Görsel yüklenemedi.",
+    "imageValidationFailed": "Görsel doğrulanamadı.",
+    "permissionMode": "İzin modu (Shift+Tab)",
+    "permissionModeTitle": "İzin modu: {{label}} — {{hint}} (Shift+Tab ile değiştir)",
+    "placeholder": "Mesaj yaz — @ ajan adı, # artifact, / komut",
+    "replacementPathMissing": "Yeni yüklemede silme yolu bulunmuyor.",
+    "thinkingLevel": "Düşünme seviyesi",
+    "thinkingLevelTitle": "Düşünme seviyesi: {{label}} — {{hint}}",
+    "toggleTurnSettings": "Tur ayarlarını göster/gizle",
+    "tools": "Araç bilgisi",
+    "toolsTitle": "Araçlar — bu ajanın kullanabildiği araçlar ve MCP durumu (salt bilgi)",
+    "turnSettings": "Tur ayarları (düşünme · izin · çalışma dizini · araçlar)",
+    "waitingPlaceholder": "Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın",
+    "writeMessage": "Mesaj yaz"
+  },
+  "contextChange": {
+    "applyPrefix": "Değişiklik bir sonraki bağlam yenilemesinde tam uygulanır —",
+    "applySuffix": "(veya compaction / boşta kalma).",
+    "summary": "Statik bağlam değişti"
+  },
+  "copy": { "copied": "Kopyalandı", "message": "Mesajı kopyala" },
+  "debug": {
+    "avoidableWaste": "Kaçınılabilir fazla ödeme: {{amount}}{{estimate}} — tur daha erken gelseydi önek sıcak kalırdı.",
+    "breakReason": "Kırılma sebebi",
+    "breakReasonValue": {
+      "model-changed": "Model değişti",
+      "prompt-or-tools-changed": "Prompt / araç şeması değişti",
+      "ttl-or-server-eviction": "TTL doldu ya da sunucu düşürdü"
+    },
+    "cacheBroken": "cache kırıldı",
+    "cacheRead": "Cache oku",
+    "cacheSavings": "Cache tasarrufu",
+    "cacheWrite": "Cache yaz",
+    "cold": "❄ soğuk",
+    "coldDescription": "Bu tur soğuk başladı — istem cache'e tam yazıldı (pahalı).",
+    "compactions_one": "{{count}} sıkıştırma",
+    "compactions_other": "{{count}} sıkıştırma",
+    "cost": "Maliyet",
+    "duration": "Süre",
+    "error": "hata",
+    "errors_one": "{{count}} hata",
+    "errors_other": "{{count}} hata",
+    "heading": "Mesaj debug",
+    "input": "Girdi",
+    "loading": "Yükleniyor…",
+    "model": "Model",
+    "noData": "Bu mesaj için debug verisi yok (debug günlüğü kapalı ya da bu mesaj önce üretilmiş).",
+    "output": "Çıktı",
+    "outputSpeed": "Çıktı hızı",
+    "recoveries_one": "{{count}} kurtarma",
+    "recoveries_other": "{{count}} kurtarma",
+    "thinking": "Düşünme",
+    "title": "Bu mesajın debug · maliyet · performans bilgileri",
+    "tools_one": "Araçlar ({{count}})",
+    "tools_other": "Araçlar ({{count}})",
+    "totalPrompt": "Toplam istem",
+    "warm": "🔥 sıcak · %{{percent}} cache",
+    "warmDescription": "Bu tur sıcak prompt cache'ini yeniden kullandı (ucuz)."
+  },
+  "delete": { "cancel": "Vazgeç", "confirm": "Sil", "message": "Mesajı sil" },
+  "diff": {
+    "change": "Değişiklik",
+    "create": "Oluştur",
+    "edit": "Düzenle",
+    "new": "yeni",
+    "write": "Yaz"
+  },
+  "direction": { "addressedTo": "Bu mesaj {{label}} adresli" },
+  "empty": {
+    "agent": "Ajan",
+    "createAgent": "Ajan oluştur",
+    "createAgentDescription": "Sohbet başlatmak için en az bir ajana ihtiyacın var. Ajanlar ekranından hızlıca bir tane oluşturabilirsin.",
+    "createAgentTitle": "Önce bir ajan oluştur",
+    "deletedAgent": "Seçili ajan silinmiş. Geçmiş sohbetleri duruyor; devam etmek için başka bir ajan seç.",
+    "newChat": "Yeni sohbet",
+    "startDescription": "Bir ajan seç ve sohbete başla. Mesajlar seçtiğin ajanla yürütülür.",
+    "startTitle": "Yeni sohbete başla"
+  },
+  "error": {
+    "generic": "Hata",
+    "reason": {
+      "billing": "Kredi / kota tükendi",
+      "overloaded": "Sağlayıcı aşırı yüklü",
+      "rate_limit": "Kullanım limitine ulaşıldı"
+    },
+    "retryHint": "Aşağıdaki “Yeniden dene” butonuyla turu sürdürebilirsiniz."
+  },
+  "messageList": {
+    "cacheCooled": "cache soğudu · {{gap}} ara",
+    "cacheGapDescription": "Bu boşluk ({{gap}}) 1sa cache TTL'ini aştı — sonraki tur öneki soğuk olarak yeniden ödedi.",
+    "cliRestart": "yeni CLI oturumu",
+    "cliRestartDescription": "Bu turda CLI oturumu yeniden başladı — --resume uygulanamadı (önceki thread sürdürülemedi, compaction tabanı sıfırladı ya da oturumun ilk CLI turu). Hazırlanan transkript yeni CLI oturumuna baştan gönderildi.",
+    "days_one": "{{count}} gün",
+    "days_other": "{{count}} gün",
+    "everyone": "herkes",
+    "history": "Sohbet geçmişi",
+    "hours_one": "{{count}} sa",
+    "hours_other": "{{count}} sa",
+    "returnToPinnedQuestion": "Sabitlenen soruya dön",
+    "returnToQuestion": "Bu soruya dön",
+    "start": "Sohbete başla",
+    "writeBelow": "Aşağıya bir mesaj yaz."
+  },
+  "messageMeta": {
+    "cacheCold": "Soğuk: cache öneki bu turda baştan yazıldı (pahalı). Sebebi için debug panelini aç.",
+    "cacheWarm": "Sıcak: bu tur cache'li öneki yeniden kullandı (ucuz)",
+    "durationDerived": "Ajanın bu yanıtı üretme süresi (yaklaşık — eski mesaj, mesaj zamanlarından türetildi)",
+    "durationMeasured": "Ajanın bu yanıtı üretme süresi (sunucuda ölçüldü)",
+    "liveTimer": "Ajan ne zamandır çalışıyor"
+  },
+  "notification": {
+    "permissionTitle": "İzin bekleniyor",
+    "planBody": "Ajan hazırladığı planın onayını bekliyor.",
+    "planTitle": "Plan onayı bekleniyor",
+    "questionBody": "Ajan yanıtını bekliyor.",
+    "questionTitle": "Ajan bir soru sordu"
+  },
+  "queue": {
+    "kind": {
+      "automation": "Otomasyon turu çalışıyor",
+      "command": "Komut çalışıyor",
+      "coordinator": "Worker bildirimi işleniyor",
+      "generic": "Tur çalışıyor",
+      "peer": "Ajan mesajı işleniyor",
+      "spawn": "Spawn turu çalışıyor",
+      "wake": "Zamanlanmış tur çalışıyor",
+      "worker": "Worker görevi çalışıyor"
+    },
+    "runningLabel": "{{label}} çalışıyor"
+  }
+}

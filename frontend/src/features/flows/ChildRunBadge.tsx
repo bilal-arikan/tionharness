@@ -1,4 +1,5 @@
 import type { ChildProgress } from './runTree'
+import { useTranslation } from 'react-i18next'
 
 // ChildRunBadge is the rollup line a subflow/spawn node shows while the run it
 // launched is executing: which node of the CHILD is live, and how far in.
@@ -11,6 +12,7 @@ import type { ChildProgress } from './runTree'
 // Renders nothing without progress, so a node whose child has not started yet (or
 // a view that does not follow the run tree) keeps its plain appearance.
 export function ChildRunBadge({ child }: { child: ChildProgress | undefined }) {
+  const { t } = useTranslation('flows')
   if (!child) return null
   const { phase, title, index } = child
   const mark = phase === 'error' ? '✕' : phase === 'done' ? '✓' : phase === 'waiting' ? '⏳' : '▶'
@@ -23,11 +25,11 @@ export function ChildRunBadge({ child }: { child: ChildProgress | undefined }) {
   return (
     <div
       className={`mt-0.5 flex items-center gap-1 text-[11px] ${tone}`}
-      title="Çift tıkla alt koşuya in"
+      title={t('nodes.childRunOpen')}
     >
       <span className="shrink-0">{mark}</span>
       <span className="shrink-0 opacity-70">{index}.</span>
-      <span className="truncate">{title || 'alt koşu'}</span>
+      <span className="truncate">{title || t('nodes.childRun')}</span>
     </div>
   )
 }

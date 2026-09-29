@@ -34,6 +34,7 @@ import { EndNode } from './EndNode'
 import { SpawnNode } from './SpawnNode'
 import { JoinNode } from './JoinNode'
 import { CoordinatorNode } from './CoordinatorNode'
+import { useTranslation } from 'react-i18next'
 
 // CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
 // ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
@@ -49,6 +50,7 @@ function CanvasTools({
   showMinimap: boolean
   onToggleMinimap: () => void
 }) {
+  const { t } = useTranslation('flows')
   const { fitView } = useReactFlow()
   return (
     <Panel position="top-right">
@@ -61,9 +63,9 @@ function CanvasTools({
               setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 60)
             }}
             className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
-            title="Düğümleri otomatik diz"
+            title={t('canvas.autoLayoutTitle')}
           >
-            ▦ Oto diz
+            {t('actions.autoLayout')}
           </button>
         )}
         <button
@@ -73,9 +75,9 @@ function CanvasTools({
           className={`rounded px-2 py-1 hover:bg-[var(--color-surface-2)] ${
             showMinimap ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'
           }`}
-          title={showMinimap ? 'Mini haritayı gizle' : 'Mini haritayı göster'}
+          title={showMinimap ? t('canvas.hideMinimap') : t('canvas.showMinimap')}
         >
-          🗺 harita
+          {t('actions.showMap')}
         </button>
       </div>
     </Panel>

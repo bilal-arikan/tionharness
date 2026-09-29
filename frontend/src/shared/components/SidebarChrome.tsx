@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { PanelLeftClose, Plus, RefreshCw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 // Shared chrome for every secondary sidebar (the per-screen list column), so the
 // header row, the "new item" button, the refresh control and the drag handle all
@@ -43,19 +44,15 @@ export function SidebarHeader({
 
 // CollapseListButton is the icon-only "hide this list" control used by every
 // list-column header (SidebarHeader and the custom sessions/insight headers).
-export function CollapseListButton({
-  onClick,
-  title = 'Listeyi gizle',
-}: {
-  onClick: () => void
-  title?: string
-}) {
+export function CollapseListButton({ onClick, title }: { onClick: () => void; title?: string }) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedTitle = title ?? t('list.hide')
   return (
     <button
       type="button"
       onClick={onClick}
-      title={title}
-      aria-label={title}
+      title={resolvedTitle}
+      aria-label={resolvedTitle}
       data-testid="list-collapse"
       className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
     >
@@ -65,17 +62,13 @@ export function CollapseListButton({
 }
 
 // RefreshButton is the standard icon-only reload control for a sidebar header.
-export function RefreshButton({
-  onClick,
-  title = 'Yenile',
-}: {
-  onClick: () => void
-  title?: string
-}) {
+export function RefreshButton({ onClick, title }: { onClick: () => void; title?: string }) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedTitle = title ?? t('actions.refresh')
   return (
     <button
       onClick={onClick}
-      title={title}
+      title={resolvedTitle}
       className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
     >
       <RefreshCw size={14} />
@@ -128,10 +121,11 @@ export function ResizeHandle({
   onMouseDown: (e: React.MouseEvent) => void
   side?: 'left' | 'right'
 }) {
+  const { t } = useTranslation('sharedUi')
   return (
     <div
       onMouseDown={onMouseDown}
-      title="Genişliği ayarla"
+      title={t('list.resize')}
       className={`absolute top-0 h-full w-1 cursor-col-resize bg-transparent transition hover:bg-[var(--color-accent)] ${
         side === 'left' ? 'left-0' : 'right-0'
       }`}

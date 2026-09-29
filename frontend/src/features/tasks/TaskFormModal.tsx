@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Archive,
   ArchiveRestore,
@@ -28,11 +29,11 @@ function parseDeps(raw: string): string[] {
   }
 }
 
-const PRIORITIES: { key: TaskPriority; label: string; color: string }[] = [
-  { key: 'critical', label: 'Kritik', color: '#ef4444' },
-  { key: 'high', label: 'Yüksek', color: '#f59e0b' },
-  { key: 'medium', label: 'Orta', color: '#3b82f6' },
-  { key: 'low', label: 'Düşük', color: '#6b7280' },
+const PRIORITIES: { key: TaskPriority; color: string }[] = [
+  { key: 'critical', color: '#ef4444' },
+  { key: 'high', color: '#f59e0b' },
+  { key: 'medium', color: '#3b82f6' },
+  { key: 'low', color: '#6b7280' },
 ]
 
 interface Props {
@@ -58,8 +59,7 @@ interface Props {
 }
 
 // excerpt returns a short, single-line preview of the description used as the
-// placeholder title until the async AI title lands ("ilk başta içeriğin belli
-// miktarını başlıkta göster").
+// placeholder title until the async AI title lands.
 function excerpt(text: string, max = 60): string {
   const line = text.trim().split(/\r?\n/, 1)[0] ?? ''
   return line.length > max ? line.slice(0, max).trimEnd() + '…' : line
@@ -84,6 +84,7 @@ export function TaskFormModal({
   onArchived,
   onError,
 }: Props) {
+  const { t } = useTranslation('tasks')
   const firstCol = defaultBoardState ?? columns[0]?.key ?? 'todo'
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -144,14 +145,14 @@ export function TaskFormModal({
 
   const save = async () => {
     if (mode === 'create' && !title.trim() && !description.trim()) {
-      onError('Başlık veya açıklama gerekli')
+      onError(t('form.errors.titleOrDescriptionRequired'))
       return
     }
     if (mode === 'edit') {
       setSaving(true)
       try {
         onSaved(await api.updateTask(task!.id, payload()))
-        toast.success('Görev güncellendi')
+        toast.success(t('form.toasts.updated'))
         onClose()
       } catch (e) {
         onError((e as Error).message)
@@ -165,7 +166,7 @@ export function TaskFormModal({
     // placeholder title (typed title, else a content excerpt), close the modal,
     // then reconcile with the server row. This guarantees the chosen board column
     // is honored and lets the AI title fill in asynchronously (temp cards show a
-    // "başlık üretiliyor…" hint via their `temp-` id).
+    // "generating title…" hint via their `temp-` id).
     const p = payload()
     const tempId = `temp-${Date.now()}`
     const nowSec = Math.floor(Date.now() / 1000)
@@ -192,7 +193,7 @@ export function TaskFormModal({
     try {
       const saved = await api.createTask(p)
       onReplaceTemp?.(tempId, saved)
-      toast.success('Görev oluşturuldu')
+      toast.success(t('form.toasts.created'))
     } catch (e) {
       onReplaceTemp?.(tempId, null)
       onError((e as Error).message)
@@ -216,11 +217,11 @@ export function TaskFormModal({
 
   const remove = async () => {
     if (!task || !onDeleted) return
-    if (!confirm(`"${task.title}" silinsin mi?`)) return
+    if (!confirm(t('form.confirmDelete', { title: task.title }))) return
     try {
       await api.deleteTask(task.id)
       onDeleted(task.id)
-      toast.success('Görev silindi')
+      toast.success(t('form.toasts.deleted'))
       onClose()
     } catch (e) {
       onError((e as Error).message)
@@ -234,7 +235,7 @@ export function TaskFormModal({
     try {
       await api.archiveTask(task.id, archived)
       onArchived(task.id)
-      toast.success(archived ? 'Görev arşivlendi' : 'Görev arşivden geri alındı')
+      toast.success(archived ? t('form.toasts.archived') : t('form.toasts.restored'))
       onClose()
     } catch (e) {
       onError((e as Error).message)
@@ -257,9 +258,9 @@ export function TaskFormModal({
             <button
               data-testid="task-id-copy"
               onClick={async () => {
-                if (await copyToClipboard(task.id)) toast.info('Panoya kopyalandı')
+                if (await copyToClipboard(task.id)) toast.info(t('form.toasts.copied'))
               }}
-              title="ID'yi kopyala"
+              title={t('form.copyId')}
               className="inline-flex shrink-0 items-center gap-1 rounded bg-[var(--color-surface-2)] px-1.5 py-1 font-mono text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
             >
               {task.id}
@@ -270,7 +271,7 @@ export function TaskFormModal({
             data-testid="task-title-input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Başlık (boşsa açıklamadan üretilir)"
+            placeholder={t('form.titlePlaceholder')}
             className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-base font-medium outline-none focus:border-[var(--color-accent)]"
           />
           {mode === 'edit' && (
@@ -278,7 +279,7 @@ export function TaskFormModal({
               data-testid="task-retitle-ai"
               onClick={retitle}
               disabled={retitling}
-              title="AI ile başlığı açıklamadan üret"
+              title={t('form.generateTitle')}
               className="shrink-0 rounded border border-[var(--color-border)] p-2 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-30"
             >
               {retitling ? '…' : <RefreshCw size={15} />}
@@ -287,7 +288,7 @@ export function TaskFormModal({
           <button
             data-testid="task-detail-close"
             onClick={onClose}
-            title="Kapat"
+            title={t('actions.close')}
             className="shrink-0 rounded p-2 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
           >
             <X size={16} />
@@ -314,18 +315,21 @@ export function TaskFormModal({
               <div className="min-w-0">
                 <div className="font-medium">
                   {reviewGate.exhausted
-                    ? `Doğrulama bütçesi doldu (${reviewGate.label})`
-                    : `İncelemeden ${reviewGate.count} kez geri döndü (${reviewGate.label})`}
+                    ? t('reviewGate.exhaustedHeading', { label: reviewGate.label })
+                    : t('reviewGate.warningHeading', {
+                        count: reviewGate.count,
+                        label: reviewGate.label,
+                      })}
                 </div>
                 <div className="mt-0.5 text-[var(--color-text-dim)]">
                   {reviewGate.exhausted
-                    ? 'Yeni bir inceleme turu açmak yakınsamıyor. Kartı geçen kısma daralt ve reddedilen kısmı yeni bir karta taşı, ya da karar için kullanıcıya sor.'
-                    : 'Kapsam sözleşmesini gözden geçir: kapsam dışı bir bulgu kartı bloklamamalı, yeni kart olarak açılmalı.'}
+                    ? t('reviewGate.exhaustedDescription')
+                    : t('reviewGate.warningDescription')}
                 </div>
               </div>
             </div>
           )}
-          <Field label="Açıklama">
+          <Field label={t('form.description')}>
             <textarea
               ref={descRef}
               data-testid="task-description-textarea"
@@ -337,7 +341,7 @@ export function TaskFormModal({
           </Field>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Durum (kolon)">
+            <Field label={t('form.status')}>
               <div data-testid="task-boardstate-select" className="flex flex-wrap gap-1.5">
                 {columns.map((col) => {
                   const active = boardState === col.key
@@ -361,7 +365,7 @@ export function TaskFormModal({
               </div>
             </Field>
 
-            <Field label="Öncelik">
+            <Field label={t('form.priority')}>
               <div data-testid="task-priority-select" className="flex flex-wrap gap-1.5">
                 {PRIORITIES.map((p) => {
                   const active = priority === p.key
@@ -379,7 +383,7 @@ export function TaskFormModal({
                             }
                       }
                     >
-                      {p.label}
+                      {t(`priorities.${p.key}`)}
                     </button>
                   )
                 })}
@@ -388,24 +392,24 @@ export function TaskFormModal({
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Ajan (atanan)">
+            <Field label={t('form.assignee')}>
               <div data-testid="task-detail-owner-wrap">
                 <AgentPicker
                   agents={agents}
                   value={ownerAgentId}
                   onChange={setOwnerAgentId}
-                  placeholder="Ajan seç (opsiyonel)"
+                  placeholder={t('form.assigneePlaceholder')}
                   clearable
                 />
               </div>
             </Field>
-            <Field label="Akış (opsiyonel)">
+            <Field label={t('form.flow')}>
               <select
                 value={flowId}
                 onChange={(e) => setFlowId(e.target.value)}
                 className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
               >
-                <option value="">🔀 Akış yok</option>
+                <option value="">🔀 {t('form.noFlow')}</option>
                 {flows.map((f) => (
                   <option key={f.id} value={f.id}>
                     {normalizeAvatar(f.emoji) ?? '🔀'} {f.name}
@@ -415,18 +419,18 @@ export function TaskFormModal({
             </Field>
           </div>
 
-          <Field label="Etiketler">
+          <Field label={t('form.tags')}>
             <div className="flex flex-wrap items-center gap-1.5">
-              {tags.map((t) => (
+              {tags.map((tag) => (
                 <span
-                  key={t}
+                  key={tag}
                   className="inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-xs text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]"
                 >
-                  #{t}
+                  #{tag}
                   <button
-                    onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                    onClick={() => setTags((prev) => prev.filter((x) => x !== tag))}
                     className="opacity-60 hover:opacity-100"
-                    title="Kaldır"
+                    title={t('actions.remove')}
                   >
                     ×
                   </button>
@@ -443,13 +447,13 @@ export function TaskFormModal({
                   }
                 }}
                 onBlur={addTag}
-                placeholder="+ etiket"
+                placeholder={t('form.tagPlaceholder')}
                 className="min-w-24 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
               />
             </div>
           </Field>
 
-          <Field label="Ekler — Artifact referansları">
+          <Field label={t('form.attachments')}>
             <TaskArtifactRefs
               value={artifactIds}
               onChange={setArtifactIds}
@@ -468,7 +472,7 @@ export function TaskFormModal({
               className="flex items-center gap-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:opacity-100"
             >
               {depsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              <span>Bağımlılıklar — önce tamamlanması gereken görevler</span>
+              <span>{t('form.dependencies')}</span>
               {depIds.length > 0 && (
                 <span className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]">
                   {depIds.length}
@@ -485,14 +489,18 @@ export function TaskFormModal({
         <div className="flex items-center gap-2 border-t border-[var(--color-border)] px-4 py-3">
           <div data-testid="task-detail-save">
             <Button onClick={save} disabled={saving}>
-              {saving ? 'Kaydediliyor…' : mode === 'create' ? '+ Oluştur' : 'Kaydet'}
+              {saving
+                ? t('actions.saving')
+                : mode === 'create'
+                  ? t('actions.create')
+                  : t('actions.save')}
             </Button>
           </div>
           <button
             onClick={onClose}
             className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
           >
-            İptal
+            {t('actions.cancel')}
           </button>
           {mode === 'edit' && onArchived && (
             <button
@@ -502,7 +510,11 @@ export function TaskFormModal({
               className="ml-auto inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-40"
             >
               {task?.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-              {archiving ? 'İşleniyor…' : task?.archived ? 'Arşivden geri al' : 'Arşivle'}
+              {archiving
+                ? t('actions.processing')
+                : task?.archived
+                  ? t('actions.restoreFromArchive')
+                  : t('actions.archive')}
             </button>
           )}
           {mode === 'edit' && onDeleted && (
@@ -511,7 +523,7 @@ export function TaskFormModal({
               onClick={remove}
               className="rounded px-3 py-1.5 text-sm text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
             >
-              🗑 Sil
+              🗑 {t('actions.delete')}
             </button>
           )}
         </div>

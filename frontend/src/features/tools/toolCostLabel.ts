@@ -5,6 +5,7 @@
 // member at the 'full' tier. Both are approximations, so the label stays coarse
 // ("~3.1k tok/tur") — it exists to compare groups with each other, not to bill.
 import { formatTokens } from '@/features/sessions/sessionDetailFormat'
+import { i18next } from '@/i18n'
 
 export interface ToolGroupCost {
   fullTokens?: number
@@ -15,7 +16,7 @@ export interface ToolGroupCost {
 // (older build) — the row then simply shows no badge rather than a fake "0".
 export function costLabel(g: ToolGroupCost): string | null {
   if (g.currentTokens === undefined) return null
-  return `~${formatTokens(g.currentTokens)} tok/tur`
+  return i18next.t('cost.label', { ns: 'tools', tokens: formatTokens(g.currentTokens) })
 }
 
 // costHint explains the badge and, when the group is not already all-full, what
@@ -23,11 +24,18 @@ export function costLabel(g: ToolGroupCost): string | null {
 // deciding on.
 export function costHint(g: ToolGroupCost): string {
   if (g.currentTokens === undefined) return ''
-  const current = `Bu grup şu an her turda ≈${formatTokens(g.currentTokens)} token bağlam harcıyor.`
+  const current = i18next.t('cost.current', {
+    ns: 'tools',
+    tokens: formatTokens(g.currentTokens),
+  })
   if (g.fullTokens === undefined) return current
   const delta = g.fullTokens - g.currentTokens
   if (delta <= 0) {
-    return `${current} Tümü zaten "Tam" tier'da — daha pahalıya çıkamaz.`
+    return `${current} ${i18next.t('cost.alreadyFull', { ns: 'tools' })}`
   }
-  return `${current} Tümünü "Tam" tier'a çekersen ≈${formatTokens(g.fullTokens)} token olur (+${formatTokens(delta)}).`
+  return `${current} ${i18next.t('cost.promote', {
+    ns: 'tools',
+    fullTokens: formatTokens(g.fullTokens),
+    delta: formatTokens(delta),
+  })}`
 }

@@ -8,6 +8,7 @@
 // Detection is local and instant, so it runs on open. The update CHECK leaves
 // the machine (GitHub API) and is therefore explicit — a button, never automatic.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ScanSearch, Eraser, RefreshCw, ArrowUpCircle, Copy } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
@@ -74,15 +75,16 @@ const TOOL_HOOK_TEMPLATES: Record<string, HookInput> = {
 
 // Human-readable group headings for the tool categories returned by the backend.
 const TOOL_CATEGORY_LABELS: Record<string, string> = {
-  provider: 'LLM sağlayıcı CLI’ları',
-  token: 'Token / bağlam optimizasyonu',
-  dev: 'Geliştirme araçları',
-  render: 'Render / diyagram',
-  design: 'Tasarım',
-  voice: 'Ses (TTS / STT)',
+  provider: 'externalTools.categories.provider',
+  token: 'externalTools.categories.token',
+  dev: 'externalTools.categories.dev',
+  render: 'externalTools.categories.render',
+  design: 'externalTools.categories.design',
+  voice: 'externalTools.categories.voice',
 }
 
 export function ExternalToolsPanel({ onError }: Props) {
+  const { t: translate } = useTranslation('settingsMain')
   const [hooks, setHooks] = useState<Hook[]>([])
   const [tools, setTools] = useState<ExternalToolStatus[] | null>(null)
   const [checking, setChecking] = useState(false)
@@ -136,7 +138,11 @@ export function ExternalToolsPanel({ onError }: Props) {
     setUpdateLog(null)
     try {
       const res = await systemApi.updateExternalTool(t.name)
-      setUpdateLog({ name: t.name, ok: res.ok, text: res.output?.trim() || '(çıktı yok)' })
+      setUpdateLog({
+        name: t.name,
+        ok: res.ok,
+        text: res.output?.trim() || translate('externalTools.noOutput'),
+      })
       await checkTools()
       await checkUpdates(true)
     } catch (e) {
@@ -149,7 +155,7 @@ export function ExternalToolsPanel({ onError }: Props) {
   const copyCommand = async (cmd: string) => {
     try {
       await navigator.clipboard.writeText(cmd)
-      toast.info('Panoya kopyalandı')
+      toast.info(translate('externalTools.copied'))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -345,16 +351,7 @@ export function ExternalToolsPanel({ onError }: Props) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        TionHarness ile birlikte kullanılabilecek isteğe bağlı CLI araçlarının (token optimizasyonu,
-        geliştirme, render — ör. <code>sqz</code>, <code>mmdc</code>, <code>piper</code>) bu cihazda{' '}
-        <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol
-        eder. Önce Ayarlar'daki yol geçersiz kılması (varsa), yoksa PATH aranır — araçlar{' '}
-        <span className="font-medium text-[var(--color-text)]">
-          kurulmaz, çalıştırılmaz, değiştirilmez
-        </span>
-        .<span className="font-mono"> hook</span> araçları tek tıkla bağlanır;{' '}
-        <span className="font-mono">mcp</span>/<span className="font-mono">cli</span> araçları bilgi
-        rozetiyle gösterilir. Kurulu sürüm aracın kendi <code>--version</code> çıktısından okunur.
+        {translate('externalTools.description')}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -364,18 +361,22 @@ export function ExternalToolsPanel({ onError }: Props) {
           className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-50"
         >
           <ScanSearch size={14} className="text-[var(--color-accent)]" />
-          {checking ? 'Kontrol ediliyor…' : 'Kurulu mu kontrol et'}
+          {checking
+            ? translate('externalTools.checking')
+            : translate('externalTools.checkInstalled')}
         </button>
         <button
           type="button"
           data-testid="ext-tools-check-updates"
           onClick={() => checkUpdates(false)}
           disabled={checkingUpdates}
-          title="Kurulu araçları GitHub'daki en son yayımlanmış sürümle karşılaştırır. Sonuç sunucuda 6 saat önbelleklenir (GitHub API limiti saatte 60 istek)."
+          title={translate('externalTools.updateCheckHint')}
           className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-50"
         >
           <ArrowUpCircle size={14} className="text-[var(--color-accent)]" />
-          {checkingUpdates ? 'Sürümler alınıyor…' : 'Güncellemeleri kontrol et'}
+          {checkingUpdates
+            ? translate('externalTools.fetchingVersions')
+            : translate('externalTools.checkUpdates')}
         </button>
         {Object.keys(updates).length > 0 && (
           <button
@@ -383,11 +384,11 @@ export function ExternalToolsPanel({ onError }: Props) {
             data-testid="ext-tools-refresh-updates"
             onClick={() => checkUpdates(true)}
             disabled={checkingUpdates}
-            title="Önbelleği atlayıp GitHub'a yeniden sor"
+            title={translate('externalTools.bypassCacheHint')}
             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] disabled:opacity-50"
           >
             <RefreshCw size={11} />
-            Önbelleği atla
+            {translate('externalTools.bypassCache')}
           </button>
         )}
       </div>
@@ -401,7 +402,7 @@ export function ExternalToolsPanel({ onError }: Props) {
             .map((cat) => (
               <div key={cat} className="flex flex-col gap-1.5">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {TOOL_CATEGORY_LABELS[cat] ?? cat}
+                  {TOOL_CATEGORY_LABELS[cat] ? translate(TOOL_CATEGORY_LABELS[cat]) : cat}
                 </p>
                 {tools
                   .filter((t) => t.category === cat)
@@ -414,9 +415,13 @@ export function ExternalToolsPanel({ onError }: Props) {
                               {t.name}
                             </code>
                             {t.found ? (
-                              <span className="text-[var(--color-success)]">✓ kurulu</span>
+                              <span className="text-[var(--color-success)]">
+                                ✓ {translate('externalTools.installed')}
+                              </span>
                             ) : (
-                              <span className="text-[var(--color-text-dim)]">— bulunamadı</span>
+                              <span className="text-[var(--color-text-dim)]">
+                                — {translate('externalTools.notFound')}
+                              </span>
                             )}
                             {t.found && t.version && (
                               <span
@@ -424,7 +429,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                                 data-tool={t.name}
                                 className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]"
                               >
-                                v{t.version}
+                                {translate('externalTools.version', { version: t.version })}
                               </span>
                             )}
                             {t.found && !t.version && t.versionError && (
@@ -432,7 +437,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                                 className="font-mono text-[10px] text-[var(--color-text-dim)]"
                                 title={t.versionError}
                               >
-                                sürüm okunamadı
+                                {translate('externalTools.versionUnreadable')}
                               </span>
                             )}
                             {/* Update verdict. Only ever rendered from a real
@@ -445,11 +450,12 @@ export function ExternalToolsPanel({ onError }: Props) {
                                 href={updates[t.name].releaseUrl ?? t.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                title={`En son yayımlanan sürüm: ${updates[t.name].latest}${
-                                  updates[t.name].stale
-                                    ? ' (önbellekten — GitHub’a ulaşılamadı)'
-                                    : ''
-                                }`}
+                                title={translate('externalTools.latestRelease', {
+                                  version: updates[t.name].latest,
+                                  stale: updates[t.name].stale
+                                    ? translate('externalTools.cachedSuffix')
+                                    : '',
+                                })}
                                 className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-warning)] hover:underline"
                               >
                                 ↑ {updates[t.name].latest}
@@ -458,9 +464,9 @@ export function ExternalToolsPanel({ onError }: Props) {
                             {t.found && updates[t.name]?.status === 'up-to-date' && (
                               <span
                                 className="font-mono text-[10px] text-[var(--color-success)]"
-                                title="En son sürüm"
+                                title={translate('externalTools.latestVersion')}
                               >
-                                güncel
+                                {translate('externalTools.upToDate')}
                               </span>
                             )}
                             {t.found && updates[t.name]?.error && (
@@ -468,7 +474,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                                 className="font-mono text-[10px] text-[var(--color-text-dim)]"
                                 title={updates[t.name].error}
                               >
-                                sürüm karşılaştırılamadı
+                                {translate('externalTools.versionCompareFailed')}
                               </span>
                             )}
                           </div>
@@ -490,17 +496,17 @@ export function ExternalToolsPanel({ onError }: Props) {
                               }`}
                               title={
                                 wiredHook(t.name)
-                                  ? 'TionHarness hook bağlantısını aç/kapat'
-                                  : 'Bu araç için TionHarness hook’u oluştur ve etkinleştir'
+                                  ? translate('externalTools.toggleHookHint')
+                                  : translate('externalTools.createHookHint')
                               }
                             >
                               {toolBusy === t.name
                                 ? '…'
                                 : wiredHook(t.name)?.enabled
-                                  ? 'Aktif'
+                                  ? translate('shared.active')
                                   : wiredHook(t.name)
-                                    ? 'Pasif'
-                                    : 'Bağla'}
+                                    ? translate('shared.inactive')
+                                    : translate('externalTools.connect')}
                             </button>
                           )}
                           {t.found && t.wire === 'setting' && (
@@ -514,19 +520,19 @@ export function ExternalToolsPanel({ onError }: Props) {
                                   ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
                                   : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
                               }`}
-                              title="Bu araç hook ile değil, workspace ayarıyla bağlanır (Ayarlar ▸ Workspace ▸ Shell komutu yeniden yazma). Yalnız ölçülmüş kazanç veren test/build komutları yeniden yazılır."
+                              title={translate('externalTools.settingWireHint')}
                             >
                               {toolBusy === t.name
                                 ? '…'
                                 : ws?.shellCommandRewrite === 'on'
-                                  ? 'Aktif'
-                                  : 'Bağla'}
+                                  ? translate('shared.active')
+                                  : translate('externalTools.connect')}
                             </button>
                           )}
                           {t.found && t.wire === 'mcp' && (
                             <span
                               className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
-                              title="MCP tabanlı — Ayarlar ▸ MCP'den eklenir, hook değil"
+                              title={translate('externalTools.mcpHint')}
                             >
                               MCP
                             </span>
@@ -534,15 +540,15 @@ export function ExternalToolsPanel({ onError }: Props) {
                           {t.found && t.wire === 'provider' && (
                             <span
                               className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
-                              title="Bir LLM sağlayıcısını çalıştırır — Ayarlar ▸ Sağlayıcılar'dan yapılandırılır, hook değil"
+                              title={translate('externalTools.providerHint')}
                             >
-                              Sağlayıcı
+                              {translate('externalTools.provider')}
                             </span>
                           )}
                           {t.found && t.wire === 'cli' && (
                             <span
                               className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
-                              title="Düz CLI — ajan geliştirmede Bash ile doğrudan çağırır"
+                              title={translate('externalTools.cliHint')}
                             >
                               CLI
                             </span>
@@ -558,10 +564,14 @@ export function ExternalToolsPanel({ onError }: Props) {
                               data-tool={t.name}
                               disabled={updateBusy === t.name}
                               onClick={() => runUpdate(t)}
-                              title={`Çalıştırılacak komut: ${t.updateCommand}`}
+                              title={translate('externalTools.commandToRun', {
+                                command: t.updateCommand,
+                              })}
                               className="rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
                             >
-                              {updateBusy === t.name ? 'Güncelleniyor…' : 'Güncelle'}
+                              {updateBusy === t.name
+                                ? translate('externalTools.updating')
+                                : translate('externalTools.update')}
                             </button>
                           )}
                           <a
@@ -570,7 +580,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                             rel="noreferrer"
                             className="text-xs text-[var(--color-accent)] hover:underline"
                           >
-                            repo ↗
+                            {translate('externalTools.repository')} ↗
                           </a>
                         </div>
                       </div>
@@ -589,7 +599,10 @@ export function ExternalToolsPanel({ onError }: Props) {
                             className="rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]"
                           >
                             <span className="font-medium text-[var(--color-text)]">
-                              ⬆ {updates[t.name].latest} yayımlanmış — elle güncellenir.
+                              ⬆{' '}
+                              {translate('externalTools.manualUpdate', {
+                                version: updates[t.name].latest,
+                              })}
                             </span>{' '}
                             {t.updateNote}{' '}
                             <a
@@ -598,7 +611,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                               rel="noreferrer"
                               className="text-[var(--color-accent)] hover:underline"
                             >
-                              release sayfası ↗
+                              {translate('externalTools.releasePage')} ↗
                             </a>
                           </div>
                         )}
@@ -612,7 +625,9 @@ export function ExternalToolsPanel({ onError }: Props) {
                                 : 'text-[var(--color-warning)]'
                             }
                           >
-                            {updateLog.ok ? '✓ Güncelleme tamamlandı' : '✕ Güncelleme başarısız'}
+                            {updateLog.ok
+                              ? `✓ ${translate('externalTools.updateComplete')}`
+                              : `✕ ${translate('externalTools.updateFailed')}`}
                           </div>
                           <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 text-[11px] text-[var(--color-text-dim)]">
                             {updateLog.text}
@@ -629,7 +644,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                           data-tool={t.name}
                           onClick={() => copyCommand(t.updateCommand ?? '')}
                           className="inline-flex w-fit items-center gap-1 rounded px-1 text-[11px] text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
-                          title="Güncelleme komutunu panoya kopyala"
+                          title={translate('externalTools.copyUpdateCommand')}
                         >
                           <Copy size={10} />
                           <code>{t.updateCommand}</code>
@@ -640,24 +655,9 @@ export function ExternalToolsPanel({ onError }: Props) {
                       {t.name === CBM_TOOL && (
                         <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
                           <span className="font-medium text-[var(--color-text)]">
-                            🧠 codebase-memory entegrasyonu:
+                            🧠 {translate('externalTools.cbm.title')}
                           </span>{' '}
-                          Bir <code>codebase-memory-mcp</code> sunucusu eklendiğinde, TionHarness
-                          otomatik olarak ajanın bağlamına{' '}
-                          <span className="font-medium text-[var(--color-text)]">
-                            "kod bilgi-grafiği mevcut"
-                          </span>{' '}
-                          ipucu ekler, sunucuyu{' '}
-                          <span className="font-medium text-[var(--color-text)]">
-                            workspace'e özel izole bir store
-                          </span>
-                          'a yönlendirir (indeksler workspace'ler arası karışmaz), çalışma dizinini
-                          otomatik indeksler ve <code>codebase_workspace_search</code> aracını
-                          sunar. Bu sistem{' '}
-                          <span className="font-medium text-[var(--color-text)]">
-                            Ayarlar ▸ Bu Workspace
-                          </span>{' '}
-                          altından açılıp kapatılabilir.
+                          {translate('externalTools.cbm.description')}
                           <div className="mt-2 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
                             <button
                               type="button"
@@ -671,24 +671,24 @@ export function ExternalToolsPanel({ onError }: Props) {
                               }`}
                               title={
                                 !t.found
-                                  ? 'Önce bu araç PATH’te bulunmalı (yukarıda "kurulu" görünmeli)'
+                                  ? translate('externalTools.cbm.mustBeOnPath')
                                   : cbmServer()
-                                    ? 'MCP sunucusunu kaldır'
-                                    : 'MCP sunucusunu otomatik ekle'
+                                    ? translate('externalTools.cbm.removeHint')
+                                    : translate('externalTools.cbm.addHint')
                               }
                             >
                               {mcpBusy
                                 ? '…'
                                 : cbmServer()
-                                  ? 'MCP’yi kaldır'
-                                  : 'MCP’yi otomatik ekle'}
+                                  ? translate('externalTools.cbm.remove')
+                                  : translate('externalTools.cbm.add')}
                             </button>
                             <span className="text-[11px] text-[var(--color-text-dim)]">
                               {!t.found
-                                ? 'Araç PATH’te bulunamadı.'
+                                ? translate('externalTools.cbm.notOnPath')
                                 : cbmServer()
-                                  ? 'MCP sunucusu ekli — ajanlar kullanabilir.'
-                                  : 'MCP sunucusu ekli değil.'}
+                                  ? translate('externalTools.cbm.connected')
+                                  : translate('externalTools.cbm.disconnected')}
                             </span>
                           </div>
                         </div>
@@ -719,21 +719,9 @@ export function ExternalToolsPanel({ onError }: Props) {
                 {cat === 'token' && (
                   <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
                     <span className="font-medium text-[var(--color-text)]">
-                      ⚡ Token optimizasyonu entegrasyonu:
+                      ⚡ {translate('externalTools.token.title')}
                     </span>{' '}
-                    Bir <code>rtk</code> / <code>sqz</code> aracı hook olarak bağlandığında,
-                    TionHarness ajanın bağlamına{' '}
-                    <span className="font-medium text-[var(--color-text)]">
-                      "token optimizasyonu aktif"
-                    </span>{' '}
-                    bilgi bloğu ekler (codebase-memory entegrasyonu gibi) — böylece ajan araç
-                    çıktısının otomatik kısaltıldığını{' '}
-                    <span className="font-medium text-[var(--color-text)]">(kayıp değil)</span>{' '}
-                    bilir ve komutlardan çekinmez. Hook{' '}
-                    <span className="font-medium text-[var(--color-text)]">matcher</span>'ı{' '}
-                    <code>Bash,PowerShell</code> olmalı; yalnız <code>Bash</code> ise Windows'ta
-                    ajanın kullandığı <code>PowerShell</code> aracında{' '}
-                    <span className="font-medium text-[var(--color-text)]">hiç ateşlenmez</span>.
+                    {translate('externalTools.token.description')}
                     {/* This used to warn "do not enable rtk and sqz together — both rewrite
                         the command". Measurement showed the opposite: they act at opposite
                         ends and stacking wins (git log -30: 6595 ham → sqz 2027 → rtk 2157
@@ -741,17 +729,18 @@ export function ExternalToolsPanel({ onError }: Props) {
                         best configuration. */}
                     <span className="font-medium text-[var(--color-text)]">
                       {' '}
-                      İkisini birden açmak önerilir
+                      {translate('externalTools.token.enableBoth')}
                     </span>{' '}
-                    — rtk komutu <span className="italic">çalışmadan önce</span> şekillendirir, sqz
-                    çıktıyı <span className="italic">sonra</span> sıkıştırır; ölçümde istifleme her
-                    ikisinden de iyi çıktı.
+                    {translate('externalTools.token.enableBothDetail')}
                     {tokenHooksNeedingFix().length > 0 && (
                       <div className="mt-2 flex flex-col gap-1.5 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
                         {tokenHooksNeedingFix().map((h) => (
                           <div key={h.id} className="flex items-center justify-between gap-2">
                             <span className="min-w-0 truncate text-[var(--color-warning)]">
-                              ⚠ matcher <code>{h.matcher}</code> — PowerShell kapsamıyor
+                              ⚠{' '}
+                              {translate('externalTools.token.matcherMissing', {
+                                matcher: h.matcher,
+                              })}
                             </span>
                             <button
                               type="button"
@@ -760,9 +749,9 @@ export function ExternalToolsPanel({ onError }: Props) {
                               disabled={fixBusy === h.id}
                               onClick={() => fixMatcher(h)}
                               className="shrink-0 rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
-                              title="Matcher'a PowerShell ekle (Bash,PowerShell)"
+                              title={translate('externalTools.token.fixMatcherHint')}
                             >
-                              {fixBusy === h.id ? '…' : 'Matcher’ı düzelt'}
+                              {fixBusy === h.id ? '…' : translate('externalTools.token.fixMatcher')}
                             </button>
                           </div>
                         ))}
@@ -780,26 +769,25 @@ export function ExternalToolsPanel({ onError }: Props) {
                   <div className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-[var(--color-text)]">
-                        🔧 Bakım ve tasarruf raporu
+                        🔧 {translate('externalTools.maintenance.title')}
                       </span>
                       <button
                         type="button"
                         data-testid="token-report-refresh"
                         disabled={maintBusy === 'refresh'}
-                        onClick={() => runMaint('refresh', loadReport, () => 'Rapor yenilendi.')}
+                        onClick={() =>
+                          runMaint('refresh', loadReport, () =>
+                            translate('externalTools.maintenance.refreshed'),
+                          )
+                        }
                         className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] hover:text-[var(--color-text)] disabled:opacity-50"
-                        title="rtk gain / sqz gain çıktısını yeniden al"
+                        title={translate('externalTools.maintenance.refreshHint')}
                       >
                         <RefreshCw size={11} />
-                        {maintBusy === 'refresh' ? '…' : 'Yenile'}
+                        {maintBusy === 'refresh' ? '…' : translate('shared.refresh')}
                       </button>
                     </div>
-                    <p className="mt-1">
-                      Aşağıdaki rakamlar{' '}
-                      <span className="font-medium text-[var(--color-text)]">araçların kendi</span>{' '}
-                      <code>gain</code> çıktısıdır — TionHarness yeniden hesaplamaz, böylece
-                      araçların muhasebesinden sapamaz.
-                    </p>
+                    <p className="mt-1">{translate('externalTools.maintenance.description')}</p>
                     {(['rtk', 'sqz'] as const).map((name) => {
                       const found = name === 'rtk' ? report.rtkFound : report.sqzFound
                       const gain = name === 'rtk' ? report.rtkGain : report.sqzGain
@@ -807,10 +795,12 @@ export function ExternalToolsPanel({ onError }: Props) {
                       return (
                         <div key={name} className="mt-2">
                           <div className="mb-1 font-mono text-[10px] uppercase tracking-wide">
-                            {name} gain
+                            {name} {translate('externalTools.maintenance.gain')}
                           </div>
                           <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 text-[11px]">
-                            {gain?.trim() ? gain : '(rapor boş — henüz veri yok)'}
+                            {gain?.trim()
+                              ? gain
+                              : translate('externalTools.maintenance.emptyReport')}
                           </pre>
                         </div>
                       )
@@ -822,17 +812,17 @@ export function ExternalToolsPanel({ onError }: Props) {
                           data-testid="sqz-reset-cache"
                           disabled={maintBusy === 'sqz-reset'}
                           onClick={() =>
-                            runMaint(
-                              'sqz-reset',
-                              systemApi.sqzResetCache,
-                              () => 'sqz dedup önbelleği temizlendi.',
+                            runMaint('sqz-reset', systemApi.sqzResetCache, () =>
+                              translate('externalTools.maintenance.cacheCleared'),
                             )
                           }
                           className="inline-flex items-center gap-1.5 rounded bg-[var(--color-surface-2)] px-2.5 py-1 font-medium hover:text-[var(--color-text)] disabled:opacity-50"
-                          title="sqz'nin dedup önbelleğini temizler (istatistikler korunur). Bayat §ref:…§ işaretçileri ajanı şaşırttığında sqz'nin kendi önerdiği işlem."
+                          title={translate('externalTools.maintenance.clearCacheHint')}
                         >
                           <Eraser size={12} />
-                          {maintBusy === 'sqz-reset' ? '…' : 'sqz dedup önbelleğini temizle'}
+                          {maintBusy === 'sqz-reset'
+                            ? '…'
+                            : translate('externalTools.maintenance.clearCache')}
                         </button>
                       )}
                       {maintMsg && <span className="text-[var(--color-success)]">{maintMsg}</span>}
@@ -843,19 +833,12 @@ export function ExternalToolsPanel({ onError }: Props) {
                         {!report.rtkConfigExists && (
                           <>
                             {' '}
-                            — dosya{' '}
-                            <span className="font-medium text-[var(--color-text)]">henüz yok</span>;
-                            rtk yerleşik varsayılanlarla çalışıyor. Oluşturmak için terminalde{' '}
+                            — {translate('externalTools.maintenance.configMissing')}{' '}
                             <code>rtk config --create</code>.
                           </>
                         )}
                         <br />
-                        Bu dosya{' '}
-                        <span className="font-medium text-[var(--color-text)]">
-                          makine geneli
-                        </span>{' '}
-                        — workspace'e özel değil. Bu yüzden anahtarları buraya ayar olarak
-                        taşınmadı: burada değiştirdiğin şey diğer tüm workspace'leri de etkilerdi.
+                        {translate('externalTools.maintenance.machineWide')}
                       </p>
                     )}
                   </div>

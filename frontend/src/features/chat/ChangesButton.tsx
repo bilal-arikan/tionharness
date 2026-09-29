@@ -4,6 +4,10 @@ import type { TurnStep } from '@/types'
 import { extractFileChanges, changeTotals } from '@/shared/lib/fileChanges'
 import { ChangesModal } from './ChangesModal'
 import { actionChip } from './messageActions'
+import { useTranslation } from 'react-i18next'
+
+const MINUS_SIGN = String.fromCharCode(0x2212)
+const AT_LEAST = String.fromCharCode(0x2265)
 
 interface Props {
   sessionId?: string
@@ -19,6 +23,7 @@ interface Props {
 // The modal is mounted only while open: its work (parsing every patch in the
 // session) must not be paid by a transcript that merely scrolled past.
 export function ChangesButton({ sessionId, msgId, steps, onOpenFile }: Props) {
+  const { t } = useTranslation('chat')
   const [open, setOpen] = useState(false)
   const changes = useMemo(() => extractFileChanges(steps, { msgId }), [steps, msgId])
   if (changes.length === 0) return null
@@ -32,14 +37,19 @@ export function ChangesButton({ sessionId, msgId, steps, onOpenFile }: Props) {
     <>
       <button
         onClick={() => setOpen(true)}
-        title={`Bu turda değişen ${files} dosyanın farklarını topluca gör`}
+        title={t('changesButton.title', { count: files })}
         className={actionChip()}
       >
         <FileDiff size={13} />
-        <span>{files} dosya</span>
+        <span>{t('changesButton.files', { count: files })}</span>
         {added > 0 && <span className="text-[var(--color-success)]">+{added}</span>}
-        {removed > 0 && <span className="text-[var(--color-danger)]">−{removed}</span>}
-        {partial && <span className="opacity-60">≥</span>}
+        {removed > 0 && (
+          <span className="text-[var(--color-danger)]">
+            {MINUS_SIGN}
+            {removed}
+          </span>
+        )}
+        {partial && <span className="opacity-60">{AT_LEAST}</span>}
       </button>
       {open && (
         <ChangesModal

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { TurnSteps } from './TurnSteps'
@@ -39,6 +40,7 @@ function subInput(input: unknown): { target: string; task: string } {
 // activity trace (its tool calls / thinking, gathered in an isolated context)
 // plus its final reply. Mirrors the nested agent rows in External Agent chat.
 export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
+  const { t } = useTranslation('chatStatus')
   // A still-running delegation opens by default so its nested steps stream in
   // view; once it completes the card keeps the normal collapsible behaviour
   // (the user's own toggle always wins from then on).
@@ -58,14 +60,19 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
           <HeaderIcon size={14} />
         </span>
         <span className="shrink-0 font-medium text-[var(--color-text)]">
-          Alt-ajan{target ? ` · ${target}` : ''}
+          {t('steps.subagent')}
+          {target ? ` · ${target}` : ''}
         </span>
         {task && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">{task}</span>
         )}
-        {step.isError && <span className="shrink-0 text-[var(--color-danger)]">hata</span>}
+        {step.isError && (
+          <span className="shrink-0 text-[var(--color-danger)]">{t('steps.error')}</span>
+        )}
         {sub.length > 0 && (
-          <span className="shrink-0 text-[var(--color-text-dim)]">{sub.length} adım</span>
+          <span className="shrink-0 text-[var(--color-text-dim)]">
+            {t('steps.count', { count: sub.length })}
+          </span>
         )}
         <span className="ml-1 shrink-0 opacity-50">
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -82,14 +89,14 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
           {reply && (
             <div>
               <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                Sonuç
+                {t('steps.result')}
               </div>
               <pre
                 className={`overflow-x-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 ${
                   step.isError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'
                 }`}
               >
-                {reply.length > 4000 ? reply.slice(0, 4000) + '\n… (kırpıldı)' : reply}
+                {reply.length > 4000 ? `${reply.slice(0, 4000)}\n${t('steps.truncated')}` : reply}
               </pre>
             </div>
           )}

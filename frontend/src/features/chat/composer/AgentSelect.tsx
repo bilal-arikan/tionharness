@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Agent } from '@/types'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   agents: Agent[]
@@ -16,6 +17,7 @@ interface Props {
 // (the agent's avatar; name in the tooltip) opens an upward menu listing every
 // agent with avatar + name, matching the other composer pickers.
 export function AgentSelect({ agents, value, onChange, disabled }: Props) {
+  const { t } = useTranslation('chatControls')
   const [open, setOpen] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
   const selected = agents.find((a) => a.id === value)
@@ -29,8 +31,16 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
         data-testid="agent-select"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={selected ? `Hedef ajan: ${selected.name}` : 'Ajan seç'}
-        title={selected ? `Mesajın gönderileceği ajan: ${selected.name}` : 'Ajan seç'}
+        aria-label={
+          selected
+            ? t('agentSelect.targetAgent', { name: selected.name })
+            : t('agentSelect.selectAgent')
+        }
+        title={
+          selected
+            ? t('agentSelect.messageTarget', { name: selected.name })
+            : t('agentSelect.selectAgent')
+        }
         className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-3 text-sm transition disabled:opacity-40 ${
           selected
             ? 'border-[var(--color-accent)] text-[var(--color-text)]'
@@ -47,22 +57,24 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
             className="md:max-w-[220px]"
           />
         ) : (
-          <span>Ajan seç</span>
+          <span>{t('agentSelect.selectAgent')}</span>
         )}
       </button>
 
       {open && (
         <div
           role="listbox"
-          aria-label="Mesajı gönder"
+          aria-label={t('agentSelect.sendMessage')}
           data-testid="agent-select-menu"
           className="absolute bottom-full left-0 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl"
         >
           <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            Mesajı gönder
+            {t('agentSelect.sendMessage')}
           </div>
           {agents.length === 0 && (
-            <div className="px-2 py-2 text-sm text-[var(--color-text-dim)]">Ajan yok</div>
+            <div className="px-2 py-2 text-sm text-[var(--color-text-dim)]">
+              {t('agentSelect.noAgents')}
+            </div>
           )}
           {agents.map((a) => (
             <button

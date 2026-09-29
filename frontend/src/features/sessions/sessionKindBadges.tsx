@@ -1,6 +1,7 @@
 // Session run-state badges. Split out of sessionKindMeta so that module stays
 // component-free (fast refresh only preserves state for component-only files).
 import { Badge } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 import { runStateMeta } from './runStateMeta'
 
 // RunStateBadge renders a session's last run outcome, or nothing when the session
@@ -18,6 +19,7 @@ export function RunStateBadge({ runState }: { runState?: string }) {
 
 // StatusPill shows a finished run's pass/fail outcome (task/flow kinds).
 export function StatusPill({ status }: { status: string }) {
+  const { t } = useTranslation('sessions')
   if (status !== 'success' && status !== 'failure') return null
   const ok = status === 'success'
   return (
@@ -30,7 +32,7 @@ export function StatusPill({ status }: { status: string }) {
           : 'color-mix(in srgb, var(--color-danger) 14%, transparent)',
       }}
     >
-      {ok ? 'başarılı' : 'hata'}
+      {ok ? t('status.success') : t('status.failure')}
     </span>
   )
 }

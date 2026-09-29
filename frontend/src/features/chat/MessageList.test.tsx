@@ -2,9 +2,12 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Agent, Message } from '@/types'
 import { MessageList } from './MessageList'
+import { setLocale } from '@/i18n'
+
+beforeAll(() => setLocale('tr'))
 
 vi.mock('./AssistantTurn', () => ({
   AssistantTurn: ({ agent, message }: { agent?: Agent; message: Message }) => (

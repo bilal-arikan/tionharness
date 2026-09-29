@@ -27,6 +27,11 @@ import {
   actionChip,
   actionChipActive,
 } from './messageActions'
+import { useTranslation } from 'react-i18next'
+
+const UP_ARROW = String.fromCharCode(0x2191)
+const DOWN_ARROW = String.fromCharCode(0x2193)
+const LIGHTNING = String.fromCharCode(0x26a1)
 
 interface Props {
   message: Message
@@ -64,14 +69,14 @@ interface Props {
 
 // stopReasonLabel maps a provider stop reason to a short Turkish note, or "" when
 // it is the normal end (end_turn / tool_use) that needs no badge.
-function stopReasonLabel(reason?: string): string {
+function stopReasonKey(reason?: string): string {
   switch (reason) {
     case 'max_tokens':
-      return 'çıktı limiti — kesilmiş olabilir'
+      return 'maxTokens'
     case 'refusal':
-      return 'model reddetti'
+      return 'refusal'
     case 'stop_sequence':
-      return 'durdurma dizisi'
+      return 'stopSequence'
     default:
       return ''
   }
@@ -97,6 +102,7 @@ export const AssistantTurn = memo(function AssistantTurn({
   onOpenAgent,
   recipientLabel,
 }: Props) {
+  const { t } = useTranslation('chat')
   // The full trace fetched on demand, replacing the server-trimmed one. Keyed
   // implicitly by this bubble's identity; a session switch remounts the row.
   const [fullSteps, setFullSteps] = useState<string | null>(null)
@@ -121,7 +127,8 @@ export const AssistantTurn = memo(function AssistantTurn({
       setLoadingFull(false)
     }
   }
-  const stopNote = stopReasonLabel(m.stopReason)
+  const stopKey = stopReasonKey(m.stopReason)
+  const stopNote = stopKey ? t(`assistant.stopReason.${stopKey}`) : ''
   const rating = m.feedback?.rating ?? 0
   const toolCount = steps.filter(
     (st) => st.kind === 'tool' || st.kind === 'diff' || st.kind === 'todo',
@@ -186,12 +193,18 @@ export const AssistantTurn = memo(function AssistantTurn({
             <div className="mb-1.5 flex items-center gap-2">
               <button
                 onClick={() => onToggleTools(m.id)}
-                title={toolsHidden ? 'Araç adımlarını göster' : 'Araç adımlarını gizle'}
+                title={toolsHidden ? t('assistant.showTools') : t('assistant.hideTools')}
                 className="flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
               >
                 <span>🔧</span>
-                <span>{toolCount > 0 ? `${toolCount} araç` : `${steps.length} adım`}</span>
-                <span className="opacity-70">{toolsHidden ? '▸ göster' : '▾ gizle'}</span>
+                <span>
+                  {toolCount > 0
+                    ? t('assistant.tools', { count: toolCount })
+                    : t('assistant.steps', { count: steps.length })}
+                </span>
+                <span className="opacity-70">
+                  {toolsHidden ? `▸ ${t('assistant.show')}` : `▾ ${t('assistant.hide')}`}
+                </span>
               </button>
               {/* The transcript arrives with long tool payloads cut server-side
                   so opening a session stays cheap. This pulls THIS turn's full
@@ -200,14 +213,18 @@ export const AssistantTurn = memo(function AssistantTurn({
                 <button
                   onClick={loadFullSteps}
                   disabled={loadingFull}
-                  title="Bu turun kırpılmış araç çıktılarının tamamını sunucudan getir"
+                  title={t('assistant.fullTraceDescription')}
                   className="flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] underline decoration-dotted underline-offset-2 transition hover:text-[var(--color-accent)] disabled:opacity-50"
                 >
-                  {loadingFull ? '⏳ getiriliyor…' : '⤓ tam iz'}
+                  {loadingFull
+                    ? `⏳ ${t('assistant.loadingTrace')}`
+                    : `⤓ ${t('assistant.fullTrace')}`}
                 </button>
               )}
               {fullError && (
-                <span className="text-[10px] text-[var(--color-danger)]">tam iz alınamadı</span>
+                <span className="text-[10px] text-[var(--color-danger)]">
+                  {t('assistant.traceFailed')}
+                </span>
               )}
             </div>
           )}
@@ -237,14 +254,14 @@ export const AssistantTurn = memo(function AssistantTurn({
           {m.interrupted && (
             <div className="mt-2 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
               <span>⚠</span>
-              <span>Bu yanıt yarıda kesildi (sunucu yeniden başladı). İçerik eksik olabilir.</span>
+              <span>{t('assistant.interrupted')}</span>
             </div>
           )}
           {/* Reply the user stopped mid-stream (intentional, not a crash). */}
           {m.cancelled && (
             <div className="mt-2 flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
               <span>⏹</span>
-              <span>Bu yanıt manuel olarak durduruldu. O ana kadarki içerik korundu.</span>
+              <span>{t('assistant.cancelled')}</span>
             </div>
           )}
           {/* Stop-reason warning (truncation / refusal). */}
@@ -272,7 +289,7 @@ export const AssistantTurn = memo(function AssistantTurn({
           {(m.model || m.usage) && (
             <span
               className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]"
-              title="Bu turun modeli ve token tüketimi"
+              title={t('assistant.modelUsage')}
             >
               {/* Named, not mono: this is the model people talk about, while the
                   numbers beside it stay mono. The exact id lives in the title. */}
@@ -283,9 +300,15 @@ export const AssistantTurn = memo(function AssistantTurn({
               )}
               {m.usage && (
                 <span className="font-mono">
-                  ↑{fmtTok(m.usage.in)} ↓{fmtTok(m.usage.out)}
+                  {UP_ARROW}
+                  {fmtTok(m.usage.in)} {DOWN_ARROW}
+                  {fmtTok(m.usage.out)}
                   {!!m.usage.cacheRead && (
-                    <span className="opacity-60"> ⚡{fmtTok(m.usage.cacheRead)}</span>
+                    <span className="opacity-60">
+                      {' '}
+                      {LIGHTNING}
+                      {fmtTok(m.usage.cacheRead)}
+                    </span>
                   )}
                 </span>
               )}
@@ -315,8 +338,8 @@ export const AssistantTurn = memo(function AssistantTurn({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={toggleSpeak}
-                  title={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku (kod atlanır)'}
-                  aria-label={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku'}
+                  title={speaking ? t('assistant.stopReading') : t('assistant.readAloudTitle')}
+                  aria-label={speaking ? t('assistant.stopReading') : t('assistant.readAloud')}
                   className={speaking ? actionChipActive() : actionChip()}
                 >
                   {speaking ? <Square size={13} /> : <Volume2 size={13} />}
@@ -329,8 +352,8 @@ export const AssistantTurn = memo(function AssistantTurn({
               <>
                 <button
                   onClick={() => onFeedback(m.id, rating === 1 ? 0 : 1)}
-                  title="Bu yanıt iyi"
-                  aria-label="Bu yanıt iyi"
+                  title={t('assistant.goodResponse')}
+                  aria-label={t('assistant.goodResponse')}
                   aria-pressed={rating === 1}
                   className={rating === 1 ? actionChipActive('positive') : actionChip('positive')}
                 >
@@ -338,8 +361,8 @@ export const AssistantTurn = memo(function AssistantTurn({
                 </button>
                 <button
                   onClick={() => onFeedback(m.id, rating === -1 ? 0 : -1)}
-                  title="Bu yanıt kötü"
-                  aria-label="Bu yanıt kötü"
+                  title={t('assistant.badResponse')}
+                  aria-label={t('assistant.badResponse')}
                   aria-pressed={rating === -1}
                   className={rating === -1 ? actionChipActive('danger') : actionChip('danger')}
                 >
@@ -350,11 +373,11 @@ export const AssistantTurn = memo(function AssistantTurn({
             {canRetry && (
               <button
                 onClick={() => onRetry!(m.id)}
-                title="Bu turu yeniden dene"
+                title={t('assistant.retryTitle')}
                 className={actionChipActive('danger', 'font-semibold')}
               >
                 <RotateCcw size={13} />
-                Yeniden dene
+                {t('assistant.retry')}
               </button>
             )}
             {onDelete && !isLastLive && <DeleteButton onClick={() => onDelete(m.id)} />}

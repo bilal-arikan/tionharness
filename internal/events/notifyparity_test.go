@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -15,9 +16,11 @@ import (
 // (frontend-only). Both files carry a "keep the two in sync" comment; these
 // tests are what actually enforces it.
 //
-// `prompt` is deliberately frontend-only: ask/permission/plan cues are a
-// client-side session-stream signal with no backend event behind them.
-const frontendOnlyKind = "prompt"
+// These established UI notifications live outside the core NotifyKinds list:
+// prompt comes from session interactions, rota from workspace-stream projections,
+// and agent-model-changed is published directly by api/change_notifier.go. The
+// old object-literal regex accidentally skipped commented and hyphenated entries.
+var additionalFrontendKinds = []string{"prompt", "rota", "agent-model-changed"}
 
 // notifyTypesPath locates the frontend registry relative to this package.
 func notifyTypesPath(t *testing.T) string {
@@ -29,9 +32,10 @@ func notifyTypesPath(t *testing.T) string {
 	return p
 }
 
-// notifyTypesEntry matches one `{ type: 'chat', ... }` record inside the
-// NOTIFY_TYPES array literal.
-var notifyTypesEntry = regexp.MustCompile(`\{\s*type:\s*'([a-z_]+)'`)
+// notifyTypesEntry reads stable event IDs passed to the frontend factory. Human
+// labels are now locale-aware getters, so object-literal matching is no longer
+// appropriate. Hyphenated IDs are part of the event contract too.
+var notifyTypesEntry = regexp.MustCompile(`notifyType\(\s*'([a-z_-]+)'`)
 
 // parseFrontendNotifyTypes returns the `type` keys declared in NOTIFY_TYPES, in
 // source order.
@@ -41,7 +45,15 @@ func parseFrontendNotifyTypes(t *testing.T) []string {
 	if err != nil {
 		t.Fatalf("read notifyTypes.ts: %v", err)
 	}
-	matches := notifyTypesEntry.FindAllStringSubmatch(string(src), -1)
+	_, registry, ok := strings.Cut(string(src), "export const NOTIFY_TYPES: NotifyType[] = [")
+	if !ok {
+		t.Fatal("NOTIFY_TYPES array declaration not found; update the registry parser")
+	}
+	registry, _, ok = strings.Cut(registry, "\n]")
+	if !ok {
+		t.Fatal("NOTIFY_TYPES array terminator not found; update the registry parser")
+	}
+	matches := notifyTypesEntry.FindAllStringSubmatch(registry, -1)
 	if len(matches) == 0 {
 		t.Fatal("parsed 0 entries from NOTIFY_TYPES — the array literal shape changed, so this parity test is no longer checking anything; update the regex")
 	}
@@ -55,7 +67,10 @@ func parseFrontendNotifyTypes(t *testing.T) []string {
 func TestNotifyKindsMatchFrontendRegistry(t *testing.T) {
 	frontend := parseFrontendNotifyTypes(t)
 
-	want := map[string]bool{frontendOnlyKind: true}
+	want := map[string]bool{}
+	for _, k := range additionalFrontendKinds {
+		want[k] = true
+	}
 	for _, k := range NotifyKinds {
 		want[k] = true
 	}

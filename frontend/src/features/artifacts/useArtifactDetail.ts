@@ -48,7 +48,7 @@ export function useArtifactDetail({
   setList,
   onError,
 }: UseArtifactDetailOptions): ArtifactDetail {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation(['artifacts', 'common'])
   const [active, setActive] = useState<Artifact | null>(null)
   const [activePath, setActivePath] = useState<string>('')
   // Edit/create state. When `draft` is set the viewer becomes an editor.
@@ -104,17 +104,17 @@ export function useArtifactDetail({
 
   const remove = useCallback(
     async (id: string) => {
-      if (!confirm('Bu artifact kalıcı olarak silinsin mi?')) return
+      if (!confirm(t('confirm.delete'))) return
       try {
         await api.deleteArtifact(id)
         setList((prev) => prev.filter((a) => a.id !== id))
         setActiveId((cur) => (cur === id ? null : cur))
-        toast.success('Artifact silindi')
+        toast.success(t('toast.deleted'))
       } catch (e) {
         onError((e as Error).message)
       }
     },
-    [onError, setList, setActiveId],
+    [onError, setList, setActiveId, t],
   )
 
   // Single-artifact archive / un-archive from the detail toolbar. Keeps the list
@@ -153,10 +153,7 @@ export function useArtifactDetail({
   // Every action that replaces the selection also drops the open draft (the load
   // effect clears it), so an unsaved edit must not disappear silently — ask
   // first and let the caller bail out when the user declines.
-  const confirmDiscard = useCallback(
-    () => !dirty || confirm('Kaydedilmemiş değişiklikler var, atılsın mı?'),
-    [dirty],
-  )
+  const confirmDiscard = useCallback(() => !dirty || confirm(t('confirm.discard')), [dirty, t])
 
   const selectArtifact = useCallback(
     (id: string) => {
@@ -172,7 +169,11 @@ export function useArtifactDetail({
   const createNew = useCallback(async () => {
     if (!confirmDiscard()) return
     try {
-      const a = await api.createArtifact({ title: 'Yeni artifact', kind: 'markdown', content: '' })
+      const a = await api.createArtifact({
+        title: t('newArtifactTitle'),
+        kind: 'markdown',
+        content: '',
+      })
       setList((prev) => [a, ...prev])
       setActiveId(a.id)
       setActive(a)
@@ -180,7 +181,7 @@ export function useArtifactDetail({
     } catch (e) {
       onError((e as Error).message)
     }
-  }, [confirmDiscard, onError, setList, setActiveId])
+  }, [confirmDiscard, onError, setList, setActiveId, t])
 
   // Enter edit mode for the current artifact.
   const startEdit = useCallback(() => {
@@ -195,7 +196,7 @@ export function useArtifactDetail({
     (updated: Artifact) => {
       setActive(updated)
       setList((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
-      toast.success(t('artifactAnnotation.updated'))
+      toast.success(t('artifactAnnotation.updated', { ns: 'common' }))
     },
     [t, setList],
   )
@@ -231,20 +232,20 @@ export function useArtifactDetail({
       setActive(updated)
       setDraft(null)
       setList((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
-      toast.success('Kaydedildi')
+      toast.success(t('toast.saved'))
     } catch (e) {
       onError((e as Error).message)
     } finally {
       setSaving(false)
     }
-  }, [active, draft, onError, setList])
+  }, [active, draft, onError, setList, t])
 
   const copy = useCallback(() => {
     if (!active) return
     copyToClipboard(active.content).then((ok) => {
-      if (ok) toast.info('Panoya kopyalandı')
+      if (ok) toast.info(t('toast.copied'))
     })
-  }, [active])
+  }, [active, t])
 
   return {
     active,

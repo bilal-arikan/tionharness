@@ -53,16 +53,18 @@ describe('InsightPanel analysis agent selection', () => {
     expect(onError).toHaveBeenCalledWith('PUT failed')
   })
 
-  it('keeps the picker under Tara in the rail and out of SettingsTab', () => {
+  it('keeps the picker under the scan action in the rail and out of SettingsTab', () => {
     expect(panelSource).toContain('Promise.all([api.getInsightSettings(), api.listAgents()])')
     expect(panelSource).toContain('withDefaultAnalysisAgent(loadedSettings, loadedAgents)')
-    expect(panelSource.indexOf('Retrospektif tarama başlat')).toBeGreaterThan(-1)
-    expect(panelSource.indexOf('Analiz ajanı')).toBeGreaterThan(
-      panelSource.indexOf('Retrospektif tarama başlat'),
+    expect(panelSource.indexOf("t('scan.startTitle')")).toBeGreaterThan(-1)
+    expect(panelSource.indexOf("t('scan.analysisAgent')")).toBeGreaterThan(
+      panelSource.indexOf("t('scan.startTitle')"),
     )
-    expect(panelSource.indexOf('Analiz ajanı')).toBeLessThan(panelSource.indexOf('Sub-page rail.'))
+    expect(panelSource.indexOf("t('scan.analysisAgent')")).toBeLessThan(
+      panelSource.indexOf('Sub-page rail.'),
+    )
     expect(settingsSource).not.toContain('AgentPicker')
-    expect(settingsSource).not.toContain('Analiz ajanı')
+    expect(settingsSource).not.toContain('scan.analysisAgent')
   })
 
   it('keeps manual scans on the persisted backend agent fallback', () => {

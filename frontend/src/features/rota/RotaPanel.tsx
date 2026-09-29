@@ -5,6 +5,7 @@
 // schedules sit in the future strip. Data comes solely from the lane store
 // (workspace stream + REST seed); nothing here writes.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MessageSquare, Waypoints } from 'lucide-react'
 import { api } from '@/api'
 import { EmptyState } from '@/shared/components'
@@ -50,6 +51,7 @@ export function RotaPanel({
   trajectoryId,
   onTrajectory,
 }: Props) {
+  const { t } = useTranslation('rota')
   const lanes = useLanes()
   const now = useServerNow(5000)
   const [selected, setSelected] = useState<RotaSelection | null>(null)
@@ -248,21 +250,29 @@ export function RotaPanel({
     <div className="flex h-full flex-1 flex-col overflow-hidden" tabIndex={0} onKeyDown={onKeyDown}>
       <header className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-2 text-xs">
         <Waypoints size={16} className="opacity-70" />
-        <span className="font-medium">Rota</span>
+        <span className="font-medium">{t('title')}</span>
         <span
           className={`h-2 w-2 rounded-full ${lanes.connected ? 'bg-emerald-500' : 'bg-amber-500'}`}
-          title={lanes.connected ? 'Canlı akış bağlı' : 'Akış bağlanıyor…'}
+          title={lanes.connected ? t('panel.streamConnected') : t('panel.streamConnecting')}
         />
         <span className="text-[var(--color-text-dim)]">
-          {layout.rows.filter((r) => r.depth === 0).length} şerit · {lanes.sessions.size} oturum ·{' '}
-          {lanes.trajectories.size} rota · {lanes.flowRuns.size} akış koşusu · {lanes.fires.length}{' '}
-          tetik
+          {t('panel.counts', {
+            lanes: layout.rows.filter((r) => r.depth === 0).length,
+            sessions: lanes.sessions.size,
+            trajectories: lanes.trajectories.size,
+            runs: lanes.flowRuns.size,
+            triggers: lanes.fires.length,
+          })}
         </span>
         {lanes.capacity && (
           <span className="text-[var(--color-text-dim)]">
-            spawn {lanes.capacity.spawnActive}/{lanes.capacity.spawnMax} · kuyruk{' '}
-            {lanes.capacity.queueDepth}/{lanes.capacity.queueMax}
-            {lanes.capacity.autonomyPaused ? ' · otonomi duraklatıldı' : ''}
+            {t('panel.capacity', {
+              active: lanes.capacity.spawnActive,
+              max: lanes.capacity.spawnMax,
+              queue: lanes.capacity.queueDepth,
+              queueMax: lanes.capacity.queueMax,
+            })}
+            {lanes.capacity.autonomyPaused ? ` · ${t('panel.autonomyPaused')}` : ''}
           </span>
         )}
         <RotaZoomControl zoom={zoom} onZoom={setZoom} />
@@ -274,8 +284,8 @@ export function RotaPanel({
           normalizeBars={normalizeBars}
           onNormalizeBars={setNormalizeBars}
         />
-        <span className="ml-auto text-[var(--color-text-dim)]" title="Akış seq / depo revizyonu">
-          #{lanes.head} · r{lanes.revision}
+        <span className="ml-auto text-[var(--color-text-dim)]" title={t('panel.revisionTitle')}>
+          {t('panel.revision', { head: lanes.head, revision: lanes.revision })}
         </span>
       </header>
       {!trajectoryId && (
@@ -292,10 +302,9 @@ export function RotaPanel({
           {layout.rows.length === 0 && !trajectoryId ? (
             <EmptyState
               icon={Waypoints}
-              title={loading ? 'Şeritler yükleniyor…' : 'Bu pencerede şerit yok'}
+              title={loading ? t('panel.loadingLanes') : t('panel.noLanes')}
             >
-              Bir oturum başladığında burada bir şerit olarak görünür; süzgeci genişletmek için
-              üstteki pencereyi değiştir.
+              {t('panel.emptyHint')}
             </EmptyState>
           ) : trajectoryId ? (
             <RotaTrajectoryView
@@ -337,19 +346,21 @@ export function RotaPanel({
                     type="button"
                     onClick={() => onOpenSession?.(selected.id)}
                     className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
-                    title={`${selected.id} oturumunu Sohbet'te aç`}
+                    title={t('panel.openChatTitle', { id: selected.id })}
                   >
                     <MessageSquare size={13} />
-                    Sohbette aç
+                    {t('panel.openInChat')}
                   </button>
                   {rootIsOther && (
                     <button
                       type="button"
                       onClick={() => onOpenSession?.(selectedRoot)}
                       className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-                      title={`Bu şeridin bağlı olduğu kök oturum: ${rootTitle || selectedRoot}`}
+                      title={t('panel.rootSessionTitle', {
+                        session: rootTitle || selectedRoot,
+                      })}
                     >
-                      ↰ Asıl oturum
+                      ↰ {t('panel.rootSession')}
                     </button>
                   )}
                 </div>
@@ -364,8 +375,11 @@ export function RotaPanel({
                   className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-1.5 text-left text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
                   title={`${selectedTrajectory.trajectoryId} · rev ${selectedTrajectory.revision}`}
                 >
-                  ◈ Rotayı aç · {selectedTrajectory.templateRef || 'plansız'} ·{' '}
-                  {selectedTrajectory.status}
+                  ◈ {t('panel.openTrajectory')} ·{' '}
+                  {selectedTrajectory.templateRef || t('common.unplanned')} ·{' '}
+                  {t(`status.${selectedTrajectory.status}`, {
+                    defaultValue: selectedTrajectory.status,
+                  })}
                 </button>
               )}
               <ViewPanel

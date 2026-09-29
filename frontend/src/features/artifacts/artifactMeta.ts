@@ -27,18 +27,7 @@ export const KIND_ICON: Record<ArtifactKind, LucideIcon> = {
   file: FileIcon,
 }
 
-export const KIND_LABEL: Record<ArtifactKind, string> = {
-  markdown: 'Markdown',
-  code: 'Kod',
-  html: 'HTML',
-  text: 'Metin',
-  svg: 'SVG',
-  mermaid: 'Mermaid',
-  image: 'Görsel',
-  video: 'Video',
-  audio: 'Ses',
-  file: 'Dosya',
-}
+export const artifactKindKey = (kind: ArtifactKind) => `kind.${kind}` as const
 
 // Origin badge: where the artifact came from. Tinted to read at a glance.
 export const KINDS: ArtifactKind[] = ['markdown', 'code', 'html', 'text', 'svg', 'mermaid']

@@ -23,6 +23,9 @@ import { agentName, resolveAgent } from '@/shared/lib/agentLookup'
 import { useTranscriptWindow } from './useTranscriptWindow'
 import { TranscriptPaging, type TranscriptPagingState } from './TranscriptPaging'
 import { CACHE_TTL_SEC } from '@/features/sessions/sessionDetailFormat'
+import { useTranslation } from 'react-i18next'
+
+const SNOWFLAKE = String.fromCodePoint(0x2744, 0xfe0f)
 
 interface Props {
   messages: Message[]
@@ -101,6 +104,7 @@ export function MessageList({
   bottomInset,
   scrollBottomSignal,
 }: Props) {
+  const { t } = useTranslation('chat')
   // Identity-stable handlers. The rows below are React.memo'd, and callers hand
   // these in as inline arrow functions — without this, every row would re-render
   // on every streaming delta and the memo would buy nothing.
@@ -179,7 +183,7 @@ export function MessageList({
   const peerRecipient = (m: Message): string | undefined => {
     const rid = m.recipientId
     if (!rid) return undefined
-    if (rid === '*') return 'herkes'
+    if (rid === '*') return t('messageList.everyone')
     return agentName(agents, rid)
   }
   // Resolve a turn's "→ <name>" recipient label from recipientId (falling back to
@@ -189,7 +193,7 @@ export function MessageList({
     if (!multiParticipant) return undefined
     const rid = m.recipientId || (m.role === 'user' ? m.agentId : undefined)
     if (!rid) return undefined
-    if (rid === '*') return 'herkes'
+    if (rid === '*') return t('messageList.everyone')
     return agentName(agents, rid)
   }
   // Per-message collapse of the tool-activity trace (the TurnSteps block). Keyed
@@ -352,6 +356,9 @@ export function MessageList({
     el.scrollTop = el.scrollHeight
     virtual.updateViewport()
     updateActivePinned(el)
+    // The transcript window object is intentionally excluded: its identity is not
+    // stable, while the scalar dimensions above are the actual scroll triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, pending, firstId, sessionId, virtual.total, virtual.height, bottomInset])
 
   // Deep-link: when a search result is opened, scroll to the target message once
@@ -361,8 +368,12 @@ export function MessageList({
     if (!highlightMessageId) return
     const index = messages.findIndex((m) => m.id === highlightMessageId)
     if (index < 0) return
+    // Imperative scroll pin state is intentionally kept outside React rendering.
+    // eslint-disable-next-line react-hooks/immutability
     pinnedRef.current = false
     virtual.scrollToIndex(index)
+    // This state mirrors an external navigation request consumed by the effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFlashId(highlightMessageId)
     requestAnimationFrame(() => {
       const container = scrollRef.current
@@ -375,6 +386,9 @@ export function MessageList({
       virtual.updateViewport()
     })
     consumeHighlight?.()
+    // The transcript window object is intentionally excluded because its identity
+    // changes independently of the navigation request handled here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightMessageId, messages, consumeHighlight])
 
   // Fade the transient highlight out, whichever jump set it (search deep-link or
@@ -393,11 +407,16 @@ export function MessageList({
     if (!scrollBottomSignal) return
     const el = scrollRef.current
     if (!el) return
+    // Imperative scroll pin state is intentionally kept outside React rendering.
+    // eslint-disable-next-line react-hooks/immutability
     pinnedRef.current = true
     if (transcriptPaging?.hasNewer) transcriptPaging.loadLatest()
     el.scrollTop = el.scrollHeight
     virtual.updateViewport()
     updateActivePinned(el)
+    // The signal is the sole trigger; paging and virtual helpers expose the latest
+    // mutable transcript state without needing to retrigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollBottomSignal])
 
   // When a live assistant bubble is already present, the standalone pending bubble
@@ -447,8 +466,8 @@ export function MessageList({
               const el = scrollRef.current
               if (el) el.scrollTop += e.deltaY
             }}
-            title="Bu soruya dön"
-            aria-label="Sabitlenen soruya dön"
+            title={t('messageList.returnToQuestion')}
+            aria-label={t('messageList.returnToPinnedQuestion')}
             className="pointer-events-auto cursor-pointer rounded-2xl outline-none ring-[var(--color-accent)] focus-visible:ring-2"
           >
             <div aria-hidden>
@@ -467,7 +486,7 @@ export function MessageList({
         data-testid="chat-transcript"
         role="log"
         aria-live="polite"
-        aria-label="Sohbet geçmişi"
+        aria-label={t('messageList.history')}
         className="th-measure h-full overflow-y-auto pb-6 pt-2"
         style={{ paddingBottom: bottomInset || undefined, overflowAnchor: 'none' }}
       >
@@ -627,8 +646,8 @@ export function MessageList({
 
           {messages.length === 0 && !pending && (
             <div className="mt-20 text-center text-[var(--color-text-dim)]">
-              <p className="text-lg">Sohbete başla</p>
-              <p className="mt-1 text-sm">Aşağıya bir mesaj yaz.</p>
+              <p className="text-lg">{t('messageList.start')}</p>
+              <p className="mt-1 text-sm">{t('messageList.writeBelow')}</p>
             </div>
           )}
 
@@ -645,13 +664,17 @@ export function MessageList({
 // cache_break event (those are attributed server-side and carded separately); it
 // is the ambient "why did this turn cost more" context while scrolling.
 function ColdCacheDivider({ gapSec }: { gapSec: number }) {
+  const { t } = useTranslation('chat')
+  const gap = formatGap(gapSec, t)
   return (
     <div
       className="flex items-center gap-2 px-2 text-[10px] text-[var(--color-text-dim)]"
-      title={`Bu boşluk (${formatGap(gapSec)}) 1sa cache TTL'ini aştı — sonraki tur öneki soğuk olarak yeniden ödedi.`}
+      title={t('messageList.cacheGapDescription', { gap })}
     >
       <span className="h-px flex-1 bg-[var(--color-border)]" />
-      <span className="shrink-0 opacity-80">❄️ cache soğudu · {formatGap(gapSec)} ara</span>
+      <span className="shrink-0 opacity-80">
+        {SNOWFLAKE} {t('messageList.cacheCooled', { gap })}
+      </span>
       <span className="h-px flex-1 bg-[var(--color-border)]" />
     </div>
   )
@@ -663,22 +686,23 @@ function ColdCacheDivider({ gapSec }: { gapSec: number }) {
 // Backend-attributed (db.Message.CLIColdStart), unlike ColdCacheDivider which is
 // derived from timestamps alone.
 function CLIColdStartDivider() {
+  const { t } = useTranslation('chat')
   return (
     <div
       className="flex items-center gap-2 px-2 text-[10px] text-[var(--color-text-dim)]"
-      title="Bu turda CLI oturumu yeniden başladı — --resume uygulanamadı (önceki thread sürdürülemedi, compaction tabanı sıfırladı ya da oturumun ilk CLI turu). Hazırlanan transkript yeni CLI oturumuna baştan gönderildi."
+      title={t('messageList.cliRestartDescription')}
     >
       <span className="h-px flex-1 bg-[var(--color-border)]" />
-      <span className="shrink-0 opacity-80">🔄 yeni CLI oturumu</span>
+      <span className="shrink-0 opacity-80">🔄 {t('messageList.cliRestart')}</span>
       <span className="h-px flex-1 bg-[var(--color-border)]" />
     </div>
   )
 }
 
 // formatGap renders a between-messages gap in hours/days (it is always > 1h here).
-function formatGap(sec: number): string {
+function formatGap(sec: number, t: (key: string, options?: { count: number }) => string): string {
   const h = Math.floor(sec / 3600)
-  if (h < 24) return `${h} sa`
+  if (h < 24) return t('messageList.hours', { count: h })
   const d = Math.floor(h / 24)
-  return `${d} gün`
+  return t('messageList.days', { count: d })
 }

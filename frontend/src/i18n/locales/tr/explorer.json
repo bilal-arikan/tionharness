@@ -1,0 +1,129 @@
+{
+  "title": "Harita",
+  "workspace": "Workspace",
+  "summary": "{{nodes}} düğüm · {{edges}} bağlantı",
+  "density": "Yoğunluk",
+  "densityHint": "Düğümlerin sıkışıklığı",
+  "refresh": "Yenile",
+  "refreshHint": "Haritayı yenile",
+  "loading": "Harita yükleniyor…",
+  "loadFailed": "Harita yüklenemedi: {{error}}",
+  "retry": "Tekrar dene",
+  "backToRoot": "Workspace köküne dön",
+  "regionLabel": "Workspace haritası",
+  "detail": {
+    "button": "Detay",
+    "selectedTitle": "Seçili düğüm detayı",
+    "close": "Düğüm detayını kapat"
+  },
+  "search": {
+    "placeholder": "haritada ara…",
+    "label": "Haritada ara",
+    "clear": "Aramayı temizle",
+    "results": "Harita arama sonuçları"
+  },
+  "filters": {
+    "label": "Harita filtreleri",
+    "layers": "katmanlar",
+    "live": "Canlı",
+    "liveHint": "Yalnız şu an çalışan oturumlar",
+    "kind": "tür",
+    "agent": "ajan",
+    "all": "tümü",
+    "tag": "etiket",
+    "nodeCount": "{{visible}}/{{total}} düğüm",
+    "clear_one": "{{count}} filtre · temizle",
+    "clear_other": "{{count}} filtre · temizle"
+  },
+  "selection": {
+    "announcement": "Seçili düğüm {{label}} ({{kind}}).",
+    "showChildren_one": "Alt düğümleri göster · {{count}}",
+    "showChildren_other": "Alt düğümleri göster · {{count}}",
+    "hideChildren_one": "Alt düğümleri gizle · {{count}}",
+    "hideChildren_other": "Alt düğümleri gizle · {{count}}",
+    "openScreen": "{{label}} ekranında aç"
+  },
+  "errors": {
+    "invalidFocus": "Geçersiz odak bağlantısı: {{focus}}",
+    "missingFocus": "Odak düğümü haritada yok: {{focus}}"
+  },
+  "kind": {
+    "workspace": "Workspace",
+    "category": "Grup",
+    "board": "Pano",
+    "session": "Oturum",
+    "flowrun": "Akış çalıştırması",
+    "schedule": "Zamanlama",
+    "agent": "Ajan",
+    "budget": "Bütçe",
+    "tools": "Araçlar",
+    "artifact": "Artifact",
+    "automation": "Otomasyon",
+    "skill": "Skill",
+    "insight": "İçgörü",
+    "logs": "Günlükler",
+    "trajectory": "Rota"
+  },
+  "role": {
+    "boardColumn": "Pano sütunu",
+    "boardCard": "Kart",
+    "toolGroup": "Araç grubu",
+    "toolMcp": "MCP sunucusu",
+    "budgetProvider": "Sağlayıcı",
+    "liveAgent": "Çalışan ajan",
+    "sessionKind": "Oturum türü"
+  },
+  "sessionKind": {
+    "chat": "Sohbet",
+    "task": "Görev",
+    "flow": "Akış",
+    "flowCoordinator": "Akış koordinatörü",
+    "schedule": "Zamanlama",
+    "spawned": "Spawn",
+    "worker": "Worker",
+    "inbox": "Inbox",
+    "other": "Diğer"
+  },
+  "category": {
+    "sessions": "Oturumlar",
+    "flows": "Akışlar",
+    "agents": "Ajanlar",
+    "artifacts": "Artifact'lar",
+    "automations": "Otomasyonlar",
+    "skills": "Skill'ler",
+    "insights": "İçgörüler"
+  },
+  "boardColumn": {
+    "todo": "Yapılacak",
+    "in_progress": "Devam ediyor",
+    "review": "İnceleme",
+    "done": "Tamamlandı",
+    "failed": "Başarısız"
+  },
+  "tooltip": {
+    "hiddenChildren_one": "{{count}} alt düğüm gizli",
+    "hiddenChildren_other": "{{count}} alt düğüm gizli",
+    "running": "çalışıyor",
+    "awaitingWorkers": "worker bekliyor",
+    "session": "oturum: {{id}}",
+    "doubleClickChat": "çift tık sohbeti açar"
+  },
+  "edge": {
+    "selfLoop": "{{source}} kendi üzerine döngü",
+    "bidirectional": "{{source}} ↔ {{target}} iki yönlü"
+  },
+  "screen": {
+    "workspace": "Workspace",
+    "chat": "Sohbet",
+    "flows": "Akışlar",
+    "agents": "Ajanlar",
+    "artifacts": "Artifact'lar",
+    "schedules": "Zamanlamalar",
+    "skills": "Skill'ler",
+    "insights": "İçgörüler",
+    "board": "Pano",
+    "budget": "Bütçe",
+    "tools": "Araçlar",
+    "rota": "Rota"
+  }
+}

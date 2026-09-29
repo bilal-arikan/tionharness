@@ -1,0 +1,396 @@
+{
+  "providers": {
+    "claudeCli": "Claude CLI (abonelik · anahtarsız)",
+    "anthropic": "Anthropic API",
+    "minimax": "MiniMax (OpenAI uyumlu)",
+    "minimaxAnthropic": "MiniMax (Anthropic modu · araç kullanımı + düşünme)",
+    "openRouter": "OpenRouter (OpenAI uyumlu)",
+    "zai": "Z.ai GLM (Anthropic modu · araç kullanımı + düşünme)",
+    "deepSeek": "DeepSeek (OpenAI uyumlu)",
+    "deepSeekAnthropic": "DeepSeek (Anthropic modu · araç kullanımı + düşünme)",
+    "codexCli": "Codex CLI (abonelik · anahtarsız)",
+    "openAICompatible": "OpenAI uyumlu (özel)",
+    "anthropicCompatible": "Anthropic uyumlu (özel)",
+    "lmStudio": "LM Studio (yerel)"
+  },
+  "fields": {
+    "labels": {
+      "apiKey": "API anahtarı",
+      "optionalApiKey": "API anahtarı (isteğe bağlı)",
+      "baseUrl": "Taban URL",
+      "cliPath": "CLI yolu",
+      "configDir": "Yapılandırma dizini",
+      "authKind": "Kimlik doğrulama türü",
+      "authToken": "Kimlik doğrulama bilgisi"
+    },
+    "placeholders": {
+      "autoPath": "otomatik (PATH'te ara)",
+      "minimaxEndpoint": "varsayılan MiniMax uç noktası"
+    },
+    "help": {
+      "anthropic": {
+        "key": "Anthropic Console'dan alınan API anahtarı."
+      },
+      "anthropicCompatible": {
+        "key": "Uç noktanın API anahtarı.",
+        "baseUrl": "Anthropic uyumlu Messages uç noktası (/messages eklenir)."
+      },
+      "claudeCli": {
+        "cliPath": "Boş bırakılırsa PATH'teki claude ikili dosyası kullanılır.",
+        "configDir": "Boş bırakılırsa çalışma alanının claude-home dizini kullanılır. Bir yol girildiğinde bu örneğe özel, yalıtılmış bir oturum açma dizini kullanılır.",
+        "authKind": "Boş bırakılırsa varsayılan oturum açma yöntemi kullanılır.",
+        "authToken": "Seçilen kimlik doğrulama türünün token'ı veya anahtarı."
+      },
+      "codexCli": {
+        "cliPath": "Boş bırakılırsa PATH'teki codex ikili dosyası kullanılır.",
+        "configDir": "Boş bırakılırsa çalışma alanının codex-home dizini kullanılır. Bir yol girildiğinde bu örneğe özel, yalıtılmış bir oturum açma dizini kullanılır."
+      },
+      "deepSeek": {
+        "key": "DeepSeek hesap API anahtarı.",
+        "baseUrl": "Boş bırakılırsa DeepSeek'in varsayılan API uç noktası kullanılır."
+      },
+      "deepSeekAnthropic": {
+        "key": "DeepSeek hesap API anahtarı (DeepSeek türüyle aynı anahtar)."
+      },
+      "minimax": {
+        "key": "MiniMax hesap API anahtarı.",
+        "baseUrl": "Boş bırakılırsa MiniMax'in varsayılan API uç noktası kullanılır."
+      },
+      "minimaxAnthropic": {
+        "key": "MiniMax hesap API anahtarı (MiniMax türüyle aynı anahtar)."
+      },
+      "openAICompatible": {
+        "key": "Uç noktanın API anahtarı.",
+        "baseUrl": "OpenAI uyumlu Chat Completions uç noktası."
+      },
+      "openRouter": {
+        "key": "OpenRouter hesap API anahtarı.",
+        "baseUrl": "Boş bırakılırsa OpenRouter'ın varsayılan API uç noktası kullanılır."
+      },
+      "zai": {
+        "key": "Z.ai hesap API anahtarı.",
+        "baseUrl": "Boş bırakılırsa Z.ai'nin Anthropic uyumlu uç noktası kullanılır."
+      },
+      "lmStudio": {
+        "key": "LM Studio anahtar istemez. Yalnızca sunucu anahtar doğrulayan bir ara sunucunun arkasındaysa doldurun.",
+        "baseUrl": "LM Studio'nun Developer sekmesindeki yerel sunucu adresi. Boş bırakılırsa varsayılan adres kullanılır."
+      }
+    }
+  },
+  "models": {
+    "anthropic": {
+      "fable51": {
+        "label": "Claude Fable 5.1 — öncü",
+        "description": "Genel erişime açık en yetenekli model; 1M bağlam, 128K çıktı, adaptif düşünme (daima açık) ve Opus fiyatının yarısına cache okuma ($0.25/MTok). Fable 5 ile aynı fiyat. Farklar: zorunlu tool_choice yoktur ve düşünme blokları konuşmaya bağlıdır (TionHarness bunu drop_block ile tolere eder). 30 günlük veri saklama gerektirir; güvenlik retlerinde Opus 4.8'e geçilir (Ayarlar)"
+      },
+      "fable5": {
+        "label": "Claude Fable 5 — önceki öncü",
+        "description": "Fable 5.1'in öncülü; 1M bağlam, adaptif düşünme (daima açık) ve ajan görevleri. 30 günlük veri saklama gerektirdiğinden ZDR kuruluşlarında çalışmaz; güvenlik retlerinde Opus 4.8'e geçilir (Ayarlar)"
+      },
+      "opus5": {
+        "label": "Claude Opus 5 — en yetenekli",
+        "description": "En yeni Opus amiral modeli (24 Temmuz 2026); 1M bağlam, öncü ajan, kodlama ve bilgisayar kullanımı yetenekleri; Opus fiyatı değişmedi ($5/$25)"
+      },
+      "opus48": {
+        "label": "Claude Opus 4.8 — önceki nesil",
+        "description": "Karmaşık akıl yürütme, kodlama ve ajan görevleri için önceki Opus amiral modeli"
+      },
+      "sonnet5": {
+        "label": "Claude Sonnet 5 — dengeli",
+        "description": "En yeni dengeli nesil; 1M bağlam, güçlü ajan ve kodlama yetenekleri, hız ve kalite dengesi"
+      },
+      "sonnet46": {
+        "label": "Claude Sonnet 4.6 — önceki dengeli model",
+        "description": "Güçlü ve hızlı; önceki nesil dengeli model"
+      },
+      "haiku45": {
+        "label": "Claude Haiku 4.5 — hızlı ve ucuz",
+        "description": "Basit görevler için düşük gecikme ve yüksek hacim"
+      }
+    },
+    "claudeCli": {
+      "session": {
+        "label": "Claude oturum modeli",
+        "description": "Claude oturumunun etkin modelini kullan"
+      },
+      "fable": {
+        "label": "Fable — öncü",
+        "description": "CLI'nin güncel Fable modeli (5.1); 1M bağlam ve adaptif düşünme (daima açık)"
+      },
+      "opus": {
+        "label": "Opus — en güçlü",
+        "description": "En yetenekli; en yavaş ve en pahalı"
+      },
+      "sonnet": {
+        "label": "Sonnet — dengeli",
+        "description": "Günlük kullanım için hız ve kalite dengesi"
+      },
+      "haiku": {
+        "label": "Haiku — hızlı",
+        "description": "En hızlı ve en ucuz; basit görevlere uygun"
+      }
+    },
+    "codexCli": {
+      "session": {
+        "label": "Codex oturum modeli",
+        "description": "Codex oturumunun etkin modelini kullan"
+      },
+      "gpt6Astra": {
+        "label": "GPT-6 Astra",
+        "description": "En ileri akıl yürütme ve kodlama. Codex çaba düzeyi: low ile ultra arası; doğrulanmış CLI bağlamı: 272K. Kullanılabilirlik oturum açılan hesaba bağlıdır."
+      },
+      "gpt6Sol": {
+        "label": "GPT-6 Sol",
+        "description": "Dengeli kodlama ve ajanik iş akışları. Codex çaba düzeyi: low ile ultra arası; doğrulanmış CLI bağlamı: 272K. Kullanılabilirlik oturum açılan hesaba bağlıdır."
+      },
+      "gpt6Luna": {
+        "label": "GPT-6 Luna",
+        "description": "Verimli, odaklı görevler. Codex çaba düzeyi: low ile max arası; doğrulanmış CLI bağlamı: 272K. Kullanılabilirlik oturum açılan hesaba bağlıdır."
+      },
+      "gpt56Sol": {
+        "label": "GPT-5.6 Sol",
+        "description": "Önceki nesil; yayımlanan API bağlamı yaklaşık 1,05M (272K üzeri uzun bağlam fiyatlandırması)"
+      },
+      "gpt56Terra": {
+        "label": "GPT-5.6 Terra",
+        "description": "Önceki nesil; yayımlanan API bağlamı yaklaşık 1,05M (272K üzeri uzun bağlam fiyatlandırması)"
+      },
+      "gpt56Luna": {
+        "label": "GPT-5.6 Luna",
+        "description": "Önceki nesil; yayımlanan API bağlamı 400K"
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Codex CLI modeli"
+      },
+      "gpt54": {
+        "label": "GPT-5.4",
+        "description": "ChatGPT hesabıyla kullanılamaz (API faturalandırması gerekir)"
+      },
+      "gpt54Mini": {
+        "label": "GPT-5.4 Mini — hızlı",
+        "description": "En hızlı ve en ucuz; basit görevlere uygun"
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "ChatGPT hesabıyla kullanılamaz (API faturalandırması gerekir)"
+      }
+    },
+    "deepSeek": {
+      "flash": {
+        "label": "DeepSeek V4.1 Flash — hızlı ve ucuz",
+        "description": "1M bağlam; düşünme kapalı veya low/high/max olabilir ($0.15/$0.60 · 1M, cache isabeti $0.003; yoğun saatlerde 2×)"
+      },
+      "v4Pro": {
+        "label": "DeepSeek V4 Pro — güçlü akıl yürütme",
+        "description": "V4-Pro-0813 · 1M bağlam; düşünme kapalı veya low/high/max olabilir ($0.66/$1.98 · 1M, cache isabeti $0.022; yoğun saatlerde 2×)"
+      },
+      "v4Flash": {
+        "label": "DeepSeek V4 Flash — eski ad",
+        "description": "Geçici takma ad: DeepSeek bunu Flash fiyatıyla V4.1 Flash'a yönlendirir; yeni ajanlarda deepseek-flash seçin"
+      }
+    },
+    "minimax": {
+      "m3": {
+        "label": "MiniMax M3 — güncel amiral",
+        "description": "En yeni akıl yürütme ve kodlama modeli (varsayılan)"
+      },
+      "m27": {
+        "label": "MiniMax M2.7 — önceki nesil",
+        "description": "Önceki barındırılan akıl yürütme modeli"
+      },
+      "m27Highspeed": {
+        "label": "MiniMax M2.7 Highspeed — hızlı",
+        "description": "M2.7'nin hızlı katmanı"
+      },
+      "m25": {
+        "label": "MiniMax M2.5",
+        "description": "Dengeli akıl yürütme katmanı"
+      },
+      "m25Highspeed": {
+        "label": "MiniMax M2.5 Highspeed — hızlı",
+        "description": "M2.5'in hızlı katmanı"
+      },
+      "m21": {
+        "label": "MiniMax M2.1 — çok dilli kodlama",
+        "description": "Güçlü çok dilli kodlama (~60 tps)"
+      },
+      "m21Lightning": {
+        "label": "MiniMax M2.1 Lightning — hızlı",
+        "description": "M2.1'in hızlı varyantı (~100 tps)"
+      },
+      "m2": {
+        "label": "MiniMax M2 — ajanlar ve akıl yürütme",
+        "description": "Ajan yetenekleri ve gelişmiş akıl yürütme"
+      }
+    },
+    "minimaxAnthropic": {
+      "m3": {
+        "label": "MiniMax M3 — güncel amiral",
+        "description": "Anthropic modu: araç kullanımı ve düşünme"
+      },
+      "m27": {
+        "label": "MiniMax M2.7 — önceki nesil",
+        "description": "Anthropic modu: önceki barındırılan akıl yürütme modeli"
+      },
+      "m25": {
+        "label": "MiniMax M2.5",
+        "description": "Anthropic modu: dengeli akıl yürütme"
+      },
+      "m21": {
+        "label": "MiniMax M2.1 — çok dilli kodlama",
+        "description": "Anthropic modu: araç kullanımı ve düşünme"
+      },
+      "m21Lightning": {
+        "label": "MiniMax M2.1 Lightning — hızlı",
+        "description": "M2.1'in hızlı varyantı"
+      },
+      "m2": {
+        "label": "MiniMax M2 — ajanlar ve akıl yürütme",
+        "description": "Ajan yetenekleri ve gelişmiş akıl yürütme"
+      }
+    },
+    "openRouter": {
+      "claudeFable51": {
+        "label": "Claude Fable 5.1 — öncü",
+        "description": "En yeni Anthropic nesli; 1M bağlam, adaptif düşünme (daima açık) ve ucuz cache okuma"
+      },
+      "claudeFable5": {
+        "label": "Claude Fable 5 — önceki öncü",
+        "description": "Fable 5.1'in öncülü; 1M bağlam ve adaptif düşünme (daima açık)"
+      },
+      "claudeOpus5": {
+        "label": "Claude Opus 5 — en yetenekli",
+        "description": "En yeni Anthropic amiral modeli; 1M bağlam ve öncü ajan, kodlama ve bilgisayar kullanımı yetenekleri"
+      },
+      "claudeOpus48": {
+        "label": "Claude Opus 4.8 — önceki nesil",
+        "description": "Karmaşık akıl yürütme ve ajan görevleri için önceki Anthropic amiral modeli"
+      },
+      "claudeOpus48Fast": {
+        "label": "Claude Opus 4.8 (Hızlı)",
+        "description": "Opus 4.8'in hızlı varyantı"
+      },
+      "claudeOpus47": { "label": "Claude Opus 4.7", "description": "Önceki Opus nesli" },
+      "claudeSonnet5": {
+        "label": "Claude Sonnet 5 — dengeli",
+        "description": "En yeni dengeli Anthropic nesli; 1M bağlam ve güçlü ajan ve kodlama yetenekleri"
+      },
+      "claudeSonnet46": {
+        "label": "Claude Sonnet 4.6 — önceki dengeli model",
+        "description": "Güçlü ve hızlı; önceki nesil dengeli model"
+      },
+      "claudeHaiku45": {
+        "label": "Claude Haiku 4.5 — hızlı ve ucuz",
+        "description": "Düşük gecikme ve yüksek hacim"
+      },
+      "gpt55": { "label": "GPT-5.5", "description": "OpenAI genel amaçlı amiral modeli" },
+      "gpt55Pro": { "label": "GPT-5.5 Pro", "description": "En yetenekli GPT-5.5 katmanı" },
+      "gemini35Flash": {
+        "label": "Gemini 3.5 Flash — hızlı",
+        "description": "Google'ın hızlı çok kipli modeli"
+      },
+      "gemini31FlashLite": {
+        "label": "Gemini 3.1 Flash Lite",
+        "description": "Çok hızlı ve ucuz Google katmanı"
+      },
+      "deepSeekV41Flash": {
+        "label": "DeepSeek V4.1 Flash",
+        "description": "Yeni DeepSeek Flash (2026-09); 1M bağlam ve lider işlem hacmi"
+      },
+      "deepSeekV4Flash": {
+        "label": "DeepSeek V4 Flash",
+        "description": "Önceki açık ağırlıklı Flash nesli"
+      },
+      "deepSeekV4Pro": { "label": "DeepSeek V4 Pro", "description": "DeepSeek'in güçlü katmanı" },
+      "grok43": { "label": "Grok 4.3", "description": "xAI amiral modeli" },
+      "minimaxM3": {
+        "label": "MiniMax M3",
+        "description": "MiniMax'in güncel akıl yürütme ve kodlama modeli"
+      },
+      "kimiK26": {
+        "label": "Kimi K2.6",
+        "description": "Geliştiriciler arasında saygın Moonshot modeli"
+      },
+      "qwen37Max": {
+        "label": "Qwen3.7 Max",
+        "description": "Alibaba'nın en yetenekli Qwen katmanı"
+      },
+      "qwen37Plus": { "label": "Qwen3.7 Plus", "description": "Dengeli Qwen katmanı" },
+      "nemotron3Ultra": { "label": "Nemotron 3 Ultra", "description": "NVIDIA 550B hibrit MoE" },
+      "step37Flash": {
+        "label": "Step 3.7 Flash",
+        "description": "StepFun'ın hızlı kodlama modeli"
+      },
+      "glm53": { "label": "GLM 5.3", "description": "Z.ai amiral modeli (2026-08); daima düşünür" },
+      "glm53Flash": {
+        "label": "GLM 5.3 Flash",
+        "description": "Z.ai'nin hızlı, ucuz, çok kipli katmanı"
+      },
+      "glm52": { "label": "GLM 5.2", "description": "Önceki Z.ai amiral modeli" },
+      "mistralMedium35": { "label": "Mistral Medium 3.5", "description": "Dengeli Mistral modeli" },
+      "tencentHy3": {
+        "label": "Tencent Hy3 (önizleme)",
+        "description": "Tencent Hunyuan 3 önizlemesi"
+      },
+      "mimoV25": { "label": "MiMo V2.5", "description": "Xiaomi'nin popüler kodlama modeli" },
+      "owlAlpha": { "label": "Owl Alpha", "description": "OpenRouter topluluk modeli" },
+      "claudeOpus47Fast": {
+        "label": "Claude Opus 4.7 (Hızlı)",
+        "description": "Opus 4.7'nin hızlı varyantı"
+      },
+      "gemini3ProImage": {
+        "label": "Gemini 3 Pro (çok kipli)",
+        "description": "Google Gemini 3 Pro — görsel ve metin"
+      }
+    },
+    "lmStudio": {
+      "qwen3Coder30b": {
+        "label": "Qwen3 Coder 30B A3B — yerel, kodlama",
+        "description": "256K bağlam, MoE (3B etkin); güvenilir yerel araç çağırma için önerilir. Ücretsiz."
+      },
+      "qwen332b": {
+        "label": "Qwen3 32B — yerel, genel",
+        "description": "128K bağlam, yoğun model; genel ajan görevlerinde güçlüdür. Ücretsiz."
+      },
+      "qwen38b": {
+        "label": "Qwen3 8B — yerel, hafif",
+        "description": "128K bağlam; hızlıdır ve az bellek kullanır, ancak araç çağırmada daha az güvenilirdir. Özetleyici veya alt ajan rollerine uygundur. Ücretsiz."
+      }
+    },
+    "zai": {
+      "glm53": {
+        "label": "GLM-5.3 — güncel amiral",
+        "description": "Anthropic modu: araç kullanımı ve düşünme (daima açık, low/high/max) ($1.40/$4.40 · 1M, cache $0.26)"
+      },
+      "glm53Flash": {
+        "label": "GLM-5.3 Flash — hızlı, ucuz, çok kipli",
+        "description": "Daima düşünür; Coding Plan'da 3× kota ($0.15/$0.50 · 1M, cache $0.03)"
+      },
+      "glm53FlashX": {
+        "label": "GLM-5.3 FlashX — en hızlı",
+        "description": "Yaklaşık 200 token/sn üreten Flash katmanı; henüz Coding Plan'da yok ($0.37/$1.25 · 1M, cache $0.075)"
+      },
+      "glm52": {
+        "label": "GLM-5.2 — önceki amiral",
+        "description": "Anthropic modu: araç kullanımı ve düşünme ($1.40/$4.40 · 1M)"
+      },
+      "glm51": {
+        "label": "GLM-5.1 — önceki nesil",
+        "description": "Anthropic modu: araç kullanımı ve düşünme ($1.40/$4.40 · 1M)"
+      },
+      "glm5": {
+        "label": "GLM-5 — dengeli taban",
+        "description": "Anthropic modu ($1.00/$3.20 · 1M)"
+      },
+      "glm47": {
+        "label": "GLM-4.7 — önceki kodlama modeli",
+        "description": "Anthropic modu: araç kullanımı ($0.60/$2.20 · 1M)"
+      },
+      "glm47Flash": {
+        "label": "GLM-4.7 Flash — ücretsiz",
+        "description": "Düşük gecikme ve yüksek hacim (Z.ai'de ücretsiz)"
+      }
+    }
+  }
+}

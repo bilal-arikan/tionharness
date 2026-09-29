@@ -1,8 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Paperclip, Plus, UploadCloud } from 'lucide-react'
 import { api } from '@/api'
 import type { Artifact } from '@/types'
-import { KIND_ICON, KIND_LABEL, artifactKindForUpload } from '@/features/artifacts/artifactMeta'
+import {
+  KIND_ICON,
+  artifactKindForUpload,
+  artifactKindKey,
+} from '@/features/artifacts/artifactMeta'
 
 interface Props {
   // Referenced artifact ids (order preserved).
@@ -32,6 +37,8 @@ export function TaskArtifactRefs({
   bucket,
   onError,
 }: Props) {
+  const { t } = useTranslation(['tasks', 'artifacts'])
+  const kindLabel = (kind: Artifact['kind']) => t(artifactKindKey(kind), { ns: 'artifacts' })
   const [pickerOpen, setPickerOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -81,7 +88,7 @@ export function TaskArtifactRefs({
             createdIds.push(a.id)
             created.push(a)
           } catch (e) {
-            onError(`"${file.name}" eklenemedi: ${(e as Error).message}`)
+            onError(t('artifacts.uploadError', { name: file.name, error: (e as Error).message }))
           }
         }
         if (createdIds.length) {
@@ -92,7 +99,7 @@ export function TaskArtifactRefs({
         setImporting(false)
       }
     },
-    [bucket, value, onChange, onArtifactsChanged, onError],
+    [bucket, value, onChange, onArtifactsChanged, onError, t],
   )
 
   const onDragEnter = (e: React.DragEvent) => {
@@ -137,7 +144,7 @@ export function TaskArtifactRefs({
             return (
               <span
                 key={a.id}
-                title={`${KIND_LABEL[a.kind] ?? a.kind} — ${a.title}`}
+                title={`${kindLabel(a.kind)} — ${a.title}`}
                 className="inline-flex max-w-[220px] items-center gap-1 rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-xs text-[var(--color-text)]"
               >
                 <Icon size={12} className="shrink-0 text-[var(--color-text-dim)]" />
@@ -145,7 +152,7 @@ export function TaskArtifactRefs({
                 <button
                   onClick={() => remove(a.id)}
                   className="shrink-0 opacity-60 hover:opacity-100"
-                  title="Referansı kaldır"
+                  title={t('artifacts.removeReference')}
                 >
                   ×
                 </button>
@@ -162,16 +169,16 @@ export function TaskArtifactRefs({
           onClick={() => setPickerOpen((v) => !v)}
           className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
         >
-          <Plus size={12} /> Var olan
+          <Plus size={12} /> {t('artifacts.linkExisting')}
         </button>
         <span className="inline-flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
           {importing ? (
             <>
-              <UploadCloud size={12} className="animate-pulse" /> Yükleniyor…
+              <UploadCloud size={12} className="animate-pulse" /> {t('artifacts.uploading')}
             </>
           ) : (
             <>
-              <UploadCloud size={12} /> ya da dosya sürükle-bırak
+              <UploadCloud size={12} /> {t('artifacts.dropHint')}
             </>
           )}
         </span>
@@ -183,13 +190,13 @@ export function TaskArtifactRefs({
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Artifact ara…"
+              placeholder={t('artifacts.searchPlaceholder')}
               className="mb-1.5 w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
             />
             <div className="max-h-48 overflow-y-auto">
               {candidates.length === 0 ? (
                 <div className="px-2 py-3 text-center text-xs text-[var(--color-text-dim)]">
-                  {artifacts.length === 0 ? 'Henüz artifact yok' : 'Eşleşme yok'}
+                  {artifacts.length === 0 ? t('artifacts.empty') : t('artifacts.noMatch')}
                 </div>
               ) : (
                 candidates.map((a) => {
@@ -203,7 +210,7 @@ export function TaskArtifactRefs({
                       <Icon size={13} className="shrink-0 text-[var(--color-text-dim)]" />
                       <span className="truncate">{a.title}</span>
                       <span className="ml-auto shrink-0 text-[10px] text-[var(--color-text-dim)]">
-                        {KIND_LABEL[a.kind] ?? a.kind}
+                        {kindLabel(a.kind)}
                       </span>
                     </button>
                   )

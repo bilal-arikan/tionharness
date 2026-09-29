@@ -9,6 +9,8 @@ import { toolDisplayName } from './viz/flowVizData'
 import { formatTime } from '@/shared/lib/intl'
 import { formatBytes as fmtBytes, tokens as fmtTok, usd as fmtUsd } from '@/shared/lib/format'
 import { formatDurationMs as fmtDur } from '@/shared/lib/time'
+import { useTranslation } from 'react-i18next'
+import { i18next } from '@/i18n'
 
 // SessionDebugCard renders the per-session DEBUG journal (parallel observability
 // stream): turn timings, token spend by model, per-tool latency/size/errors,
@@ -31,6 +33,7 @@ export function SessionDebugCard({
   // expanded and its collapse header is hidden — the modal supplies the title.
   alwaysOpen?: boolean
 }) {
+  const { t } = useTranslation('sessions')
   const [sum, setSum] = useState<SessionDebugSummary | null>(null)
   // Whole-card fold (collapsed by default — debug is secondary; the header line
   // still shows a one-glance summary). Persisted so the choice sticks.
@@ -109,12 +112,14 @@ export function SessionDebugCard({
           ) : (
             <ChevronRight size={12} className="shrink-0" />
           )}
-          <Bug size={12} className="shrink-0" /> Debug / Gözlemlenebilirlik
+          <Bug size={12} className="shrink-0" /> {t('debug.title')}
           {!open && (
             <span className="ml-auto flex items-center gap-1.5 normal-case tracking-normal">
-              <span>{sum.turns} tur</span>
+              <span>{t('debug.turns', { count: sum.turns })}</span>
               {warnCount > 0 && (
-                <span className="text-[var(--color-danger)]">· {warnCount} uyarı</span>
+                <span className="text-[var(--color-danger)]">
+                  · {t('debug.warnings', { count: warnCount })}
+                </span>
               )}
             </span>
           )}
@@ -123,38 +128,40 @@ export function SessionDebugCard({
 
       {open && (
         <div className="mt-2">
-          <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">
-            Bu oturumun yapılandırılmış debug akışı (token, süre, araç, hata).
-          </p>
+          <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">{t('debug.description')}</p>
 
           {/* Headline metric grid */}
           <div className="grid grid-cols-3 gap-1.5">
-            <Metric label="Tur" value={String(sum.turns)} />
-            <Metric label="LLM çağrısı" value={String(sum.llmCalls)} />
-            <Metric label="Araç" value={String(sum.toolCalls)} />
-            <Metric label="Giriş tok" value={fmtTok(sum.inputTokens)} />
-            <Metric label="Çıkış tok" value={fmtTok(sum.outputTokens)} />
+            <Metric label={t('debug.metric.turns')} value={String(sum.turns)} />
+            <Metric label={t('debug.metric.llmCalls')} value={String(sum.llmCalls)} />
+            <Metric label={t('debug.metric.tools')} value={String(sum.toolCalls)} />
+            <Metric label={t('debug.metric.inputTokens')} value={fmtTok(sum.inputTokens)} />
+            <Metric label={t('debug.metric.outputTokens')} value={fmtTok(sum.outputTokens)} />
             {/* Hidden-reasoning share of output tokens (estimated; already inside
             "Çıkış tok"). Hidden when the session did no measurable thinking. */}
             {(sum.thinkingTokens ?? 0) > 0 && (
               <Metric
-                label="Düşünme"
+                label={t('debug.metric.thinking')}
                 value={`%${Math.round((sum.thinkingShare ?? 0) * 100)} · ${fmtTok(sum.thinkingTokens ?? 0)}`}
               />
             )}
-            <Metric label="Cache oku" value={fmtTok(sum.cacheReadTokens)} />
-            <Metric label="Cache yaz" value={fmtTok(sum.cacheWriteTokens)} />
-            <Metric label="Cache isabet" value={cacheHitPct} />
+            <Metric label={t('debug.metric.cacheRead')} value={fmtTok(sum.cacheReadTokens)} />
+            <Metric label={t('debug.metric.cacheWrite')} value={fmtTok(sum.cacheWriteTokens)} />
+            <Metric label={t('debug.metric.cacheHit')} value={cacheHitPct} />
           </div>
 
           {/* Health row: errors / compactions / recoveries */}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <Pill label="Hata" value={sum.errors} tone={sum.errors > 0 ? 'error' : 'dim'} />
-            <Pill label="Compaction" value={sum.compactions} tone="dim" />
-            <Pill label="Recovery" value={sum.recoveries} tone="dim" />
+            <Pill
+              label={t('debug.health.errors')}
+              value={sum.errors}
+              tone={sum.errors > 0 ? 'error' : 'dim'}
+            />
+            <Pill label={t('debug.health.compactions')} value={sum.compactions} tone="dim" />
+            <Pill label={t('debug.health.recoveries')} value={sum.recoveries} tone="dim" />
             {sum.cacheBreaks > 0 && (
               <Pill
-                label="Cache kırılması"
+                label={t('debug.health.cacheBreaks')}
                 value={sum.cacheBreaks}
                 tone={sum.cacheBreaks >= 2 ? 'error' : 'dim'}
               />
@@ -164,7 +171,7 @@ export function SessionDebugCard({
             have saved. Estimated ("~") for subscription providers (claude-cli). */}
             {(sum.coolingWasteUsd ?? 0) > 0 && (
               <Pill
-                label="Soğuma israfı"
+                label={t('debug.health.coolingWaste')}
                 value={`${sum.coolingWasteEstimated ? '~' : ''}${fmtUsd(sum.coolingWasteUsd ?? 0)}${
                   (sum.coolingBreaks ?? 0) > 0 ? ` · ${sum.coolingBreaks}×` : ''
                 }`}
@@ -173,7 +180,12 @@ export function SessionDebugCard({
               />
             )}
             {sum.turnDurMs > 0 && (
-              <Pill label="Toplam süre" value={fmtDur(sum.turnDurMs)} tone="dim" raw />
+              <Pill
+                label={t('debug.health.totalDuration')}
+                value={fmtDur(sum.turnDurMs)}
+                tone="dim"
+                raw
+              />
             )}
           </div>
 
@@ -211,10 +223,18 @@ export function SessionDebugCard({
             (sum.tokenSeries && sum.tokenSeries.length > 1)) && (
             <div className="mt-2 grid grid-cols-2 gap-2">
               {sum.turnDurSeries && sum.turnDurSeries.length > 1 && (
-                <Sparkline label="Tur süresi" data={sum.turnDurSeries} format={fmtDur} />
+                <Sparkline
+                  label={t('debug.chart.turnDuration')}
+                  data={sum.turnDurSeries}
+                  format={fmtDur}
+                />
               )}
               {sum.tokenSeries && sum.tokenSeries.length > 1 && (
-                <Sparkline label="Çağrı token" data={sum.tokenSeries} format={fmtTok} />
+                <Sparkline
+                  label={t('debug.chart.callTokens')}
+                  data={sum.tokenSeries}
+                  format={fmtTok}
+                />
               )}
             </div>
           )}
@@ -230,7 +250,7 @@ export function SessionDebugCard({
           {topTools.length > 0 && (
             <div className="mt-2">
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                En yavaş araçlar
+                {t('debug.slowestTools')}
               </div>
               <div className="flex flex-col gap-1">
                 {topTools.map(({ name, stat }) => (
@@ -241,7 +261,9 @@ export function SessionDebugCard({
                     >
                       {toolDisplayName(name)}
                       {stat && stat.errors > 0 && (
-                        <span className="ml-1 text-[var(--color-danger)]">·{stat.errors} hata</span>
+                        <span className="ml-1 text-[var(--color-danger)]">
+                          ·{t('debug.errors', { count: stat.errors })}
+                        </span>
                       )}
                     </span>
                     <span className="ml-2 shrink-0 text-[var(--color-text)]">
@@ -257,7 +279,7 @@ export function SessionDebugCard({
           {sum.byModel && Object.keys(sum.byModel).length > 0 && (
             <div className="mt-2">
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                Modele göre token
+                {t('debug.tokensByModel')}
               </div>
               <div className="flex flex-col gap-1">
                 {Object.entries(sum.byModel)
@@ -285,7 +307,7 @@ export function SessionDebugCard({
             className="mt-2 flex items-center gap-1 text-[11px] text-[var(--color-accent)] underline-offset-2 hover:underline"
           >
             {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            Ham olaylar ({sum.events})
+            {t('debug.rawEvents', { count: sum.events })}
           </button>
           {expanded && (
             <div className="mt-1.5">
@@ -319,13 +341,13 @@ export function SessionDebugCard({
                         : 'border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                     }`}
                   >
-                    {t || 'hepsi'}
+                    {t || i18next.t('debug.all', { ns: 'sessions' })}
                   </button>
                 ))}
               </div>
               {loadingEvents ? (
                 <div className="flex items-center gap-1.5 py-2 text-[11px] text-[var(--color-text-dim)]">
-                  <Loader2 size={12} className="animate-spin" /> Yükleniyor…
+                  <Loader2 size={12} className="animate-spin" /> {t('common.loading')}
                 </div>
               ) : events && events.length > 0 ? (
                 <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] font-mono text-[10px]">
@@ -348,7 +370,9 @@ export function SessionDebugCard({
                     ))}
                 </div>
               ) : (
-                <p className="py-2 text-[11px] text-[var(--color-text-dim)]">(olay yok)</p>
+                <p className="py-2 text-[11px] text-[var(--color-text-dim)]">
+                  {t('debug.noEvents')}
+                </p>
               )}
             </div>
           )}
@@ -441,14 +465,14 @@ function Pill({
 function eventLabel(e: SessionDebugEvent): string {
   switch (e.type) {
     case 'turn':
-      return `${fmtDur(e.durMs ?? 0)}${e.stop ? ` · ${e.stop}` : ''}${e.err ? ' · HATA' : ''}`
+      return `${fmtDur(e.durMs ?? 0)}${e.stop ? ` · ${e.stop}` : ''}${e.err ? ` · ${i18next.t('debug.event.error', { ns: 'sessions' })}` : ''}`
     case 'llm_call':
-      return `${e.model || '(model)'} · in ${e.in ?? 0} / out ${e.out ?? 0}${
+      return `${e.model || i18next.t('debug.event.model', { ns: 'sessions' })} · ${i18next.t('debug.event.input', { ns: 'sessions' })} ${e.in ?? 0} / ${i18next.t('debug.event.output', { ns: 'sessions' })} ${e.out ?? 0}${
         e.cacheRead ? ` / cache ${e.cacheRead}` : ''
       }`
     case 'tool':
       return `${e.name} · ${fmtDur(e.durMs ?? 0)} · ${fmtBytes(e.outBytes ?? 0)}${
-        e.err ? ' · HATA' : ''
+        e.err ? ` · ${i18next.t('debug.event.error', { ns: 'sessions' })}` : ''
       }`
     case 'hook':
       return `${e.name} · ${e.detail ?? ''}`
@@ -458,8 +482,10 @@ function eventLabel(e: SessionDebugEvent): string {
       return e.detail ?? ''
     case 'cache_break':
       return `${e.name ?? 'cache-break'}${e.detail ? ` · ${e.detail}` : ''}${
-        e.cacheWrite ? ` · yeniden yazılan ${e.cacheWrite}` : ''
-      }${e.wasteUsd ? ` · israf ${e.wasteEst ? '~' : ''}${fmtUsd(e.wasteUsd)}` : ''}`
+        e.cacheWrite
+          ? ` · ${i18next.t('debug.event.rewritten', { ns: 'sessions', count: e.cacheWrite })}`
+          : ''
+      }${e.wasteUsd ? ` · ${i18next.t('debug.event.waste', { ns: 'sessions' })} ${e.wasteEst ? '~' : ''}${fmtUsd(e.wasteUsd)}` : ''}`
     case 'epoch':
       return `${e.name ?? 'epoch'}${e.detail ? ` · ${e.detail}` : ''}`
     case 'repair':
@@ -479,7 +505,7 @@ function eventLabel(e: SessionDebugEvent): string {
     case 'lifecycle':
       return `${e.name ?? 'lifecycle'}${e.detail ? ` · ${e.detail}` : ''}`
     case 'thinking_dropped':
-      return `${e.calls ?? 1} thinking bloğu düşürüldü · ${e.name ?? ''}${e.detail ? ` · ${e.detail}` : ''}`
+      return `${i18next.t('debug.event.thinkingDropped', { ns: 'sessions', count: e.calls ?? 1 })} · ${e.name ?? ''}${e.detail ? ` · ${e.detail}` : ''}`
     case 'error':
       return e.detail ?? ''
     default:

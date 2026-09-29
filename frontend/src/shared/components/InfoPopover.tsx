@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 // InfoPopover is a small (ⓘ) button that reveals explanatory text on click,
 // keeping long help notes out of the way until the user asks for them. Closes on
@@ -7,7 +8,7 @@ import { Info } from 'lucide-react'
 // popover relative to the button's inline-flex wrapper.
 export function InfoPopover({
   text,
-  label = 'Bilgi',
+  label,
   align = 'left',
   fixed = false,
 }: {
@@ -20,6 +21,8 @@ export function InfoPopover({
   // flow node palette), where an absolute bubble would be cut off.
   fixed?: boolean
 }) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedLabel = label ?? t('actions.info')
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -54,8 +57,8 @@ export function InfoPopover({
         type="button"
         onClick={toggle}
         onBlur={() => setOpen(false)}
-        title={label}
-        aria-label={label}
+        title={resolvedLabel}
+        aria-label={resolvedLabel}
         aria-expanded={open}
         className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
       >

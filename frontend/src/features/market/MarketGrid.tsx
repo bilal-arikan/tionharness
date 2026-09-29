@@ -2,6 +2,7 @@ import { Check, ArrowUpCircle, Globe2 } from 'lucide-react'
 import type { Pack, PackKind } from '@/types'
 import { updateAvailable } from './marketHelpers'
 import { KindBadge } from './previewParts'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   visible: Pack[]
@@ -29,11 +30,12 @@ export function MarketGrid({
   remoteResults,
   remoteWarnings,
 }: Props) {
+  const { t } = useTranslation('market')
   return (
     <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] content-start gap-3 overflow-y-auto p-3 sm:p-4 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
       {visible.length === 0 && (
         <p className="col-span-full mt-8 text-center text-sm text-[var(--color-text-dim)]">
-          Bu türde paket yok.
+          {t('grid.empty')}
         </p>
       )}
       {visible.map((p) => {
@@ -66,7 +68,9 @@ export function MarketGrid({
                 <div className="flex items-center gap-1.5">
                   <KindBadge kind={p.kind} />
                   {p.version && (
-                    <span className="text-[10px] text-[var(--color-text-dim)]">v{p.version}</span>
+                    <span className="text-[10px] text-[var(--color-text-dim)]">
+                      {t('detail.version', { version: p.version })}
+                    </span>
                   )}
                 </div>
               </div>
@@ -74,16 +78,17 @@ export function MarketGrid({
             <p className="line-clamp-3 text-xs text-[var(--color-text-dim)]">{p.description}</p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                {p.source === 'remote' ? p.registryName || 'Uzak' : 'Yerel'}
+                {p.source === 'remote' ? p.registryName || t('source.remote') : t('source.local')}
               </span>
               {updateAvailable(p) && (
                 <span className="flex items-center gap-1 text-[10px] text-[var(--color-accent)]">
-                  <ArrowUpCircle size={11} /> Güncelle (v{p.installedVersion}→v{p.version})
+                  <ArrowUpCircle size={11} />{' '}
+                  {t('grid.updateVersion', { from: p.installedVersion, to: p.version })}
                 </span>
               )}
               {done && !updateAvailable(p) && (
                 <span className="flex items-center gap-1 text-[10px] text-[var(--color-success)]">
-                  <Check size={11} /> Kuruldu
+                  <Check size={11} /> {t('status.installed')}
                 </span>
               )}
             </div>
@@ -96,9 +101,11 @@ export function MarketGrid({
         <div className="col-span-full mt-2 border-t border-[var(--color-border)] pt-3">
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-text-dim)]">
             <Globe2 size={13} />
-            İnternet sonuçları (SkillsMP · CrossAITools)
-            {searching && <span className="text-[var(--color-text-dim)]">aranıyor…</span>}
-            {!searching && <span>· {remoteResults.length}</span>}
+            {t('grid.internetResults')}
+            {searching && (
+              <span className="text-[var(--color-text-dim)]">{t('grid.searching')}</span>
+            )}
+            {!searching && <span>{t('grid.resultCount', { count: remoteResults.length })}</span>}
           </div>
           {remoteWarnings.length > 0 && (
             <p className="mb-2 text-[10px] text-[var(--color-warning,#d97706)]">
@@ -134,11 +141,11 @@ export function MarketGrid({
               <p className="line-clamp-3 text-xs text-[var(--color-text-dim)]">{p.description}</p>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {p.registryName || 'Uzak'}
+                  {p.registryName || t('source.remote')}
                 </span>
                 {done && (
                   <span className="flex items-center gap-1 text-[10px] text-[var(--color-success)]">
-                    <Check size={11} /> Kuruldu
+                    <Check size={11} /> {t('status.installed')}
                   </span>
                 )}
               </div>

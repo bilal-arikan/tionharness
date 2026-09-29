@@ -4,6 +4,7 @@ import { Lightbox } from '@/shared/components'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { toast } from '../toastStore'
 import { Copy } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   code: string
@@ -48,6 +49,7 @@ function themeVariables(): Record<string, string> {
 // often syntactically incomplete, so failures fall back to the raw code instead
 // of throwing. The diagram re-renders when the document theme changes.
 export function MermaidDiagram({ code }: Props) {
+  const { t } = useTranslation('sharedUi')
   const baseId = useId().replace(/:/g, '')
   const [svg, setSvg] = useState('')
   const [error, setError] = useState(false)
@@ -116,7 +118,7 @@ export function MermaidDiagram({ code }: Props) {
 
   const copy = () => {
     copyToClipboard(code).then((ok) => {
-      if (ok) toast.info('Panoya kopyalandı')
+      if (ok) toast.info(t('actions.copied'))
     })
   }
 
@@ -126,7 +128,7 @@ export function MermaidDiagram({ code }: Props) {
     return (
       <div className="my-2 overflow-hidden rounded-lg border border-[var(--color-border)]">
         <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-[11px] text-[var(--color-text-dim)]">
-          mermaid {error ? '· (geçersiz sözdizimi)' : '· işleniyor…'}
+          {'mermaid'} {error ? t('mermaid.invalidSyntax') : t('mermaid.rendering')}
         </div>
         <pre className="overflow-x-auto bg-[var(--color-bg)] p-3 text-xs leading-relaxed">
           <code>{code}</code>
@@ -139,28 +141,28 @@ export function MermaidDiagram({ code }: Props) {
     <>
       <div className="group relative my-2 overflow-hidden rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-[11px] text-[var(--color-text-dim)]">
-          <span>mermaid</span>
+          <span>{'mermaid'}</span>
           <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
             <button
               onClick={() => setShowSource((s) => !s)}
-              title={showSource ? 'Diyagramı göster' : 'Kaynağı göster'}
+              title={showSource ? t('mermaid.showDiagram') : t('mermaid.showSource')}
               className="rounded px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
             >
-              {showSource ? 'Diagram' : 'Source'}
+              {showSource ? t('mermaid.diagram') : t('mermaid.source')}
             </button>
             {!showSource && (
               <button
                 onClick={() => setExpanded(true)}
-                title="Tam ekran"
+                title={t('actions.fullscreen')}
                 className="rounded px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
               >
-                Expand
+                {t('actions.expand')}
               </button>
             )}
             <button
               onClick={copy}
-              title="Kodu kopyala"
-              aria-label="Kodu kopyala"
+              title={t('actions.copyCode')}
+              aria-label={t('actions.copyCode')}
               className="rounded px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
             >
               <Copy size={14} />

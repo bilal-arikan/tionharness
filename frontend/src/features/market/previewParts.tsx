@@ -4,8 +4,9 @@ import type { Pack, PackKind } from '@/types'
 import type { PriceTable } from '@/api/providers'
 import type { PreviewItem } from '@/api/ingest'
 import { Markdown } from '@/shared/components/markdown/Markdown'
-import { fmtPrice, KIND_LABEL, SOURCE_LABEL, stripFrontmatter } from './marketHelpers'
+import { fmtPrice, packKindKey, sourceLabel, stripFrontmatter } from './marketHelpers'
 import { formatDate } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
 
 // Row is a small labelled key/value line used in the agent/provider preview.
 export function Row({ k, v }: { k: string; v?: string }) {
@@ -76,6 +77,7 @@ export function ModelList({
   providerId: string
   prices: PriceTable
 }) {
+  const { t } = useTranslation('market')
   if (!models) return null
   const ids = models
     .split('\n')
@@ -84,7 +86,9 @@ export function ModelList({
   const table = prices[providerId] || {}
   return (
     <div className="pt-1">
-      <span className="text-xs text-[var(--color-text-dim)]">Modeller ({ids.length})</span>
+      <span className="text-xs text-[var(--color-text-dim)]">
+        {t('preview.models', { count: ids.length })}
+      </span>
       <div className="mt-1 max-h-64 overflow-y-auto rounded bg-[var(--color-surface-2)] p-1.5">
         {ids.map((id) => {
           const pr = table[id]
@@ -97,20 +101,18 @@ export function ModelList({
               {pr ? (
                 <span
                   className="shrink-0 tabular-nums text-[var(--color-text-dim)]"
-                  title="giriş / çıkış — $/1M token"
+                  title={t('preview.priceTitle')}
                 >
                   {fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)}
                 </span>
               ) : (
-                <span className="shrink-0 text-[var(--color-text-dim)] opacity-50">—</span>
+                <span className="shrink-0 text-[var(--color-text-dim)] opacity-50">{'—'}</span>
               )}
             </div>
           )
         })}
       </div>
-      <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-        $/1M token (giriş / çıkış) — yaklaşık liste fiyatı.
-      </p>
+      <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">{t('preview.priceHint')}</p>
     </div>
   )
 }
@@ -168,10 +170,11 @@ export function MiniChip({ children, title }: { children: ReactNode; title?: str
 // PackMeta renders a row of metadata chips (source, installed version, created
 // date, tags) shown under the description for every pack kind.
 export function PackMeta({ pack }: { pack: Pack }) {
+  const { t } = useTranslation('market')
   const created = pack.createdAt
     ? formatDate(new Date(pack.createdAt * 1000), { dateStyle: 'short' })
     : null
-  const src = pack.source ? (SOURCE_LABEL[pack.source] ?? pack.source) : null
+  const src = pack.source ? sourceLabel(pack.source) : null
   if (!src && !created && !pack.installedVersion && !(pack.tags && pack.tags.length)) return null
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -181,7 +184,9 @@ export function PackMeta({ pack }: { pack: Pack }) {
           {pack.registryName ? ` · ${pack.registryName}` : ''}
         </MiniChip>
       )}
-      {pack.installedVersion && <MiniChip>Kurulu: v{pack.installedVersion}</MiniChip>}
+      {pack.installedVersion && (
+        <MiniChip>{t('detail.installedVersion', { version: pack.installedVersion })}</MiniChip>
+      )}
       {created && <MiniChip>📅 {created}</MiniChip>}
       {pack.tags?.map((t) => (
         <MiniChip key={t}>#{t}</MiniChip>
@@ -201,6 +206,7 @@ export function SourceRefPreview({
   items: PreviewItem[] | null
   loading: boolean
 }) {
+  const { t } = useTranslation('market')
   return (
     <div className="space-y-3">
       <a
@@ -212,12 +218,10 @@ export function SourceRefPreview({
         <Globe2 size={12} /> {url}
       </a>
       {loading && (
-        <p className="text-xs text-[var(--color-text-dim)]">Önizleme GitHub'dan yükleniyor…</p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('preview.githubLoading')}</p>
       )}
       {!loading && items && items.length === 0 && (
-        <p className="text-xs text-[var(--color-text-dim)]">
-          Önizleme alınamadı (kurulumda yine de denenir).
-        </p>
+        <p className="text-xs text-[var(--color-text-dim)]">{t('preview.githubFailed')}</p>
       )}
       {!loading &&
         items &&
@@ -243,9 +247,10 @@ export function SourceRefPreview({
 }
 
 export function KindBadge({ kind }: { kind: PackKind }) {
+  const { t } = useTranslation('market')
   return (
     <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
-      {KIND_LABEL[kind]}
+      {t(packKindKey(kind))}
     </span>
   )
 }

@@ -1,4 +1,5 @@
 import type { TranscriptSummary } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 export interface TranscriptPagingState {
   offset: number
@@ -20,6 +21,7 @@ export function TranscriptPaging({
   state?: TranscriptPagingState
   edge: 'older' | 'newer'
 }) {
+  const { t } = useTranslation('chatStatus')
   if (!state || (edge === 'older' ? !state.hasOlder : !state.hasNewer)) return null
   return (
     <div className="flex justify-center gap-3 py-3 text-sm">
@@ -29,14 +31,14 @@ export function TranscriptPaging({
         className="rounded-lg border border-[var(--color-border)] px-3 py-2 disabled:opacity-50"
       >
         {state.loading
-          ? 'Loading…'
+          ? t('transcript.loading')
           : edge === 'older'
-            ? 'Load earlier messages'
-            : 'Load newer messages'}
+            ? t('transcript.earlier')
+            : t('transcript.newer')}
       </button>
       {edge === 'newer' && (
         <button disabled={state.loading} onClick={state.loadLatest} className="px-3 py-2">
-          Jump to latest
+          {t('transcript.latest')}
         </button>
       )}
     </div>

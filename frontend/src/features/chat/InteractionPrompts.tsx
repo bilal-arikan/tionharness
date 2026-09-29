@@ -1,6 +1,7 @@
 import { AskPrompt, type PendingAsk } from './AskPrompt'
 import { PermissionPrompt } from './PermissionPrompt'
 import { PlanPrompt } from './PlanPrompt'
+import { useTranslation } from 'react-i18next'
 
 export function InteractionPrompts({
   asks,
@@ -9,6 +10,7 @@ export function InteractionPrompts({
   asks: PendingAsk[]
   onAnswer: (text: string, interactionId?: string) => void
 }) {
+  const { t } = useTranslation('chat')
   if (!asks.length) return null
   return (
     <div className="flex max-h-[45vh] flex-col gap-2 overflow-y-auto">
@@ -17,9 +19,7 @@ export function InteractionPrompts({
         return (
           <div key={ask.interactionId ?? index}>
             {ask.async && (
-              <div className="mb-1 text-xs text-[var(--color-text-dim)]">
-                Answer when ready. Independent work can continue.
-              </div>
+              <div className="mb-1 text-xs text-[var(--color-text-dim)]">{t('ask.asyncHint')}</div>
             )}
             {ask.kind === 'permission' ? (
               <PermissionPrompt ask={ask} onAnswer={answer} />

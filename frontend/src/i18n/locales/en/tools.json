@@ -1,10 +1,168 @@
 {
+  "actions": {
+    "add": "Add",
+    "adding": "Adding…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "closeSymbol": "×",
+    "delete": "Delete",
+    "disable": "Disable",
+    "edit": "Edit",
+    "enable": "Enable",
+    "import": "Import",
+    "importing": "Importing…",
+    "save": "Save",
+    "test": "Test"
+  },
+  "categories": {
+    "agents": "Agents & Sessions",
+    "artifacts": "Artifacts",
+    "automation": "Automation (Flows / Schedules / Tasks)",
+    "config": "Configuration & Secrets",
+    "diagnostics": "Diagnostics & Tool Loading",
+    "files": "Files & Shell",
+    "interaction": "Interaction",
+    "other": "Other",
+    "search": "Search & Web",
+    "skillsMcp": "Skill & MCP Management"
+  },
+  "categoryShort": {
+    "agents": "Agents",
+    "artifacts": "Artifacts",
+    "automation": "Automation",
+    "config": "Settings",
+    "diagnostics": "Diagnostics",
+    "files": "Files",
+    "interaction": "Interaction",
+    "other": "Other",
+    "search": "Search"
+  },
+  "cost": {
+    "alreadyFull": "Everything is already at the \"Full\" tier, so the cost cannot increase.",
+    "current": "This group currently uses ≈{{tokens}} context tokens per turn.",
+    "label": "~{{tokens}} tok/turn",
+    "promote": "Setting everything to the \"Full\" tier would use ≈{{fullTokens}} tokens (+{{delta}})."
+  },
+  "detail": {
+    "builtin": "Built-in",
+    "contextVisibility": "Context visibility",
+    "description": "Description",
+    "examples_one": "Example call ({{count}})",
+    "examples_other": "Example calls ({{count}})",
+    "examplesHintAfter": "visibility, along with the full schema, sends these patterns to the model.",
+    "examplesHintBefore": "Usage patterns the schema cannot express, such as date/ID formats and fields that belong together. Only",
+    "mcpSource": "MCP · {{server}}",
+    "noDescription": "No description.",
+    "noParameters": "This tool has no parameters.",
+    "parameters_one": "Parameter ({{count}})",
+    "parameters_other": "Parameters ({{count}})",
+    "required": "required"
+  },
   "mcpDisconnect": {
     "title": "MCP server \"{{server}}\" disconnected",
     "titleScoped": "This session lost its connection to MCP server \"{{server}}\"",
     "pendingCalls_one": "{{count}} in-flight tool call was interrupted.",
     "pendingCalls_other": "{{count}} in-flight tool calls were interrupted.",
     "hint": "Its tools are unavailable until it reconnects. The next tool call re-dials automatically.",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "warningIcon": "⚠️"
+  },
+  "panel": {
+    "activeCount": "{{active}}/{{total}} enabled",
+    "all": "All",
+    "clear": "Clear",
+    "clearFilters": "Clear filters",
+    "listLabel": "Tools",
+    "manageServers": "Manage MCP servers",
+    "matches_one": "{{count}} match · ",
+    "matches_other": "{{count}} matches · ",
+    "mcpServers": "MCP Servers",
+    "noMatches": "No matching tools.",
+    "noTools": "No tools yet.",
+    "searchPlaceholder": "Search tools…",
+    "showDisabled": "Show disabled tools",
+    "showEnabled": "Show enabled tools",
+    "title": "Tools & MCP",
+    "toolGroups": "Tool groups",
+    "visibilityFilter": "Visibility: {{label}}"
+  },
+  "server": {
+    "added": "MCP server added",
+    "allTools_one": "All tools ({{count}})",
+    "allTools_other": "All tools ({{count}})",
+    "allToolsArrow_one": "All tools ({{count}}) →",
+    "allToolsArrow_other": "All tools ({{count}}) →",
+    "argsPlaceholder": "Arguments (space-separated)",
+    "commandPlaceholder": "Command (e.g. npx)",
+    "connectionScope": "Connection scope",
+    "copied": "Copied to clipboard",
+    "copyJsonHint": "Copy this server's configuration to the clipboard as mcpServers JSON, ready to paste and import elsewhere.",
+    "deleteConfirm": "Delete server \"{{name}}\"?",
+    "deleted": "MCP server deleted",
+    "editHint": "Edit this server's name, command, URL, headers, and scope. It reconnects on the next turn after a change.",
+    "empty": "No MCP servers have been added yet.",
+    "headersPlaceholder": "Optional headers — one \"Key: Value\" per line\ne.g. Authorization: Bearer TOKEN",
+    "idleClose": "close automatically after {{minutes}} minutes idle (reaper).",
+    "idleDisabled": "idle eviction is off (reaper disabled).",
+    "importCreated_one": "{{count}} server added",
+    "importCreated_other": "{{count}} servers added",
+    "importErrors_one": "{{count}} error — {{detail}}",
+    "importErrors_other": "{{count}} errors — {{detail}}",
+    "importJsonAfter": "JSON (Claude Code / .mcp.json format). Multiple servers are added at once.",
+    "importJsonBefore": "Paste a standard",
+    "importJsonTitle": "Import from JSON",
+    "intro": "Select a tool in the list on the left to view its details and enable or disable it.",
+    "json": "JSON",
+    "liveScopedHint": "{{live}} live connections ({{total}} slots). Closes after {{minutes}} minutes idle (reaper).",
+    "liveSharedHint": "{{live}} live shared connection(s) (workspace-wide, not subject to the reaper).",
+    "namePlaceholder": "Name (e.g. filesystem)",
+    "newTitle": "New MCP server",
+    "noImportable": "There are no other MCP servers available to add.",
+    "otherModalSubtitle": "Servers not yet added to this workspace. Copy one with a single click.",
+    "otherModalTitle": "MCP servers in other workspaces",
+    "otherServers": "Other MCP servers",
+    "otherServersHint": "View MCP servers configured in other TionHarness workspaces but not added here, and add one with a single click.",
+    "scopeScoped": "Per session (separate connection per session, closes when idle)",
+    "scopeShared": "Shared (workspace-wide, default)",
+    "scopedBadge": "per session",
+    "scopedBadgeHint": "Per session: a separate live connection for each session and agent pair; closes automatically when idle.",
+    "scopedConnections": "Per-session connections",
+    "sessionSuffix": " session(s)",
+    "testSuccess_one": "{{count}} tool",
+    "testSuccess_other": "{{count}} tools",
+    "testing": "Testing…",
+    "title": "MCP Servers",
+    "transportHttp": "http (Streamable HTTP)",
+    "transportStdio": "stdio",
+    "updated": "MCP server updated",
+    "urlPlaceholder": "URL (Streamable HTTP endpoint)"
+  },
+  "status": {
+    "disabled": "Disabled",
+    "disabledParenthetical": "(disabled)",
+    "disabledShort": "Off",
+    "enabled": "Enabled"
+  },
+  "visibility": {
+    "blocked": {
+      "hint": "This tool is never offered to this agent: it is absent from the catalog, tool_search cannot find it, and it cannot be called.",
+      "label": "Blocked"
+    },
+    "full": {
+      "hint": "The full schema is sent to the agent on every turn (highest token cost).",
+      "label": "Full"
+    },
+    "hidden": {
+      "hint": "It is omitted from the catalog and can only be discovered with tool_search, though it remains callable once enabled.",
+      "label": "Hidden"
+    },
+    "nameOnly": {
+      "hint": "Only the name appears in the catalog; the summary is omitted. Load the schema with tool_search or activate_tools.",
+      "label": "Name"
+    },
+    "summary": {
+      "hint": "The catalog shows the name and a short summary; the full schema loads on demand.",
+      "label": "Summary"
+    }
   }
 }

@@ -1,34 +1,34 @@
+import { useTranslation } from 'react-i18next'
 import { Toggle, NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function AutonomousWork({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">
-        These controls apply to autonomous work. Interactive conversations are unaffected.
-      </p>
+      <p className="text-xs text-[var(--color-text-dim)]">{t('autonomous.description')}</p>
       <Toggle
-        label="Confine autonomous file operations"
-        hint="Restrict supported file tools to the working directory and block git push. Shell commands and arbitrary scripts can still access other paths; this is not a sandbox."
+        label={t('autonomous.confine.label')}
+        hint={t('autonomous.confine.hint')}
         checked={draft.autonomousConfine}
         onChange={(v) => set('autonomousConfine', v)}
       />
       <Toggle
-        label="Autonomous startup checklist"
-        hint="Remind autonomous agents to orient themselves, verify a baseline, complete one task and close the loop."
+        label={t('autonomous.checklist.label')}
+        hint={t('autonomous.checklist.hint')}
         checked={draft.autonomousBootSeq}
         onChange={(v) => set('autonomousBootSeq', v)}
       />
       <Toggle
-        label="Continue unfinished autonomous work"
-        hint="Resume unfinished autonomous turns automatically. Manually stopped or guard-limited runs are excluded."
+        label={t('autonomous.continue.label')}
+        hint={t('autonomous.continue.hint')}
         checked={draft.autonomousAutoContinue}
         onChange={(v) => set('autonomousAutoContinue', v)}
       />
       {draft.autonomousAutoContinue && (
         <NumberField
-          label="Maximum continuation turns"
-          hint="0 uses the built-in default."
+          label={t('autonomous.maxTurns.label')}
+          hint={t('autonomous.maxTurns.hint')}
           min={0}
           value={draft.autonomousAutoContinueMax}
           onChange={(v) => set('autonomousAutoContinueMax', v)}

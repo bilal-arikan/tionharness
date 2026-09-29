@@ -1,4 +1,5 @@
 import { Button } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 
 export interface SettingsSaveBarProps {
   dirty: boolean
@@ -8,17 +9,14 @@ export interface SettingsSaveBarProps {
 }
 
 export function SettingsSaveBar({ dirty, saving, invalid, onSave }: SettingsSaveBarProps) {
+  const { t } = useTranslation('settings')
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span role="status" className="text-xs text-[var(--color-text-dim)]">
-        {invalid
-          ? 'Invalid number — correct it before saving'
-          : dirty
-            ? 'Unsaved changes'
-            : 'Saved'}
+        {invalid ? t('saveBar.invalid') : dirty ? t('common.unsavedChanges') : t('common.saved')}
       </span>
       <Button onClick={onSave} disabled={!dirty || saving || invalid}>
-        {saving ? 'Saving…' : 'Save'}
+        {saving ? t('common.saving') : t('common.save')}
       </Button>
     </div>
   )

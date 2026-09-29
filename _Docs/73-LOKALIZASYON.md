@@ -1,6 +1,7 @@
 # 73 — Lokalizasyon (UI i18n)
 
-> **Durum:** Altyapı UYGULANDI (2026-08-25). Kelime çevirileri kademeli devam ediyor.
+> **Durum:** Arayüz genelinde İngilizce/Türkçe katalog geçişi tamamlandı (2026-09-29).
+> Her dilde 28 namespace ve 5.355 çeviri anahtarı bulunuyor.
 > **Kapsam:** Yalnız **arayüz dili**. Ajan yanıt dili ve LLM'e giden metin ayrı eksenler (aşağıya bak).
 
 ## 1. Üç ayrı "dil" ekseni
@@ -45,17 +46,20 @@ frontend/src/i18n/
 ├── index.ts                         # i18next init, setLocale, <html lang/dir>
 ├── I18nRoot.tsx                     # dil değişiminde ağacı yeniden bağlar
 ├── catalog.test.ts                  # parite/boşluk/placeholder guard'ı
-└── locales/{en,tr}/common.json
+├── sourceCatalog.test.ts            # statik t/Trans anahtarlarının katalogda bulunması
+└── locales/{en,tr}/*.json            # ekran ve ortak bileşen katalogları
 frontend/src/shared/lib/intl.ts      # dateFormat/numberFormat/collator + formatDate/Time/DateTime/compareText
 frontend/src/shared/lib/format.ts    # usd/count/decimal/percent/tokens/bytes (locale-duyarlı)
 frontend/src/shared/lib/time.ts      # relativeTime/formatDuration/bucketLabel (katalog-tabanlı)
-frontend/scripts/codemod-intl.mjs    # tek-seferlik migrasyon aracı (SKIP listesi = bilerek locale-bağımsız yerler)
 frontend/i18next-parser.config.js    # npm run i18n:extract
 ```
 
 ## 4. Namespace ve anahtar sözleşmesi
 
-- **Namespace = feature klasörü adı.** `chat`, `tasks`, `flows`… Paylaşılanlar `common`.
+- **Namespace normalde feature klasörü adıdır:** `chat`, `tasks`, `flows`… Büyük
+  yüzeyler `chatControls`, `chatStatus`, `settingsMain` gibi alt kataloglara
+  ayrılabilir. Uygulama kabuğu `common`, ortak bileşenler `sharedUi`, ortak
+  yardımcılar `shared` kullanır.
 - **Anahtar semantiktir**, metnin kendisi değil: `chat.composer.send`. Metin düzeltmek
   anahtarı kırmazsa çeviriler ayakta kalır.
 - Katalog dosyası: `src/i18n/locales/<locale>/<namespace>.json`. Dosyayı bırakmak yeter,
@@ -73,8 +77,10 @@ yazılmalıdır (ikisi de aynı metin). `time.test.ts` bunu render çıktısı �
 | Guard | Ne yakalar |
 |-------|-----------|
 | `src/i18n/catalog.test.ts` | Diller arası namespace/anahtar farkı, boş çeviri, `{{placeholder}}` uyuşmazlığı, kayıtsız katalog klasörü |
+| `src/i18n/sourceCatalog.test.ts` | Statik olarak çözülebilen `t` ve açık namespace kullanan `Trans` çağrılarının iki dilde de bulunması; çoğul anahtar ailelerinin eksikliği |
 | `src/shared/lib/time.test.ts` | Anahtarın gerçekten çözülmesi (çoğul eki dahil), locale'e göre sayı/yüzde biçimi |
-| ESLint `i18next/no-literal-string` | Migrasyonu bitmiş klasörlerde yeni hardcoded metin. **Allowlist** (`eslint.config.js` → `I18N_MIGRATED`), her feature migre edildikçe büyür |
+| ESLint `i18next/no-literal-string` | Tüm `src` altında doğrudan JSX metninin katalogları atlaması; test verileri, marka adı, semboller ve kod örnekleri kapsam dışıdır. Attribute ve dinamik anahtarlar için ekran testleri de gerekir |
+| Ekran yerelleştirme testleri | Masaüstü/mobil gezinme, başlıklar, bildirimler, seçiciler ve modül düzeyi metadata'nın canlı dil değişiminde güncellenmesi; makine değerleri ve kullanıcı içeriğinin korunması |
 | `internal/api/settings_test.go` altın liste | `uiLanguage` alanının backend↔frontend tip sürüklemesi |
 | `internal/settings/language_test.go` | `UILanguage` "" toleransı, bilinmeyen kodun düşürülmesi, çözümleme sırası, prompt adı tablosunun eksiksizliği |
 
@@ -86,10 +92,27 @@ yazılmalıdır (ikisi de aynı metin). `time.test.ts` bunu render çıktısı �
 
 Adım 3 eksikse `catalog.test.ts` kırmızı olur — yarım eklenmiş dil ship edilemez.
 
-## 7. Bilinen açıklar / sıradaki iş
+## 7. Kapsam ve kalan sınırlar
 
-- **Kelime çevirileri:** ~2.2k Türkçe literal 450+ dosyada duruyor. Feature-feature
-  taşınacak; her feature bitince yolu `I18N_MIGRATED` allowlist'ine eklenmeli.
+- **Arayüz metinleri:** Ana gezinme, sohbet, ajanlar, oturumlar, görevler, akışlar,
+  otomasyonlar, workspace, ayarlar, araçlar/MCP, skills, market, artifactlar,
+  bütçe/panel, içgörü, Rota, harita, loglar, view ve ortak bileşenler katalogları
+  kullanır. Düğmeler, yardım/açıklama, placeholder, erişilebilirlik, yerel hata,
+  bildirim ve onay metinleri dahildir.
+- **Canlı dil değişimi:** Modül yüklenirken çevrilmiş metin saklama. Etiket haritaları
+  getter veya çağrı anında çalışan fonksiyon kullanır. Kimlik, enum, select değeri,
+  komut ve depolanan kullanıcı verisi çevrilmez. Yerleşik görev sütunlarının
+  görünen adları çevrilirken saklanan kanonik değerleri korunur. Yeni akış düğümü
+  ve otomasyon şablonu adları oluşturma anındaki dili kullanır; kayıtlı özel
+  adlar sonraki dil değişikliklerinde yeniden yazılmaz.
+- **İçerik sınırı:** Kullanıcı/ajan metinleri, kaydedilmiş promptlar, akış şablonunun
+  yürütülecek gövdesi, kod/komut örnekleri ve model kimlikleri arayüz dilinden bağımsızdır.
+  Workspace, Skill, Workflow gibi mevcut ürün/alan terimleri bazı Türkçe etiketlerde
+  korunur; bir metnin iki katalogda aynı olması tek başına eksik çeviri değildir.
+- **Yerleşik sunucu metadata'sı:** Sağlayıcı/model açıklamaları ve sağlayıcı form
+  alanları, bilinen kimlik ve özgün metin eşleşmesiyle çevrilir; özel etiketler ve
+  bilinmeyen modeller korunur. Oturum bağlamı etiketleri yapılandırılmış rol ve
+  kalibrasyon alanlarından çözülür; bilinmeyen roller özgün etiketi kullanır.
 - **Backend hata mesajları:** API `message` alanı Türkçe. Hedef: makine-okunur `code` +
   UI tarafında çeviri.
 - **LLM'e giden metin (eksen 3):** `internal/view/*` projeksiyonları Türkçe ve prompt'a
@@ -108,6 +131,6 @@ Adım 3 eksikse `catalog.test.ts` kırmızı olur — yarım eklenmiş dil ship 
   Türkçe locale'de 'I' → 'ı' eşlemesi "Insight" aramasını bozardı. Arama makine işidir.
 - **Sabit `BUCKET_LABELS` map'i:** Modül seviyesindeki etiket sabiti, modül ilk
   yüklendiğindeki dilde donuyordu → `bucketLabel()` fonksiyonuna çevrildi.
-- **Hardcoded `'tr-TR'`:** 60+ çağrı yeri Intl katmanına taşındı. Bilerek dışarıda
-  bırakılanlar `codemod-intl.mjs` içindeki `SKIP` listesinde gerekçesiyle duruyor
-  (URL parametre sırası, BCP-47 kod sıralaması — bunlar makine verisi, kullanıcı metni değil).
+- **Hardcoded `'tr-TR'`:** Arayüzde tarih, sayı, para ve süre biçimleri ortak Intl
+  katmanını kullanır. URL parametre sırası ve BCP-47 kod sıralaması gibi makine
+  işlemleri kullanıcı arayüzünün diline göre değişmez.

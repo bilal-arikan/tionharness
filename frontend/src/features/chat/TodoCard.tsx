@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, CircleDot, Circle, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react'
 import type { TurnStep, TodoItem } from '@/types'
 import { ScrollableCard } from '@/shared/components'
@@ -32,6 +33,7 @@ function readTodos(step: TurnStep): TodoItem[] {
 // items are struck through; the active item is accented — mirroring the task-list
 // affordance in External Agent / Claude Code.
 export function TodoCard({ step }: Props) {
+  const { t } = useTranslation('chatStatus')
   // Default collapsed: the pinned TodoPanel already surfaces the current list,
   // so the inline trace card stays compact (header only) until expanded.
   const [open, setOpen] = useState(false)
@@ -46,7 +48,7 @@ export function TodoCard({ step }: Props) {
         className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
       >
         <HeaderIcon size={14} className="shrink-0" />
-        <span className="font-medium text-[var(--color-text)]">Görev Listesi</span>
+        <span className="font-medium text-[var(--color-text)]">{t('steps.todo')}</span>
         <span className="ml-auto tabular-nums">
           {done}/{todos.length}
         </span>

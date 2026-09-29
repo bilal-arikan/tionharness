@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Play, Hourglass, Pencil, Workflow } from 'lucide-react'
 import type { Agent, Flow, Schedule } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -28,6 +29,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
   { schedule: s, agents, flows, highlighted, running, onToggle, onRunNow, onEdit, onTags },
   ref,
 ) {
+  const { t } = useTranslation('schedules')
   const flow = flows.find((f) => f.id === s.flowId)
   const flowIcon = normalizeAvatar(flow?.emoji)
   const owner = agents.find((a) => a.id === s.agentId)
@@ -53,12 +55,12 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
             type="button"
             role="switch"
             aria-checked={s.enabled}
-            aria-label={s.enabled ? 'Etkin' : 'Pasif'}
+            aria-label={s.enabled ? t('common.enabled') : t('common.disabled')}
             onClick={onToggle}
             className={`h-4 w-8 rounded-full transition ${
               s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
             }`}
-            title={s.enabled ? 'Etkin' : 'Pasif'}
+            title={s.enabled ? t('common.enabled') : t('common.disabled')}
           >
             <span
               className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${s.enabled ? 'translate-x-4' : ''}`}
@@ -67,7 +69,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
           {s.flowId ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-              title="Akış tabanlı zamanlama"
+              title={t('scheduleCard.flowBased')}
             >
               {flowIcon ? (
                 <span className="text-base leading-none">{flowIcon}</span>
@@ -95,17 +97,21 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
           <div
             className={`font-mono text-[13px] ${s.name ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'}`}
           >
-            {s.oneShot ? `Tek seferlik · ${fmtTime(s.fireAt)}` : s.cronExpr}
+            {s.oneShot ? t('scheduleCard.oneShotAt', { time: fmtTime(s.fireAt) }) : s.cronExpr}
           </div>
           <div className="truncate text-xs text-[var(--color-text-dim)]">
-            → {s.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? s.flowId}` : (owner?.name ?? '—')}
+            {t('common.targetArrow', {
+              target: s.flowId
+                ? `${flowIcon ?? '🔀'} ${flow?.name ?? s.flowId}`
+                : (owner?.name ?? t('common.none')),
+            })}
           </div>
           {(s.prompt || !s.flowId) && (
             <div
               className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]"
               title={s.prompt}
             >
-              {s.flowId ? 'Girdi' : 'Prompt'}: {s.prompt}
+              {s.flowId ? t('common.input') : t('common.prompt')}: {s.prompt}
             </div>
           )}
         </div>
@@ -114,7 +120,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
         <div className="flex shrink-0 flex-col items-center gap-1.5">
           <CardAction
             icon={running ? Hourglass : Play}
-            label="Şimdi çalıştır"
+            label={t('common.runNow')}
             tone="success"
             disabled={running}
             onClick={onRunNow}
@@ -123,7 +129,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
           />
           <CardAction
             icon={Pencil}
-            label="Düzenle"
+            label={t('common.edit')}
             onClick={onEdit}
             testId="schedule-edit"
             entityId={s.id}
@@ -133,7 +139,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
 
       <div className="mt-1.5 space-y-0.5 text-[11px] text-[var(--color-text-dim)]">
         <div>
-          Sonraki: {fmtTime(s.nextRunAt)} · Son:{' '}
+          {t('scheduleCard.nextAndLast', { next: fmtTime(s.nextRunAt) })}
           {s.lastDeliveryStatus ? (
             <span
               className={
@@ -142,19 +148,24 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
                   : 'text-[var(--color-danger)]'
               }
             >
-              {s.lastDeliveryStatus} {fmtTime(s.lastRunAt)}
+              {t(`deliveryStatus.${s.lastDeliveryStatus}`, {
+                defaultValue: s.lastDeliveryStatus,
+              })}{' '}
+              {fmtTime(s.lastRunAt)}
             </span>
           ) : (
-            '—'
+            t('common.none')
           )}
         </div>
         {s.lastDeliveryError && (
-          <div className="text-[var(--color-danger)]">Hata: {s.lastDeliveryError}</div>
+          <div className="text-[var(--color-danger)]">
+            {t('common.error')}: {s.lastDeliveryError}
+          </div>
         )}
         {s.expiresAt ? (
           <div className={expired ? 'text-[var(--color-danger)]' : ''}>
-            Son tarih: {fmtTime(s.expiresAt)}
-            {expired && ' (süresi doldu)'}
+            {t('common.expiresAt')}: {fmtTime(s.expiresAt)}
+            {expired && ` (${t('common.expired')})`}
           </div>
         ) : null}
       </div>

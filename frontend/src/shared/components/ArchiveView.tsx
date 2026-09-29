@@ -1,4 +1,5 @@
 import { Archive } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 // Shared "archive view" chrome, lifted from the kanban board so every list that
 // can archive its items (tasks, agents, skills, automations) switches views the
@@ -29,20 +30,24 @@ export function ArchiveViewToggle({
   active,
   onToggle,
   testId,
-  backLabel = 'Listeye dön',
-  showTitle = 'Arşivlenenleri göster',
-  backTitle = 'Aktif listeye dön',
+  backLabel,
+  showTitle,
+  backTitle,
 }: ToggleProps) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedBackLabel = backLabel ?? t('archive.backToList')
+  const resolvedShowTitle = showTitle ?? t('archive.show')
+  const resolvedBackTitle = backTitle ?? t('archive.backToActive')
   return (
     <button
       type="button"
       data-testid={testId}
       aria-pressed={active}
       onClick={onToggle}
-      title={active ? backTitle : showTitle}
+      title={active ? resolvedBackTitle : resolvedShowTitle}
       className={`${TOGGLE_BASE} ${active ? TOGGLE_ON : TOGGLE_OFF}`}
     >
-      <Archive size={13} /> {active ? backLabel : 'Arşiv'}
+      <Archive size={13} /> {active ? resolvedBackLabel : t('archive.label')}
     </button>
   )
 }
@@ -59,6 +64,7 @@ interface BannerProps {
 
 /** ArchiveViewBanner is the info bar above an archive view. */
 export function ArchiveViewBanner({ count, noun, restoreHint, testId }: BannerProps) {
+  const { t } = useTranslation('sharedUi')
   return (
     <div
       data-testid={testId}
@@ -67,8 +73,12 @@ export function ArchiveViewBanner({ count, noun, restoreHint, testId }: BannerPr
       <Archive size={13} className="flex-shrink-0" />
       <span className="min-w-0 flex-1">
         {count === 0
-          ? `Arşivlenmiş ${noun} yok.`
-          : `${count} arşivlenmiş ${noun}${restoreHint ? ` — ${restoreHint}` : ''}`}
+          ? t('archive.empty', { noun })
+          : t('archive.count', {
+              count,
+              noun,
+              restoreHint: restoreHint ? ` — ${restoreHint}` : '',
+            })}
       </span>
     </div>
   )

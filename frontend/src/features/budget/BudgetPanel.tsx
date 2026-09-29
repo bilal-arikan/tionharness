@@ -17,9 +17,13 @@ import { PaneHeader } from '@/shared/components'
 import type { KindStat, ProviderStat, BudgetTrendPoint } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { kindColor } from '@/shared/lib/palette'
-import { tokens as fmt, usd } from '@/shared/lib/format'
+import { percent, tokens as fmt, usd } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/intl'
+import { i18next } from '@/i18n'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { useAsync } from '@/shared/hooks/useAsync'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 interface Props {
   onError: (msg: string) => void
@@ -38,29 +42,31 @@ interface TrendMetricDef {
   color: string
 }
 
-const TREND_METRICS: TrendMetricDef[] = [
-  {
-    key: 'token',
-    label: 'Token',
-    value: (p) => p.inputTokens + p.outputTokens,
-    fmt,
-    color: 'var(--color-accent)',
-  },
-  {
-    key: 'cost',
-    label: 'Maliyet',
-    value: (p) => p.costUSD,
-    fmt: usd,
-    color: 'var(--color-warning)',
-  },
-  {
-    key: 'cacheSave',
-    label: 'Cache tasarrufu',
-    value: (p) => p.savingsUSD,
-    fmt: usd,
-    color: 'var(--color-success)',
-  },
-]
+function trendMetrics(t: TFunction<'budget'>): TrendMetricDef[] {
+  return [
+    {
+      key: 'token',
+      label: t('trend.metric.token'),
+      value: (p) => p.inputTokens + p.outputTokens,
+      fmt,
+      color: 'var(--color-accent)',
+    },
+    {
+      key: 'cost',
+      label: t('trend.metric.cost'),
+      value: (p) => p.costUSD,
+      fmt: usd,
+      color: 'var(--color-warning)',
+    },
+    {
+      key: 'cacheSave',
+      label: t('trend.metric.cacheSavings'),
+      value: (p) => p.savingsUSD,
+      fmt: usd,
+      color: 'var(--color-success)',
+    },
+  ]
+}
 
 // Provider display labels; claude-cli is a flat subscription, not metered.
 const PROVIDER_LABEL: Record<string, string> = {
@@ -74,28 +80,25 @@ function providerLabel(p: string): string {
   return PROVIDER_LABEL[p] ?? p
 }
 
-// Turkish labels per call origin; the hue comes from the shared categorical
-// palette (lib/palette) so the same kind keeps its colour across the app.
-const KIND_LABELS: Record<string, string> = {
-  chat: 'Sohbet',
-  task: 'Görev',
-  schedule: 'Zamanlama',
-  flow: 'Akış',
-  delegate: 'Delegasyon',
-  title: 'Başlık',
-  summary: 'Özet',
-  reflect: 'Yansıma',
-  compact: 'Sıkıştırma',
-  decide: 'Karar',
-  system: 'System agent',
-  other: 'Diğer',
-}
-
-function kindMeta(kind: string) {
+function kindMeta(kind: string, t: TFunction<'budget'>) {
+  const labels: Record<string, string> = {
+    chat: t('kind.chat'),
+    task: t('kind.task'),
+    schedule: t('kind.schedule'),
+    flow: t('kind.flow'),
+    delegate: t('kind.delegate'),
+    title: t('kind.title'),
+    summary: t('kind.summary'),
+    reflect: t('kind.reflect'),
+    compact: t('kind.compact'),
+    decide: t('kind.decide'),
+    system: t('kind.system'),
+    other: t('kind.other'),
+  }
   const [prefix, operation] = kind.split(':', 2)
   const label = operation
-    ? `${KIND_LABELS[prefix] ?? prefix} · ${KIND_LABELS[operation] ?? operation}`
-    : (KIND_LABELS[kind] ?? kind)
+    ? `${labels[prefix] ?? prefix} · ${labels[operation] ?? operation}`
+    : (labels[kind] ?? kind)
   return { label, color: kindColor(kind) }
 }
 
@@ -106,20 +109,28 @@ function tokensOf(s: KindStat): number {
 // costText renders a cost cell honoring the priced/estimated flags.
 // Subscription providers (claude-cli) have an estimated equivalent-API cost
 // shown with a "~" prefix and a tooltip explaining it is not real billing.
-function costText(costUSD: number, priced: boolean, estimated?: boolean): React.ReactNode {
+function costText(
+  costUSD: number,
+  priced: boolean,
+  estimated: boolean | undefined,
+  t: TFunction<'budget'>,
+): React.ReactNode {
   if (priced) return usd(costUSD)
   if (costUSD > 0) {
-    const title = estimated
-      ? 'Abonelik (claude-cli) — eşdeğer API maliyeti tahmini; gerçek faturalandırma değil'
-      : 'Bir kısmı fiyatsız (abonelik/özel model)'
+    const title = estimated ? t('cost.subscriptionEstimateHint') : t('cost.partlyUnpricedHint')
     return <span title={title}>~{usd(costUSD)}</span>
   }
-  return <span className="text-[var(--color-text-dim)]">abonelik / fiyatsız</span>
+  return <span className="text-[var(--color-text-dim)]">{t('cost.subscriptionOrUnpriced')}</span>
 }
 
 // cacheText renders the "read/write" cache token pair, dimmed when zero.
 function cacheText(read: number, write: number): React.ReactNode {
-  if (read === 0 && write === 0) return <span className="text-[var(--color-text-dim)]">—</span>
+  if (read === 0 && write === 0)
+    return (
+      <span className="text-[var(--color-text-dim)]">
+        {i18next.t('notAvailable', { ns: 'budget' })}
+      </span>
+    )
   return (
     <span className="text-[var(--color-text-dim)]">
       {fmt(read)}/{fmt(write)}
@@ -139,6 +150,7 @@ function FragmentRows({
   onToggle: () => void
   provider: ProviderStat
 }) {
+  const { t } = useTranslation('budget')
   return (
     <>
       <tr
@@ -159,7 +171,7 @@ function FragmentRows({
             {providerLabel(p.provider)}
           </span>
         </td>
-        <td className="px-4 py-2.5 text-[var(--color-text-dim)]">{p.calls}</td>
+        <td className="px-4 py-2.5 text-[var(--color-text-dim)]">{fmt(p.calls)}</td>
         <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
           {fmt(p.inputTokens + p.outputTokens)}{' '}
           <span className="opacity-60">
@@ -175,7 +187,7 @@ function FragmentRows({
           )}
         </td>
         <td className="px-4 py-2.5 text-[var(--color-text)]">
-          {costText(p.costUSD, p.priced, p.estimated)}
+          {costText(p.costUSD, p.priced, p.estimated, t)}
         </td>
       </tr>
       {open &&
@@ -190,7 +202,7 @@ function FragmentRows({
             >
               {modelDisplayName(m.model)}
             </td>
-            <td className="px-4 py-2 text-xs text-[var(--color-text-dim)]">{m.calls}</td>
+            <td className="px-4 py-2 text-xs text-[var(--color-text-dim)]">{fmt(m.calls)}</td>
             <td className="px-4 py-2 text-xs text-[var(--color-text-dim)]">
               {fmt(m.inputTokens + m.outputTokens)}{' '}
               <span className="opacity-60">
@@ -208,7 +220,7 @@ function FragmentRows({
               )}
             </td>
             <td className="px-4 py-2 text-xs text-[var(--color-text)]">
-              {costText(m.costUSD, m.priced, m.estimated)}
+              {costText(m.costUSD, m.priced, m.estimated, t)}
             </td>
           </tr>
         ))}
@@ -273,6 +285,7 @@ function SavingsCell({
 // per-origin breakdown (the new ByKind data), a daily trend, and a per-agent
 // spend table with limit fill bars.
 export function BudgetPanel({ onError }: Props) {
+  const { t } = useTranslation('budget')
   const [days, setDays] = useState(7)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   // Which series the daily trend chart plots. Token volume by default; the other
@@ -332,18 +345,23 @@ export function BudgetPanel({ onError }: Props) {
     return list.sort((a, b) => b.tokens - a.tokens)
   }, [usage, totalTokens])
 
-  const metricDef = TREND_METRICS.find((m) => m.key === trendMetric) ?? TREND_METRICS[0]
+  const metrics = trendMetrics(t)
+  const metricDef = metrics.find((m) => m.key === trendMetric) ?? metrics[0]
 
-  const trendMax = useMemo(() => {
-    if (!usage) return 0
-    return Math.max(1e-9, ...usage.trend.map((p) => metricDef.value(p)))
-  }, [usage, metricDef])
+  const trendMax = usage ? Math.max(1e-9, ...usage.trend.map((point) => metricDef.value(point))) : 0
 
   return (
     <div className="flex h-full flex-col bg-[var(--color-surface)]">
       <PaneHeader
-        title="Bütçe"
-        subtitle={usage ? `· ${usage.day}` : undefined}
+        title={t('title')}
+        subtitle={
+          usage
+            ? `· ${formatDate(new Date(`${usage.day}T00:00:00Z`), {
+                dateStyle: 'medium',
+                timeZone: 'UTC',
+              })}`
+            : undefined
+        }
         right={
           <>
             <div className="flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
@@ -357,14 +375,14 @@ export function BudgetPanel({ onError }: Props) {
                       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:opacity-80'
                   }`}
                 >
-                  {d}g
+                  {t('rangeDays', { count: d })}
                 </button>
               ))}
             </div>
             <button
               onClick={() => load()}
               className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1.5 text-[var(--color-text-dim)] transition hover:opacity-80"
-              title="Yenile"
+              title={t('refresh')}
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -374,7 +392,7 @@ export function BudgetPanel({ onError }: Props) {
       <div className="flex-1 overflow-y-auto p-3 md:p-5">
         {!usage ? (
           <div className="text-sm text-[var(--color-text-dim)]">
-            {loading ? 'Yükleniyor…' : 'Veri yok.'}
+            {loading ? t('loading') : t('noData')}
           </div>
         ) : (
           <>
@@ -382,30 +400,33 @@ export function BudgetPanel({ onError }: Props) {
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <SummaryCard
                 icon={<Coins size={12} />}
-                label="Bugünkü toplam token"
+                label={t('summary.tokensToday')}
                 value={fmt(totalTokens)}
-                sub={`${fmt(usage.totals.inputTokens)} girdi · ${fmt(usage.totals.outputTokens)} çıktı`}
+                sub={t('summary.inputOutput', {
+                  input: fmt(usage.totals.inputTokens),
+                  output: fmt(usage.totals.outputTokens),
+                })}
               />
               <SummaryCard
                 icon={<Hash size={12} />}
-                label="Bugünkü çağrı"
+                label={t('summary.callsToday')}
                 value={fmt(usage.totals.calls)}
               />
               <SummaryCard
                 icon={<ArrowDownToLine size={12} />}
-                label="Girdi token"
+                label={t('summary.inputTokens')}
                 value={fmt(usage.totals.inputTokens)}
               />
               <SummaryCard
                 icon={<DollarSign size={12} />}
-                label="Tahmini maliyet (bugün)"
+                label={t('summary.estimatedCostToday')}
                 value={`${usage.totals.priced ? '' : '~'}${usd(usage.totals.costUSD)}`}
                 sub={
                   usage.totals.priced
-                    ? 'liste fiyatı tahmini'
+                    ? t('summary.listPriceEstimate')
                     : usage.totals.estimated
-                      ? 'claude-cli: eşdeğer API maliyeti dahil'
-                      : 'bir kısmı abonelik/fiyatsız'
+                      ? t('summary.cliEquivalentIncluded')
+                      : t('summary.partlySubscription')
                 }
               />
             </div>
@@ -422,25 +443,25 @@ export function BudgetPanel({ onError }: Props) {
               "Araçlar" count. See the session context popup's "Talep-üzerine" chip. */}
             {usage.totals.estimated && (
               <div className="mb-5 flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#d97706)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#d97706)_8%,transparent)] px-3 py-2 text-[11px] text-[var(--color-text-dim)]">
-                <span className="text-[var(--color-warning,#d97706)]">ⓘ</span>
+                <span className="text-[var(--color-warning,#d97706)]">{t('infoSymbol')}</span>
                 <span>
-                  <strong className="text-[var(--color-text)]">claude-cli ek yükü:</strong> Bu
-                  sağlayıcı kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler;
-                  gerçek girdi, bağlam-önizlemesindeki (context-preview) segment tahmininden çok
-                  büyüktür. Buradaki rakamlar <strong>gerçek faturalanan</strong> tüketimdir
-                  (eşdeğer-API maliyeti) — önizleme tahminine değil bunlara güvenin. Tek bir mesajın
-                  kırılımı için sohbette o mesajın debug butonunu kullanın.
+                  <strong className="text-[var(--color-text)]">{t('cliOverhead.title')}</strong>{' '}
+                  {t('cliOverhead.descriptionBefore')} <strong>{t('cliOverhead.billed')}</strong>{' '}
+                  {t('cliOverhead.descriptionAfter')}
                   <br />
                   <span className="mt-1 inline-block">
-                    <strong className="text-[var(--color-text)]">Araç sayısı farkı:</strong> Bilgi
-                    ekranı ajanın erişebildiği tüm kataloğu (ör. 129) sayar; bağlam popup'ının{' '}
-                    <em>“Araçlar”</em> satırı yalnız her tur şeması gönderilen <em>eager</em>{' '}
-                    kümedir. Oturum boyunca{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code> ile
-                    aktive edilen <em>deferred (lazy)</em> araçlar{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">--resume</code> ile
-                    sıcak kalıp gerçek girdiyi büyütür ama popup'ın eager sayısına girmez — bkz.
-                    popup'taki <em>“Talep-üzerine”</em> chip'i.
+                    <strong className="text-[var(--color-text)]">
+                      {t('cliOverhead.toolCountTitle')}
+                    </strong>{' '}
+                    {t('cliOverhead.toolCountBefore')} <em>{t('cliOverhead.toolsLabel')}</em>{' '}
+                    {t('cliOverhead.toolCountMiddle')} <em>{t('cliOverhead.eager')}</em>{' '}
+                    {t('cliOverhead.toolCountSet')}{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code>{' '}
+                    {t('cliOverhead.activatedWith')} <em>{t('cliOverhead.deferred')}</em>{' '}
+                    {t('cliOverhead.tools')}{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1">--resume</code>{' '}
+                    {t('cliOverhead.resumeAfter')} <em>{t('cliOverhead.onDemandLabel')}</em>{' '}
+                    {t('cliOverhead.chip')}
                   </span>
                 </span>
               </div>
@@ -452,27 +473,33 @@ export function BudgetPanel({ onError }: Props) {
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <SummaryCard
                 icon={<Sigma size={12} />}
-                label={`Toplam maliyet (son ${days}g)`}
+                label={t('cumulative.totalCost', { count: days })}
                 value={`${usage.cumulative.costUSD > 0 && !usage.totals.priced ? '~' : ''}${usd(usage.cumulative.costUSD)}`}
-                sub={`${fmt(usage.cumulative.calls)} çağrı · ${fmt(usage.cumulative.inputTokens + usage.cumulative.outputTokens)} token`}
+                sub={t('cumulative.callsTokens', {
+                  calls: fmt(usage.cumulative.calls),
+                  tokens: fmt(usage.cumulative.inputTokens + usage.cumulative.outputTokens),
+                })}
               />
               <SummaryCard
                 icon={<PiggyBank size={12} />}
-                label={`Cache tasarrufu (son ${days}g)`}
+                label={t('cumulative.cacheSavings', { count: days })}
                 value={usd(usage.cumulative.savingsUSD)}
-                sub={`${fmt(usage.cumulative.cacheReadTokens)} oku · ${fmt(usage.cumulative.cacheWriteTokens)} yaz`}
+                sub={t('cumulative.cacheReadWrite', {
+                  read: fmt(usage.cumulative.cacheReadTokens),
+                  write: fmt(usage.cumulative.cacheWriteTokens),
+                })}
               />
               <SummaryCard
                 icon={<Percent size={12} />}
-                label="Cache isabet oranı"
-                value={`${(usage.cumulative.cacheHitRate * 100).toFixed(0)}%`}
-                sub="önbellekten okunan istem payı"
+                label={t('cumulative.cacheHitRate')}
+                value={percent(usage.cumulative.cacheHitRate)}
+                sub={t('cumulative.cacheHitRateHint')}
               />
               <SummaryCard
                 icon={<DollarSign size={12} />}
-                label="Tasarrufsuz maliyet"
+                label={t('cumulative.noCacheCost')}
                 value={`${usage.cumulative.noCacheCostUSD > 0 && !usage.totals.priced ? '~' : ''}${usd(usage.cumulative.noCacheCostUSD)}`}
-                sub="caching olmasaydı ödenecek"
+                sub={t('cumulative.noCacheCostHint')}
               />
               {/* Cooling waste: avoidable overpay from warm prefixes that cooled
                 (TTL/eviction) before the next turn. Only shown when it occurred —
@@ -480,9 +507,9 @@ export function BudgetPanel({ onError }: Props) {
               {(usage.cumulative.coolingWasteUSD ?? 0) > 0 && (
                 <SummaryCard
                   icon={<Snowflake size={12} />}
-                  label={`Soğuma israfı (son ${days}g)`}
+                  label={t('cumulative.coolingWaste', { count: days })}
                   value={`${usage.cumulative.coolingWasteEstimated ? '~' : ''}${usd(usage.cumulative.coolingWasteUSD ?? 0)}`}
-                  sub="geç tur sıcak öneği soğuttu"
+                  sub={t('cumulative.coolingWasteHint')}
                 />
               )}
             </div>
@@ -493,19 +520,22 @@ export function BudgetPanel({ onError }: Props) {
               <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
                 <PiggyBank size={15} style={{ color: 'var(--color-success)' }} />
                 <span className="text-sm font-medium text-[var(--color-text)]">
-                  Tasarruf Merkezi
+                  {t('savings.title')}
                 </span>
                 <span className="text-xs text-[var(--color-text-dim)]">
-                  · son {days}g · tüm optimizasyon kaynakları
+                  {t('savings.window', { count: days })}
                 </span>
               </div>
               <div className="grid grid-cols-1">
                 {/* Prompt-cache — the only source with real USD billing impact. */}
                 <SavingsCell
-                  title="Prompt-cache"
+                  title={t('savings.promptCache')}
                   primary={usd(usage.cumulative.savingsUSD)}
-                  sub={`${fmt(usage.cumulative.cacheReadTokens)} token önbellekten · %${(usage.cumulative.cacheHitRate * 100).toFixed(0)} isabet`}
-                  hint="Statik prefix'in tekrar okunması yerine cache'ten gelmesinin tam girdi fiyatına kıyasla kazandırdığı gerçek USD."
+                  sub={t('savings.promptCacheSub', {
+                    tokens: fmt(usage.cumulative.cacheReadTokens),
+                    rate: percent(usage.cumulative.cacheHitRate),
+                  })}
+                  hint={t('savings.promptCacheHint')}
                 />
                 {/* Cooling waste — the inverse of the saving above: warm prefixes lost
                   to TTL/eviction before the next turn, re-written at the write tier.
@@ -514,10 +544,10 @@ export function BudgetPanel({ onError }: Props) {
                   <div className="border-t border-[var(--color-border)]">
                     <SavingsCell
                       tone="warning"
-                      title="Soğuma israfı (önlenebilir)"
+                      title={t('savings.coolingWaste')}
                       primary={`${usage.cumulative.coolingWasteEstimated ? '~' : ''}−${usd(usage.cumulative.coolingWasteUSD ?? 0)}`}
-                      sub="TTL/eviction ile soğuyan öneklerin yeniden yazım primi"
-                      hint="Geç gelen tur sıcak prompt-cache öneğini soğuttuğu için okuma yerine yazma tarifesinden ödenen, zamanında yanıtla kaçınılabilir olan fark. Fiili para zaten maliyete dahildir; bu yalnız önlenebilir kısmı izole eder."
+                      sub={t('savings.coolingWasteSub')}
+                      hint={t('savings.coolingWasteHint')}
                     />
                   </div>
                 )}
@@ -528,17 +558,15 @@ export function BudgetPanel({ onError }: Props) {
               {/* Origin breakdown */}
               <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
                 <div className="mb-3 text-sm font-medium text-[var(--color-text)]">
-                  Köken kırılımı (bugün)
+                  {t('origin.title')}
                 </div>
                 {kinds.length === 0 ? (
-                  <div className="text-xs text-[var(--color-text-dim)]">
-                    Bugün henüz kullanım yok.
-                  </div>
+                  <div className="text-xs text-[var(--color-text-dim)]">{t('origin.empty')}</div>
                 ) : (
                   <div className="space-y-2">
                     {kinds.map(({ kind, st, tokens }) => {
                       const pct = totalTokens > 0 ? (tokens / totalTokens) * 100 : 0
-                      const m = kindMeta(kind)
+                      const m = kindMeta(kind, t)
                       return (
                         <div key={kind}>
                           <div className="mb-0.5 flex items-center justify-between text-xs">
@@ -550,7 +578,11 @@ export function BudgetPanel({ onError }: Props) {
                               {m.label}
                             </span>
                             <span className="text-[var(--color-text-dim)]">
-                              {fmt(tokens)} · {pct.toFixed(0)}% · {st.calls} çağrı
+                              {t('origin.rowMeta', {
+                                tokens: fmt(tokens),
+                                percent: percent(pct / 100),
+                                calls: fmt(st.calls),
+                              })}
                             </span>
                           </div>
                           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-surface)]">
@@ -570,12 +602,12 @@ export function BudgetPanel({ onError }: Props) {
               <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="text-sm font-medium text-[var(--color-text)]">
-                    Trend — son {days} gün
+                    {t('trend.title', { count: days })}
                   </div>
                   {/* Metric selector: plot the same window as token volume, spend
                     or caching ROI. */}
                   <div className="flex overflow-hidden rounded border border-[var(--color-border)] text-[11px]">
-                    {TREND_METRICS.map((m) => (
+                    {metrics.map((m) => (
                       <button
                         key={m.key}
                         onClick={() => setTrendMetric(m.key)}
@@ -591,7 +623,7 @@ export function BudgetPanel({ onError }: Props) {
                   </div>
                 </div>
                 {usage.trend.length === 0 ? (
-                  <div className="text-xs text-[var(--color-text-dim)]">Geçmiş veri yok.</div>
+                  <div className="text-xs text-[var(--color-text-dim)]">{t('trend.empty')}</div>
                 ) : (
                   <div className="flex h-32 items-end gap-1">
                     {usage.trend.map((p) => {
@@ -603,15 +635,31 @@ export function BudgetPanel({ onError }: Props) {
                           key={p.day}
                           className="flex-1 rounded-t transition-all hover:opacity-80"
                           style={{ height: `${Math.max(2, h)}%`, background: metricDef.color }}
-                          title={`${p.day} · ${metricDef.label}: ${metricDef.fmt(v)}\n${fmt(tok)} token · ${p.calls} çağrı · ${usd(p.costUSD)} maliyet${p.savingsUSD > 0 ? ` · cache ${usd(p.savingsUSD)}` : ''}`}
+                          title={t('trend.tooltip', {
+                            day: formatDate(new Date(`${p.day}T00:00:00Z`), {
+                              dateStyle: 'medium',
+                              timeZone: 'UTC',
+                            }),
+                            metric: metricDef.label,
+                            value: metricDef.fmt(v),
+                            tokens: fmt(tok),
+                            calls: fmt(p.calls),
+                            cost: usd(p.costUSD),
+                            savings:
+                              p.savingsUSD > 0
+                                ? t('trend.tooltipSavings', { value: usd(p.savingsUSD) })
+                                : '',
+                          })}
                         />
                       )
                     })}
                   </div>
                 )}
                 <div className="mt-2 text-[11px] text-[var(--color-text-dim)]">
-                  {metricDef.label} ·{' '}
-                  {metricDef.fmt(usage.trend.reduce((a, p) => a + metricDef.value(p), 0))} toplam
+                  {t('trend.total', {
+                    metric: metricDef.label,
+                    value: metricDef.fmt(usage.trend.reduce((a, p) => a + metricDef.value(p), 0)),
+                  })}
                 </div>
               </div>
             </div>
@@ -620,7 +668,7 @@ export function BudgetPanel({ onError }: Props) {
             <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)]">
               <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
                 <span className="text-sm font-medium text-[var(--color-text)]">
-                  Provider / model (bugün)
+                  {t('provider.title')}
                 </span>
                 {usage.totals.savingsUSD > 0 && (
                   <span
@@ -629,28 +677,29 @@ export function BudgetPanel({ onError }: Props) {
                       background: 'color-mix(in srgb, var(--color-success) 15%, transparent)',
                       color: 'var(--color-success)',
                     }}
-                    title="Prompt-cache okumalarının tam girdi fiyatına kıyasla sağladığı tasarruf"
+                    title={t('provider.cacheSavingsHint')}
                   >
-                    cache tasarrufu {usd(usage.totals.savingsUSD)}
+                    {t('provider.cacheSavings', { value: usd(usage.totals.savingsUSD) })}
                   </span>
                 )}
               </div>
               {usage.byProvider.length === 0 ? (
                 <div className="px-4 py-3 text-xs text-[var(--color-text-dim)]">
-                  Bugün etiketli provider kullanımı yok. (Deploy öncesi kaydedilen kullanım
-                  model/provider bilgisi taşımaz; yeni turlar burada görünecek.)
+                  {t('provider.empty')}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[36rem] text-sm">
                     <thead>
                       <tr className="text-left text-xs text-[var(--color-text-dim)]">
-                        <th className="px-4 py-2 font-medium">Provider / Model</th>
-                        <th className="px-4 py-2 font-medium">Çağrı</th>
-                        <th className="px-4 py-2 font-medium">Token (G/Ç)</th>
-                        <th className="px-4 py-2 font-medium">Cache (oku/yaz)</th>
-                        <th className="px-4 py-2 font-medium">Tasarruf</th>
-                        <th className="px-4 py-2 font-medium">Maliyet</th>
+                        <th className="px-4 py-2 font-medium">
+                          {t('provider.columns.providerModel')}
+                        </th>
+                        <th className="px-4 py-2 font-medium">{t('provider.columns.calls')}</th>
+                        <th className="px-4 py-2 font-medium">{t('provider.columns.tokens')}</th>
+                        <th className="px-4 py-2 font-medium">{t('provider.columns.cache')}</th>
+                        <th className="px-4 py-2 font-medium">{t('provider.columns.savings')}</th>
+                        <th className="px-4 py-2 font-medium">{t('provider.columns.cost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -674,19 +723,21 @@ export function BudgetPanel({ onError }: Props) {
             {/* Per-agent table */}
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)]">
               <div className="border-b border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text)]">
-                Ajan başına kullanım (bugün)
+                {t('agents.title')}
               </div>
               {usage.agents.length === 0 ? (
-                <div className="px-4 py-3 text-xs text-[var(--color-text-dim)]">Ajan yok.</div>
+                <div className="px-4 py-3 text-xs text-[var(--color-text-dim)]">
+                  {t('agents.empty')}
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[28rem] text-sm">
                     <thead>
                       <tr className="text-left text-xs text-[var(--color-text-dim)]">
-                        <th className="px-4 py-2 font-medium">Ajan</th>
-                        <th className="px-4 py-2 font-medium">Çağrı</th>
-                        <th className="px-4 py-2 font-medium">Token (G/Ç)</th>
-                        <th className="px-4 py-2 font-medium">Maliyet</th>
+                        <th className="px-4 py-2 font-medium">{t('agents.columns.agent')}</th>
+                        <th className="px-4 py-2 font-medium">{t('agents.columns.calls')}</th>
+                        <th className="px-4 py-2 font-medium">{t('agents.columns.tokens')}</th>
+                        <th className="px-4 py-2 font-medium">{t('agents.columns.cost')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -706,11 +757,13 @@ export function BudgetPanel({ onError }: Props) {
                                   size={22}
                                 />
                                 <span className="text-[var(--color-text)]">
-                                  {a.name || 'İsimsiz'}
+                                  {a.name || t('agents.unnamed')}
                                 </span>
                               </div>
                             </td>
-                            <td className="px-4 py-2.5 text-[var(--color-text-dim)]">{a.calls}</td>
+                            <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
+                              {fmt(a.calls)}
+                            </td>
                             <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
                               {fmt(tok)}{' '}
                               <span className="opacity-60">
@@ -718,7 +771,7 @@ export function BudgetPanel({ onError }: Props) {
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-[var(--color-text-dim)]">
-                              {costText(a.costUSD, a.priced, a.estimated)}
+                              {costText(a.costUSD, a.priced, a.estimated, t)}
                             </td>
                           </tr>
                         )

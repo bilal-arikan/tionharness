@@ -1,3 +1,5 @@
+import { i18next } from '@/i18n'
+
 const ACCEPTED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const
 export const MAX_SOURCE_BYTES = 20_971_520
 export const MAX_SOURCE_DIMENSION = 8192
@@ -24,19 +26,36 @@ export type ImageAnnotatorErrorCode =
   | 'DRAWING_MEMORY_LIMIT'
   | 'EXPORT_FAILED'
 
-export const IMAGE_ANNOTATOR_ERROR_MESSAGES: Record<ImageAnnotatorErrorCode, string> = {
-  IMAGE_UNSUPPORTED_TYPE: 'Bu görsel türü desteklenmiyor. PNG, JPEG veya WebP seçin.',
-  IMAGE_TOO_LARGE_BYTES: 'Görsel 20 MB sınırını aşıyor.',
-  IMAGE_DIMENSION_EXCEEDED: 'Görsel boyutu 8192 px sınırını aşıyor.',
-  IMAGE_PIXEL_LIMIT_EXCEEDED: 'Görsel 40 megapiksel sınırını aşıyor.',
-  IMAGE_HEADER_INVALID: 'Görsel başlığı geçersiz veya dosya türüyle uyuşmuyor.',
-  IMAGE_DECODE_FAILED: 'Görsel açılamadı; dosya bozuk olabilir.',
-  STROKE_POINT_LIMIT: 'Tek çizgi 20.000 nokta sınırına ulaştı.',
-  DRAWING_POINT_LIMIT: 'Çizim 200.000 nokta sınırına ulaştı.',
-  DRAWING_STROKE_LIMIT: 'Çizim 500 çizgi sınırına ulaştı.',
-  HISTORY_LIMIT: 'En eski geri alma adımları kaldırıldı.',
-  DRAWING_MEMORY_LIMIT: 'Çizim bellek sınırına ulaştı.',
-  EXPORT_FAILED: 'Görsel dışa aktarılamadı.',
+const ERROR_MESSAGE_KEYS: Record<ImageAnnotatorErrorCode, string> = {
+  IMAGE_UNSUPPORTED_TYPE: 'unsupportedType',
+  IMAGE_TOO_LARGE_BYTES: 'tooLargeBytes',
+  IMAGE_DIMENSION_EXCEEDED: 'dimensionExceeded',
+  IMAGE_PIXEL_LIMIT_EXCEEDED: 'pixelLimitExceeded',
+  IMAGE_HEADER_INVALID: 'headerInvalid',
+  IMAGE_DECODE_FAILED: 'decodeFailed',
+  STROKE_POINT_LIMIT: 'strokePointLimit',
+  DRAWING_POINT_LIMIT: 'drawingPointLimit',
+  DRAWING_STROKE_LIMIT: 'drawingStrokeLimit',
+  HISTORY_LIMIT: 'historyLimit',
+  DRAWING_MEMORY_LIMIT: 'drawingMemoryLimit',
+  EXPORT_FAILED: 'exportFailed',
+}
+
+export function imageAnnotatorErrorMessage(code: ImageAnnotatorErrorCode): string {
+  return i18next.t(`errors.${ERROR_MESSAGE_KEYS[code]}`, { ns: 'image-annotator' })
+}
+
+// Preserve the exported lookup object while resolving each value lazily. These
+// messages are used both by the modal and errors raised before the modal opens.
+export const IMAGE_ANNOTATOR_ERROR_MESSAGES: Record<ImageAnnotatorErrorCode, string> = {} as Record<
+  ImageAnnotatorErrorCode,
+  string
+>
+for (const code of Object.keys(ERROR_MESSAGE_KEYS) as ImageAnnotatorErrorCode[]) {
+  Object.defineProperty(IMAGE_ANNOTATOR_ERROR_MESSAGES, code, {
+    enumerable: true,
+    get: () => imageAnnotatorErrorMessage(code),
+  })
 }
 
 export class ImageAnnotatorError extends Error {

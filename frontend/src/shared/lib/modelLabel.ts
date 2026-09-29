@@ -1,4 +1,5 @@
 import type { CatalogEntry, CatalogModel } from '@/types'
+import { sharedText } from './sharedI18n'
 
 // Pure label logic for provider/model display, split out of catalog.ts so it can
 // be unit-tested in the repo's `node` vitest environment — catalog.ts pulls in
@@ -56,7 +57,7 @@ export function formatModelVersion(id: string): string {
 // this one when the id in hand is already concrete: a turn's model, a usage row,
 // a debug event.
 export function modelDisplayName(id: string): string {
-  if (!id) return '(model belirtilmemiş)'
+  if (!id) return sharedText('model.unspecified')
   return formatModelVersion(id) || id
 }
 
@@ -82,7 +83,7 @@ export function resolveModelLabel(
   model: string,
 ): string {
   const entry = catalog.find((c) => c.id === provider)
-  if (!entry) return model ? formatModelVersion(model) || model : '(model belirtilmemiş)'
+  if (!entry) return model ? formatModelVersion(model) || model : sharedText('model.unspecified')
   const exact = entry.models.find((m) => m.id === model)
   if (exact) return labelForModel(exact, provider)
   // A custom model id not present in the curated list. It is already concrete, so
@@ -91,5 +92,5 @@ export function resolveModelLabel(
   // Empty model and no empty-id catalog entry to explain it: say exactly that.
   // Falling back to the catalog's FIRST entry used to print a model the agent was
   // never configured with — a plausible lie is worse than an admitted gap.
-  return '(model belirtilmemiş)'
+  return sharedText('model.unspecified')
 }

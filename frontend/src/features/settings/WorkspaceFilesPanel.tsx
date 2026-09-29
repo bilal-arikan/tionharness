@@ -10,6 +10,7 @@ import { PromptEditor, LoadingState, toast } from '@/shared/components'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { displayPath } from '@/shared/lib/paths'
 import { changedEditablePrompts } from '@/shared/lib/workspacePrompts'
+import { useTranslation } from 'react-i18next'
 
 // FilesSaveState lets the parent (WorkspaceView) render the Save button + status
 // in its top header instead of this panel showing its own.
@@ -38,6 +39,7 @@ function toDraft(c: WorkspaceConfig): Draft {
 }
 
 export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
+  const { t } = useTranslation('settings')
   const [config, setConfig] = useState<WorkspaceConfig | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [original, setOriginal] = useState<Draft | null>(null)
@@ -94,13 +96,13 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
       setConfig(updated)
       setDraft(toDraft(updated))
       setOriginal(toDraft(updated))
-      toast.success('Kaydedildi')
+      toast.success(t('common.saved'))
     } catch (e) {
       onError((e as Error).message)
     } finally {
       setSaving(false)
     }
-  }, [onError])
+  }, [onError, t])
 
   // Report save state to the parent header (Kaydet/Kayıtlı live there now).
   useEffect(() => {
@@ -110,7 +112,7 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
   useEffect(() => () => onState?.(null), [onState])
 
   if (!config || !draft) {
-    return <LoadingState label="Yükleniyor…" />
+    return <LoadingState label={t('common.loading')} />
   }
 
   const setPrompt = (key: string, val: string) =>
@@ -120,9 +122,9 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
     <>
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
         <span className="text-xs text-[var(--color-text-dim)]">
-          Bu dosyalar{' '}
+          {t('workspaceFiles.locationPrefix')}{' '}
           <code className="rounded bg-[var(--color-bg)] px-1">{displayPath(config.dir)}</code>{' '}
-          altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
+          {t('workspaceFiles.locationSuffix')}
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={config.dir} />
@@ -130,34 +132,31 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
       </div>
 
       <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Workspace dosyaları
+        {t('workspaceFiles.title')}
       </div>
-      <Field
-        label="Talimatlar (instructions.md)"
-        hint="Bu workspace'teki tüm ajanlara eklenen yönergeler. 'Genel' sekmesindeki talimatlarla senkronizedir."
-      >
+      <Field label={t('workspaceFiles.instructions')} hint={t('workspaceFiles.instructionsHint')}>
         <PromptEditor
           value={draft.instructions}
           onChange={(v) => setDraft((d) => (d ? { ...d, instructions: v } : d))}
           rows={4}
           autoSize
-          placeholder="Örn. Tüm cevapları Türkçe ver; commit at ama push'lama."
+          placeholder={t('workspaceFiles.instructionsPlaceholder')}
         />
       </Field>
 
       <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Runtime promptları
+        {t('workspaceFiles.runtimePrompts')}
       </div>
       <p className="text-[11px] text-[var(--color-text-dim)]">
-        Sistem ajanlarının promptları (başlık, compaction, insight, subagent profilleri…) burada
-        değil: her biri kendi ajanının promptudur ve <strong>Ayarlar ▸ Sistem ajanları</strong>{' '}
-        ekranından düzenlenir — doğrudan ya da kalıtım alan bir özelleştirme üzerinden.{' '}
+        {t('workspaceFiles.systemPromptsPrefix')}{' '}
+        <strong>{t('workspaceFiles.systemAgentsPath')}</strong>{' '}
+        {t('workspaceFiles.systemPromptsSuffix')}{' '}
         <button
           type="button"
           onClick={onGoToAgents}
           className="text-[var(--color-accent)] underline underline-offset-2"
         >
-          Ajanlar ekranını aç
+          {t('workspaceFiles.openAgents')}
         </button>
       </p>
       {config.promptKeys.map((key) => {
@@ -167,9 +166,11 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
         const missing = placeholders.filter((p) => !draft.prompts[key].includes(`{{${p}}}`))
         let hint = meta.hint
         if (placeholders.length) {
-          hint = `${hint} Zorunlu yer tutucular: ${placeholders.map((p) => `{{${p}}}`).join(', ')}.`
+          hint = `${hint} ${t('workspaceFiles.requiredPlaceholders', {
+            placeholders: placeholders.map((p) => `{{${p}}}`).join(', '),
+          })}`
         }
-        hint = `${hint} Boş bırakırsan gömülü varsayılan kullanılır.`
+        hint = `${hint} ${t('workspaceFiles.emptyUsesDefault')}`
         return (
           <Field key={key} label={meta.label || key} hint={hint}>
             <PromptEditor
@@ -186,24 +187,30 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
                 disabled={isDefault}
                 className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-30"
               >
-                Varsayılana dön
+                {t('workspaceFiles.resetDefault')}
               </button>
               {isDefault ? (
-                <span className="text-[11px] text-[var(--color-text-dim)]">varsayılan</span>
+                <span className="text-[11px] text-[var(--color-text-dim)]">
+                  {t('workspaceFiles.default')}
+                </span>
               ) : (
-                <span className="text-[11px] text-[var(--color-accent)]">özelleştirildi</span>
+                <span className="text-[11px] text-[var(--color-accent)]">
+                  {t('workspaceFiles.customized')}
+                </span>
               )}
               {meta.epochAffecting && (
                 <span
-                  title="Bu prompt önbelleğe alınan statik sistem prefix'ine girer; değişiklik yeni oturum/epoch'larda etkili olur."
+                  title={t('workspaceFiles.epochHint')}
                   className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]"
                 >
-                  yeni oturumlarda etkili
+                  {t('workspaceFiles.newSessions')}
                 </span>
               )}
               {!isDefault && missing.length > 0 && (
                 <span className="rounded bg-[var(--color-danger)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-danger)]">
-                  eksik yer tutucu: {missing.map((p) => `{{${p}}}`).join(', ')} — varsayılana düşer
+                  {t('workspaceFiles.missingPlaceholder', {
+                    placeholders: missing.map((p) => `{{${p}}}`).join(', '),
+                  })}
                 </span>
               )}
             </div>

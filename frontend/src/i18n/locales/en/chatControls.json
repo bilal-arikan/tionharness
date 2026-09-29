@@ -1,0 +1,196 @@
+{
+  "common": {
+    "close": "Close",
+    "loading": "Loading…"
+  },
+  "agentSelect": {
+    "targetAgent": "Target agent: {{name}}",
+    "messageTarget": "Agent that will receive the message: {{name}}",
+    "selectAgent": "Select agent",
+    "sendMessage": "Send message",
+    "noAgents": "No agents"
+  },
+  "autocomplete": {
+    "agents": "Agents (reference)",
+    "artifacts": "Artifacts",
+    "commands": "Commands",
+    "untitled": "Untitled",
+    "artifactKinds": {
+      "markdown": "Markdown",
+      "code": "Code",
+      "html": "HTML",
+      "text": "Text",
+      "svg": "SVG",
+      "mermaid": "Mermaid",
+      "image": "Image",
+      "video": "Video",
+      "audio": "Audio",
+      "file": "File"
+    }
+  },
+  "btw": {
+    "title": "Btw — side question",
+    "notSaved": "not saved to history",
+    "descriptionBefore": "The agent answers this question with the full context of the current conversation, but the question and answer are",
+    "descriptionEmphasis": "not added",
+    "descriptionAfter": "to chat history and the main task is not interrupted. Tools are unavailable in the side chat (it cannot run commands or edit files).",
+    "placeholder": "Write a side question — press Enter to ask",
+    "questionLabel": "Side question",
+    "asking": "Asking…",
+    "ask": "Ask"
+  },
+  "mic": {
+    "server": "server",
+    "browser": "browser",
+    "recognitionError": "Speech recognition error: {{error}}",
+    "transcribing": "Transcribing…",
+    "finishRecording": "Finish recording ({{language}} · {{engine}})",
+    "stopListening": "Stop listening ({{language}})",
+    "voiceType": "Type by voice ({{language}} · {{engine}}) — change the language in Settings",
+    "stopRecording": "Stop recording",
+    "voiceTypeLabel": "Type by voice",
+    "microphoneUnavailable": "microphone access is unavailable (a secure context is required)",
+    "errors": {
+      "aborted": "recognition was cancelled",
+      "audioCapture": "no audio input is available",
+      "badGrammar": "the speech grammar is invalid",
+      "languageNotSupported": "this language is not supported",
+      "network": "a network error occurred",
+      "noSpeech": "no speech was detected",
+      "notAllowed": "microphone access was denied",
+      "serviceNotAllowed": "the speech recognition service is unavailable"
+    }
+  },
+  "send": {
+    "send": "Send",
+    "stop": "Stop",
+    "stopAutoWake": "Stop automatic wake-up",
+    "afterTurn": "Send after this turn finishes",
+    "queue": "Queue",
+    "interruptTitle": "Interrupt the turn and send now (Ctrl/Cmd+Enter)",
+    "interrupt": "Interrupt",
+    "steerTitle": "Guide the current task without stopping it",
+    "steerUnavailable": "Live guidance is unavailable for this turn. Use Queue instead.",
+    "steer": "Guide",
+    "stopGeneration": "Stop generation"
+  },
+  "picker": {
+    "thinking": {
+      "auto": { "label": "Auto", "hint": "Use the agent's setting" },
+      "off": { "label": "Off", "hint": "No reasoning" },
+      "low": { "label": "Low", "hint": "Brief reasoning" },
+      "medium": { "label": "Medium", "hint": "Balanced" },
+      "high": { "label": "High", "hint": "Deep reasoning" },
+      "xhigh": {
+        "label": "Extra high",
+        "hint": "effort xhigh — coding/agent work (current models)"
+      },
+      "max": { "label": "Max", "hint": "effort max — hardest tasks (current models)" },
+      "ultra": { "label": "Ultra", "hint": "effort ultra — Codex GPT-5 family" }
+    },
+    "permission": {
+      "default": { "label": "Auto", "hint": "Use the agent's permission setting" },
+      "readOnly": { "label": "Read-only", "hint": "Writing and commands are blocked" },
+      "ask": { "label": "Ask", "hint": "Ask for approval before writing or running commands" },
+      "auto": { "label": "Automatic", "hint": "Use all tools without approval" }
+    }
+  },
+  "sttLanguages": {
+    "turkish": "Turkish",
+    "englishUs": "English (US)",
+    "german": "German",
+    "spanish": "Spanish",
+    "french": "French",
+    "italian": "Italian",
+    "russian": "Russian",
+    "arabic": "Arabic"
+  },
+  "tools": {
+    "title": "Tools",
+    "readOnly": "read-only",
+    "readOnlyAgent": "{{name}} · read-only",
+    "searchPlaceholder": "Search…",
+    "searchLabel": "Search tools",
+    "tabs": {
+      "inContext": "In context",
+      "onDemand": "On demand"
+    },
+    "descriptions": {
+      "inContext": "The full schemas for these tools are sent to the model on every turn, so it can call them immediately.",
+      "onDemand": "The schemas for these tools are not sent with the turn; the agent loads them through tool_search / activate_tools when needed. {{hiddenCount}} are in the Hidden tier: they are not listed individually in the catalog, while context retains only a note that they can be found with tool_search.",
+      "servers": "All MCP servers in the workspace, including scoped servers, and whether their tools enter context: green means present in the prompt; yellow or gray means absent (hover over the badge for the reason). 🔗 marks a live connection. Select a row to inspect that server's tools; search filters expanded rows. Configuration is available in Settings under Tools."
+    },
+    "empty": {
+      "inContext": "This agent has no tools whose schemas are sent on every turn.",
+      "onDemand": "No tools are available on demand — all tools are already in context.",
+      "noSearchMatch": "No tools match the search.",
+      "noServers": "No MCP servers are configured in this workspace."
+    },
+    "blocked": "Blocked ({{value}})",
+    "mcpDisabled": "MCP is disabled for this agent, so tools from MCP servers are unavailable.",
+    "categories": {
+      "builtin": "built-in",
+      "files": "Files & Shell",
+      "search": "Search & Web",
+      "agents": "Agents & Sessions",
+      "automation": "Automation",
+      "interaction": "Interaction",
+      "artifacts": "Artifacts",
+      "skillsMcp": "Skills & MCP",
+      "config": "Configuration",
+      "diagnostics": "Diagnostics",
+      "other": "Other"
+    },
+    "visibility": {
+      "full": {
+        "label": "Full",
+        "hint": "The full schema is sent to the agent on every turn (highest token cost)."
+      },
+      "summary": {
+        "label": "Summary",
+        "hint": "The catalog shows the name and a short summary; the full schema loads on demand."
+      },
+      "nameOnly": {
+        "label": "Name",
+        "hint": "Only the name appears in the catalog; the schema loads through tool_search/activate_tools."
+      },
+      "hidden": {
+        "label": "Hidden",
+        "hint": "Not listed in the catalog; discoverable only through tool_search and callable after activation."
+      }
+    },
+    "serverStatus": {
+      "inContext": {
+        "label": "in context",
+        "hint": "This server's tools are in the agent's prompt and can be called."
+      },
+      "hiddenOnly": {
+        "label": "outside catalog",
+        "hint": "Its tools use the Hidden tier: they are not listed individually, but context retains a note that more tools can be found with tool_search. They can be called normally after activation."
+      },
+      "disabled": {
+        "label": "disabled",
+        "hint": "The server is disabled in this workspace and can be enabled from the Tools screen."
+      },
+      "agentMcpOff": {
+        "label": "MCP off for agent",
+        "hint": "The server is enabled, but MCP is disabled for this agent, so no MCP tools are provided."
+      },
+      "noTools": {
+        "label": "no tools",
+        "hint": "The server is enabled but supplies no tools. It may be disconnected or all its tools may be blocked."
+      }
+    },
+    "server": {
+      "scoped": "session-specific",
+      "live": "{{live}}/{{total}} live connections",
+      "liveWithTimeout": "{{live}}/{{total}} live connections — closes after {{seconds}}s idle",
+      "activeHint": "Number of tools from this server whose FULL schema is sent on every turn",
+      "activeCount": "active {{value}}",
+      "catalogHint": "Number of tools listed by name or summary that can be opened with activate_tools",
+      "catalogCount": "catalog {{value}}",
+      "hiddenHint": "Number of tools not listed individually in the catalog; context retains only a note that they can be found with tool_search (about {{tokens}} tokens saved per turn for {{value}} tools).",
+      "hiddenCount": "hidden {{value}}"
+    }
+  }
+}

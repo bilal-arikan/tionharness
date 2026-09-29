@@ -13,6 +13,7 @@
 // It is driven by a `trigger` counter that the parent bumps once per successful
 // create, so the same mount handles every workspace the user spins up.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { KeyRound, X } from 'lucide-react'
 import { api } from '@/api'
@@ -53,6 +54,7 @@ export function ClaudeAuthGate({
   onNavigateProviders,
   onError,
 }: Props) {
+  const { t } = useTranslation('workspace')
   // Non-null while the "login needed" notification is showing; carries the probe
   // failure reason for the tooltip.
   const [notice, setNotice] = useState<{ detail?: string } | null>(null)
@@ -117,27 +119,24 @@ export function ClaudeAuthGate({
           >
             <KeyRound size={16} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-[var(--color-text)]">
-                Yeni workspace için claude-cli girişi gerekli
-              </p>
+              <p className="font-medium text-[var(--color-text)]">{t('authGate.title')}</p>
               <p
                 className="mt-0.5 break-words text-xs text-[var(--color-text-dim)]"
                 title={notice.detail}
               >
-                Bu workspace'in claude-home'u henüz yetkilendirilmedi. Kimlik doğrulamadan
-                claude-cli turları çalışmaz.
+                {t('authGate.description')}
               </p>
               <button
                 onClick={openDialog}
                 data-testid="claude-auth-gate-open"
                 className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs font-medium hover:border-[var(--color-accent)]"
               >
-                <KeyRound size={12} /> Kimlik doğrula
+                <KeyRound size={12} /> {t('authGate.authenticate')}
               </button>
             </div>
             <button
               onClick={() => setNotice(null)}
-              title="Kapat"
+              title={t('actions.close')}
               className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
               <X size={14} />
@@ -148,7 +147,7 @@ export function ClaudeAuthGate({
 
       {dialogOpen && (
         <ClaudeAuthDialog
-          providerLabel="Workspace claude-cli"
+          providerLabel={t('authGate.providerLabel')}
           isLoggedIn={false}
           onClose={() => setDialogOpen(false)}
           // The saved credential is written server-side; drop the snapshot so the

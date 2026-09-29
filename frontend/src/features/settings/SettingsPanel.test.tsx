@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppSettings } from '@/types'
 import { api } from '@/api'
+import { toast } from '@/shared/components'
+import { i18next } from '@/i18n'
 import { SettingsPanel } from './SettingsPanel'
 
 vi.mock('@/api', () => ({
@@ -27,11 +29,29 @@ vi.mock('./appPanels', async () => {
       draft: AppSettings
       set: (key: string, value: string) => void
     }) => (
-      <input
-        aria-label="Name"
-        value={draft.userName}
-        onChange={(e) => set('userName', e.target.value)}
-      />
+      <>
+        <input
+          aria-label="Name"
+          value={draft.userName}
+          onChange={(e) => set('userName', e.target.value)}
+        />
+        <select
+          aria-label="Interface language"
+          value={draft.uiLanguage}
+          onChange={(e) => set('uiLanguage', e.target.value)}
+        >
+          <option value="en">English</option>
+          <option value="tr">Türkçe</option>
+        </select>
+        <select
+          aria-label="Agent reply language"
+          value={draft.language}
+          onChange={(e) => set('language', e.target.value)}
+        >
+          <option value="en">English</option>
+          <option value="tr">Türkçe</option>
+        </select>
+      </>
     ),
     ToolsPanel: ({
       draft,
@@ -120,7 +140,7 @@ async function toggle(label: string) {
 }
 function markedCategories() {
   return [...container.querySelectorAll('aside button')]
-    .filter((node) => node.querySelector('[title="Kaydedilmemiş"]'))
+    .filter((node) => node.querySelector('span[title]'))
     .map((node) => node.textContent)
 }
 
@@ -143,6 +163,33 @@ describe('settings navigation and persistence', () => {
     expect(api.updateSettings).toHaveBeenLastCalledWith({ enableShell: true })
     expect(markedCategories()).toEqual([])
   })
+
+  it.each([
+    { current: 'tr', target: 'en', reply: 'tr', expected: 'Saved' },
+    { current: 'en', target: 'tr', reply: 'en', expected: 'Kayıtlı' },
+  ] as const)(
+    'shows save feedback in target UI locale when switching $current to $target',
+    async ({ current, target, reply, expected }) => {
+      saved = { ...saved, uiLanguage: current, language: reply }
+      await i18next.changeLanguage(current)
+      await render('profile')
+
+      const uiLanguage = container.querySelector<HTMLSelectElement>(
+        '[aria-label="Interface language"]',
+      )!
+      await act(async () => {
+        uiLanguage.value = target
+        uiLanguage.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      await click(i18next.t('common.save', { ns: 'settings' }))
+
+      expect(api.updateSettings).toHaveBeenCalledWith({ uiLanguage: target })
+      expect(onSaved).toHaveBeenCalledWith(
+        expect.objectContaining({ uiLanguage: target, language: reply }),
+      )
+      expect(vi.mocked(toast.success)).toHaveBeenLastCalledWith(expected)
+    },
+  )
 
   it('saves notifications immediately without losing another category draft', async () => {
     await render()

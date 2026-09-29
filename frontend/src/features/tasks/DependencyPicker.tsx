@@ -1,14 +1,7 @@
 // DependencyPicker lets the user select other tasks as dependencies for the
 // current task. Selected dependencies are shown as chips below the picker.
 import type { Task, BoardState } from '@/types'
-
-const STATE_LABELS: Record<BoardState, string> = {
-  todo: 'Yapılacak',
-  in_progress: 'Devam Eden',
-  review: 'İnceleme',
-  done: 'Bitti',
-  failed: 'Başarısız',
-}
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // All tasks available for selection (current task should be excluded by caller).
@@ -19,6 +12,7 @@ interface Props {
 }
 
 export function DependencyPicker({ tasks, value, onChange }: Props) {
+  const { t: translate } = useTranslation('tasks')
   const toggle = (id: string) => {
     if (value.includes(id)) {
       onChange(value.filter((v) => v !== id))
@@ -28,7 +22,7 @@ export function DependencyPicker({ tasks, value, onChange }: Props) {
   }
 
   if (tasks.length === 0) {
-    return <p className="text-xs text-[var(--color-text-dim)]">Başka görev yok.</p>
+    return <p className="text-xs text-[var(--color-text-dim)]">{translate('dependencies.empty')}</p>
   }
 
   return (
@@ -53,7 +47,9 @@ export function DependencyPicker({ tasks, value, onChange }: Props) {
             <span
               className={`ml-auto shrink-0 text-[10px] ${done ? 'text-[var(--color-success)]' : 'text-[var(--color-text-dim)]'}`}
             >
-              {STATE_LABELS[t.boardState as BoardState] ?? t.boardState}
+              {translate(`boardStates.${t.boardState as BoardState}`, {
+                defaultValue: t.boardState,
+              })}
             </span>
           </label>
         )

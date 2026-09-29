@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
 import { buildConcurrencyTimeline, type TimelineModel } from './flowVizData'
 import { formatTime } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
+import { i18next } from '@/i18n'
 
 // Layout constants (SVG user units; the chart scales responsively via viewBox).
 const W = 620
@@ -21,8 +23,16 @@ function clock(ms: number): string {
 }
 
 function fmtSpan(ms: number): string {
-  if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)} dk`
-  if (ms >= 1000) return `${(ms / 1000).toFixed(1)} s`
+  if (ms >= 60_000)
+    return i18next.t('visualization.timeline.minutes', {
+      ns: 'sessions',
+      value: (ms / 60_000).toFixed(1),
+    })
+  if (ms >= 1000)
+    return i18next.t('visualization.timeline.seconds', {
+      ns: 'sessions',
+      value: (ms / 1000).toFixed(1),
+    })
   return `${ms} ms`
 }
 
@@ -38,11 +48,12 @@ export function ConcurrencyTimeline({
   events: SessionDebugEvent[]
   agentNames: Record<string, string>
 }) {
+  const { t } = useTranslation('sessions')
   const model = useMemo(() => buildConcurrencyTimeline(events, agentNames), [events, agentNames])
   if (!model) {
     return (
       <p className="py-2 text-[11px] text-[var(--color-text-dim)]">
-        Zaman çizelgesi için yeterli olay yok.
+        {t('visualization.timeline.empty')}
       </p>
     )
   }
@@ -50,6 +61,7 @@ export function ConcurrencyTimeline({
 }
 
 function TimelineSVG({ model }: { model: TimelineModel }) {
+  const { t } = useTranslation('sessions')
   const { lanes, bars, minMs, maxMs, hasOverlap } = model
   const span = maxMs - minMs || 1
   const plotW = W - GUTTER - RIGHT
@@ -67,10 +79,14 @@ function TimelineSVG({ model }: { model: TimelineModel }) {
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
       <div className="mb-1 flex items-center justify-between text-[10px] text-[var(--color-text-dim)]">
         <span>
-          {bars.length} olay · {lanes.length} ajan · {fmtSpan(span)}
+          {t('visualization.timeline.summary', {
+            events: bars.length,
+            agents: lanes.length,
+            duration: fmtSpan(span),
+          })}
         </span>
         <span className={hasOverlap ? 'text-[var(--color-accent)]' : ''}>
-          {hasOverlap ? 'eşzamanlı' : 'seri'}
+          {hasOverlap ? t('visualization.timeline.concurrent') : t('visualization.timeline.serial')}
         </span>
       </div>
       <svg

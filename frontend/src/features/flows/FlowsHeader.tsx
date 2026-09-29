@@ -4,12 +4,13 @@ import { EmojiField } from '@/shared/components/EmojiField'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { ViewButton } from '@/features/view/ViewButton'
-import { STATUS_LABEL, statusColor } from './runStatus'
-import type { FlowTemplate } from './flowTemplates'
+import { statusLabel, statusColor } from './runStatus'
+import { flowTemplateDescription, flowTemplateName, type FlowTemplate } from './flowTemplates'
 import type { FlowsTab } from './flowsPanelShared'
 import type { Flow, FlowRun } from '@/types'
 import { Button, PaneHeader } from '@/shared/components'
 import { formatDateTime } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   flowsListOpen: boolean
@@ -52,6 +53,7 @@ export function FlowsHeader({
   rerunRun,
   rerunning,
 }: Props) {
+  const { t } = useTranslation('flows')
   return (
     <PaneHeader
       listOpen={flowsListOpen}
@@ -64,7 +66,7 @@ export function FlowsHeader({
         (tab === 'templates' && selectedTemplate) ||
         (tab === 'runs' && selectedRun)
           ? undefined
-          : 'Akışlar'
+          : t('header.flows')
       }
       titleSlot={
         tab === 'flows' && selectedId ? (
@@ -73,22 +75,24 @@ export function FlowsHeader({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Akış adı"
+              placeholder={t('header.flowNamePlaceholder')}
               className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium outline-none"
             />
             <span
               className="flex-shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
-              title="Akış ID (dosya adı)"
+              title={t('header.flowIdTitle')}
             >
               {selectedId}
             </span>
           </>
         ) : tab === 'templates' && selectedTemplate ? (
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-sm font-medium">{selectedTemplate.name}</span>
+            <span className="truncate text-sm font-medium">
+              {flowTemplateName(selectedTemplate)}
+            </span>
             {selectedTemplate.description && (
               <span className="truncate text-xs text-[var(--color-text-dim)]">
-                {selectedTemplate.description}
+                {flowTemplateDescription(selectedTemplate)}
               </span>
             )}
           </span>
@@ -98,11 +102,11 @@ export function FlowsHeader({
               {(() => {
                 const rf = flows.find((f) => f.id === selectedRun.flowId)
                 const e = normalizeAvatar(rf?.emoji)
-                return `${e ? e + ' ' : ''}${rf?.name ?? '（silinmiş akış）'}`
+                return `${e ? e + ' ' : ''}${rf?.name ?? t('flow.deletedName')}`
               })()}
             </span>
             <span className={`flex-shrink-0 text-xs ${statusColor(selectedRun.status)}`}>
-              {STATUS_LABEL[selectedRun.status] ?? selectedRun.status}
+              {statusLabel(selectedRun.status)}
             </span>
             <span className="flex-shrink-0 text-xs text-[var(--color-text-dim)]">
               {formatDateTime(new Date(selectedRun.createdAt * 1000), {
@@ -116,22 +120,22 @@ export function FlowsHeader({
       right={
         tab === 'flows' && selectedId ? (
           <>
-            <CopyPathButton path={flowPath} title="Akış yolunu kopyala" />
+            <CopyPathButton path={flowPath} title={t('header.flowPathCopy')} />
             <Button onClick={saveFlow} size="lg" className="flex-shrink-0">
-              Kaydet
+              {t('actions.save')}
             </Button>
           </>
         ) : tab === 'templates' && selectedTemplate ? (
           <>
             <span className="hidden text-xs text-[var(--color-text-dim)] sm:inline">
-              salt-okunur önizleme
+              {t('header.readOnlyPreview')}
             </span>
             <Button
               onClick={() => instantiateTemplate(selectedTemplate)}
               size="lg"
               className="flex-shrink-0"
             >
-              + Bu şablondan akış oluştur
+              {t('actions.createFromTemplate')}
             </Button>
           </>
         ) : tab === 'runs' && selectedRun ? (
@@ -148,13 +152,13 @@ export function FlowsHeader({
               }
               title={
                 !flows.some((f) => f.id === selectedRun.flowId)
-                  ? 'Akış silinmiş — tekrar çalıştırılamaz'
-                  : 'Bu koşuyu aynı girdiyle tekrar çalıştır'
+                  ? t('header.rerunDeleted')
+                  : t('header.rerunTitle')
               }
               className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RotateCcw size={13} className={rerunning ? 'animate-spin' : ''} />
-              {rerunning ? 'Çalışıyor…' : 'Tekrar çalıştır'}
+              {rerunning ? t('actions.running') : t('actions.rerun')}
             </button>
           </>
         ) : undefined

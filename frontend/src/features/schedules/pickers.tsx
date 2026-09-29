@@ -1,4 +1,5 @@
 import { Workflow } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { Flow } from '@/types'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 
@@ -11,6 +12,7 @@ export function TargetModeToggle({
   mode: 'agent' | 'flow'
   onChange: (m: 'agent' | 'flow') => void
 }) {
+  const { t } = useTranslation('schedules')
   return (
     <div className="inline-flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
       {(['agent', 'flow'] as const).map((m) => (
@@ -24,7 +26,7 @@ export function TargetModeToggle({
               : 'bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
           }`}
         >
-          {m === 'agent' ? 'Ajan' : 'Akış'}
+          {m === 'agent' ? t('common.agent') : t('common.flow')}
         </button>
       ))}
     </div>
@@ -41,6 +43,7 @@ export function FlowPicker({
   value: string
   onChange: (id: string) => void
 }) {
+  const { t } = useTranslation('schedules')
   // Selected flow's icon (mojibake-safe emoji, or a Workflow glyph fallback),
   // shown next to the dropdown — mirrors the AgentPicker's leading avatar.
   const selected = flows.find((f) => f.id === value)
@@ -60,7 +63,7 @@ export function FlowPicker({
         onChange={(e) => onChange(e.target.value)}
         className="rounded bg-transparent py-1 pr-2 text-sm outline-none"
       >
-        <option value="">Akış seç…</option>
+        <option value="">{t('common.selectFlow')}</option>
         {flows.map((f) => (
           <option key={f.id} value={f.id}>
             {normalizeAvatar(f.emoji) ? `${normalizeAvatar(f.emoji)} ${f.name}` : f.name}

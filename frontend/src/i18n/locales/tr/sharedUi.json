@@ -1,0 +1,179 @@
+{
+  "actions": {
+    "cancel": "Vazgeç",
+    "close": "Kapat",
+    "copied": "Panoya kopyalandı",
+    "copy": "Panoya kopyala",
+    "copyCode": "Kodu kopyala",
+    "expand": "Genişlet",
+    "fullscreen": "Tam ekran",
+    "info": "Bilgi",
+    "refresh": "Yenile",
+    "yes": "Evet"
+  },
+  "agents": {
+    "archived": "(arşivli)",
+    "deleted": "silinmiş",
+    "empty": "Ajan yok",
+    "select": "Ajan seç"
+  },
+  "archive": {
+    "backToActive": "Aktif listeye dön",
+    "backToList": "Listeye dön",
+    "count_one": "{{count}} arşivlenmiş {{noun}}{{restoreHint}}",
+    "count_other": "{{count}} arşivlenmiş {{noun}}{{restoreHint}}",
+    "empty": "Arşivlenmiş {{noun}} yok.",
+    "label": "Arşiv",
+    "show": "Arşivlenenleri göster"
+  },
+  "commandPalette": {
+    "label": "Komut paleti",
+    "noMatches": "Eşleşme yok",
+    "search": "Komut ara…"
+  },
+  "copyPath": {
+    "manualPrompt": "Yolu kopyalayın (Ctrl+C, Enter):",
+    "title": "Yolu kopyala"
+  },
+  "diff": {
+    "lines_one": "{{formattedCount}} satır",
+    "lines_other": "{{formattedCount}} satır",
+    "loadRemaining_one": "kalan {{formattedCount}} satırı da yükle",
+    "loadRemaining_other": "kalan {{formattedCount}} satırı da yükle",
+    "showUnchanged_one": "⋯ {{formattedCount}} değişmeyen satır — göster",
+    "showUnchanged_other": "⋯ {{formattedCount}} değişmeyen satır — göster",
+    "showingFirst_one": "İlk {{formattedCount}} satır gösteriliyor ·",
+    "showingFirst_other": "İlk {{formattedCount}} satır gösteriliyor ·"
+  },
+  "emoji": {
+    "noResults": "Sonuç yok",
+    "option": "{{emoji}} emojisini seç",
+    "search": "Emoji ara…",
+    "select": "Emoji seç",
+    "useInitials": "Emoji yok — baş harf kullan (Aa)"
+  },
+  "errorBoundary": {
+    "description": "Arayüzde beklenmeyen bir hata oluştu. Hata kaydedildi ve Loglar ekranında görülebilir. Devam etmek için sayfayı yeniden yükleyin.",
+    "reload": "Sayfayı yenile",
+    "retry": "Tekrar dene",
+    "title": "Bir şeyler ters gitti"
+  },
+  "folderPicker": {
+    "noSubfolders": "Alt klasör yok",
+    "parent": "Üst klasör",
+    "selectThis": "Bu klasörü seç",
+    "thisComputer": "Bu bilgisayar",
+    "title": "Klasör seç"
+  },
+  "gallery": {
+    "empty": "gallery · görsel bulunamadı",
+    "image": "Görsel {{number}}"
+  },
+  "htmlPreview": {
+    "empty": "html-preview · kaynak bulunamadı",
+    "frameTitle": "HTML önizlemesi",
+    "invalidSource": "geçersiz kaynak yolu",
+    "loadFailed": "html-preview yüklenemedi: {{error}}",
+    "tab": "Sekme {{number}}"
+  },
+  "lightbox": {
+    "close": "Kapat (Esc)",
+    "next": "Sonraki (→)",
+    "previous": "Önceki (←)",
+    "reset": "Sıfırla (0)",
+    "zoomIn": "Yakınlaştır",
+    "zoomOut": "Uzaklaştır"
+  },
+  "list": {
+    "hide": "Listeyi gizle",
+    "openPanel": "{{label}} panelini aç",
+    "resize": "Genişliği ayarla",
+    "show": "Listeyi göster",
+    "togglePanel": "Liste panelini aç/kapat"
+  },
+  "mermaid": {
+    "diagram": "Diyagram",
+    "invalidSyntax": "· (geçersiz sözdizimi)",
+    "rendering": "· işleniyor…",
+    "showDiagram": "Diyagramı göster",
+    "showSource": "Kaynağı göster",
+    "source": "Kaynak"
+  },
+  "promptEditor": {
+    "edit": "Düzenle",
+    "emptyPreview": "Önizlenecek içerik yok.",
+    "exitFullscreen": "Tam ekrandan çık",
+    "exitFullscreenTitle": "Tam ekrandan çık (Esc)",
+    "fullscreenEditor": "Tam ekran düzenleyici",
+    "markdownPreview": "Markdown önizlemesi",
+    "preview": "Önizleme",
+    "split": "Bölünmüş görünüm",
+    "splitTitle": "Böl (düzenle + önizleme)"
+  },
+  "provider": {
+    "custom": "Özel…",
+    "deletedInstance": "(silinmiş örnek)",
+    "disabledSuffix": " (devre dışı)",
+    "model": "Model",
+    "modelName": "model adı",
+    "orphaned": "⚠ Bu ajanın bağlı olduğu sağlayıcı örneği (\"{{providerInstanceId}}\") silinmiş. Ajan bu haliyle çalışmaz. Yukarıdan yeni bir sağlayıcı örneği seçip kaydedin.",
+    "provider": "Sağlayıcı",
+    "selectFromList": "Listeden seç",
+    "selectModel": "Model seçin…"
+  },
+  "seedDefault": {
+    "confirm": "Düzenlemeler silinsin mi?",
+    "default": "Varsayılan",
+    "edited": "düzenlendi",
+    "editedTitle": "Bu dosya varsayılandan farklı olduğu için TionHarness güncellemeleri artık otomatik uygulanmaz. Güncellemeleri sürdürmek için varsayılana dönün; yerel değişiklikler silinir.",
+    "restoreTitle": "TionHarness ile gelen varsayılan içeriğe dön. Yerel düzenlemeler silinir ve otomatik güncellemeler yeniden başlar.",
+    "restored": "{{label}} varsayılana döndürüldü"
+  },
+  "selection": {
+    "all": "Tümü",
+    "clear": "Seçimi temizle (Esc)",
+    "filteredOut_one": "(+{{count}} filtre dışı)",
+    "filteredOut_other": "(+{{count}} filtre dışı)",
+    "remove": "Seçimi kaldır",
+    "selectVisible": "Görünen tümünü seç",
+    "selected_one": "{{count}} seçili",
+    "selected_other": "{{count}} seçili"
+  },
+  "states": {
+    "loading": "Yükleniyor…"
+  },
+  "tags": {
+    "add": "Etiket ekle…",
+    "remove": "{{tag}} etiketini kaldır"
+  },
+  "workflow": {
+    "advanced": "Gelişmiş / opsiyonel",
+    "details": {
+      "invalidPhases": "⚠ Faz bloğu geçersiz: {{error}}",
+      "maxTurns": "Tur üst sınırı: {{maxTurns}}",
+      "pattern": "Desen: {{pattern}}",
+      "phases": "Fazlar: {{phases}}",
+      "skill": "Skill: {{slug}}",
+      "skillVersion": "Skill: {{slug}} (v{{version}})",
+      "stopCondition": "Durma koşulu: {{condition}}",
+      "workers": "Önerilen worker'lar: {{workers}}"
+    },
+    "emptyAfter": "Skills ekranından bir skill ekleyin.",
+    "emptyBefore": "Kayıtlı reçete yok. Oluşturmak için",
+    "free": "Serbest (recipe yok)",
+    "help": "Kayıtlı bir orkestrasyon reçetesi: koordinatör prompt'unun üzerine bindirilir, worker'ların hangi sırayla başlayıp sonuçlarının nasıl birleşeceğini tarif eder.\n\nHer reçete bir skill dosyasıdır (kind: coordinator-workflow). Satırdaki kitap düğmesiyle içeriğini açabilirsiniz. Serbest seçilirse koordinatör kendi kararıyla ilerler.",
+    "label": "Workflow",
+    "loading": "Reçeteler yükleniyor…",
+    "openInSkills": "\"{{name}}\" skill'ini Skills ekranında aç",
+    "openSkill": "{{name}} skill'ini aç",
+    "patterns": {
+      "adversarial": "Karşıt doğrulama — bir üretici, bir de onu çürütmeye çalışan worker",
+      "classify": "Sınıflandır ve yönlendir — girdi önce etiketlenir, sonra ilgili profile gider",
+      "fanout": "Fan-out ve sentez — paralel worker'lar, sonuçları koordinatör birleştirir",
+      "generateFilter": "Üret ve süz — çok sayıda aday üretilir, sonra elenir",
+      "loop": "Bitene kadar döngü — durma koşulu sağlanana dek tur tekrarlanır",
+      "tournament": "Turnuva — adaylar ikişerli karşılaştırılarak eleme yapılır"
+    },
+    "whatDoesItDo": "{{name}} — ne yapar?"
+  }
+}

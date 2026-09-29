@@ -1,17 +1,19 @@
+import { useTranslation } from 'react-i18next'
 import { Toggle, Segmented } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
 
 export function CliOptions({ draft, set }: PanelProps) {
+  const { t } = useTranslation('settingsMain')
   return (
     <>
       <Toggle
-        label="Forward hooks to Claude CLI"
-        hint="Run workspace hooks through the CLI. Commands must be compatible with the CLI shell."
+        label={t('cli.hooks.label')}
+        hint={t('cli.hooks.hint')}
         checked={draft.enableCliHooks}
         onChange={(v) => set('enableCliHooks', v)}
       />
       <Segmented
-        label="Claude CLI session mode"
+        label={t('cli.sessionMode.label')}
         value={draft.claudePersistentSession ? 'persistent' : draft.claudeResume ? 'resume' : 'off'}
         onChange={(mode) => {
           // Two mutually-exclusive booleans drive the runtime (toolloop.go picks
@@ -23,42 +25,42 @@ export function CliOptions({ draft, set }: PanelProps) {
         options={[
           {
             value: 'persistent',
-            label: 'Persistent process',
-            hint: 'Keep one CLI process alive per session and send only new messages.',
+            label: t('cli.sessionMode.persistent.label'),
+            hint: t('cli.sessionMode.persistent.hint'),
           },
           {
             value: 'resume',
-            label: 'Resume',
-            hint: 'Start a process per turn and resume the previous CLI session. Available for single-agent conversations.',
+            label: t('cli.sessionMode.resume.label'),
+            hint: t('cli.sessionMode.resume.hint'),
           },
           {
             value: 'off',
-            label: 'Off',
-            hint: 'Start a new process with the full transcript each turn. Useful for diagnostics; increases input usage.',
+            label: t('cli.sessionMode.off.label'),
+            hint: t('cli.sessionMode.off.hint'),
           },
         ]}
       />
       <Toggle
-        label="Pass the system prompt through a file"
-        hint="Use a temporary file to avoid command-line length limits with large prompts."
+        label={t('cli.promptFile.label')}
+        hint={t('cli.promptFile.hint')}
         checked={draft.claudeSysPromptFile}
         onChange={(v) => set('claudeSysPromptFile', v)}
       />
       <Toggle
-        label="Limit Claude CLI built-in tools"
-        hint="Expose only the built-in tools needed by the bridge to reduce prompt overhead."
+        label={t('cli.toolAllowlist.label')}
+        hint={t('cli.toolAllowlist.hint')}
         checked={draft.claudeCliToolAllowlist}
         onChange={(v) => set('claudeCliToolAllowlist', v)}
       />
       <Toggle
-        label="Claude CLI research agents"
-        hint="Allow native Explore and Plan agents. Delegation to TionHarness agents stays separate."
+        label={t('cli.researchAgents.label')}
+        hint={t('cli.researchAgents.hint')}
         checked={draft.claudeCliNativeSubagents}
         onChange={(v) => set('claudeCliNativeSubagents', v)}
       />
       <Toggle
-        label="Use Anthropic API for auxiliary calls"
-        hint="Route supported title, summary and other tool-free system calls through an available Anthropic API instance. These calls use API billing instead of the CLI subscription."
+        label={t('cli.auxRouting.label')}
+        hint={t('cli.auxRouting.hint')}
         checked={draft.auxNativeRouting}
         onChange={(v) => set('auxNativeRouting', v)}
       />

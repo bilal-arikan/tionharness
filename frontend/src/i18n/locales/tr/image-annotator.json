@@ -1,0 +1,16 @@
+{
+  "errors": {
+    "unsupportedType": "Bu görsel türü desteklenmiyor. PNG, JPEG veya WebP seçin.",
+    "tooLargeBytes": "Görsel 20 MB sınırını aşıyor.",
+    "dimensionExceeded": "Görsel boyutu 8192 px sınırını aşıyor.",
+    "pixelLimitExceeded": "Görsel 40 megapiksel sınırını aşıyor.",
+    "headerInvalid": "Görsel başlığı geçersiz veya dosya türüyle uyuşmuyor.",
+    "decodeFailed": "Görsel açılamadı; dosya bozuk olabilir.",
+    "strokePointLimit": "Tek çizgi 20.000 nokta sınırına ulaştı.",
+    "drawingPointLimit": "Çizim 200.000 nokta sınırına ulaştı.",
+    "drawingStrokeLimit": "Çizim 500 çizgi sınırına ulaştı.",
+    "historyLimit": "En eski geri alma adımları kaldırıldı.",
+    "drawingMemoryLimit": "Çizim bellek sınırına ulaştı.",
+    "exportFailed": "Görsel dışa aktarılamadı."
+  }
+}

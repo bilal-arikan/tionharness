@@ -2,6 +2,7 @@
 // type/options/secret-ness comes entirely from the kind manifest (backend) —
 // nothing about which kind has which field is hardcoded here.
 import type { ProviderFieldSpec } from '@/api/providers'
+import { useTranslation } from 'react-i18next'
 
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
@@ -16,8 +17,11 @@ interface Props {
 }
 
 export function ProviderFieldInput({ field, value, isSet, onChange }: Props) {
+  const { t } = useTranslation('settings')
   const placeholder =
-    field.secret && isSet ? '(kayıtlı — değiştirmek için yaz)' : field.placeholder || field.default
+    field.secret && isSet
+      ? t('providerFields.savedPlaceholder')
+      : field.placeholder || field.default
 
   return (
     <label className="flex flex-col gap-1">
@@ -32,7 +36,7 @@ export function ProviderFieldInput({ field, value, isSet, onChange }: Props) {
           onChange={(e) => onChange(e.target.value)}
           className={inputCls}
         >
-          <option value="">{field.placeholder || 'seç…'}</option>
+          <option value="">{field.placeholder || t('providerFields.select')}</option>
           {(field.options ?? []).map((o) => (
             <option key={o} value={o}>
               {o}
@@ -51,7 +55,9 @@ export function ProviderFieldInput({ field, value, isSet, onChange }: Props) {
       )}
       {field.help && <span className="text-[10px] text-[var(--color-text-dim)]">{field.help}</span>}
       {field.secret && isSet && (
-        <span className="text-[10px] text-[var(--color-success)]">✓ kayıtlı (şifreli)</span>
+        <span className="text-[10px] text-[var(--color-success)]">
+          {t('providerFields.savedEncrypted')}
+        </span>
       )}
     </label>
   )

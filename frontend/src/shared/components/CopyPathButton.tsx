@@ -2,6 +2,7 @@ import { Copy } from 'lucide-react'
 import { displayPath } from '@/shared/lib/paths'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { toast } from './toastStore'
+import { useTranslation } from 'react-i18next'
 
 // Shared visual language for the path actions used across the app so they
 // always look identical: a compact bordered icon-only button that dims to
@@ -23,7 +24,9 @@ interface Props {
 // CopyPathButton copies a filesystem path to the clipboard, surfacing success
 // through the app-wide toast (single feedback channel). Standardised look via
 // PATH_ACTION_CLS.
-export function CopyPathButton({ path, getPath, title = 'Yolu kopyala', testId, onError }: Props) {
+export function CopyPathButton({ path, getPath, title, testId, onError }: Props) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedTitle = title ?? t('copyPath.title')
   if (!path && !getPath) return null
 
   const copy = async () => {
@@ -33,8 +36,7 @@ export function CopyPathButton({ path, getPath, title = 'Yolu kopyala', testId, 
       // copyToClipboard falls back to a manual-copy prompt when the browser
       // blocks programmatic copy (insecure LAN/HTTP context); it returns true
       // only on a real programmatic copy, so gate the toast on it.
-      if (await copyToClipboard(text, 'Yolu kopyalayın (Ctrl+C, Enter):'))
-        toast.info('Panoya kopyalandı')
+      if (await copyToClipboard(text, t('copyPath.manualPrompt'))) toast.info(t('actions.copied'))
     } catch (e) {
       onError?.(e instanceof Error ? e.message : String(e))
     }
@@ -45,7 +47,7 @@ export function CopyPathButton({ path, getPath, title = 'Yolu kopyala', testId, 
       type="button"
       onClick={copy}
       data-testid={testId}
-      title={path ? `${title}: ${displayPath(path)}` : title}
+      title={path ? `${resolvedTitle}: ${displayPath(path)}` : resolvedTitle}
       className={PATH_ACTION_CLS}
     >
       <Copy size={14} />

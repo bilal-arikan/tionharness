@@ -7,6 +7,7 @@
 import { MessageSquarePlus, Bot } from 'lucide-react'
 import type { Agent } from '@/types'
 import { Button } from '@/shared/components'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   agents: Agent[]
@@ -46,6 +47,7 @@ export function ChatEmptyState({
   onSelectDefaultAgent,
   onGoToAgents,
 }: Props) {
+  const { t } = useTranslation('chat')
   const hasAgents = agents.length > 0
   // The agent a new chat would open with. When the stored default was DELETED we
   // deliberately do NOT fall through to agents[0]: substituting a different agent
@@ -67,9 +69,9 @@ export function ChatEmptyState({
 
         {hasAgents ? (
           <>
-            <h2 className="mb-1 text-lg font-semibold">Yeni sohbete başla</h2>
+            <h2 className="mb-1 text-lg font-semibold">{t('empty.startTitle')}</h2>
             <p className="mb-5 text-sm text-[var(--color-text-dim)]">
-              Bir ajan seç ve sohbete başla. Mesajlar seçtiğin ajanla yürütülür.
+              {t('empty.startDescription')}
             </p>
 
             {defaultAgentDeleted && (
@@ -77,8 +79,7 @@ export function ChatEmptyState({
                 data-testid="chat-empty-default-deleted"
                 className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-left text-xs text-[var(--color-text-dim)]"
               >
-                Seçili ajan silinmiş. Geçmiş sohbetleri duruyor; devam etmek için başka bir ajan
-                seç.
+                {t('empty.deletedAgent')}
               </p>
             )}
 
@@ -86,7 +87,9 @@ export function ChatEmptyState({
                 agent: just show which one will be used. */}
             {agents.length > 1 ? (
               <label className="mb-4 block text-left">
-                <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Ajan</span>
+                <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+                  {t('empty.agent')}
+                </span>
                 <select
                   value={starting?.id ?? ''}
                   onChange={(e) => onSelectDefaultAgent(e.target.value)}
@@ -110,18 +113,17 @@ export function ChatEmptyState({
             )}
 
             <Button onClick={onNewSession} size="lg" className="w-full">
-              <MessageSquarePlus size={16} /> Yeni sohbet
+              <MessageSquarePlus size={16} /> {t('empty.newChat')}
             </Button>
           </>
         ) : (
           <>
-            <h2 className="mb-1 text-lg font-semibold">Önce bir ajan oluştur</h2>
+            <h2 className="mb-1 text-lg font-semibold">{t('empty.createAgentTitle')}</h2>
             <p className="mb-5 text-sm text-[var(--color-text-dim)]">
-              Sohbet başlatmak için en az bir ajana ihtiyacın var. Ajanlar ekranından hızlıca bir
-              tane oluşturabilirsin.
+              {t('empty.createAgentDescription')}
             </p>
             <Button onClick={onGoToAgents} size="lg" className="w-full">
-              <Bot size={16} /> Ajan oluştur
+              <Bot size={16} /> {t('empty.createAgent')}
             </Button>
           </>
         )}

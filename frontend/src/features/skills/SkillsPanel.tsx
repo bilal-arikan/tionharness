@@ -49,13 +49,11 @@ import { relativeTime, fullDateTime } from '@/shared/lib/time'
 import { compareText } from '@/shared/lib/intl'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_SKILLS } from '@/app/eventToRefreshSignals'
+import { useTranslation } from 'react-i18next'
 
 // Advisory shown after any mutation to a GLOBAL-tier skill: its SKILL.md lives in
 // the shared global dir, so the change reaches every workspace that does not
 // override the same slug in its own workspace tier.
-const GLOBAL_CHANGE_MSG =
-  'Global skill değişti — bu değişiklik tüm workspace’lerde geçerli (kendi skill’inde aynı ismi tanımlayan workspace’ler hariç).'
-
 interface Props {
   onError: (msg: string) => void
   // Rota F3: open the Rota screen on a recipe's latest trajectory.
@@ -66,13 +64,8 @@ interface Props {
 
 // Tier badge styling — workspace (higher priority) is accented, global is muted.
 // Mirrors the override order on the backend (workspace > global).
-const SOURCE_LABEL: Record<SkillSource, string> = {
-  global: 'Global',
-  workspace: 'Workspace',
-}
-
 // Label for the bucket holding skills with no `group` set; always rendered last.
-const UNGROUPED = 'Grupsuz'
+const UNGROUPED = '__ungrouped__'
 
 // Group key for one skill: its `group` field, or the ungrouped bucket.
 function skillGroupKey(sk: Skill): string {
@@ -92,6 +85,7 @@ function sortSkillGroups(a: string, b: string): number {
 }
 
 function SourceBadge({ source }: { source: SkillSource }) {
+  const { t } = useTranslation('skills')
   const tone =
     source === 'workspace'
       ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
@@ -100,7 +94,7 @@ function SourceBadge({ source }: { source: SkillSource }) {
     <span
       className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}
     >
-      {SOURCE_LABEL[source]}
+      {t(`source.${source}`)}
     </span>
   )
 }
@@ -109,12 +103,13 @@ function SourceBadge({ source }: { source: SkillSource }) {
 // explicitly assigned to can see/use it. On-demand (shared) skills are the
 // default case and carry no badge.
 function RestrictedBadge() {
+  const { t } = useTranslation('skills')
   return (
     <span
       className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-danger)_18%,transparent)] text-[var(--color-danger)]"
-      title="Yalnız atanan ajanlar kullanabilir (atama gerekir)"
+      title={t('access.restrictedHint')}
     >
-      Kısıtlı
+      {t('access.restricted')}
     </span>
   )
 }
@@ -162,11 +157,12 @@ function SkillVisibilitySelector({
   busy: boolean
   onSet: (tier: ToolVisibility) => void
 }) {
+  const { t } = useTranslation('skills')
   return (
     <div
       className="inline-flex overflow-hidden rounded-md border border-[var(--color-border)]"
       role="group"
-      aria-label="Skill görünürlüğü"
+      aria-label={t('visibility.ariaLabel')}
       data-testid="skill-detail-visibility"
     >
       {VISIBILITY_TIERS.map((tier) => {
@@ -198,6 +194,7 @@ function SkillVisibilitySelector({
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
 export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props) {
+  const { t } = useTranslation('skills')
   const skillsTick = useRefreshTrigger(SIGNAL_SKILLS)
   const [list, setList] = useState<Skill[]>([])
   const [catalogRevision, setCatalogRevision] = useState(0)
@@ -331,12 +328,12 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
       .setSkillAccess(active.slug, !active.shared)
       .then((sk) => {
         setActive((a) => (a ? { ...a, shared: sk.shared } : a))
-        if (active.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
+        if (active.source === 'global') setInfoMsg(t('globalChangeMessage'))
         reload()
       })
       .catch((e) => onError((e as Error).message))
       .finally(() => setAccessBusy(false))
-  }, [active, reload, onError])
+  }, [active, reload, onError, t])
 
   // Set the selected skill's 4-way visibility tier (full | summary | name-only |
   // hidden) — the skill analogue of a tool's context tier. One backend call
@@ -359,13 +356,13 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 }
               : a,
           )
-          if (active.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
+          if (active.source === 'global') setInfoMsg(t('globalChangeMessage'))
           reload()
         })
         .catch((e) => onError((e as Error).message))
         .finally(() => setVisBusy(false))
     },
-    [active, reload, onError],
+    [active, reload, onError, t],
   )
 
   // After the editor saves, refresh the list and focus the saved skill.
@@ -374,10 +371,10 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
       setEditor(null)
       setActive(saved)
       setActiveSlug(saved.slug)
-      if (saved.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
+      if (saved.source === 'global') setInfoMsg(t('globalChangeMessage'))
       reload()
     },
-    [reload, setActiveSlug],
+    [reload, setActiveSlug, t],
   )
 
   // Delete the selected skill (confirm first), then refresh + clear selection.
@@ -390,11 +387,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
 
   const removeActive = useCallback(() => {
     if (!active) return
-    if (
-      !window.confirm(
-        `"${active.name}" becerisini silmek istediğine emin misin? Bu, klasörünü diskten kaldırır.`,
-      )
-    ) {
+    if (!window.confirm(t('confirm.deleteOne', { name: active.name }))) {
       return
     }
     setDeleteBusy(true)
@@ -407,7 +400,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
       })
       .catch((e) => onError((e as Error).message))
       .finally(() => setDeleteBusy(false))
-  }, [active, reload, onError, setActiveSlug])
+  }, [active, reload, onError, setActiveSlug, t])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk skill deletion. The
   // ordered id list is the flattened visible (non-collapsed) skill order so a
@@ -420,8 +413,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
   const bulkDelete = useCallback(() => {
     const slugs = [...sel.selected]
     if (slugs.length === 0) return
-    if (!window.confirm(`${slugs.length} beceri silinsin mi? Bu, klasörlerini diskten kaldırır.`))
-      return
+    if (!window.confirm(t('confirm.deleteMany', { count: slugs.length }))) return
     Promise.all(slugs.map((slug) => api.deleteSkill(slug)))
       .then(() => {
         if (activeSlug && sel.selected.has(activeSlug)) {
@@ -432,7 +424,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
         reload()
       })
       .catch((e) => onError((e as Error).message))
-  }, [sel, activeSlug, reload, onError, setActiveSlug])
+  }, [sel, activeSlug, reload, onError, setActiveSlug, t])
 
   // Archive or restore skills. Either way they leave the current view; the
   // catalog is re-read so the list and the selection follow.
@@ -543,12 +535,12 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
         onToggle={toggleList}
         widthKey="tionharness.skillsListWidth"
         defaultWidth={288}
-        label="Skills"
+        label={t('panel.title')}
         testId="skills-list-toggle"
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Skills · {sideList.length}
+            {t('panel.titleCount', { count: sideList.length })}
           </span>
           <div className="flex items-center gap-1.5">
             <ArchiveViewToggle
@@ -558,14 +550,14 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 sel.clear()
                 setShowArchived((v) => !v)
               }}
-              backLabel="Skills"
-              backTitle="Aktif becerilere dön"
+              backLabel={t('panel.title')}
+              backTitle={t('archive.backTitle')}
             />
             {grouped.length > 1 && (
               <button
                 data-testid="skills-toggle-all"
                 onClick={toggleAll}
-                title={allCollapsed ? 'Tüm grupları aç' : 'Tüm grupları katla'}
+                title={allCollapsed ? t('groups.expandAll') : t('groups.collapseAll')}
                 className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
               >
                 {allCollapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
@@ -574,10 +566,10 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
             <button
               data-testid="skills-rescan"
               onClick={rescan}
-              title="Diskten yeniden tara"
+              title={t('panel.rescanHint')}
               className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
-              <RefreshCw size={13} /> Tara
+              <RefreshCw size={13} /> {t('panel.rescan')}
             </button>
           </div>
         </div>
@@ -585,14 +577,14 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
           <ArchiveViewBanner
             testId="skills-archive-banner"
             count={sideList.length}
-            noun="beceri"
-            restoreHint="ajanlara hiç sunulmaz; seçip “Arşivden çıkar”a bas."
+            noun={t('archive.noun')}
+            restoreHint={t('archive.restoreHint')}
           />
         ) : (
           <NewItemButton
             onClick={() => setEditor({ mode: 'create' })}
-            label="Yeni Beceri"
-            title="Yeni beceri oluştur"
+            label={t('panel.newSkill')}
+            title={t('panel.newSkillHint')}
             testId="skills-create"
           />
         )}
@@ -601,9 +593,10 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
               <Sparkles size={28} className="opacity-40" />
               <p>
-                Henüz beceri yok. <code>SKILL.md</code> içeren bir klasörü{' '}
-                <code>~/.tionharness/skills/</code> (global) ya da workspace <code>skills/</code>{' '}
-                altına koyup <strong>Tara</strong>'ya bas.
+                {t('panel.emptyBefore')} <code>SKILL.md</code> {t('panel.emptyMiddle')}{' '}
+                <code>~/.tionharness/skills/</code> ({t('source.global').toLowerCase()}){' '}
+                {t('panel.emptyOrWorkspace')} <code>skills/</code> {t('panel.emptyAfter')}{' '}
+                <strong>{t('panel.rescan')}</strong>.
               </p>
             </div>
           )}
@@ -620,7 +613,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                   data-collapsed={isCollapsed}
                   data-drop-active={isDropTarget}
                   onClick={() => toggleGroup(groupName)}
-                  title={isCollapsed ? 'Grubu aç' : 'Grubu katla'}
+                  title={isCollapsed ? t('groups.expand') : t('groups.collapse')}
                   className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
                     isDropTarget
                       ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
@@ -628,7 +621,9 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                   }`}
                 >
                   {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-                  <span className="min-w-0 flex-1 truncate">{groupName}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {groupName === UNGROUPED ? t('groups.ungrouped') : groupName}
+                  </span>
                   <span className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--color-text-dim)]">
                     {items.length}
                   </span>
@@ -676,9 +671,11 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                             {sk.modifiedAt ? (
                               <span
                                 className="mt-0.5 block text-[10px] text-[var(--color-text-dim)] opacity-70"
-                                title={`Son düzenleme: ${fullDateTime(sk.modifiedAt)}`}
+                                title={t('panel.lastModifiedFull', {
+                                  date: fullDateTime(sk.modifiedAt),
+                                })}
                               >
-                                Düzenlendi: {relativeTime(sk.modifiedAt)}
+                                {t('panel.modified')}: {relativeTime(sk.modifiedAt)}
                               </span>
                             ) : null}
                           </span>
@@ -701,7 +698,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
           <div
             className="inline-flex overflow-hidden rounded-md border border-[var(--color-border)]"
             role="group"
-            aria-label="Seçili becerilerin görünürlüğü"
+            aria-label={t('bulk.visibilityAria')}
             data-testid="skills-bulk-visibility"
           >
             {VISIBILITY_TIERS.map((tier) => (
@@ -710,7 +707,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 type="button"
                 disabled={bulkVisBusy}
                 onClick={() => bulkSetVisibility(tier.value)}
-                title={`Seçili becerileri "${tier.label}" yap — ${tier.hint}`}
+                title={t('bulk.setVisibilityHint', { label: tier.label, hint: tier.hint })}
                 data-testid={`skills-bulk-vis-${tier.value}`}
                 className="px-2 py-1 text-xs text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
               >
@@ -722,28 +719,28 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
           <div
             className="inline-flex overflow-hidden rounded-md border border-[var(--color-border)]"
             role="group"
-            aria-label="Seçili becerilerin erişimi"
+            aria-label={t('bulk.accessAria')}
             data-testid="skills-bulk-access"
           >
             <button
               type="button"
               disabled={bulkAccessBusy}
               onClick={() => bulkSetAccess(false)}
-              title="Seçili becerileri kısıtla — yalnız atanan ajanlar kullanabilsin"
+              title={t('bulk.restrictHint')}
               data-testid="skills-bulk-access-restrict"
               className="flex items-center gap-1 px-2 py-1 text-xs text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
             >
-              <Lock size={13} /> Kısıtla
+              <Lock size={13} /> {t('access.restrict')}
             </button>
             <button
               type="button"
               disabled={bulkAccessBusy}
               onClick={() => bulkSetAccess(true)}
-              title="Seçili becerileri paylaş — tüm ajanlar gerektiğinde kullanabilsin"
+              title={t('bulk.shareHint')}
               data-testid="skills-bulk-access-share"
               className="flex items-center gap-1 border-l border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
             >
-              <Globe size={13} /> Paylaş
+              <Globe size={13} /> {t('access.share')}
             </button>
           </div>
           {/* Bulk group: move every selected skill into one organisation bucket. */}
@@ -759,7 +756,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 }
               }}
               disabled={bulkGroupBusy}
-              placeholder="Grup ata…"
+              placeholder={t('bulk.groupPlaceholder')}
               data-testid="skills-bulk-group-input"
               className="w-28 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
             />
@@ -774,11 +771,11 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
               disabled={bulkGroupBusy}
               title={
                 bulkGroup.trim()
-                  ? `Seçili becerileri "${bulkGroup.trim()}" grubuna taşı`
-                  : 'Seçili becerileri grupsuz yap'
+                  ? t('bulk.moveToGroupHint', { group: bulkGroup.trim() })
+                  : t('bulk.ungroupHint')
               }
             >
-              {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
+              {bulkGroup.trim() ? t('bulk.assign') : t('groups.ungrouped')}
             </SelectionBarButton>
           </div>
           <SelectionBarButton
@@ -786,10 +783,10 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
             onClick={() => setArchived([...sel.selected], !showArchived)}
             disabled={archiveBusy}
           >
-            {showArchived ? 'Arşivden çıkar' : 'Arşivle'}
+            {showArchived ? t('archive.restore') : t('archive.archive')}
           </SelectionBarButton>
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
-            Sil
+            {t('actions.delete')}
           </SelectionBarButton>
         </SelectionBar>
       </ListPane>
@@ -805,7 +802,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
           // Chips + the Tam/Özet/İsim/Gizli selector always live on their own second
           // row (every width), so the first row stays compact.
           secondaryAlwaysWrap
-          title={active ? undefined : 'Skills'}
+          title={active ? undefined : t('panel.title')}
           titleSlot={
             active ? (
               <span className="flex min-w-0 items-center gap-2">
@@ -851,7 +848,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 <button
                   data-testid="skill-detail-edit"
                   onClick={() => setEditor({ mode: 'edit', initial: active })}
-                  title="Bu beceriyi düzenle (ad, simge, açıklama, içerik)"
+                  title={t('detail.editHint')}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                 >
                   <Pencil size={14} />
@@ -861,14 +858,12 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                   onClick={toggleAccess}
                   disabled={accessBusy}
                   title={
-                    active.shared
-                      ? 'Kısıtlıya çevir: yalnız atanan ajanlar kullanabilsin'
-                      : 'Paylaşımlı yap: tüm ajanlar gerektiğinde kullanabilsin'
+                    active.shared ? t('detail.makeRestrictedHint') : t('detail.makeSharedHint')
                   }
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
                 >
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
-                  {active.shared ? 'Kısıtla' : 'Paylaş'}
+                  {active.shared ? t('access.restrict') : t('access.share')}
                 </button>
                 <button
                   data-testid="skill-detail-archive"
@@ -876,13 +871,13 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                   disabled={archiveBusy}
                   title={
                     active.archived
-                      ? 'Arşivden çıkar: ajanlara yeniden sunulsun'
-                      : 'Arşivle: dosya kalır, ajanlara sunulmaz ve haritadan gizlenir'
+                      ? t('archive.restoreDetailHint')
+                      : t('archive.archiveDetailHint')
                   }
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
                 >
                   {active.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                  {active.archived ? 'Arşivden çıkar' : 'Arşivle'}
+                  {active.archived ? t('archive.restore') : t('archive.archive')}
                 </button>
                 <CopyPathButton path={active.dir} />
                 {/* Shipped skills only. The automatic re-seed refreshes a skill
@@ -901,10 +896,10 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                   data-testid="skill-detail-delete"
                   onClick={removeActive}
                   disabled={deleteBusy}
-                  title="Bu beceriyi sil (klasörünü diskten kaldırır)"
+                  title={t('detail.deleteHint')}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
                 >
-                  <Trash2 size={14} /> Sil
+                  <Trash2 size={14} /> {t('actions.delete')}
                 </button>
               </div>
             ) : undefined
@@ -912,7 +907,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
         />
         {!active ? (
           <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
-            {loadingBody ? 'Yükleniyor…' : 'Görüntülemek için bir beceri seç.'}
+            {loadingBody ? t('actions.loading') : t('detail.selectPrompt')}
           </div>
         ) : (
           <>
@@ -924,12 +919,12 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 </p>
                 {active.whenToUse && (
                   <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                    <span className="font-medium">Ne zaman:</span> {active.whenToUse}
+                    <span className="font-medium">{t('detail.whenToUse')}:</span> {active.whenToUse}
                   </p>
                 )}
                 {active.modifiedAt ? (
                   <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                    <span className="font-medium">Son düzenleme:</span>{' '}
+                    <span className="font-medium">{t('detail.lastModified')}:</span>{' '}
                     {fullDateTime(active.modifiedAt)}{' '}
                     <span className="opacity-70">({relativeTime(active.modifiedAt)})</span>
                   </p>
@@ -943,7 +938,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 )}
                 {active.alwaysAllow && active.alwaysAllow.length > 0 && (
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
-                    <span className="font-medium">İzinli araçlar:</span>
+                    <span className="font-medium">{t('detail.allowedTools')}:</span>
                     {active.alwaysAllow.map((tool) => (
                       <code key={tool} className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">
                         {tool}
@@ -953,11 +948,8 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 )}
                 {active.subSkills && active.subSkills.length > 0 && (
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
-                    <span
-                      className="font-medium"
-                      title="use_skill ile gerektiğinde yüklenen daha ayrıntılı beceriler"
-                    >
-                      Alt beceriler:
+                    <span className="font-medium" title={t('detail.subSkillsHint')}>
+                      {t('detail.subSkills')}:
                     </span>
                     {active.subSkills.map((sub) => {
                       const known = list.some((s) => s.slug === sub)
@@ -966,7 +958,11 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                           key={sub}
                           onClick={() => known && setActiveSlug(sub)}
                           disabled={!known}
-                          title={known ? `${sub} becerisine git` : `${sub} bulunamadı`}
+                          title={
+                            known
+                              ? t('detail.goToSubSkill', { slug: sub })
+                              : t('detail.subSkillNotFound', { slug: sub })
+                          }
                           className={`rounded px-1 py-0.5 ${
                             known
                               ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:underline'
@@ -990,9 +986,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                   <Markdown>{active.body}</Markdown>
                 </div>
               ) : (
-                <p className="text-sm text-[var(--color-text-dim)]">
-                  Bu becerinin gövde içeriği yok.
-                </p>
+                <p className="text-sm text-[var(--color-text-dim)]">{t('detail.noBody')}</p>
               )}
             </div>
           </>

@@ -16,6 +16,7 @@ import { useArtifactBulkActions } from './useArtifactBulkActions'
 import { useArtifactDetail } from './useArtifactDetail'
 import { useArtifactImport } from './useArtifactImport'
 import { useArtifactList } from './useArtifactList'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onError: (msg: string) => void
@@ -37,6 +38,7 @@ interface Props {
 // everything that can replace the selection needs `confirmDiscard`, which the
 // detail hook derives from the open draft.
 export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: Props) {
+  const { t } = useTranslation('artifacts')
   const artifactsTick = useRefreshTrigger(SIGNAL_ARTIFACTS)
   const listState = useArtifactList(selectedId, artifactsTick, onError)
   const { list, setList, activeId, setActiveId, reload, groupNames, orderedIds } = listState
@@ -72,7 +74,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 border-2 border-dashed border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_12%,var(--color-bg))]/90 backdrop-blur-sm">
           <UploadCloud size={40} className="text-[var(--color-accent)]" />
           <p className="text-sm font-medium text-[var(--color-text)]">
-            {importing ? 'Ekleniyor…' : 'Dosyaları bırak — resim, video, ses veya dosya'}
+            {importing ? t('import.importing') : t('import.dropFiles')}
           </p>
         </div>
       )}
@@ -83,18 +85,21 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         onToggle={toggleList}
         widthKey="tionharness.artifactsListWidth"
         defaultWidth={288}
-        label="Artifactlar"
+        label={t('title')}
         testId="artifacts-list-toggle"
       >
         <SidebarHeader
-          title={`Artifactlar · ${list.length}${listState.hasMore ? ` / ${listState.total}` : ''}`}
+          title={t('list.titleCount', {
+            loaded: list.length,
+            total: listState.hasMore ? listState.total : list.length,
+          })}
           onCollapse={toggleList}
         >
           {listState.grouped.length > 1 && (
             <button
               data-testid="artifacts-toggle-all"
               onClick={listState.toggleAll}
-              title={listState.allCollapsed ? 'Tüm grupları aç' : 'Tüm grupları katla'}
+              title={listState.allCollapsed ? t('group.expandAll') : t('group.collapseAll')}
               className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
             >
               {listState.allCollapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
@@ -104,8 +109,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         </SidebarHeader>
         <NewItemButton
           onClick={detail.createNew}
-          label="Yeni Artifact"
-          title="Yeni artifact"
+          label={t('actions.new')}
+          title={t('actions.newTitle')}
           testId="artifacts-create-new"
         />
 
@@ -169,7 +174,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         />
         {!active ? (
           <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
-            Görüntülemek için bir artifact seç.
+            {t('detail.selectPrompt')}
           </div>
         ) : draft ? (
           <ArtifactEditor

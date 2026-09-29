@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import type { AgentToolGroup, AgentToolTier } from '@/types'
 import { AgentTierSelector } from '@/features/tools/VisibilityControls'
 import { costHint, costLabel } from '@/features/tools/toolCostLabel'
+import { useTranslation } from 'react-i18next'
 
 // AgentToolGroupRow is one bulk-override target: a built-in category
 // ('group:files') or an MCP server ('linear__*'). Picking a tier writes the
@@ -23,6 +24,7 @@ export function AgentToolGroupRow({
   onSelect: (tier: AgentToolTier) => void
   onClear: () => void
 }) {
+  const { t } = useTranslation('agents')
   // Per-turn context cost of the group — the number the tier choice moves.
   const cost = costLabel(group)
   return (
@@ -39,7 +41,10 @@ export function AgentToolGroupRow({
     >
       <span className="text-xs font-medium">{group.label}</span>
       <span className="text-[11px] text-[var(--color-text-dim)]">
-        {group.kind === 'mcp' ? 'MCP' : 'yerleşik'} · {group.count} araç
+        {t('tools.groupSummary', {
+          kind: group.kind === 'mcp' ? 'MCP' : t('tools.groupKindBuiltin'),
+          count: group.count,
+        })}
       </span>
       {cost && (
         <span
@@ -62,7 +67,7 @@ export function AgentToolGroupRow({
         <button
           onClick={onClear}
           disabled={busy || !tier}
-          title="Grup override'ını kaldır"
+          title={t('tools.clearGroup')}
           className="rounded-md p-1 text-[var(--color-text-dim)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] hover:text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <X size={13} />

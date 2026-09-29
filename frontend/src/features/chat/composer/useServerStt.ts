@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/api'
 import { sttModel } from '@/shared/lib/stt'
+import { useTranslation } from 'react-i18next'
 
 export interface ServerStt {
   // recording audio from the mic right now.
@@ -18,6 +19,7 @@ export interface ServerStt {
 // preview: recognition happens once, after recording ends. getUserMedia still
 // needs a secure context (localhost/HTTPS), so start() errors on plain LAN-HTTP.
 export function useServerStt(onFinal: (text: string) => void): ServerStt {
+  const { t } = useTranslation('chatControls')
   const [listening, setListening] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,49 +37,52 @@ export function useServerStt(onFinal: (text: string) => void): ServerStt {
     streamRef.current = null
   }
 
-  const start = useCallback(async (lang: string) => {
-    setError(null)
-    langRef.current = lang
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError('mikrofon erişimi yok (güvenli bağlam gerekir)')
-      return
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
-      chunksRef.current = []
-      const rec = new MediaRecorder(stream)
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
+  const start = useCallback(
+    async (lang: string) => {
+      setError(null)
+      langRef.current = lang
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError(t('mic.microphoneUnavailable'))
+        return
       }
-      rec.onstop = async () => {
-        releaseStream()
-        const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        streamRef.current = stream
         chunksRef.current = []
-        if (blob.size === 0) {
-          setTranscribing(false)
-          return
+        const rec = new MediaRecorder(stream)
+        rec.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data)
         }
-        setTranscribing(true)
-        try {
-          const text = await api.transcribe(blob, langRef.current, sttModel())
-          const clean = text.trim()
-          if (clean) onFinalRef.current(clean)
-        } catch (e) {
-          setError((e as Error).message)
-        } finally {
-          setTranscribing(false)
+        rec.onstop = async () => {
+          releaseStream()
+          const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
+          chunksRef.current = []
+          if (blob.size === 0) {
+            setTranscribing(false)
+            return
+          }
+          setTranscribing(true)
+          try {
+            const text = await api.transcribe(blob, langRef.current, sttModel())
+            const clean = text.trim()
+            if (clean) onFinalRef.current(clean)
+          } catch (e) {
+            setError((e as Error).message)
+          } finally {
+            setTranscribing(false)
+          }
         }
+        recRef.current = rec
+        rec.start()
+        setListening(true)
+      } catch (e) {
+        // Permission denied, no device, or insecure context (LAN over HTTP).
+        setError((e as Error).message)
+        releaseStream()
       }
-      recRef.current = rec
-      rec.start()
-      setListening(true)
-    } catch (e) {
-      // Permission denied, no device, or insecure context (LAN over HTTP).
-      setError((e as Error).message)
-      releaseStream()
-    }
-  }, [])
+    },
+    [t],
+  )
 
   const stop = useCallback(() => {
     const rec = recRef.current

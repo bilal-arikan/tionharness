@@ -1,0 +1,126 @@
+{
+  "title": "Bütçe",
+  "rangeDays_one": "{{count}}g",
+  "rangeDays_other": "{{count}}g",
+  "refresh": "Yenile",
+  "loading": "Yükleniyor…",
+  "noData": "Veri yok.",
+  "notAvailable": "—",
+  "infoSymbol": "ⓘ",
+  "summary": {
+    "tokensToday": "Bugünkü toplam token",
+    "inputOutput": "{{input}} girdi · {{output}} çıktı",
+    "callsToday": "Bugünkü çağrı",
+    "inputTokens": "Girdi token",
+    "estimatedCostToday": "Tahmini maliyet (bugün)",
+    "listPriceEstimate": "liste fiyatı tahmini",
+    "cliEquivalentIncluded": "claude-cli: eşdeğer API maliyeti dahil",
+    "partlySubscription": "bir kısmı abonelik/fiyatsız"
+  },
+  "kind": {
+    "chat": "Sohbet",
+    "task": "Görev",
+    "schedule": "Zamanlama",
+    "flow": "Akış",
+    "delegate": "Delegasyon",
+    "title": "Başlık",
+    "summary": "Özet",
+    "reflect": "Yansıma",
+    "compact": "Sıkıştırma",
+    "decide": "Karar",
+    "system": "Sistem ajanı",
+    "other": "Diğer"
+  },
+  "cost": {
+    "subscriptionEstimateHint": "Abonelik (claude-cli) — eşdeğer API maliyeti tahmini; gerçek faturalandırma değil",
+    "partlyUnpricedHint": "Bir kısmı fiyatsız (abonelik/özel model)",
+    "subscriptionOrUnpriced": "abonelik / fiyatsız"
+  },
+  "cliOverhead": {
+    "title": "claude-cli ek yükü:",
+    "descriptionBefore": "Bu sağlayıcı kendi sistem promptu, araç şemaları ve MCP köprüsünü modele ekler; gerçek girdi, bağlam önizlemesindeki segment tahmininden çok büyüktür. Buradaki rakamlar",
+    "billed": "gerçek faturalanan",
+    "descriptionAfter": "tüketimdir (eşdeğer API maliyeti). Önizleme tahmini yerine bunlara güvenin. Tek bir mesajın kırılımı için sohbette o mesajın debug butonunu kullanın.",
+    "toolCountTitle": "Araç sayısı farkı:",
+    "toolCountBefore": "Bilgi ekranı ajanın erişebildiği tüm kataloğu (ör. 129) sayar; bağlam popup'ının",
+    "toolsLabel": "Araçlar",
+    "toolCountMiddle": "satırı yalnız her tur şeması gönderilen",
+    "eager": "anında",
+    "toolCountSet": "kümesidir. Oturum boyunca",
+    "activatedWith": "ile aktive edilen",
+    "deferred": "ertelenmiş (gerektikçe)",
+    "tools": "araçlar",
+    "resumeAfter": "ile sıcak kalıp gerçek girdiyi büyütür ama popup'ın eager sayısına girmez. Popup'taki",
+    "onDemandLabel": "Talep üzerine",
+    "chip": "çipine bakın."
+  },
+  "cumulative": {
+    "totalCost_one": "Toplam maliyet (son {{count}} gün)",
+    "totalCost_other": "Toplam maliyet (son {{count}} gün)",
+    "callsTokens": "{{calls}} çağrı · {{tokens}} token",
+    "cacheSavings_one": "Cache tasarrufu (son {{count}} gün)",
+    "cacheSavings_other": "Cache tasarrufu (son {{count}} gün)",
+    "cacheReadWrite": "{{read}} oku · {{write}} yaz",
+    "cacheHitRate": "Cache isabet oranı",
+    "cacheHitRateHint": "önbellekten okunan istem payı",
+    "noCacheCost": "Tasarrufsuz maliyet",
+    "noCacheCostHint": "caching olmasaydı ödenecek",
+    "coolingWaste_one": "Soğuma israfı (son {{count}} gün)",
+    "coolingWaste_other": "Soğuma israfı (son {{count}} gün)",
+    "coolingWasteHint": "geç tur sıcak öneği soğuttu"
+  },
+  "savings": {
+    "title": "Tasarruf Merkezi",
+    "window_one": "· son {{count}} gün · tüm optimizasyon kaynakları",
+    "window_other": "· son {{count}} gün · tüm optimizasyon kaynakları",
+    "promptCache": "Prompt cache",
+    "promptCacheSub": "{{tokens}} token önbellekten · {{rate}} isabet",
+    "promptCacheHint": "Statik öneğin tekrar okunması yerine cache'ten gelmesinin tam girdi fiyatına kıyasla kazandırdığı gerçek USD.",
+    "coolingWaste": "Soğuma israfı (önlenebilir)",
+    "coolingWasteSub": "TTL/eviction ile soğuyan öneklerin yeniden yazım primi",
+    "coolingWasteHint": "Geç gelen tur sıcak prompt-cache öneğini soğuttuğu için okuma yerine yazma tarifesinden ödenen, zamanında yanıtla kaçınılabilir olan fark. Fiili para zaten maliyete dahildir; bu yalnız önlenebilir kısmı izole eder."
+  },
+  "origin": {
+    "title": "Köken kırılımı (bugün)",
+    "empty": "Bugün henüz kullanım yok.",
+    "rowMeta": "{{tokens}} · {{percent}} · {{calls}} çağrı"
+  },
+  "trend": {
+    "title_one": "Trend — son {{count}} gün",
+    "title_other": "Trend — son {{count}} gün",
+    "empty": "Geçmiş veri yok.",
+    "total": "{{metric}} · toplam {{value}}",
+    "tooltip": "{{day}} · {{metric}}: {{value}}\n{{tokens}} token · {{calls}} çağrı · {{cost}} maliyet{{savings}}",
+    "tooltipSavings": " · cache {{value}}",
+    "metric": {
+      "token": "Token",
+      "cost": "Maliyet",
+      "cacheSavings": "Cache tasarrufu"
+    }
+  },
+  "provider": {
+    "title": "Provider / model (bugün)",
+    "cacheSavingsHint": "Prompt-cache okumalarının tam girdi fiyatına kıyasla sağladığı tasarruf",
+    "cacheSavings": "cache tasarrufu {{value}}",
+    "empty": "Bugün etiketli provider kullanımı yok. Deploy öncesi kaydedilen kullanım model/provider bilgisi taşımaz; yeni turlar burada görünecek.",
+    "columns": {
+      "providerModel": "Sağlayıcı / model",
+      "calls": "Çağrı",
+      "tokens": "Token (G/Ç)",
+      "cache": "Cache (oku/yaz)",
+      "savings": "Tasarruf",
+      "cost": "Maliyet"
+    }
+  },
+  "agents": {
+    "title": "Ajan başına kullanım (bugün)",
+    "empty": "Ajan yok.",
+    "unnamed": "İsimsiz",
+    "columns": {
+      "agent": "Ajan",
+      "calls": "Çağrı",
+      "tokens": "Token (G/Ç)",
+      "cost": "Maliyet"
+    }
+  }
+}

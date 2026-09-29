@@ -1,6 +1,7 @@
 // Pure helpers for the tools screen, split out of ToolsPanel to keep that file
 // focused on state/behaviour. No React, no state — name parsing + schema flatten.
 import type { AgentToolTier, MCPServer, ToolVisibility, WorkspaceTool } from '@/types'
+import { i18next } from '@/i18n'
 
 // The four context-visibility tiers, in order of decreasing per-turn cost. Each
 // entry drives the tier selector: short label, one-line hint, badge accent color.
@@ -15,26 +16,42 @@ export const VISIBILITY_TIERS: {
 }[] = [
   {
     value: 'full',
-    label: 'Tam',
-    hint: 'Tam şema her tur ajana gönderilir (en yüksek token maliyeti).',
+    get label() {
+      return i18next.t('visibility.full.label', { ns: 'tools' })
+    },
+    get hint() {
+      return i18next.t('visibility.full.hint', { ns: 'tools' })
+    },
     color: 'var(--color-success)',
   },
   {
     value: 'summary',
-    label: 'Özet',
-    hint: 'Katalogda isim + kısa özet görünür; tam şema gerektiğinde on-demand yüklenir.',
+    get label() {
+      return i18next.t('visibility.summary.label', { ns: 'tools' })
+    },
+    get hint() {
+      return i18next.t('visibility.summary.hint', { ns: 'tools' })
+    },
     color: 'var(--color-info)',
   },
   {
     value: 'name-only',
-    label: 'İsim',
-    hint: 'Katalogda yalnız isim görünür (özet bastırılır); şema tool_search/activate_tools ile yüklenir.',
+    get label() {
+      return i18next.t('visibility.nameOnly.label', { ns: 'tools' })
+    },
+    get hint() {
+      return i18next.t('visibility.nameOnly.hint', { ns: 'tools' })
+    },
     color: 'var(--color-warning)',
   },
   {
     value: 'hidden',
-    label: 'Gizli',
-    hint: 'Katalogda hiç listelenmez; yalnızca tool_search ile keşfedilir (yine de aktif edilince çağrılabilir).',
+    get label() {
+      return i18next.t('visibility.hidden.label', { ns: 'tools' })
+    },
+    get hint() {
+      return i18next.t('visibility.hidden.hint', { ns: 'tools' })
+    },
     color: 'var(--color-text-dim)',
   },
 ]
@@ -56,8 +73,12 @@ export const AGENT_TIERS: {
   ...VISIBILITY_TIERS,
   {
     value: 'blocked',
-    label: 'Yasaklı',
-    hint: 'Araç bu ajana hiç sunulmaz — katalogda yok, tool_search bulamaz, çağrılamaz.',
+    get label() {
+      return i18next.t('visibility.blocked.label', { ns: 'tools' })
+    },
+    get hint() {
+      return i18next.t('visibility.blocked.hint', { ns: 'tools' })
+    },
     color: 'var(--color-danger)',
   },
 ]
@@ -148,30 +169,68 @@ export function toolCategory(t: WorkspaceTool): string {
 // not present here render under their raw key, so a new backend category degrades
 // gracefully instead of disappearing.
 export const CATEGORY_LABELS: Record<string, string> = {
-  files: 'Dosya & Kabuk',
-  search: 'Arama & Web',
-  agents: 'Ajanlar & Oturumlar',
-  automation: 'Otomasyon (Akış / Zamanlama / Görev)',
-  interaction: 'Etkileşim',
-  artifacts: 'Çıktılar (Artifacts)',
-  'skills-mcp': 'Skill & MCP Yönetimi',
-  config: 'Yapılandırma & Gizli Anahtarlar',
-  diagnostics: 'Tanılama & Araç Yükleme',
-  other: 'Diğer',
+  get files() {
+    return i18next.t('categories.files', { ns: 'tools' })
+  },
+  get search() {
+    return i18next.t('categories.search', { ns: 'tools' })
+  },
+  get agents() {
+    return i18next.t('categories.agents', { ns: 'tools' })
+  },
+  get automation() {
+    return i18next.t('categories.automation', { ns: 'tools' })
+  },
+  get interaction() {
+    return i18next.t('categories.interaction', { ns: 'tools' })
+  },
+  get artifacts() {
+    return i18next.t('categories.artifacts', { ns: 'tools' })
+  },
+  get 'skills-mcp'() {
+    return i18next.t('categories.skillsMcp', { ns: 'tools' })
+  },
+  get config() {
+    return i18next.t('categories.config', { ns: 'tools' })
+  },
+  get diagnostics() {
+    return i18next.t('categories.diagnostics', { ns: 'tools' })
+  },
+  get other() {
+    return i18next.t('categories.other', { ns: 'tools' })
+  },
 }
 
 // Compact labels for the narrow group picker on the tools screen.
 export const CATEGORY_SHORT_LABELS: Record<string, string> = {
-  files: 'Dosya',
-  search: 'Arama',
-  agents: 'Ajanlar',
-  automation: 'Otomasyon',
-  interaction: 'Etkileşim',
-  artifacts: 'Çıktılar',
+  get files() {
+    return i18next.t('categoryShort.files', { ns: 'tools' })
+  },
+  get search() {
+    return i18next.t('categoryShort.search', { ns: 'tools' })
+  },
+  get agents() {
+    return i18next.t('categoryShort.agents', { ns: 'tools' })
+  },
+  get automation() {
+    return i18next.t('categoryShort.automation', { ns: 'tools' })
+  },
+  get interaction() {
+    return i18next.t('categoryShort.interaction', { ns: 'tools' })
+  },
+  get artifacts() {
+    return i18next.t('categoryShort.artifacts', { ns: 'tools' })
+  },
   'skills-mcp': 'Skill/MCP',
-  config: 'Ayarlar',
-  diagnostics: 'Tanılama',
-  other: 'Diğer',
+  get config() {
+    return i18next.t('categoryShort.config', { ns: 'tools' })
+  },
+  get diagnostics() {
+    return i18next.t('categoryShort.diagnostics', { ns: 'tools' })
+  },
+  get other() {
+    return i18next.t('categoryShort.other', { ns: 'tools' })
+  },
 }
 
 // CATEGORY_ORDER fixes the display order of built-in category groups (most-used

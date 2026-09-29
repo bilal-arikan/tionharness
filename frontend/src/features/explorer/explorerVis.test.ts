@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { ViewGraphResult, ViewRef } from '@/types'
+import { i18next } from '@/i18n'
 import { augmentLive } from './explorerLive'
 import { seedLayout } from './explorerSeed'
 import {
@@ -26,6 +27,10 @@ const theme: ExplorerTheme = {
   accent: '#0af',
   warning: '#fa0',
 }
+
+beforeEach(async () => {
+  await i18next.changeLanguage('tr')
+})
 
 const sessions: ViewRef = { kind: 'category', id: 'sessions' }
 const flows: ViewRef = { kind: 'category', id: 'flows' }
@@ -71,6 +76,12 @@ describe('displayLabel', () => {
       displayLabel({ label: 'rota:RTA1 plan [running]', ref: { kind: 'trajectory', id: 'RTA1' } }),
     ).toBe('plan [running]')
     expect(displayLabel({ label: 'Oturumlar', ref: sessions })).toBe('Oturumlar')
+  })
+
+  it('resolves generated map labels in English when the UI locale changes', async () => {
+    await i18next.changeLanguage('en')
+    expect(displayLabel({ label: 'Oturumlar', ref: sessions })).toBe('Sessions')
+    expect(nodeLabelOfKind({ kind: 'category', id: 'skind:chat' })).toBe('Session kind')
   })
 })
 

@@ -2,8 +2,9 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '@/types'
+import { i18next } from '@/i18n'
 import { TaskCard, type TaskCardMeta } from './TaskCard'
 
 const reactTestEnvironment = globalThis as typeof globalThis & {
@@ -12,6 +13,10 @@ const reactTestEnvironment = globalThis as typeof globalThis & {
 reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: ReturnType<typeof createRoot>[] = []
+
+beforeEach(async () => {
+  await i18next.changeLanguage('tr')
+})
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount())

@@ -1,10 +1,168 @@
 {
+  "actions": {
+    "add": "Ekle",
+    "adding": "Ekleniyor…",
+    "cancel": "Vazgeç",
+    "close": "Kapat",
+    "closeSymbol": "×",
+    "delete": "Sil",
+    "disable": "Devre dışı bırak",
+    "edit": "Düzenle",
+    "enable": "Etkinleştir",
+    "import": "İçe aktar",
+    "importing": "İçe aktarılıyor…",
+    "save": "Kaydet",
+    "test": "Test"
+  },
+  "categories": {
+    "agents": "Ajanlar & Oturumlar",
+    "artifacts": "Çıktılar (Artifacts)",
+    "automation": "Otomasyon (Akış / Zamanlama / Görev)",
+    "config": "Yapılandırma & Gizli Anahtarlar",
+    "diagnostics": "Tanılama & Araç Yükleme",
+    "files": "Dosya & Kabuk",
+    "interaction": "Etkileşim",
+    "other": "Diğer",
+    "search": "Arama & Web",
+    "skillsMcp": "Skill & MCP Yönetimi"
+  },
+  "categoryShort": {
+    "agents": "Ajanlar",
+    "artifacts": "Çıktılar",
+    "automation": "Otomasyon",
+    "config": "Ayarlar",
+    "diagnostics": "Tanılama",
+    "files": "Dosya",
+    "interaction": "Etkileşim",
+    "other": "Diğer",
+    "search": "Arama"
+  },
+  "cost": {
+    "alreadyFull": "Tümü zaten \"Tam\" tier'da — daha pahalıya çıkamaz.",
+    "current": "Bu grup şu an her turda ≈{{tokens}} token bağlam harcıyor.",
+    "label": "~{{tokens}} tok/tur",
+    "promote": "Tümünü \"Tam\" tier'a çekersen ≈{{fullTokens}} token olur (+{{delta}})."
+  },
+  "detail": {
+    "builtin": "Yerleşik",
+    "contextVisibility": "Bağlam görünürlüğü",
+    "description": "Açıklama",
+    "examples_one": "Örnek çağrı ({{count}})",
+    "examples_other": "Örnek çağrılar ({{count}})",
+    "examplesHintAfter": "görünürlükte, tam şemayla modele gider.",
+    "examplesHintBefore": "Şemanın ifade edemediği kullanım kalıpları (tarih/ID biçimi, birlikte gelen alanlar). Bunlar yalnızca",
+    "mcpSource": "MCP · {{server}}",
+    "noDescription": "Açıklama yok.",
+    "noParameters": "Bu araç parametre almıyor.",
+    "parameters_one": "Parametre ({{count}})",
+    "parameters_other": "Parametreler ({{count}})",
+    "required": "zorunlu"
+  },
   "mcpDisconnect": {
     "title": "\"{{server}}\" MCP sunucusunun bağlantısı koptu",
     "titleScoped": "Bu oturum \"{{server}}\" MCP sunucusuyla bağlantısını kaybetti",
     "pendingCalls_one": "Devam eden {{count}} araç çağrısı yarıda kesildi.",
     "pendingCalls_other": "Devam eden {{count}} araç çağrısı yarıda kesildi.",
     "hint": "Yeniden bağlanana kadar araçları kullanılamaz. Sonraki araç çağrısı bağlantıyı otomatik kurar.",
-    "dismiss": "Kapat"
+    "dismiss": "Kapat",
+    "warningIcon": "⚠️"
+  },
+  "panel": {
+    "activeCount": "{{active}}/{{total}} aktif",
+    "all": "Tümü",
+    "clear": "Temizle",
+    "clearFilters": "Filtreleri temizle",
+    "listLabel": "Araçlar",
+    "manageServers": "MCP sunucularını yönet",
+    "matches_one": "{{count}} eşleşme · ",
+    "matches_other": "{{count}} eşleşme · ",
+    "mcpServers": "MCP Sunucuları",
+    "noMatches": "Eşleşen araç yok.",
+    "noTools": "Henüz araç yok.",
+    "searchPlaceholder": "Araç ara…",
+    "showDisabled": "Devre dışı araçları göster",
+    "showEnabled": "Aktif araçları göster",
+    "title": "Araçlar & MCP",
+    "toolGroups": "Araç grupları",
+    "visibilityFilter": "Görünürlük: {{label}}"
+  },
+  "server": {
+    "added": "MCP sunucusu eklendi",
+    "allTools_one": "Tüm araçlar ({{count}})",
+    "allTools_other": "Tüm araçlar ({{count}})",
+    "allToolsArrow_one": "Tüm araçlar ({{count}}) →",
+    "allToolsArrow_other": "Tüm araçlar ({{count}}) →",
+    "argsPlaceholder": "Argümanlar (boşlukla ayrılmış)",
+    "commandPlaceholder": "Komut (ör. npx)",
+    "connectionScope": "Bağlantı kapsamı",
+    "copied": "Panoya kopyalandı",
+    "copyJsonHint": "Bu sunucunun yapılandırmasını mcpServers JSON'u olarak panoya kopyala (başka yere yapıştırıp içe aktarılabilir).",
+    "deleteConfirm": "\"{{name}}\" sunucusu silinsin mi?",
+    "deleted": "MCP sunucusu silindi",
+    "editHint": "Bu sunucuyu düzenle (isim, komut, URL, başlıklar, kapsam). Değişiklik sonraki turda yeniden bağlanır.",
+    "empty": "Henüz MCP sunucusu eklenmedi.",
+    "headersPlaceholder": "Opsiyonel başlıklar — her satıra \"Anahtar: Değer\"\nör. Authorization: Bearer TOKEN",
+    "idleClose": "{{minutes}} dk boşta kaldıktan sonra otomatik kapanır (reaper).",
+    "idleDisabled": "idle eviction kapalı (reaper devre dışı).",
+    "importCreated_one": "{{count}} sunucu eklendi",
+    "importCreated_other": "{{count}} sunucu eklendi",
+    "importErrors_one": "{{count}} hata — {{detail}}",
+    "importErrors_other": "{{count}} hata — {{detail}}",
+    "importJsonAfter": "JSON'u yapıştır (Claude Code / .mcp.json biçimi). Birden çok sunucu tek seferde eklenir.",
+    "importJsonBefore": "Standart",
+    "importJsonTitle": "JSON ile içe aktar",
+    "intro": "Soldaki listeden bir araç seçerek detaylarını görüntüleyip aç/kapatabilirsin.",
+    "json": "JSON",
+    "liveScopedHint": "{{live}} canlı bağlantı ({{total}} slot). Boşta {{minutes}} dk sonra kapanır (reaper).",
+    "liveSharedHint": "{{live}} canlı paylaşımlı bağlantı (workspace geneli, reaper'a tabi değil).",
+    "namePlaceholder": "İsim (ör. filesystem)",
+    "newTitle": "Yeni MCP sunucusu",
+    "noImportable": "Eklenebilecek başka MCP sunucusu yok.",
+    "otherModalSubtitle": "Bu workspace’e eklenmemiş sunucular. Tek tıkla kopyala.",
+    "otherModalTitle": "Diğer workspace’lerdeki MCP’ler",
+    "otherServers": "Diğer MCP’ler",
+    "otherServersHint": "TionHarness'teki diğer workspace'lerde tanımlı, buraya eklenmemiş MCP sunucularını gör ve tek tıkla ekle.",
+    "scopeScoped": "Session bazlı (her oturuma ayrı, idle'da kapanır)",
+    "scopeShared": "Paylaşımlı (workspace geneli, varsayılan)",
+    "scopedBadge": "session bazlı",
+    "scopedBadgeHint": "Session bazlı: her (oturum, ajan) için ayrı canlı bağlantı; boşta kalınca otomatik kapanır.",
+    "scopedConnections": "Session bazlı bağlantılar",
+    "sessionSuffix": " oturum",
+    "testSuccess_one": "{{count}} araç",
+    "testSuccess_other": "{{count}} araç",
+    "testing": "Test ediliyor…",
+    "title": "MCP Sunucuları",
+    "transportHttp": "http (Streamable HTTP)",
+    "transportStdio": "stdio",
+    "updated": "MCP sunucusu güncellendi",
+    "urlPlaceholder": "URL (Streamable HTTP uç noktası)"
+  },
+  "status": {
+    "disabled": "Devre dışı",
+    "disabledParenthetical": "(devre dışı)",
+    "disabledShort": "Pasif",
+    "enabled": "Aktif"
+  },
+  "visibility": {
+    "blocked": {
+      "hint": "Araç bu ajana hiç sunulmaz — katalogda yok, tool_search bulamaz, çağrılamaz.",
+      "label": "Yasaklı"
+    },
+    "full": {
+      "hint": "Tam şema her tur ajana gönderilir (en yüksek token maliyeti).",
+      "label": "Tam"
+    },
+    "hidden": {
+      "hint": "Katalogda hiç listelenmez; yalnızca tool_search ile keşfedilir (yine de aktif edilince çağrılabilir).",
+      "label": "Gizli"
+    },
+    "nameOnly": {
+      "hint": "Katalogda yalnız isim görünür (özet bastırılır); şema tool_search/activate_tools ile yüklenir.",
+      "label": "İsim"
+    },
+    "summary": {
+      "hint": "Katalogda isim + kısa özet görünür; tam şema gerektiğinde on-demand yüklenir.",
+      "label": "Özet"
+    }
   }
 }

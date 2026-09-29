@@ -1,5 +1,6 @@
 import { Flame, Snowflake } from 'lucide-react'
 import { cacheRemaining, formatCountdown } from './sessionDetailFormat'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   // Session last-activity timestamp (unix seconds); the warm window starts here.
@@ -17,28 +18,31 @@ interface Props {
 // tick, so it needs no backend field. Once cold, the next turn pays a full
 // cache-miss and pending epoch changes are adopted for free.
 export function CacheWarmthBadge({ updatedAt, nowSec, compact }: Props) {
+  const { t } = useTranslation('sessions')
   const remaining = cacheRemaining(updatedAt, nowSec)
   const warm = remaining > 0
 
   if (warm) {
     return (
       <span
-        title={`Prompt cache sıcak — ${formatCountdown(remaining)} sonra soğur (1sa TTL)`}
+        title={t('cache.warmTitle', { remaining: formatCountdown(remaining) })}
         className="inline-flex items-center gap-1 font-mono text-[11px] text-[var(--color-warning)]"
       >
         <Flame size={12} className="shrink-0" />
-        {compact ? formatCountdown(remaining) : `Sıcak · ${formatCountdown(remaining)} kaldı`}
+        {compact
+          ? formatCountdown(remaining)
+          : t('cache.warmRemaining', { remaining: formatCountdown(remaining) })}
       </span>
     )
   }
 
   return (
     <span
-      title="Prompt cache soğuk — 1sa TTL doldu; sonraki tur tam cache-miss olur"
+      title={t('cache.coldTitle')}
       className="inline-flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]"
     >
       <Snowflake size={12} className="shrink-0" />
-      {compact ? '—' : 'Soğuk'}
+      {compact ? '—' : t('cache.cold')}
     </span>
   )
 }

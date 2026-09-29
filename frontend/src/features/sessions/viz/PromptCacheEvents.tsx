@@ -2,28 +2,29 @@ import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
 import { buildPromptCacheSummary } from './flowVizData'
 import { formatTime } from '@/shared/lib/intl'
+import { useTranslation } from 'react-i18next'
 
-const KIND_META: Record<string, { label: string; cls: string }> = {
+const KIND_META: Record<string, { labelKey: string; cls: string }> = {
   // Every hue maps onto a theme token (accent/warning/success/danger/info) so the
   // badges re-theme with presets and stay legible in the light theme.
   frozen: {
-    label: 'donduruldu',
+    labelKey: 'visualization.promptCache.kind.frozen',
     cls: 'bg-[color-mix(in_srgb,var(--color-info)_15%,transparent)] text-[var(--color-info)]',
   },
   adopted: {
-    label: 'adopte',
+    labelKey: 'visualization.promptCache.kind.adopted',
     cls: 'bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)]',
   },
   stale: {
-    label: 'stale',
+    labelKey: 'visualization.promptCache.kind.stale',
     cls: 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]',
   },
   refreshed: {
-    label: 'yenilendi',
+    labelKey: 'visualization.promptCache.kind.refreshed',
     cls: 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]',
   },
   break: {
-    label: 'kırılım',
+    labelKey: 'visualization.promptCache.kind.break',
     cls: 'bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]',
   },
 }
@@ -36,11 +37,12 @@ const KIND_META: Record<string, { label: string; cls: string }> = {
 // the signal worth investigating. Renders nothing for a session with neither
 // (a healthy cache is silent).
 export function PromptCacheEvents({ events }: { events: SessionDebugEvent[] }) {
+  const { t } = useTranslation('sessions')
   const model = useMemo(() => buildPromptCacheSummary(events), [events])
   if (!model) {
     return (
       <p className="text-[10px] text-[var(--color-text-dim)]">
-        Bu oturumda prompt-cache olayı yok (sağlıklı: cache sessizce çalışıyor).
+        {t('visualization.promptCache.empty')}
       </p>
     )
   }
@@ -54,7 +56,7 @@ export function PromptCacheEvents({ events }: { events: SessionDebugEvent[] }) {
               key={kind}
               className={`rounded px-1.5 py-px text-[10px] font-medium ${KIND_META[kind].cls}`}
             >
-              {KIND_META[kind].label}: {n}
+              {t(KIND_META[kind].labelKey)}: {n}
             </span>
           ))}
       </div>
@@ -64,7 +66,7 @@ export function PromptCacheEvents({ events }: { events: SessionDebugEvent[] }) {
             <span
               className={`mt-px shrink-0 rounded px-1 py-px font-medium ${KIND_META[it.kind].cls}`}
             >
-              {KIND_META[it.kind].label}
+              {t(KIND_META[it.kind].labelKey)}
             </span>
             <span className="text-[var(--color-text-dim)]">
               {formatTime(new Date(it.ts), { timeStyle: 'medium' })}

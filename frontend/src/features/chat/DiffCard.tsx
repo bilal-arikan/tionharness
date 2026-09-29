@@ -8,6 +8,9 @@ import { DiffView } from '@/shared/components/markdown/DiffView'
 import { synthDiffData } from '@/shared/lib/diff'
 import { toolBase } from './tools'
 import { shortPath } from '@/shared/lib/paths'
+import { useTranslation } from 'react-i18next'
+
+const MINUS_SIGN = String.fromCharCode(0x2212)
 
 interface Props {
   step: TurnStep
@@ -17,12 +20,12 @@ interface Props {
 // A friendly verb for the mutating tool that produced this diff. The tool name is
 // lower-cased first so it matches whether the step reports "Edit"/"Write" (the
 // shared, claude-cli-style names) or a namespaced/legacy variant.
-function actionLabel(step: TurnStep, created: boolean): string {
-  if (created) return 'Oluştur'
+function actionKey(step: TurnStep, created: boolean): string {
+  if (created) return 'create'
   const base = (step.tool || '').toLowerCase()
-  if (base === 'edit' || base === 'edit_file' || base === 'multiedit') return 'Düzenle'
-  if (base === 'write' || base === 'write_file') return 'Yaz'
-  return 'Değişiklik'
+  if (base === 'edit' || base === 'edit_file' || base === 'multiedit') return 'edit'
+  if (base === 'write' || base === 'write_file') return 'write'
+  return 'change'
 }
 
 // DiffCard renders a single file mutation (Write / Edit) as a compact
@@ -36,6 +39,7 @@ function actionLabel(step: TurnStep, created: boolean): string {
 // synthesize the patch and line counts from the tool input, so both render the
 // same panel.
 export function DiffCard({ step, onOpenFile }: Props) {
+  const { t } = useTranslation('chat')
   const [open, setOpen] = useState(false)
   const synth = step.patch?.trim() ? null : synthDiffData(toolBase(step.tool || ''), step.input)
   const path = step.path || synth?.path || ''
@@ -55,7 +59,7 @@ export function DiffCard({ step, onOpenFile }: Props) {
       >
         <HeaderIcon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="shrink-0 font-medium text-[var(--color-text)]">
-          {actionLabel(step, created)}
+          {t(`diff.${actionKey(step, created)}`)}
         </span>
         {/* The path is shown short (…/dir/file) so it no longer spans the whole
             row; only the text itself opens the file (span, not <button>, to keep
@@ -85,11 +89,16 @@ export function DiffCard({ step, onOpenFile }: Props) {
         </span>
         {created && (
           <span className="shrink-0 rounded bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
-            yeni
+            {t('diff.new')}
           </span>
         )}
         {added > 0 && <span className="shrink-0 text-[var(--color-success)]">+{added}</span>}
-        {removed > 0 && <span className="shrink-0 text-[var(--color-danger)]">−{removed}</span>}
+        {removed > 0 && (
+          <span className="shrink-0 text-[var(--color-danger)]">
+            {MINUS_SIGN}
+            {removed}
+          </span>
+        )}
         {hasPatch && (
           <span className="ml-1 shrink-0 opacity-50">
             {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}

@@ -3,6 +3,7 @@
 // files for react-refresh).
 import type { BadgeTone } from '@/shared/components'
 import type { TrajectoryStatus } from '@/types/trajectory'
+import { i18next } from '@/i18n'
 
 export const STATUS_TONE: Record<TrajectoryStatus, BadgeTone> = {
   planned: 'muted',
@@ -13,11 +14,6 @@ export const STATUS_TONE: Record<TrajectoryStatus, BadgeTone> = {
   abandoned: 'muted',
 }
 
-export const STATUS_LABEL: Record<TrajectoryStatus, string> = {
-  planned: 'planlandı',
-  running: 'sürüyor',
-  waiting: 'bekliyor',
-  done: 'bitti',
-  failed: 'başarısız',
-  abandoned: 'terk edildi',
+export function trajectoryStatusLabel(status: TrajectoryStatus): string {
+  return i18next.t(`status.${status}`, { ns: 'rota', defaultValue: status })
 }

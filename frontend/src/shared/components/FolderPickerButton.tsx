@@ -4,6 +4,7 @@ import { api } from '@/api'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import type { BrowseResp } from '@/types'
 import { Button } from './index'
+import { useTranslation } from 'react-i18next'
 
 // FolderPickerButton is a compact folder icon that opens a directory-browser
 // popover and calls onSelect with the chosen absolute path. Reusable across the
@@ -12,12 +13,14 @@ import { Button } from './index'
 export function FolderPickerButton({
   startPath,
   onSelect,
-  title = 'Klasör seç',
+  title,
 }: {
   startPath?: string
   onSelect: (path: string) => void
   title?: string
 }) {
+  const { t } = useTranslation('sharedUi')
+  const resolvedTitle = title ?? t('folderPicker.title')
   const [open, setOpen] = useState(false)
   const [browse, setBrowse] = useState<BrowseResp | null>(null)
   const [busy, setBusy] = useState(false)
@@ -53,7 +56,7 @@ export function FolderPickerButton({
       <button
         type="button"
         onClick={openPicker}
-        title={title}
+        title={resolvedTitle}
         className="flex items-center rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
       >
         <FolderSearch size={16} />
@@ -65,22 +68,26 @@ export function FolderPickerButton({
             <button
               onClick={() => navigate(browse?.parent ?? '')}
               disabled={busy || !browse?.path}
-              title="Üst klasör"
+              title={t('folderPicker.parent')}
               className="rounded-md p-1 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-30"
             >
               <CornerLeftUp size={14} />
             </button>
             <span className="truncate text-xs text-[var(--color-text)]" title={browse?.path}>
-              {browse?.path || 'Bu bilgisayar'}
+              {browse?.path || t('folderPicker.thisComputer')}
             </span>
           </div>
 
           <div className="max-h-56 overflow-y-auto rounded-lg border border-[var(--color-border)]">
             {busy && (
-              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Yükleniyor…</div>
+              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">
+                {t('states.loading')}
+              </div>
             )}
             {!busy && (browse?.entries.length ?? 0) === 0 && (
-              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Alt klasör yok</div>
+              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">
+                {t('folderPicker.noSubfolders')}
+              </div>
             )}
             {!busy &&
               browse?.entries.map((e) => (
@@ -101,7 +108,7 @@ export function FolderPickerButton({
             size="lg"
             className="mt-2 w-full"
           >
-            <Check size={14} /> Bu klasörü seç
+            <Check size={14} /> {t('folderPicker.selectThis')}
           </Button>
         </div>
       )}

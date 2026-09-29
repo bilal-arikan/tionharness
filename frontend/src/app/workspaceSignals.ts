@@ -1,3 +1,4 @@
+import { i18next } from '@/i18n'
 // diffSignals — the pure half of useWorkspaceSignals: compares two lane-store
 // snapshots and returns the toasts worth showing. Store-free so it runs in the
 // node test environment.
@@ -5,10 +6,10 @@ import type { LaneState } from '@/shared/lib/laneModel'
 import { SKIP_REASON_LABEL } from '@/features/schedules/fireMeta'
 
 const TRAJ_STATUS_TEXT: Record<string, string> = {
-  done: 'tamamlandı',
-  failed: 'başarısız oldu',
-  abandoned: 'terk edildi',
-  waiting: 'bir insan yanıtı bekliyor',
+  done: 'shell.trajectoryDone',
+  failed: 'shell.trajectoryFailed',
+  abandoned: 'shell.trajectoryAbandoned',
+  waiting: 'shell.trajectoryWaiting',
 }
 
 // SignalLevel maps 1:1 onto a toast tone (see useWorkspaceSignals).
@@ -30,13 +31,19 @@ export function diffSignals(
       if (f.outcome === 'fired') {
         out.push({
           level: 'info',
-          text: `⚡ Otomasyon ${name} ateşlendi${f.sessionId ? ` → ${f.sessionId}` : ''}`,
+          text: i18next.t('shell.automationFired', {
+            name,
+            session: f.sessionId ? ' → ' + f.sessionId : '',
+          }),
         })
       } else if (f.reason && f.reason !== 'cooldown') {
         // Cooldown skips are routine noise; the others say a rule is stuck.
         out.push({
           level: 'warning',
-          text: `↷ Otomasyon ${name} atlandı: ${SKIP_REASON_LABEL[f.reason] ?? f.reason}`,
+          text: i18next.t('shell.automationSkipped', {
+            name,
+            reason: SKIP_REASON_LABEL[f.reason] ?? f.reason,
+          }),
         })
       }
     }
@@ -48,7 +55,10 @@ export function diffSignals(
       if (a.phase === 'stall_halt') {
         out.push({
           level: 'error',
-          text: `✕ Koordinatör ${a.coordinatorId} durduruldu: ${a.reason || 'phantom spawn'}`,
+          text: i18next.t('shell.coordinatorHalted', {
+            id: a.coordinatorId,
+            reason: a.reason || i18next.t('shell.phantomSpawn'),
+          }),
         })
       }
     }
@@ -59,7 +69,10 @@ export function diffSignals(
       if (!before && t.op === 'create') {
         out.push({
           level: 'info',
-          text: `◈ Rota ${id} başladı${t.templateRef ? ` · ${t.templateRef}` : ''}`,
+          text: i18next.t('shell.trajectoryStarted', {
+            id,
+            template: t.templateRef ? ' · ' + t.templateRef : '',
+          }),
         })
         continue
       }
@@ -67,7 +80,7 @@ export function diffSignals(
         // abandoned/waiting are not failures but need the user's attention.
         const level: SignalLevel =
           t.status === 'done' ? 'success' : t.status === 'failed' ? 'error' : 'warning'
-        out.push({ level, text: `◈ Rota ${id} ${TRAJ_STATUS_TEXT[t.status]}` })
+        out.push({ level, text: i18next.t(TRAJ_STATUS_TEXT[t.status], { id }) })
       }
     }
   }
@@ -75,7 +88,13 @@ export function diffSignals(
     for (const [id, r] of next.flowRuns) {
       const before = prev.flowRuns.get(id)
       if (before && before.status !== 'failure' && r.status === 'failure') {
-        out.push({ level: 'error', text: `Akış koşusu ${id} başarısız: ${r.error || 'hata'}` })
+        out.push({
+          level: 'error',
+          text: i18next.t('shell.flowFailed', {
+            id,
+            error: r.error || i18next.t('shell.unknownError'),
+          }),
+        })
       }
     }
   }

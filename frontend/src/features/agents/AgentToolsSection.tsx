@@ -8,6 +8,7 @@ import { AGENT_TIERS } from '@/features/tools/toolMeta'
 import { AgentTierBadge, AgentTierSelector } from '@/features/tools/VisibilityControls'
 import { AgentToolOverrideRow } from './AgentToolOverrideRow'
 import { AgentToolGroupRow } from './AgentToolGroupRow'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   agentId: string
@@ -28,6 +29,7 @@ interface Props {
 // and picking a tier equal to the default deletes the override instead of
 // storing a redundant one.
 export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
+  const { t } = useTranslation('agents')
   const api = useAgentEditorApi()
   const [data, setData] = useState<AgentTools | null>(null)
   const [busy, setBusy] = useState(false)
@@ -152,7 +154,7 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
   }, [catalog, overrides, query])
 
   if (!data) {
-    return <p className="text-xs text-[var(--color-text-dim)]">Araçlar yükleniyor…</p>
+    return <p className="text-xs text-[var(--color-text-dim)]">{t('tools.loading')}</p>
   }
 
   const overrideCount = overridden.length + groupOverridden.length + orphans.length
@@ -167,8 +169,7 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
           data-testid="agent-tools-locked-note"
           className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
         >
-          Bu yerleşik worker ajanının araç listesi bir güvenlik sözleşmesidir ve koddan gelir. Her
-          spawn'da yeniden uygulanır, bu yüzden buradan değiştirilemez.
+          {t('tools.locked')}
         </p>
       )}
       <label className="flex items-center gap-2.5 text-sm">
@@ -179,14 +180,14 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
           disabled={frozen}
           onChange={(e) => save(e.target.checked, overrides)}
         />
-        <span className="font-medium">Bu ajan için araç kullanımını etkinleştir</span>
+        <span className="font-medium">{t('tools.enable')}</span>
       </label>
 
       {data.mcpEnabled && (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs text-[var(--color-text-dim)]">
-              Araç override'ları ({overrideCount}/{catalog.length})
+              {t('tools.overrides', { overrides: overrideCount, total: catalog.length })}
             </p>
             <div className="flex gap-2 text-xs">
               <button
@@ -194,26 +195,25 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
                 onClick={resetAll}
                 disabled={frozen || overrideCount === 0}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
-                title="Tüm override'ları kaldır (her araç workspace varsayılanına döner)"
+                title={t('tools.resetAllTitle')}
               >
-                Tümünü sıfırla
+                {t('tools.resetAll')}
               </button>
               <button
                 data-testid="agent-tools-block-all"
                 onClick={blockAll}
                 disabled={frozen || catalog.length === 0}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
-                title="Tüm araçları yasakla"
+                title={t('tools.blockAllTitle')}
               >
-                Tümünü yasakla
+                {t('tools.blockAll')}
               </button>
             </div>
           </div>
 
           {overrideCount === 0 ? (
             <p className="mb-3 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-center text-xs text-[var(--color-text-dim)]">
-              Hiçbir override yok — her araç workspace varsayılanıyla geliyor. Aşağıdan bir aracı
-              seçip görünürlüğünü değiştir veya yasakla.
+              {t('tools.empty')}
             </p>
           ) : (
             <ul className="mb-3 space-y-1">
@@ -233,14 +233,14 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
                   data-testid="agent-tool-override-orphan"
                   data-tool-name={name}
                   className="flex items-center gap-2 rounded border border-dashed border-[var(--color-border)] px-2.5 py-1.5"
-                  title="Bu isim şu an katalogda yok (desen veya kapalı bir araç). Kayıt korunuyor."
+                  title={t('tools.orphanTitle')}
                 >
                   <code className="text-xs">{name}</code>
                   <AgentTierBadge tier={overrides[name]} />
                   <button
                     onClick={() => clearOverride(name)}
                     disabled={frozen}
-                    title="Kaydı sil"
+                    title={t('tools.deleteEntry')}
                     className="ml-auto rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-danger)] disabled:opacity-40"
                   >
                     <X size={13} />
@@ -253,11 +253,8 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
           {groups.length > 0 && (
             <div className="mb-3 border-t border-[var(--color-border)] pt-3">
               <div className="mb-2">
-                <p className="text-xs font-medium text-[var(--color-text)]">Araç grupları</p>
-                <p className="text-[11px] text-[var(--color-text-dim)]">
-                  Bir kategorideki veya MCP sunucusundaki tüm araçların görünürlüğünü birlikte
-                  değiştir.
-                </p>
+                <p className="text-xs font-medium text-[var(--color-text)]">{t('tools.groups')}</p>
+                <p className="text-[11px] text-[var(--color-text-dim)]">{t('tools.groupsHelp')}</p>
               </div>
               <ul className="space-y-1.5">
                 {groups.map((group) => (
@@ -281,23 +278,21 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
                 data-testid="agent-tools-search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Override eklemek için araç ara…"
+                placeholder={t('tools.searchPlaceholder')}
                 className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
               />
               <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
-                Tıklayınca:
+                {t('tools.clickAction')}
                 <AgentTierSelector value={pickTier} busy={frozen} onSelect={setPickTier} compact />
               </span>
             </div>
             <div className="max-h-56 space-y-1 overflow-y-auto">
               {catalog.length === 0 && (
-                <p className="text-xs text-[var(--color-text-dim)]">
-                  Bu workspace'te aktif araç yok. Araçlar ekranından etkinleştir.
-                </p>
+                <p className="text-xs text-[var(--color-text-dim)]">{t('tools.noActive')}</p>
               )}
               {catalog.length > 0 && available.length === 0 && (
                 <p className="px-1 py-1 text-xs text-[var(--color-text-dim)]">
-                  {query.trim() ? 'Eşleşen araç yok.' : 'Tüm araçlarda zaten override var.'}
+                  {query.trim() ? t('tools.noMatch') : t('tools.allOverridden')}
                 </p>
               )}
               {available.map((t) => {

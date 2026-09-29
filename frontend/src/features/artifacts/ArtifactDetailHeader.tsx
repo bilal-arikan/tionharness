@@ -14,8 +14,9 @@ import { PaneHeader } from '@/shared/components'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { ImageArtifactEditButton } from './ImageArtifactEditButton'
-import { KIND_LABEL } from './artifactMeta'
+import { artifactKindKey } from './artifactMeta'
 import { OriginBadge } from './OriginBadge'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   listOpen: boolean
@@ -62,6 +63,7 @@ export function ArtifactDetailHeader({
   onSetArchived,
   onDelete,
 }: Props) {
+  const { t } = useTranslation('artifacts')
   const creator = (a: Artifact) => agents.find((ag) => ag.id === a.agentId) ?? null
 
   return (
@@ -73,7 +75,7 @@ export function ArtifactDetailHeader({
       // Chips + the İçerik (content-copy) button always live on their own second
       // row (every width), so the first row stays compact.
       secondaryAlwaysWrap
-      title={active ? undefined : 'Artifactlar'}
+      title={active ? undefined : t('title')}
       titleSlot={
         active ? (
           <div className="flex min-w-0 items-center gap-2">
@@ -88,7 +90,7 @@ export function ArtifactDetailHeader({
             <OriginBadge origin={active.origin} />
             {active.archived && (
               <span className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]">
-                <Archive size={11} /> Arşivlendi
+                <Archive size={11} /> {t('status.archived')}
               </span>
             )}
             {active.group && (
@@ -97,7 +99,7 @@ export function ArtifactDetailHeader({
               </span>
             )}
             <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]">
-              {KIND_LABEL[active.kind] ?? active.kind}
+              {t(artifactKindKey(active.kind))}
               {active.language ? ` · ${active.language}` : ''}
             </span>
             {creator(active) && (
@@ -123,20 +125,20 @@ export function ArtifactDetailHeader({
                 <button
                   data-testid="artifact-detail-edit"
                   onClick={onStartEdit}
-                  title="Düzenle"
+                  title={t('actions.edit')}
                   className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                 >
                   <Pencil size={14} />
-                  <span>Düzenle</span>
+                  <span>{t('actions.edit')}</span>
                 </button>
                 <button
                   data-testid="artifact-detail-copy"
                   onClick={onCopy}
-                  title="İçeriği kopyala"
+                  title={t('actions.copyContentTitle')}
                   className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                 >
                   <Copy size={14} />
-                  <span>İçerik</span>
+                  <span>{t('actions.content')}</span>
                 </button>
               </div>
             )}
@@ -154,20 +156,20 @@ export function ArtifactDetailHeader({
                   disabled={saving}
                   className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-on-accent)] hover:brightness-110 disabled:opacity-50"
                 >
-                  <Save size={14} /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
+                  <Save size={14} /> {saving ? t('actions.saving') : t('actions.save')}
                 </button>
-                <button onClick={onCancelEdit} title="İptal" className={iconBtn}>
+                <button onClick={onCancelEdit} title={t('actions.cancel')} className={iconBtn}>
                   <X size={15} />
                 </button>
               </>
             ) : (
               <>
                 {/* Edit moved next to the content-copy button in the chip row. */}
-                <CopyPathButton path={activePath} title="Yolu kopyala" />
+                <CopyPathButton path={activePath} title={t('actions.copyPath')} />
                 {active.sessionId && onOpenSession && (
                   <button
                     onClick={() => onOpenSession(active.sessionId)}
-                    title="Kaynak sohbete git"
+                    title={t('actions.openSourceChat')}
                     className={iconBtn}
                   >
                     <ExternalLink size={15} />
@@ -176,7 +178,7 @@ export function ArtifactDetailHeader({
                 <button
                   data-testid="artifact-detail-archive"
                   onClick={() => onSetArchived(active.id, !active.archived)}
-                  title={active.archived ? 'Arşivden çıkar' : 'Arşivle'}
+                  title={active.archived ? t('actions.restore') : t('actions.archive')}
                   className={iconBtn}
                 >
                   {active.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
@@ -184,10 +186,10 @@ export function ArtifactDetailHeader({
                 <button
                   data-testid="artifact-detail-delete"
                   onClick={() => onDelete(active.id)}
-                  title="Sil"
+                  title={t('actions.delete')}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
                 >
-                  <Trash2 size={14} /> Sil
+                  <Trash2 size={14} /> {t('actions.delete')}
                 </button>
               </>
             )}

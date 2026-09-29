@@ -8,6 +8,8 @@
 // Selecting one applies its tokens as inline styles on <html>, which win over
 // the stylesheet defaults in index.css.
 
+import { sharedText } from './sharedI18n'
+
 export interface PresetTokens {
   bg: string
   surface: string
@@ -100,7 +102,7 @@ const LIGHT_NEUTRALS: Neutrals = {
 // they keep enough contrast on the light canvas.
 interface ColorDef {
   id: string
-  label: string
+  labelKey: string
   darkAccent: string
   darkSoft: string
   darkOnAccent: string
@@ -112,7 +114,7 @@ interface ColorDef {
 const COLORS: ColorDef[] = [
   {
     id: 'violet',
-    label: 'Mor',
+    labelKey: 'theme.violet',
     darkAccent: '#8b5cf6',
     darkSoft: '#2c2545',
     darkOnAccent: '#000000',
@@ -122,7 +124,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'blue',
-    label: 'Mavi',
+    labelKey: 'theme.blue',
     darkAccent: '#58a6ff',
     darkSoft: '#16304d',
     darkOnAccent: '#000000',
@@ -132,7 +134,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'emerald',
-    label: 'Zümrüt',
+    labelKey: 'theme.emerald',
     darkAccent: '#34d399',
     darkSoft: '#123528',
     darkOnAccent: '#000000',
@@ -142,7 +144,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'rose',
-    label: 'Gül',
+    labelKey: 'theme.rose',
     darkAccent: '#fb7185',
     darkSoft: '#3a1f29',
     darkOnAccent: '#000000',
@@ -152,7 +154,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'amber',
-    label: 'Kehribar',
+    labelKey: 'theme.amber',
     darkAccent: '#f59e0b',
     darkSoft: '#3a2a12',
     darkOnAccent: '#000000',
@@ -162,7 +164,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'nord',
-    label: 'Nord',
+    labelKey: 'theme.nord',
     darkAccent: '#88c0d0',
     darkSoft: '#2b3d44',
     darkOnAccent: '#000000',
@@ -172,7 +174,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'cyan',
-    label: 'Camgöbeği',
+    labelKey: 'theme.cyan',
     darkAccent: '#22d3ee',
     darkSoft: '#12343b',
     darkOnAccent: '#000000',
@@ -182,7 +184,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'lime',
-    label: 'Lime',
+    labelKey: 'theme.lime',
     darkAccent: '#a3e635',
     darkSoft: '#293817',
     darkOnAccent: '#000000',
@@ -192,7 +194,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'orange',
-    label: 'Turuncu',
+    labelKey: 'theme.orange',
     darkAccent: '#fb923c',
     darkSoft: '#3d2717',
     darkOnAccent: '#000000',
@@ -202,7 +204,7 @@ const COLORS: ColorDef[] = [
   },
   {
     id: 'fuchsia',
-    label: 'Fuşya',
+    labelKey: 'theme.fuchsia',
     darkAccent: '#e879f9',
     darkSoft: '#38213e',
     darkOnAccent: '#000000',
@@ -220,7 +222,9 @@ export const DEFAULT_PRESET = 'violet-dark'
 export const THEME_PRESETS: ThemePreset[] = COLORS.flatMap((c) => [
   {
     id: `${c.id}-dark`,
-    label: c.label,
+    get label() {
+      return sharedText(c.labelKey)
+    },
     dark: true,
     tokens: {
       ...DARK_NEUTRALS,
@@ -231,7 +235,9 @@ export const THEME_PRESETS: ThemePreset[] = COLORS.flatMap((c) => [
   },
   {
     id: `${c.id}-light`,
-    label: c.label,
+    get label() {
+      return sharedText(c.labelKey)
+    },
     dark: false,
     tokens: {
       ...LIGHT_NEUTRALS,
@@ -261,7 +267,9 @@ export interface ThemeColor {
 
 export const THEME_COLORS: ThemeColor[] = COLORS.map((c) => ({
   id: c.id,
-  label: c.label,
+  get label() {
+    return sharedText(c.labelKey)
+  },
   dark: {
     id: `${c.id}-dark`,
     accent: c.darkAccent,

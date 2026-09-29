@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight, Cpu, Square } from 'lucide-react'
 import { api } from '@/api'
 import type { ProcessEntry, ProcessKind, ProcessStatus } from '@/types'
@@ -21,12 +22,12 @@ const LIST_LIMIT = 300
 // workers emits a burst. Coalesce a burst into a single refetch.
 const REFETCH_DEBOUNCE_MS = 300
 
-const STATUS_LABEL: Record<ProcessStatus, string> = {
-  running: 'Çalışıyor',
-  succeeded: 'Başarılı',
-  failed: 'Başarısız',
-  killed: 'Durduruldu',
-  timed_out: 'Zaman aşımı',
+const STATUS_LABEL_KEY: Record<ProcessStatus, string> = {
+  running: 'process.status.running',
+  succeeded: 'process.status.succeeded',
+  failed: 'process.status.failed',
+  killed: 'process.status.killed',
+  timed_out: 'process.status.timedOut',
 }
 
 const STATUS_TONE: Record<ProcessStatus, BadgeTone> = {
@@ -37,14 +38,14 @@ const STATUS_TONE: Record<ProcessStatus, BadgeTone> = {
   timed_out: 'warning',
 }
 
-const KIND_LABEL: Record<ProcessKind, string> = {
-  shell: 'Kabuk',
-  shell_background: 'Arka plan kabuk',
-  code: 'Kod',
-  provider: 'Sağlayıcı',
-  mcp: 'MCP',
-  hook: 'Hook',
-  external: 'Harici araç',
+const KIND_LABEL_KEY: Record<ProcessKind, string> = {
+  shell: 'process.kind.shell',
+  shell_background: 'process.kind.shellBackground',
+  code: 'process.kind.code',
+  provider: 'process.kind.provider',
+  mcp: 'process.kind.mcp',
+  hook: 'process.kind.hook',
+  external: 'process.kind.external',
 }
 
 const STATUS_OPTIONS: ProcessStatus[] = ['running', 'succeeded', 'failed', 'killed', 'timed_out']
@@ -79,12 +80,12 @@ function ownerAgent(e: ProcessEntry): string {
 
 // ownerLabel flattens the owner column into one line, for the cell's tooltip and
 // for the free-text filter.
-function ownerLabel(e: ProcessEntry): string {
+function ownerLabel(e: ProcessEntry, parentPrefix: string): string {
   const parts: string[] = []
   const agent = ownerAgent(e)
   if (agent) parts.push(agent)
   if (e.owner.sessionId) parts.push(e.owner.sessionId)
-  if (e.owner.parentSessionId) parts.push(`üst: ${e.owner.parentSessionId}`)
+  if (e.owner.parentSessionId) parts.push(`${parentPrefix} ${e.owner.parentSessionId}`)
   return parts.join(' · ')
 }
 
@@ -102,6 +103,7 @@ function SessionRef({
   prefix?: string
   onOpen?: (sessionId: string) => void
 }) {
+  const { t } = useTranslation('workspace')
   if (!id) return null
   const text = prefix ? `${prefix} ${id}` : id
   if (!onOpen || !liveSessions.has(id))
@@ -111,7 +113,7 @@ function SessionRef({
       type="button"
       onClick={() => onOpen(id)}
       data-testid="process-session-link"
-      title="Bu oturuma git"
+      title={t('process.openSession')}
       className="block max-w-full truncate text-left font-mono text-[var(--color-accent)] hover:underline"
     >
       {text}
@@ -127,6 +129,7 @@ function SessionRef({
 // The list is SSE-driven: the shared feed's `process` frame carries no entry by
 // design, so the panel refetches on it instead of merging (see api/system.ts).
 export function ProcessPanel({ onError, onOpenSession }: Props) {
+  const { t } = useTranslation('workspace')
   const [entries, setEntries] = useState<ProcessEntry[]>([])
   const [loading, setLoading] = useState(true)
   // The last load failure. Kept in the panel (not only in a toast) so a failed
@@ -270,7 +273,7 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
         const res = await api.stopProcess(id)
         // stopped=false is a 200 with a reason (already finished, or no stop
         // path): report it instead of pretending the click worked.
-        if (!res.stopped) onError(res.reason ?? 'İşlem durdurulamadı.')
+        if (!res.stopped) onError(res.reason ?? t('process.stopFailed'))
       } catch (e) {
         onError((e as Error).message)
       } finally {
@@ -278,7 +281,7 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
         await load()
       }
     },
-    [load, onError],
+    [load, onError, t],
   )
 
   const runningCount = useMemo(
@@ -289,18 +292,18 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneHeader
-        title="İşlemler"
+        title={t('process.title')}
         right={
           <>
             <span className="text-xs text-[var(--color-text-dim)]">
-              {`${rows.length} işlem · ${runningCount} çalışıyor`}
+              {t('process.summary', { total: rows.length, running: runningCount })}
             </span>
             <button
               onClick={() => void load()}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
-              title="İşlem listesini yenile"
+              title={t('process.refreshTitle')}
             >
-              Yenile
+              {t('actions.refresh')}
             </button>
           </>
         }
@@ -312,13 +315,13 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
           value={status}
           onChange={(e) => setStatus(e.target.value as ProcessStatus | '')}
           className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
-          title="Duruma göre filtrele"
-          aria-label="Duruma göre filtrele"
+          title={t('process.filters.statusAria')}
+          aria-label={t('process.filters.statusAria')}
         >
-          <option value="">Durum: hepsi</option>
+          <option value="">{t('process.filters.allStatuses')}</option>
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>
-              {STATUS_LABEL[s]}
+              {t(STATUS_LABEL_KEY[s])}
             </option>
           ))}
         </select>
@@ -326,22 +329,22 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
           value={kind}
           onChange={(e) => setKind(e.target.value as ProcessKind | '')}
           className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
-          title="Türe göre filtrele"
-          aria-label="Türe göre filtrele"
+          title={t('process.filters.kindAria')}
+          aria-label={t('process.filters.kindAria')}
         >
-          <option value="">Tür: hepsi</option>
+          <option value="">{t('process.filters.allKinds')}</option>
           {KIND_OPTIONS.map((k) => (
             <option key={k} value={k}>
-              {KIND_LABEL[k]}
+              {t(KIND_LABEL_KEY[k])}
             </option>
           ))}
         </select>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Ara (komut/etiket/ajan/oturum)…"
+          placeholder={t('process.filters.searchPlaceholder')}
           className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
-          aria-label="Komut, etiket, ajan veya oturuma göre ara"
+          aria-label={t('process.filters.searchAria')}
         />
         {/* Quick toggle: the "what is running right now" question, one click. */}
         <button
@@ -353,7 +356,7 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
               : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
           }`}
         >
-          Yalnız çalışanlar
+          {t('process.filters.runningOnly')}
         </button>
       </div>
 
@@ -362,32 +365,30 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
           role="alert"
           className="border-b border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] px-4 py-2 text-xs text-[var(--color-danger)]"
         >
-          İşlemler okunamadı: {loadError}
+          {t('process.loadFailed', { error: loadError })}
         </div>
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
-          <p className="px-4 py-3 text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>
+          <p className="px-4 py-3 text-sm text-[var(--color-text-dim)]">{t('actions.loading')}</p>
         ) : rows.length === 0 ? (
-          <EmptyState icon={Cpu} title="İşlem yok">
-            {entries.length > 0
-              ? 'Filtrelerle eşleşen işlem yok.'
-              : 'Bu workspace için izlenen bir süreç bulunmuyor.'}
+          <EmptyState icon={Cpu} title={t('process.empty.title')}>
+            {entries.length > 0 ? t('process.empty.filtered') : t('process.empty.workspace')}
           </EmptyState>
         ) : (
           <table className="w-full table-fixed text-xs">
             <thead className="sticky top-0 bg-[var(--color-surface)] text-left text-[var(--color-text-dim)]">
               <tr className="border-b border-[var(--color-border)]">
                 <th className="w-6 px-2 py-2" />
-                <th className="w-24 px-2 py-2">Durum</th>
-                <th className="w-28 px-2 py-2">Tür</th>
-                <th className="px-2 py-2">Komut</th>
+                <th className="w-24 px-2 py-2">{t('process.columns.status')}</th>
+                <th className="w-28 px-2 py-2">{t('process.columns.kind')}</th>
+                <th className="px-2 py-2">{t('process.columns.command')}</th>
                 <th className="w-20 px-2 py-2">PID</th>
-                <th className="w-44 px-2 py-2">Sahip</th>
-                <th className="w-32 px-2 py-2">Başlangıç</th>
-                <th className="w-24 px-2 py-2">Süre</th>
-                <th className="w-16 px-2 py-2">Çıkış</th>
+                <th className="w-44 px-2 py-2">{t('process.columns.owner')}</th>
+                <th className="w-32 px-2 py-2">{t('process.columns.started')}</th>
+                <th className="w-24 px-2 py-2">{t('process.columns.duration')}</th>
+                <th className="w-16 px-2 py-2">{t('process.columns.exit')}</th>
                 <th className="w-24 px-2 py-2" />
               </tr>
             </thead>
@@ -395,7 +396,7 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
               {rows.map((e) => {
                 const open = expanded === e.id
                 const terminal = e.status !== 'running'
-                const owner = ownerLabel(e)
+                const owner = ownerLabel(e, t('process.parentPrefix'))
                 const agent = ownerAgent(e)
                 return [
                   <tr
@@ -407,17 +408,19 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
                       <button
                         onClick={() => setExpanded(open ? null : e.id)}
                         aria-expanded={open}
-                        aria-label={open ? 'Ayrıntıyı kapat' : 'Ayrıntıyı aç'}
+                        aria-label={
+                          open ? t('process.collapseDetails') : t('process.expandDetails')
+                        }
                         className="text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
                       >
                         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </button>
                     </td>
                     <td className="px-2 py-1.5" data-testid="process-status">
-                      <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
+                      <Badge tone={STATUS_TONE[e.status]}>{t(STATUS_LABEL_KEY[e.status])}</Badge>
                     </td>
                     <td className="px-2 py-1.5 text-[var(--color-text-dim)]">
-                      {KIND_LABEL[e.kind]}
+                      {t(KIND_LABEL_KEY[e.kind])}
                     </td>
                     <td className="px-2 py-1.5">
                       {e.label && (
@@ -442,7 +445,7 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
                           <SessionRef
                             id={e.owner.parentSessionId}
                             liveSessions={liveSessions}
-                            prefix="üst:"
+                            prefix={t('process.parentPrefix')}
                             onOpen={onOpenSession}
                           />
                         </>
@@ -486,13 +489,13 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
                               data-testid="process-stop-confirm"
                               className="rounded bg-[var(--color-danger)] px-2 py-0.5 text-[10px] text-[var(--color-on-accent)]"
                             >
-                              Emin misin?
+                              {t('process.confirmStop')}
                             </button>
                             <button
                               onClick={() => setConfirmStop(null)}
                               className="text-[10px] text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
                             >
-                              Vazgeç
+                              {t('actions.cancel')}
                             </button>
                           </span>
                         ) : (
@@ -500,11 +503,11 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
                             onClick={() => setConfirmStop(e.id)}
                             disabled={stopping === e.id}
                             data-testid="process-stop"
-                            title="Bu süreci durdur"
+                            title={t('process.stopTitle')}
                             className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-dim)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)] disabled:opacity-50"
                           >
                             <Square size={10} />
-                            {stopping === e.id ? 'Durduruluyor…' : 'Durdur'}
+                            {stopping === e.id ? t('process.stopping') : t('process.stop')}
                           </button>
                         ))}
                     </td>
@@ -530,7 +533,7 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
                             </pre>
                           ) : (
                             <p className="text-[11px] text-[var(--color-text-dim)]">
-                              Bu süreç için kayıtlı çıktı yok.
+                              {t('process.noOutput')}
                             </p>
                           )}
                         </div>

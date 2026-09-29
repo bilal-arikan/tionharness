@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { BoardColumnDef } from '@/types'
 import { Button } from '@/shared/components'
 
@@ -44,6 +45,7 @@ interface Props {
 }
 
 export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose }: Props) {
+  const { t } = useTranslation('tasks')
   const [draft, setDraft] = useState<DraftColumn[]>(() =>
     columns.map((c) => ({ ...c, originalKey: c.key })),
   )
@@ -59,7 +61,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
   }
 
   const addColumn = () => {
-    const newCol: BoardColumnDef = { key: '', label: 'Yeni Sütun', color: '' }
+    const newCol: BoardColumnDef = { key: '', label: t('columns.newColumn'), color: '' }
     setDraft((prev) => [...prev, newCol])
   }
 
@@ -102,23 +104,21 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
     const keys = new Set<string>()
     for (const col of draft) {
       if (!isValidKey(col.key)) {
-        setError(
-          `"${col.label}" için geçersiz anahtar: "${col.key}" (sadece küçük harf, rakam, alt çizgi)`,
-        )
+        setError(t('columns.errors.invalidKey', { label: col.label, key: col.key }))
         return
       }
       if (!col.label.trim()) {
-        setError('Sütun etiketi boş bırakılamaz.')
+        setError(t('columns.errors.emptyLabel'))
         return
       }
       if (keys.has(col.key)) {
-        setError(`Yinelenen sütun anahtarı: "${col.key}"`)
+        setError(t('columns.errors.duplicateKey', { key: col.key }))
         return
       }
       keys.add(col.key)
     }
     if (draft.length === 0) {
-      setError('En az bir sütun gereklidir.')
+      setError(t('columns.errors.minimumOne'))
       return
     }
     setSaving(true)
@@ -137,11 +137,11 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
     <div className="flex h-full w-72 flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-        <span className="text-sm font-semibold">Sütun Düzenleyici</span>
+        <span className="text-sm font-semibold">{t('columns.editorTitle')}</span>
         <button
           onClick={onClose}
           className="rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          title="Kapat"
+          title={t('actions.close')}
         >
           ✕
         </button>
@@ -177,7 +177,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
               <div className="flex items-center gap-1.5">
                 <span
                   className="cursor-grab select-none text-[var(--color-text-dim)] text-sm"
-                  title="Sürükleyerek yeniden sırala"
+                  title={t('columns.dragToReorder')}
                 >
                   ⠿
                 </span>
@@ -186,7 +186,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                   data-col-index={idx}
                   value={col.label}
                   onChange={(e) => handleLabelChange(idx, e.target.value)}
-                  placeholder="Sütun adı"
+                  placeholder={t('columns.namePlaceholder')}
                   className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-0.5 text-sm outline-none focus:border-[var(--color-accent)]"
                 />
                 {/* Color swatch button */}
@@ -195,7 +195,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                     data-testid="column-color-toggle"
                     data-col-index={idx}
                     onClick={() => setColorPickerIdx(isOpen ? -1 : idx)}
-                    title="Renk seç"
+                    title={t('columns.chooseColor')}
                     className="h-6 w-6 flex-shrink-0 rounded border border-[var(--color-border)] hover:opacity-80"
                     style={{
                       backgroundColor: col.color || 'var(--color-surface)',
@@ -229,7 +229,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                           value={col.color?.startsWith('#') ? col.color : '#6b7280'}
                           onChange={(e) => update(idx, { color: e.target.value })}
                           className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
-                          title="Özel renk"
+                          title={t('columns.customColor')}
                         />
                         <input
                           data-testid="column-hex-color-input"
@@ -243,7 +243,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                           <button
                             onClick={() => update(idx, { color: '' })}
                             className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
-                            title="Rengi kaldır"
+                            title={t('columns.removeColor')}
                           >
                             ✕
                           </button>
@@ -260,10 +260,10 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                   disabled={!canDelete}
                   title={
                     taskCount > 0
-                      ? `${taskCount} görev bu sütunda — önce taşıyın`
+                      ? t('columns.deleteBlockedTasks', { count: taskCount })
                       : draft.length <= 1
-                        ? 'Son sütun silinemez'
-                        : 'Sütunu sil'
+                        ? t('columns.deleteLastBlocked')
+                        : t('columns.delete')
                   }
                   className="flex-shrink-0 rounded p-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-30"
                 >
@@ -272,13 +272,15 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
               </div>
               {/* Row 2: key input + reorder buttons */}
               <div className="mt-1.5 flex items-center gap-1">
-                <span className="text-[10px] text-[var(--color-text-dim)]">anahtar:</span>
+                <span className="text-[10px] text-[var(--color-text-dim)]">
+                  {t('columns.keyLabel')}
+                </span>
                 <input
                   value={col.key}
                   onChange={(e) =>
                     update(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })
                   }
-                  placeholder="ornek_anahtar"
+                  placeholder={t('columns.keyPlaceholder')}
                   className={`w-32 rounded border px-1.5 py-0.5 font-mono text-[11px] outline-none ${
                     col.key && !isValidKey(col.key)
                       ? 'border-[var(--color-danger)] bg-[var(--color-danger)]/10'
@@ -287,7 +289,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                 />
                 {taskCount > 0 && (
                   <span className="ml-auto rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
-                    {taskCount} görev
+                    {t('taskCount', { count: taskCount })}
                   </span>
                 )}
                 <div className="ml-auto flex gap-0.5">
@@ -297,7 +299,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                     onClick={() => moveUp(idx)}
                     disabled={idx === 0}
                     className="rounded p-0.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface)] disabled:opacity-20"
-                    title="Yukarı taşı"
+                    title={t('columns.moveUp')}
                   >
                     ↑
                   </button>
@@ -307,7 +309,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                     onClick={() => moveDown(idx)}
                     disabled={idx === draft.length - 1}
                     className="rounded p-0.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface)] disabled:opacity-20"
-                    title="Aşağı taşı"
+                    title={t('columns.moveDown')}
                   >
                     ↓
                   </button>
@@ -323,7 +325,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
           onClick={addColumn}
           className="w-full rounded-lg border border-dashed border-[var(--color-border)] py-2 text-sm text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
         >
-          + Sütun Ekle
+          {t('columns.add')}
         </button>
       </div>
 
@@ -336,7 +338,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
         )}
         <div data-testid="board-column-save">
           <Button onClick={handleSave} disabled={saving} className="w-full">
-            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+            {saving ? t('actions.saving') : t('actions.save')}
           </Button>
         </div>
       </div>

@@ -5,6 +5,7 @@
 // comes back as 422 and can be forced after confirmation; a human gate opens a
 // card on the root chat (202).
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Flag, Loader2, Plus } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
@@ -20,6 +21,7 @@ interface Props {
 type ApiErr = Error & { status?: number }
 
 export function PhaseActions({ trajectory: t, phase }: Props) {
+  const { t: translate } = useTranslation('rota')
   const [busy, setBusy] = useState(false)
   const [adding, setAdding] = useState(false)
   const [newId, setNewId] = useState('')
@@ -40,19 +42,24 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
         force,
       })
       if ('pending' in res && res.pending) {
-        toast.info(`Faz ${phase}: insan kapısı açıldı — kök sohbetteki kartı yanıtla`)
+        toast.info(translate('phase.humanGateOpened', { phase }))
       } else {
-        toast.success(`Faz ${phase} → ${state}`)
+        toast.success(
+          translate('phase.moved', {
+            phase,
+            state: translate(`phase.state.${state}`, { defaultValue: state }),
+          }),
+        )
       }
     } catch (e) {
       const err = e as ApiErr
       if (err.status === 422 && !force) {
-        if (confirm(`Kapı geçilmedi:\n${err.message}\n\nZorla geç?`)) {
+        if (confirm(translate('phase.forceConfirm', { message: err.message }))) {
           await move(state, true)
           return
         }
       } else if (err.status === 409) {
-        toast.warning('Rota bu arada değişti; ekran yenilendi, tekrar dene')
+        toast.warning(translate('phase.changedWarning'))
       } else {
         toast.error(err.message)
       }
@@ -83,7 +90,7 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
         gate: undefined,
       })
       await api.planTrajectory(t.id, { phases, expectedRev: t.revision })
-      toast.success(`Faz eklendi: ${id}`)
+      toast.success(translate('phase.added', { id }))
       setNewId('')
       setNewProfile('')
       setAdding(false)
@@ -95,12 +102,12 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
   }
 
   const finish = async (status: 'done' | 'failed') => {
-    if (!confirm(`Rota ${status === 'done' ? 'tamamlandı' : 'başarısız'} olarak kapatılsın mı?`))
+    if (!confirm(translate('phase.finishConfirm', { status: translate(`status.${status}`) })))
       return
     setBusy(true)
     try {
       await api.finishTrajectory(t.id, { status, expectedRev: t.revision })
-      toast.success('Rota kapatıldı')
+      toast.success(translate('phase.finished'))
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -118,11 +125,13 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
       {busy && <Loader2 size={12} className="animate-spin" />}
       {phase && node ? (
         <>
-          <span className="font-medium">faz {phase}</span>
-          <span className="text-[var(--color-text-dim)]">({node.state})</span>
+          <span className="font-medium">{translate('phase.phaseName', { phase })}</span>
+          <span className="text-[var(--color-text-dim)]">
+            ({translate(`phase.state.${node.state}`, { defaultValue: node.state })})
+          </span>
           {node.state !== 'active' && !terminal && (
             <button type="button" className={btn} disabled={busy} onClick={() => move('active')}>
-              ● aktif yap
+              ● {translate('phase.makeActive')}
             </button>
           )}
           {node.state !== 'done' && !terminal && (
@@ -131,21 +140,27 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
               className={btn}
               disabled={busy}
               onClick={() => move('done')}
-              title={node.gate ? `Kapı: ${node.gate.kind} ${node.gate.value ?? ''}` : undefined}
+              title={
+                node.gate
+                  ? translate('phase.gateTitle', {
+                      kind: node.gate.kind,
+                      value: node.gate.value ?? '',
+                    })
+                  : undefined
+              }
             >
-              ✓ tamamlandı{node.gate ? ' (kapı)' : ''}
+              ✓ {translate('phase.markDone')}
+              {node.gate ? ` (${translate('phase.gate')})` : ''}
             </button>
           )}
           {node.state !== 'skipped' && node.state !== 'done' && !terminal && (
             <button type="button" className={btn} disabled={busy} onClick={() => move('skipped')}>
-              ↷ atla
+              ↷ {translate('phase.skip')}
             </button>
           )}
         </>
       ) : (
-        <span className="text-[var(--color-text-dim)]">
-          Bir faz sütununa tıkla: aktif yap / tamamlandı / atla
-        </span>
+        <span className="text-[var(--color-text-dim)]">{translate('phase.selectHint')}</span>
       )}
       {!terminal && (
         <span className="ml-auto flex items-center gap-1.5">
@@ -154,13 +169,13 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
               <input
                 value={newId}
                 onChange={(e) => setNewId(e.target.value)}
-                placeholder="faz id (ör. docs)"
+                placeholder={translate('phase.idPlaceholder')}
                 className="w-28 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 font-mono text-[var(--color-text)]"
               />
               <input
                 value={newProfile}
                 onChange={(e) => setNewProfile(e.target.value)}
-                placeholder="profil (opsiyonel)"
+                placeholder={translate('phase.profilePlaceholder')}
                 className="w-28 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-[var(--color-text)]"
               />
               <button
@@ -169,10 +184,10 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
                 disabled={busy || !newId.trim()}
                 onClick={addPhase}
               >
-                ekle
+                {translate('actions.add')}
               </button>
               <button type="button" className={btn} onClick={() => setAdding(false)}>
-                vazgeç
+                {translate('actions.cancel')}
               </button>
             </>
           ) : (
@@ -180,9 +195,9 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
               type="button"
               className={btn}
               onClick={() => setAdding(true)}
-              title="Plana faz ekle"
+              title={translate('phase.addTitle')}
             >
-              <Plus size={11} /> faz ekle
+              <Plus size={11} /> {translate('phase.add')}
             </button>
           )}
           <button
@@ -190,9 +205,9 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
             className={btn}
             disabled={busy}
             onClick={() => finish('done')}
-            title="Rotayı tamamlandı olarak kapat"
+            title={translate('phase.finishTitle')}
           >
-            <Flag size={11} /> bitir
+            <Flag size={11} /> {translate('phase.finish')}
           </button>
         </span>
       )}

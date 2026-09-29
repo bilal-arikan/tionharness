@@ -1,10 +1,14 @@
 import { FileCode } from 'lucide-react'
 import type { TurnStep, ArtifactRefResult } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   step: TurnStep
   onOpenArtifact?: (id: string) => void
 }
+
+const MIDDLE_DOT = String.fromCharCode(0xb7)
+const RIGHT_ARROW = String.fromCharCode(0x2192)
 
 // parseArtifactResult decodes the JSON result emitted by the create_artifact /
 // update_artifact tools ({id,title,kind,action}). Returns null when the tool
@@ -20,20 +24,12 @@ function parseArtifactResult(output?: string): ArtifactRefResult | null {
   return null
 }
 
-const KIND_LABEL: Record<string, string> = {
-  markdown: 'Markdown',
-  code: 'Kod',
-  html: 'HTML',
-  text: 'Metin',
-  svg: 'SVG',
-  mermaid: 'Mermaid',
-}
-
 // ArtifactCard renders a create_artifact / update_artifact tool step as a
 // clickable card that opens the artifact in the dedicated viewer — the chat
 // equivalent of a Claude.ai artifact chip. On tool failure it falls back to a
 // small error row.
 export function ArtifactCard({ step, onOpenArtifact }: Props) {
+  const { t } = useTranslation('chat')
   const ref = parseArtifactResult(step.output)
 
   if (!ref) {
@@ -41,7 +37,8 @@ export function ArtifactCard({ step, onOpenArtifact }: Props) {
       <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-3 py-1.5 text-xs text-[var(--color-danger)]">
         <FileCode size={14} className="shrink-0" />
         <span className="truncate">
-          Artifact kaydedilemedi{step.output ? `: ${step.output}` : ''}
+          {t('artifact.saveFailed')}
+          {step.output ? `: ${step.output}` : ''}
         </span>
       </div>
     )
@@ -60,12 +57,12 @@ export function ArtifactCard({ step, onOpenArtifact }: Props) {
           {ref.title}
         </span>
         <span className="block text-[11px] text-[var(--color-text-dim)]">
-          {KIND_LABEL[ref.kind] ?? ref.kind} ·{' '}
-          {ref.action === 'update' ? 'güncellendi' : 'oluşturuldu'}
+          {t(`artifact.kind.${ref.kind}`, { defaultValue: ref.kind })} {MIDDLE_DOT}{' '}
+          {ref.action === 'update' ? t('artifact.updated') : t('artifact.created')}
         </span>
       </span>
       <span className="shrink-0 text-xs text-[var(--color-accent)] opacity-0 transition group-hover:opacity-100">
-        Görüntüle →
+        {t('artifact.view')} {RIGHT_ARROW}
       </span>
     </button>
   )

@@ -1,0 +1,475 @@
+{
+  "title": "Settings",
+  "section": {
+    "settings": "Settings",
+    "help": "Help"
+  },
+  "common": {
+    "add": "Add",
+    "cancel": "Cancel",
+    "copy": "Copy",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "hide": "Hide",
+    "loading": "Loading…",
+    "refresh": "Refresh",
+    "save": "Save",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "show": "Show",
+    "unsaved": "Unsaved",
+    "unsavedChanges": "Unsaved changes",
+    "update": "Update"
+  },
+  "categories": {
+    "general": "General",
+    "profile": "Profile",
+    "sound": "Sound & notifications",
+    "providers": "Providers",
+    "secrets": "Secrets",
+    "context": "Context & memory",
+    "tools": "Tool permissions",
+    "execution": "Agent execution",
+    "sysagents": "Agent library",
+    "decider": "Decision authorities",
+    "hooks": "Hooks",
+    "exttools": "External tools",
+    "diagnostics": "Diagnostics",
+    "backup": "Backup",
+    "reference": "Reference",
+    "about": "About"
+  },
+  "validation": {
+    "requiredNumber": "This field cannot be empty — enter a value.",
+    "invalidNumber": "Enter a valid number.",
+    "minimum": "Must be at least {{min}}.",
+    "maximum": "Must be at most {{max}}."
+  },
+  "promptDetails": {
+    "system": "System",
+    "userTurn": "User turn"
+  },
+  "profile": {
+    "intro": "This information is added to chat context so agents can personalise their replies to you.",
+    "name": "Name",
+    "nameHint": "How the agent should address you.",
+    "namePlaceholder": "e.g. Ada",
+    "timezone": "Time zone",
+    "timezoneHint": "Used for relative dates such as ‘tomorrow’ and ‘next week’.",
+    "timezonePlaceholder": "e.g. Europe/London",
+    "city": "City",
+    "cityPlaceholder": "e.g. London",
+    "country": "Country",
+    "countryPlaceholder": "e.g. United Kingdom",
+    "notes": "Notes",
+    "notesHint": "Free-form preferences such as instructions and working style.",
+    "notesPlaceholder": "Preferences the agents should know…"
+  },
+  "notifications": {
+    "title": "Desktop notifications",
+    "scope": "All workspaces · saved immediately. Your browser must also allow notifications.",
+    "masterLabel": "Desktop notifications",
+    "masterHint": "Show notifications when the app is in the background.",
+    "typesTitle": "Notification types",
+    "typesHint": "This device only · applied immediately. These preferences take effect when desktop notifications are enabled. Muting a type does not mute its sound; use Sound effects below.",
+    "types": {
+      "chat": {
+        "label": "Chat reply",
+        "hint": "An assistant reply finished (reply-ready notification and sound)."
+      },
+      "prompt": {
+        "label": "Approval / question",
+        "hint": "An agent is waiting for your answer to an approval, permission request, or question."
+      },
+      "schedule": { "label": "Schedules", "hint": "A scheduled prompt ran or failed." },
+      "flow": { "label": "Flows", "hint": "A flow run finished or failed." },
+      "spawned": { "label": "Spawn", "hint": "A spawned session finished or failed." },
+      "worker": { "label": "Worker", "hint": "A coordinator worker changed state." },
+      "coordination": {
+        "label": "Coordination",
+        "hint": "Coordination warnings such as a coordinator turn limit."
+      },
+      "rota": {
+        "label": "Rota",
+        "hint": "A route started, finished, failed, or is waiting for a human response."
+      },
+      "automation": {
+        "label": "Automations",
+        "hint": "A label or board automation was triggered."
+      },
+      "artifact": { "label": "Artifacts", "hint": "An artifact was created or updated." },
+      "board": {
+        "label": "Tasks (board)",
+        "hint": "A Kanban task was created, moved, updated, or deleted."
+      },
+      "agent": {
+        "label": "Agent notification",
+        "hint": "A general notification sent by an agent with the notify tool."
+      },
+      "anomaly": {
+        "label": "Anomalies",
+        "hint": "Session warning: low cache hit rate, frequent breaks, tool errors, and similar issues."
+      },
+      "agent-model-changed": {
+        "label": "Model change",
+        "hint": "An agent's model changed. Its prompt cache will cool down."
+      }
+    }
+  },
+  "providerOptions": {
+    "title": "Advanced provider options",
+    "description": "These options apply to all workspaces using the relevant provider. Save changes here; provider connections above are saved separately by their forms.",
+    "anthropic": "Anthropic API",
+    "cli": "CLI sessions and auxiliary calls"
+  },
+  "providers": {
+    "authKindMismatch": "Expected provider kind {{expected}}, received {{actual}}",
+    "deleteConfirm": "Delete provider instance “{{label}}”?",
+    "deletedWithAgents_one": "The provider was deleted, but {{count}} agent was still assigned to it. Reconfigure that agent.",
+    "deletedWithAgents_other": "The provider was deleted, but {{count}} agents were still assigned to it. Reconfigure those agents.",
+    "deleted": "Provider instance deleted",
+    "updated": "Provider instance updated",
+    "added": "Provider instance added",
+    "add": "+ New provider instance",
+    "title": "Provider instances",
+    "description": "Each provider instance has its own configuration and CLI sign-in. Changes are saved immediately."
+  },
+  "providerFields": {
+    "savedPlaceholder": "(saved — type to replace)",
+    "select": "select…",
+    "savedEncrypted": "✓ saved (encrypted)"
+  },
+  "providerForm": {
+    "noKinds": "Every provider template already has an instance, and those templates do not allow multiple instances.",
+    "editTitle": "Edit: {{label}}",
+    "newTitle": "New provider instance",
+    "labelPlaceholder": "Label (e.g. Anthropic — work account)",
+    "enabled": "Enabled",
+    "defaultModelPlaceholder": "empty = provider session model",
+    "modelsPlaceholder": "model IDs — comma-separated (optional)"
+  },
+  "providerList": {
+    "empty": "There are no provider instances yet. Choose a template above to add one.",
+    "disabled": "disabled",
+    "offline": "⚠ server offline",
+    "offlineHint": "The local model server is not responding. LM Studio / Bionic must be open and its local server started.",
+    "configured": "✓ configured",
+    "missingField": "⚠ missing field",
+    "id": "id",
+    "model": "model",
+    "authChecking": "checking status…",
+    "authError": "status unavailable: {{error}}",
+    "loggedIn": "✓ signed in{{tier}}",
+    "loggedOut": "not signed in",
+    "status": "Status",
+    "signIn": "Sign in",
+    "delete": "Delete {{label}}"
+  },
+  "reference": {
+    "loadError": "Prompt details could not be loaded.",
+    "description": "Read-only help. There are no settings to save here.",
+    "sectionsAria": "Reference sections",
+    "commands": "Commands",
+    "stepKinds": "Activity step types"
+  },
+  "saveBar": {
+    "invalid": "Invalid number — correct it before saving"
+  },
+  "searchIndex": {
+    "title": "Search index status",
+    "reloadTitle": "Reload the list",
+    "description": "Search indexes managed by TionHarness for the agent, with one row for each (tool, root) pair. The list is process-wide: two workspaces that open the same repository share one store on disk. Refresh re-embeds while keeping existing vectors, Rebuild deletes the store and creates it again, and Delete removes the index from disk after you type its root path. For codebase-memory, refresh indexes incrementally; rebuild and delete remove the project from the server's own store.",
+    "empty": "There are no managed indexes yet. When a session opens with a zvec-grep or codebase-memory MCP server configured, its working directory is indexed in the background and appears here.",
+    "refreshTitle": "Re-embed while preserving the current store",
+    "busyTitle": "A job is already running for this index",
+    "rebuildTitle": "Delete the store and build it again — required after an embedding-model change",
+    "rebuild": "Rebuild",
+    "dropTitle": "Delete the index from disk (requires typing the root path)",
+    "dropConfirm": "This index will be deleted from disk and may take minutes to rebuild. Type the exact root path to confirm:",
+    "dropButton": "Delete index",
+    "phases": {
+      "ready": "ready",
+      "indexing": "indexing…",
+      "stale": "stale",
+      "failed": "failed",
+      "missing": "missing"
+    },
+    "actions": {
+      "refresh": "refresh",
+      "rebuild": "rebuild",
+      "drop": "delete",
+      "create": "create"
+    },
+    "notices": {
+      "rebuildStarted": "Rebuild started — it may take several minutes.",
+      "createStarted": "Index creation started — it may take several minutes.",
+      "refreshStarted": "Refresh started — it may take several minutes.",
+      "dropped": "Index deleted."
+    }
+  },
+  "secrets": {
+    "intro": "API keys, tokens, and passwords are stored in this workspace's <strong>encrypted vault</strong> (AES-GCM). Agents in this workspace can access them with the <secretList>secret_list</secretList> and <secretGet>secret_get</secretGet> tools. Values are hidden in the list; use the eye icon to reveal one.",
+    "title": "Secrets",
+    "introPrefix": "API keys, tokens, and passwords are stored in this workspace's",
+    "encryptedVault": "encrypted vault",
+    "introMiddle": ". Agents in this workspace can access them with the",
+    "introSuffix": "tools. Values are hidden in the list; use the eye icon to reveal one.",
+    "and": "and",
+    "newTitle": "Add a new secret",
+    "editTitle": "Update secret: {{name}}",
+    "namePlaceholder": "Name (e.g. OPENAI_API_KEY)",
+    "descriptionPlaceholder": "Description (optional)",
+    "valuePlaceholder": "Value",
+    "newValuePlaceholder": "New value (to replace it)",
+    "nameRulePrefix": "The name must start with a letter and may contain letters, numbers,",
+    "nameRuleSuffix": "characters.",
+    "stored": "Stored secrets",
+    "empty": "No secrets have been added. Use the form above to add an API key or password.",
+    "updated": "Secret updated",
+    "added": "Secret added",
+    "copied": "Copied to clipboard",
+    "deleteConfirm": "Delete secret “{{name}}”? This cannot be undone.",
+    "deleted": "Secret deleted"
+  },
+  "sound": {
+    "deviceOnlyPrefix": "The sound preferences below apply to",
+    "deviceOnly": "this device only",
+    "deviceOnlySuffix": "and take effect immediately. No save is needed.",
+    "effectsTitle": "Sound effects",
+    "effectsLabel": "Sound effects",
+    "effectsHint": "Controls the chime when an agent finishes, microphone start/stop sounds, and alerts when an agent asks a question or requests approval or permission.",
+    "sttTitle": "Voice input (STT)",
+    "ttsTitle": "Read aloud (TTS)",
+    "autoReadLabel": "Read replies aloud",
+    "autoReadHint": "Reads the text aloud when an agent reply finishes, skipping code blocks, tables, and links.",
+    "autoReadEnabledSample": "Read aloud is on."
+  },
+  "stt": {
+    "language": "Microphone language",
+    "languageHint": "Recognition language for voice dictation. The composer microphone uses this language and shows it in the button tooltip.",
+    "engine": "Recognition engine",
+    "model": "Whisper model",
+    "modelHint_one": "{{count}} model installed. Larger models are more accurate but slower (base < small < medium).",
+    "modelHint_other": "{{count}} models installed. Larger models are more accurate but slower (base < small < medium).",
+    "autoModel": "Automatic (first installed model)",
+    "engines": {
+      "auto": {
+        "label": "Automatic",
+        "hint": "Use Whisper on the server when available; otherwise use browser recognition."
+      },
+      "browser": { "label": "Browser", "hint": "Web Speech API (Chromium; live interim results)." },
+      "server": {
+        "label": "Server (Whisper)",
+        "hint": "Upload the recording for whisper.cpp to transcribe offline, including in WebView2."
+      }
+    }
+  },
+  "tts": {
+    "engine": "Speech engine",
+    "serverVoice": "Server voice (Piper)",
+    "serverVoiceHint_one": "{{count}} voice installed. Generated on the server, with the same voice on every device, including phones.",
+    "serverVoiceHint_other": "{{count}} voices installed. Generated on the server, with the same voice on every device, including phones.",
+    "autoServerVoice": "Automatic (first installed voice)",
+    "browserVoice": "Browser voice",
+    "browserVoiceHint_one": "{{count}} voice (☁ = online). Empty selects automatically by language. Add a Windows language pack for more voices.",
+    "browserVoiceHint_other": "{{count}} voices (☁ = online). Empty selects automatically by language. Add a Windows language pack for more voices.",
+    "browserVoiceEmpty": "The voice list is loading, or this device has no TTS voices.",
+    "autoBrowserVoice": "Automatic (by language)",
+    "defaultVoice": "default",
+    "volume": "Volume",
+    "rate": "Rate",
+    "pitch": "Pitch",
+    "test": "Test voice",
+    "sample": "Hello, this is a read-aloud sample.",
+    "engines": {
+      "auto": {
+        "label": "Automatic",
+        "hint": "Use Piper on the server when available; otherwise use a browser voice."
+      },
+      "browser": { "label": "Browser", "hint": "Use this device's speechSynthesis voices." },
+      "server": {
+        "label": "Server (Piper)",
+        "hint": "Generate speech on the server with the same voice on every device, including phones."
+      }
+    }
+  },
+  "toolLimits": {
+    "defaultTimeout": "Default shell timeout (seconds)",
+    "defaultTimeoutHint": "Timeout used when a shell command does not specify one.",
+    "maxTimeout": "Maximum shell timeout (seconds)",
+    "maxTimeoutHint": "Upper limit for a command-specific shell timeout.",
+    "outputLimit": "Tool output limit (KB)",
+    "outputLimitHint": "Truncate tool output beyond this size, including MCP output."
+  },
+  "systemAgents": {
+    "loading": "Loading agent library…",
+    "agentCount_one": "{{count}} agent",
+    "agentCount_other": "{{count}} agents",
+    "refresh": "Refresh library",
+    "newAgent": "New agent",
+    "closeNew": "Close new agent",
+    "deleteConfirm": "Delete “{{name}}” from the library and all assigned workspaces?\n\nChat history is kept. Scheduled work using this agent will no longer run.",
+    "restoreConfirm": "Reset all custom settings for “{{name}}”?",
+    "selectAgent": "Select an agent to edit its profile and workspace assignments."
+  },
+  "stepKinds": {
+    "introPrefix": "An assistant turn's activity trace",
+    "introMiddle": "consists of several",
+    "types": "types",
+    "introSuffix": ". Each type below shows its meaning, whether it is persisted or live-only, and whether it is currently active.",
+    "source": "Source",
+    "status": {
+      "active": "active",
+      "legacy": "legacy-session compatibility",
+      "infra": "infrastructure ready"
+    },
+    "persisted": "persisted",
+    "liveOnly": "live-only",
+    "items": {
+      "text": {
+        "label": "Text",
+        "description": "Intermediate narrative text produced by the model between tool calls."
+      },
+      "thinking": {
+        "label": "Thinking",
+        "description": "Model reasoning content when the provider supplies it."
+      },
+      "tool": {
+        "label": "Tool",
+        "description": "A single tool call with its input and result. Edit and Write output is shown as a diff."
+      },
+      "delta": {
+        "label": "Stream chunk",
+        "description": "A live text fragment received while the reply is generated token by token. Temporary; the complete text is written to the message."
+      },
+      "ask": {
+        "label": "Question",
+        "description": "The ask_user tool asks a question and waits for the user's answer, suspending the turn. Temporary; it becomes a persisted tool step after the answer."
+      },
+      "permission": {
+        "label": "Permission approval",
+        "description": "An approval gate waits for permission before a write or command tool. Temporary; the tool runs or a permission_denied error is recorded after the decision."
+      },
+      "plan": {
+        "label": "Plan approval",
+        "description": "A Claude CLI agent presents its plan with ExitPlanMode and waits for approval. The turn continues after approval or the model revises the plan after rejection."
+      },
+      "todo": {
+        "label": "Task list",
+        "description": "The todo_write tool's working checklist, rendered as a first-class card."
+      },
+      "recovery": {
+        "label": "Recovery",
+        "description": "The loop left its normal path, for example after reaching an iteration limit. Reason carries a machine label."
+      },
+      "error": {
+        "label": "Error",
+        "description": "A turn-level error such as a provider failure, budget overrun, or cancellation, separate from a tool error."
+      },
+      "steer": {
+        "label": "Steering",
+        "description": "Live user guidance added to a running turn, shown separately from model output."
+      },
+      "tool_delta": {
+        "label": "Tool output stream",
+        "description": "Kept only for reading older persisted sessions. New tool-output chunks use the generic Append contract."
+      },
+      "tombstone": {
+        "label": "Withdrawal",
+        "description": "Removes a live step whose final card cannot arrive because of cancellation or panic. The tombstone itself is not rendered."
+      },
+      "diff": {
+        "label": "File change",
+        "description": "A file change made by Write or Edit, shown with its path, added and removed line counts, and an expandable unified diff."
+      },
+      "hook": {
+        "label": "Hook",
+        "description": "A user-defined PreToolUse or PostToolUse hook ran around a tool call and changed input or output, approved it, added context, or blocked it."
+      },
+      "context_change": {
+        "label": "Context change",
+        "description": "The session's frozen persona, instructions, skills, or tool catalog changed. The cached prefix keeps its session-start snapshot until the next context refresh."
+      },
+      "cache_break": {
+        "label": "Cache break",
+        "description": "This turn lost the session's warm prompt-cache prefix and paid for it again. Cards are shown for model, system-prompt, or tool-schema changes."
+      },
+      "compaction": {
+        "label": "Context compaction",
+        "description": "Session history was folded into a rolling summary to stay within the context budget. Raw messages remain unchanged on disk."
+      },
+      "subagent": {
+        "label": "Subagent",
+        "description": "An isolated subagent runs a task in a clean context and returns only its final result, with its own nested trace available in the expandable card."
+      }
+    }
+  },
+  "workspaceFiles": {
+    "locationPrefix": "These files are stored under",
+    "locationSuffix": ". You can edit them here or directly on disk.",
+    "title": "Workspace files",
+    "instructions": "Instructions (instructions.md)",
+    "instructionsHint": "Instructions added to every agent in this workspace. Synchronized with the instructions on the General tab.",
+    "instructionsPlaceholder": "e.g. Reply in English; commit changes but do not push.",
+    "runtimePrompts": "Runtime prompts",
+    "systemPromptsPrefix": "System-agent prompts such as titles, compaction, insight, and subagent profiles live with their agents. Edit them from",
+    "systemAgentsPath": "Settings ▸ Agent library",
+    "systemPromptsSuffix": "directly or through an inherited customization.",
+    "openAgents": "Open the agents screen",
+    "requiredPlaceholders": "Required placeholders: {{placeholders}}.",
+    "emptyUsesDefault": "Leave it empty to use the built-in default.",
+    "resetDefault": "Reset to default",
+    "default": "default",
+    "customized": "customized",
+    "epochHint": "This prompt is part of the cached static system prefix; changes take effect in new sessions or epochs.",
+    "newSessions": "takes effect in new sessions",
+    "missingPlaceholder": "missing placeholder: {{placeholders}} — falls back to the default"
+  },
+  "workspace": {
+    "introPrefix": "These settings apply only to",
+    "introSuffix": ". Every agent has an explicit provider and model; new agents inherit the setup of the first existing agent.",
+    "stats": { "agents": "Agents", "sessions": "Sessions", "tasks": "Tasks", "created": "Created" },
+    "name": "Workspace name",
+    "icon": "Icon (emoji)",
+    "responseStyle": "Response style",
+    "terseLabel": "Terse mode (caveman)",
+    "terseHint": "Adds a concise-response instruction to each agent's static system prompt in this workspace. It removes filler, pleasantries, and hedging while preserving code, commands, paths, and errors verbatim. Edit the prompt under Prompts ▸ Terse (caveman) response style. Changes reach open sessions after /refresh-context or in a new session.",
+    "codebaseMemoryTitle": "Code knowledge graph (codebase-memory)",
+    "codebaseMemoryLabel": "codebase-memory capability",
+    "codebaseMemoryHint": "When this workspace has a codebase-memory MCP server, agents receive a knowledge-graph hint, use an isolated workspace index store, automatically index session working directories, and can use codebase_workspace_search. Off disables this integration completely.",
+    "zvecTitle": "Semantic search (zvec-grep)",
+    "zvecLabel": "zvec-grep capability",
+    "zvecHint": "When this workspace has a zvec-grep MCP server, agents receive semantic-search guidance, the tool is exempt from their allowlist, and missing working-directory indexes are built in the background. Off disables the integration while leaving configured MCP tools visible.",
+    "codexPluginsTitle": "Codex plugin support",
+    "codexPluginsLabel": "Codex plugins",
+    "codexPluginsHint": "When enabled, codex-cli turns use the configured marketplaces and plugins. They are installed once per persistent chat home. Auxiliary title, summary, and insight calls do not install plugins. TionHarness does not include its own marketplace.",
+    "promptEpochTitle": "Prompt cache — frozen context (prompt epoch)",
+    "promptEpochLabel": "Prompt epoch (frozen context snapshot)",
+    "promptEpochHint": "Freezes a session's static system prompt and tool schemas at session start so mid-session skill, setting, instruction, and MCP changes do not break the prompt cache. They apply on compaction, model change, /refresh-context, or a new session.",
+    "sqzTitle": "Shell output compression (sqz)",
+    "sqzLabel": "Compress large shell output with sqz",
+    "sqzHint": "Compresses Bash or PowerShell command output in process before it reaches the model. The live UI keeps the raw output. Automatic follows the sqz hook; On requires the sqz binary; Off disables it.",
+    "sqzAuto": "Automatic (when the sqz hook is connected)",
+    "rtkTitle": "Shell command rewriting (rtk)",
+    "rtkLabel": "Run test and build commands through rtk",
+    "rtkHint": "Rewrites measured test, build, lint, and selected Git commands before execution to produce less output. The agent receives a summary that preserves failures with file and line locations. Automatic follows the rtk hook; On requires the rtk binary; Off disables it.",
+    "rtkAuto": "Automatic (when the rtk hook is connected)",
+    "forceOn": "On (force)",
+    "off": "Off",
+    "deleteHint": "Permanently delete this workspace and all of its data.",
+    "delete": "Delete workspace"
+  },
+  "zvec": {
+    "title": "zvec-grep integration",
+    "description": "When a <code>zvec-grep</code> MCP server is added, TionHarness adds a <strong>semantic workspace search available</strong> block to the agent context, fills a missing <code>root</code> from the working directory, exempts the tool from the agent allowlist, and indexes the session working directory in the background when needed. The index is written to <code>.zvec-grep/</code>, excluded through <code>.git/info/exclude</code>, and built with <code>local/potion-code-16m-v2</code>. Toggle this under <strong>Settings ▸ This workspace</strong>.",
+    "installFirst": "zg must be on PATH first and appear as installed above",
+    "removeTitle": "Remove the MCP server",
+    "addTitle": "Add the MCP server automatically (zg server --stdio)",
+    "remove": "Remove MCP",
+    "add": "Add MCP automatically",
+    "notFound": "zg was not found on PATH.",
+    "connected": "MCP server added ({{name}}) — agents can use it.",
+    "notConnected": "MCP server has not been added."
+  }
+}

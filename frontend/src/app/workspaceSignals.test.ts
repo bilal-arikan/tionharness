@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { i18next } from '@/i18n'
 import { emptyLanes, type LaneState } from '@/shared/lib/laneModel'
 import { diffSignals } from './workspaceSignals'
 
@@ -6,7 +7,28 @@ function withFires(s: LaneState, fires: LaneState['fires']): LaneState {
   return { ...s, fires }
 }
 
+beforeEach(() => i18next.changeLanguage('tr'))
+afterEach(() => i18next.changeLanguage('tr'))
+
 describe('diffSignals', () => {
+  it('uses the current language for notifications while retaining event data', async () => {
+    const before = emptyLanes()
+    const after: LaneState = {
+      ...before,
+      activity: [
+        { seq: 1, kind: 'coordination', at: 1, coordinatorId: 'SES1', phase: 'stall_halt' },
+      ],
+    }
+    await i18next.changeLanguage('en')
+    expect(diffSignals(before, after)[0]?.text).toBe('✕ Coordinator SES1 halted: phantom spawn')
+    await i18next.changeLanguage('tr')
+    expect(diffSignals(before, after)[0]?.text).toBe(
+      '✕ Koordinatör SES1 durduruldu: gerçekleşmeyen alt ajan başlatma',
+    )
+    after.activity[0].reason = 'A user-provided reason'
+    expect(diffSignals(before, after)[0]?.text).toContain('A user-provided reason')
+  })
+
   it('toasts new fires only, skipping cooldown noise', () => {
     const a = emptyLanes()
     const b = withFires(a, [

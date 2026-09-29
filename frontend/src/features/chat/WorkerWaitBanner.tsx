@@ -4,6 +4,8 @@
 // waiting, and this makes that explicit. Each running worker is clickable and
 // opens its own session (workers are first-class sessions). See _Docs/47.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Users } from 'lucide-react'
 import type { WorkerInfo } from '@/types'
 import { serverNow } from '@/shared/lib/serverClock'
@@ -14,14 +16,20 @@ import { ComposerCard } from './ComposerCard'
 // elapsedLabel renders seconds since startedAt as a compact "Xsn" / "Xdk Ysn".
 // Returns null when the start time is unknown (startedAt 0) or in the future, so
 // the chip simply omits the duration instead of showing "0sn" forever.
-function elapsedLabel(startedAt: number, nowSec: number): string | null {
+function elapsedLabel(
+  t: TFunction<'chatStatus'>,
+  startedAt: number,
+  nowSec: number,
+): string | null {
   if (startedAt <= 0) return null
   const secs = nowSec - startedAt
   if (secs < 0) return null
-  if (secs < 60) return `${secs}sn`
+  if (secs < 60) return t('workerWait.seconds', { seconds: secs })
   const m = Math.floor(secs / 60)
   const s = secs % 60
-  return s ? `${m}dk ${s}sn` : `${m}dk`
+  return s
+    ? t('workerWait.minutesSeconds', { minutes: m, seconds: s })
+    : t('workerWait.minutes', { minutes: m })
 }
 
 interface Props {
@@ -35,6 +43,7 @@ interface Props {
 }
 
 export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props) {
+  const { t } = useTranslation('chatStatus')
   // Tick once a second so each chip's elapsed time stays live without the parent
   // re-rendering (and without any network traffic — the roster itself is
   // event-driven).
@@ -54,13 +63,12 @@ export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props)
         <Users size={15} className="shrink-0 animate-pulse text-[var(--color-accent)]" />
         <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
           <span className="font-medium text-[var(--color-accent)]">
-            {workers.length} worker çalışıyor
+            {t('workerWait.running', { count: workers.length })}
           </span>
-          <span className="text-[var(--color-text-dim)]"> — sonuçları bekleniyor</span>
+          <span className="text-[var(--color-text-dim)]"> {t('workerWait.waiting')}</span>
           {doneCount > 0 && (
             <span className="text-[var(--color-text-dim)]">
-              {' '}
-              · {doneCount}/{total} bitti
+              {t('workerWait.done', { done: doneCount, total })}
             </span>
           )}
         </span>
@@ -68,7 +76,7 @@ export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props)
       <ul className="mt-1.5 flex flex-wrap gap-1.5">
         {workers.map((w) => {
           const agent = workerAgent(w)
-          const elapsed = elapsedLabel(w.startedAt, now)
+          const elapsed = elapsedLabel(t, w.startedAt, now)
           // The chip is two lines now (name over id · model), so it is capped and
           // allowed to shrink: a wide fan-out wraps into rows instead of pushing
           // the card past the composer width.
@@ -79,7 +87,7 @@ export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props)
               agent={agent}
               size="sm"
               showId={Boolean(w.agentId)}
-              subtitle="model"
+              subtitle={t('workerWait.model')}
               trailing={
                 elapsed ? (
                   <span className="shrink-0 text-[10px] tabular-nums text-[var(--color-text-dim)]">
@@ -95,7 +103,7 @@ export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props)
                 <button
                   type="button"
                   onClick={() => onSelectSession(w.sessionId)}
-                  title={`${agent.name} — worker oturumunu aç`}
+                  title={t('workerWait.openSession', { name: agent.name })}
                   className={`${chip} transition hover:border-[var(--color-accent)]`}
                 >
                   {inner}

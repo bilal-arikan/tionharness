@@ -1,4 +1,6 @@
 import type { DashboardCounters } from '@/types'
+import { useTranslation } from 'react-i18next'
+import { count } from '@/shared/lib/format'
 
 interface Tile {
   label: string
@@ -12,32 +14,52 @@ interface Tile {
 // StatTiles is the headline row. Only counts that a reader can ACT on are here —
 // a tile that never changes teaches people to stop looking at the row.
 export function StatTiles({ c }: { c: DashboardCounters }) {
+  const { t } = useTranslation('dashboard')
   const tiles: Tile[] = [
-    { label: 'Ajan', value: c.agents },
+    { label: t('stats.agents'), value: c.agents },
     {
-      label: 'Aktif oturum',
+      label: t('stats.activeSessions'),
       value: c.sessionsActive,
-      hint: `${c.sessions} toplam${c.sessionsArchived > 0 ? ` · ${c.sessionsArchived} arşiv` : ''}`,
+      hint: t('stats.sessionsHint', {
+        total: count(c.sessions),
+        archived:
+          c.sessionsArchived > 0
+            ? t('stats.archived', {
+                count: c.sessionsArchived,
+                value: count(c.sessionsArchived),
+              })
+            : '',
+      }),
     },
     {
-      label: 'Takılmış oturum',
+      label: t('stats.stuckSessions'),
       value: c.sessionsStuck,
       // Zero is the healthy value here, so it must not shout.
       tone: c.sessionsStuck > 0 ? 'danger' : 'normal',
-      hint: c.sessionsStuck > 0 ? 'StuckTurns > 0' : 'temiz',
+      hint: c.sessionsStuck > 0 ? 'StuckTurns > 0' : t('stats.clear'),
     },
-    { label: 'Açık kart', value: c.tasksOpen, hint: `${c.tasks} toplam` },
     {
-      label: 'Çalışan koşu',
+      label: t('stats.openCards'),
+      value: c.tasksOpen,
+      hint: t('stats.total', { count: c.tasks, value: count(c.tasks) }),
+    },
+    {
+      label: t('stats.runningRuns'),
       value: c.runsRunning,
       tone: c.runsRunning > 0 ? 'warn' : 'normal',
-      hint: c.runsWaiting > 0 ? `${c.runsWaiting} girdi bekliyor` : `${c.runs} toplam`,
+      hint:
+        c.runsWaiting > 0
+          ? t('stats.waitingForInput', {
+              count: c.runsWaiting,
+              value: count(c.runsWaiting),
+            })
+          : t('stats.total', { count: c.runs, value: count(c.runs) }),
     },
     {
-      label: 'Başarısız koşu',
+      label: t('stats.failedRuns'),
       value: c.runsFailed,
       tone: c.runsFailed > 0 ? 'danger' : 'normal',
-      hint: c.runsFailed > 0 ? 'incelenmeli' : 'temiz',
+      hint: c.runsFailed > 0 ? t('stats.needsReview') : t('stats.clear'),
     },
   ]
 
@@ -58,7 +80,7 @@ export function StatTiles({ c }: { c: DashboardCounters }) {
                   : ''
             }`}
           >
-            {t.value}
+            {count(t.value)}
           </div>
           {t.hint && (
             <div className="mt-0.5 truncate text-[11px] text-[var(--color-text-dim)]">{t.hint}</div>

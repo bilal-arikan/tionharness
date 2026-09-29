@@ -2,6 +2,7 @@
 // and lets the user add/edit/toggle/delete them. Self-contained (own load/save),
 // exempt from the global Save bar — like WorkspaceFilesPanel.
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Webhook, Trash2, Pencil, Plus, Lock } from 'lucide-react'
 import { api } from '@/api'
 import type { Hook, HookEvent, BuiltinHook } from '@/types'
@@ -22,6 +23,7 @@ const EMPTY: HookInput = {
 }
 
 export function HooksPanel({ onError }: Props) {
+  const { t } = useTranslation('settingsMain')
   const [hooks, setHooks] = useState<Hook[]>([])
   const [builtins, setBuiltins] = useState<BuiltinHook[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,7 +69,7 @@ export function HooksPanel({ onError }: Props) {
 
   const save = async () => {
     if (!draft.command.trim()) {
-      onError('Komut zorunludur')
+      onError(t('hooks.commandRequired'))
       return
     }
     setBusy(true)
@@ -76,7 +78,7 @@ export function HooksPanel({ onError }: Props) {
       else await api.createHook(draft)
       setEditing(null)
       await load()
-      toast.success(editing ? 'Hook güncellendi' : 'Hook eklendi')
+      toast.success(editing ? t('hooks.updated') : t('hooks.added'))
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -96,11 +98,11 @@ export function HooksPanel({ onError }: Props) {
   const remove = async (h: Hook) => {
     // Destructive and irreversible (the command is not stored anywhere else) —
     // same confirm pattern the other panels use before a permanent delete.
-    if (!confirm('Bu hook kalıcı olarak silinsin mi?')) return
+    if (!confirm(t('hooks.deleteConfirm'))) return
     try {
       await api.deleteHook(h.id)
       await load()
-      toast.success('Hook silindi')
+      toast.success(t('hooks.deleted'))
     } catch (e) {
       onError((e as Error).message)
     }
@@ -113,20 +115,9 @@ export function HooksPanel({ onError }: Props) {
     <div className="space-y-4">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-dim)]">
         <p className="mb-1 flex items-center gap-2 font-medium text-[var(--color-text)]">
-          <Webhook size={15} /> Araç kancaları (PreToolUse / PostToolUse)
+          <Webhook size={15} /> {t('hooks.title')}
         </p>
-        <p>
-          Kancalar, native (anthropic/minimax) araç döngüsünde her araç çağrısının etrafında bir dış
-          komut çalıştırır. <strong>PreToolUse</strong> girdiyi değiştirebilir, çağrıyı
-          onaylayabilir veya engelleyebilir; <strong>PostToolUse</strong> çıktıyı dönüştürebilir
-          (ör. sıkıştırma) ya da bağlam ekleyebilir. Komut, JSON'u stdin'den alır, JSON'u stdout'a
-          döner; <code>exit 2</code> engelle demektir (Claude Code sözleşmesi).{' '}
-          <em>
-            claude-cli ajanlarında bu hook'lar, "Hook'ları claude-cli'ye geçir" ayarı açıkken{' '}
-            <code>--settings</code> ile CLI'nin kendi tool döngüsüne de uygulanır; ancak CLI
-            hook'ları CLI'nin kendi shell'inde koşar (Windows PowerShell uyumsuzluğuna dikkat).
-          </em>
-        </p>
+        <p>{t('hooks.description')}</p>
       </div>
 
       <div
@@ -134,25 +125,17 @@ export function HooksPanel({ onError }: Props) {
         data-testid="hooks-codex-not-applied-notice"
         className="rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_14%,var(--color-surface))] p-4 text-sm text-[var(--color-text-dim)]"
       >
-        <p className="font-medium text-[var(--color-text)]">
-          ⚠️ codex-cli ajanlarında hook&apos;lar çalışmaz
-        </p>
-        <p className="mt-1">
-          codex-cli kendi araç döngüsünü ayrı bir alt süreçte koşturur ve hook aktarımı sunmaz.
-          Yukarıdaki PreToolUse/PostToolUse hook&apos;ların hiçbiri bu ajanlarda tetiklenmez — ne
-          codex&apos;in kendi shell/apply_patch araçları için, ne de MCP köprüsü üzerinden çağrılan
-          TionHarness araçları için. Sonuç olarak <code>sqz</code> gibi PostToolUse token-optimizer
-          sıkıştırması da codex-cli ajanlarında devre dışıdır.
-        </p>
+        <p className="font-medium text-[var(--color-text)]">⚠️ {t('hooks.codexWarningTitle')}</p>
+        <p className="mt-1">{t('hooks.codexWarningBody')}</p>
       </div>
 
       {loading ? (
-        <LoadingState label="Yükleniyor…" />
+        <LoadingState label={t('shared.loading')} />
       ) : (
         <>
           <div className="flex flex-col gap-2">
             {hooks.length === 0 && (
-              <div className="text-sm text-[var(--color-text-dim)]">Henüz hook yok.</div>
+              <div className="text-sm text-[var(--color-text-dim)]">{t('hooks.empty')}</div>
             )}
             {hooks.map((h) => (
               <div
@@ -171,7 +154,9 @@ export function HooksPanel({ onError }: Props) {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-mono text-xs">{h.command}</div>
                   <div className="text-[11px] text-[var(--color-text-dim)]">
-                    eşleşme: <code>{h.matcher || '* (tüm araçlar)'}</code> · {h.timeoutSec || 30}s
+                    {t('hooks.matcher')}: <code>{h.matcher || t('hooks.allTools')}</code> ·{' '}
+                    {h.timeoutSec || 30}
+                    {t('shared.secondsShort')}
                   </div>
                 </div>
                 <button
@@ -184,7 +169,7 @@ export function HooksPanel({ onError }: Props) {
                       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
                   }`}
                 >
-                  {h.enabled ? 'Aktif' : 'Pasif'}
+                  {h.enabled ? t('shared.active') : t('shared.inactive')}
                 </button>
                 <button
                   onClick={() => startEdit(h)}
@@ -206,12 +191,14 @@ export function HooksPanel({ onError }: Props) {
 
           {editing === null ? (
             <Button data-testid="hook-create" onClick={startCreate}>
-              <Plus size={15} /> Hook ekle
+              <Plus size={15} /> {t('hooks.add')}
             </Button>
           ) : (
             <div className="space-y-3 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] p-4">
-              <div className="text-sm font-semibold">{editing ? 'Hook düzenle' : 'Yeni hook'}</div>
-              <Field label="Olay">
+              <div className="text-sm font-semibold">
+                {editing ? t('hooks.edit') : t('hooks.new')}
+              </div>
+              <Field label={t('hooks.event')}>
                 <select
                   data-testid="hook-event-select"
                   data-hook-id={editing}
@@ -219,27 +206,22 @@ export function HooksPanel({ onError }: Props) {
                   onChange={(e) => set('event', e.target.value as HookEvent)}
                   className={inputCls}
                 >
-                  <optgroup label="Araç (yalnız native döngü)">
-                    <option value="PreToolUse">PreToolUse (çağrı öncesi)</option>
-                    <option value="PostToolUse">PostToolUse (çağrı sonrası)</option>
+                  <optgroup label={t('hooks.toolEvents')}>
+                    <option value="PreToolUse">{t('hooks.options.preToolUse')}</option>
+                    <option value="PostToolUse">{t('hooks.options.postToolUse')}</option>
                   </optgroup>
-                  <optgroup label="Yaşam döngüsü (native + claude-cli)">
-                    <option value="UserPromptSubmit">
-                      UserPromptSubmit (prompt öncesi — bağlam ekle/engelle)
-                    </option>
-                    <option value="SessionStart">SessionStart (oturum ilk turu)</option>
-                    <option value="Stop">Stop (ana ajan turu bitti)</option>
-                    <option value="SubagentStop">SubagentStop (alt-ajan bitti)</option>
-                    <option value="PreCompact">PreCompact (özetleme öncesi)</option>
-                    <option value="Notification">Notification (bildirim)</option>
-                    <option value="SessionEnd">SessionEnd (oturum silindi)</option>
+                  <optgroup label={t('hooks.lifecycleEvents')}>
+                    <option value="UserPromptSubmit">{t('hooks.options.userPromptSubmit')}</option>
+                    <option value="SessionStart">{t('hooks.options.sessionStart')}</option>
+                    <option value="Stop">{t('hooks.options.stop')}</option>
+                    <option value="SubagentStop">{t('hooks.options.subagentStop')}</option>
+                    <option value="PreCompact">{t('hooks.options.preCompact')}</option>
+                    <option value="Notification">{t('hooks.options.notification')}</option>
+                    <option value="SessionEnd">{t('hooks.options.sessionEnd')}</option>
                   </optgroup>
                 </select>
               </Field>
-              <Field
-                label="Eşleşme"
-                hint="Araç olayları: araç adı glob'u (boş = tümü, örn: Bash, Write, http_*). SessionStart: kaynak (startup|resume). PreCompact: tetik (manual|auto). Diğer yaşam-döngüsü olayları: boş bırakın."
-              >
+              <Field label={t('hooks.matcher')} hint={t('hooks.matcherHint')}>
                 <input
                   data-testid="hook-matcher-input"
                   data-hook-id={editing}
@@ -249,10 +231,7 @@ export function HooksPanel({ onError }: Props) {
                   placeholder="*"
                 />
               </Field>
-              <Field
-                label="Komut"
-                hint="Shell komutu (Windows: PowerShell). JSON stdin alır, JSON stdout döner."
-              >
+              <Field label={t('hooks.command')} hint={t('hooks.commandHint')}>
                 <textarea
                   data-testid="hook-command-input"
                   data-hook-id={editing}
@@ -263,7 +242,7 @@ export function HooksPanel({ onError }: Props) {
                   placeholder="sqz hook"
                 />
               </Field>
-              <Field label="Zaman aşımı (sn)" hint="1–120 arası.">
+              <Field label={t('hooks.timeout')} hint={t('hooks.timeoutHint')}>
                 <input
                   data-testid="hook-timeout-input"
                   data-hook-id={editing}
@@ -275,7 +254,11 @@ export function HooksPanel({ onError }: Props) {
                   max={120}
                 />
               </Field>
-              <Toggle label="Aktif" checked={draft.enabled} onChange={(v) => set('enabled', v)} />
+              <Toggle
+                label={t('shared.active')}
+                checked={draft.enabled}
+                onChange={(v) => set('enabled', v)}
+              />
               <div className="flex gap-2">
                 <Button
                   data-testid="hook-save"
@@ -283,10 +266,10 @@ export function HooksPanel({ onError }: Props) {
                   onClick={save}
                   disabled={busy}
                 >
-                  {busy ? 'Kaydediliyor…' : 'Kaydet'}
+                  {busy ? t('shared.saving') : t('shared.save')}
                 </Button>
                 <Button variant="secondary" onClick={cancel}>
-                  İptal
+                  {t('shared.cancel')}
                 </Button>
               </div>
             </div>
@@ -297,11 +280,10 @@ export function HooksPanel({ onError }: Props) {
       {builtins.length > 0 && (
         <div className="space-y-2">
           <p className="flex items-center gap-2 pt-2 text-sm font-medium text-[var(--color-text)]">
-            <Lock size={14} /> Yerleşik davranışlar (salt-okunur)
+            <Lock size={14} /> {t('hooks.builtins.title')}
           </p>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            TionHarness'in araç döngüsünün etrafına otomatik enjekte ettiği kancalar.
-            Düzenlenemezler; bazıları Ayarlar'daki ilgili anahtarla açılıp kapatılır.
+            {t('hooks.builtins.description')}
           </p>
           {builtins.map((b) => (
             <div
@@ -323,7 +305,7 @@ export function HooksPanel({ onError }: Props) {
                 </div>
                 {b.setting && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
-                    ayar: <code>{b.setting}</code>
+                    {t('hooks.builtins.setting')}: <code>{b.setting}</code>
                   </div>
                 )}
               </div>
@@ -334,7 +316,7 @@ export function HooksPanel({ onError }: Props) {
                     : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
                 }`}
               >
-                {b.enabled ? 'Aktif' : 'Pasif'}
+                {b.enabled ? t('shared.active') : t('shared.inactive')}
               </span>
             </div>
           ))}

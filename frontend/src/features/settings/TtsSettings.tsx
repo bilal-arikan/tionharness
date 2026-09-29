@@ -28,25 +28,15 @@ import {
   TTS_PITCH_MAX,
 } from '@/shared/lib/tts'
 import { Field, Slider, Segmented, inputCls } from './primitives'
+import { useTranslation } from 'react-i18next'
 
-const ENGINE_OPTIONS: { value: TtsEngine; label: string; hint?: string }[] = [
-  {
-    value: 'auto',
-    label: 'Otomatik',
-    hint: 'Sunucuda Piper varsa onu, yoksa tarayıcı sesini kullanır.',
-  },
-  { value: 'browser', label: 'Tarayıcı', hint: 'Cihazın kendi sesleri (speechSynthesis).' },
-  {
-    value: 'server',
-    label: 'Sunucu (Piper)',
-    hint: 'Sunucuda üretilir, her cihazda aynı ses — telefonda da çalar.',
-  },
-]
+const ENGINE_VALUES: TtsEngine[] = ['auto', 'browser', 'server']
 
 // TtsSettings exposes read-aloud engine + voice controls: server (Piper) vs
 // browser engine, the matching voice list, rate and pitch, plus a test button.
 // All prefs are device-local (tts.ts) and apply to auto-read and the 🔊 button.
 export function TtsSettings() {
+  const { t } = useTranslation('settings')
   const [engine, setEngine] = useState<TtsEngine>(() => ttsEngine())
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>(() => ttsVoices())
   const [voiceURI, setVoice] = useState(() => ttsVoiceURI())
@@ -96,35 +86,40 @@ export function TtsSettings() {
     setVolume(v)
     setTtsVolume(v) // broadcast → every bubble slider updates too
   }
-  const test = () => speak('Merhaba, bu bir sesli okuma örneğidir. This is a voice sample.')
+  const test = () => speak(t('tts.sample'))
 
   const sortedBrowser = [...browserVoices].sort(
     (a, b) => a.lang.localeCompare(b.lang) || a.name.localeCompare(b.name),
   )
+  const engineOptions = ENGINE_VALUES.map((value) => ({
+    value,
+    label: t(`tts.engines.${value}.label`),
+    hint: t(`tts.engines.${value}.hint`),
+  }))
 
   return (
     <div className="flex flex-col gap-3">
       {/* Engine choice is only meaningful when the server actually has Piper. */}
       {srv.available && (
         <Segmented
-          label="Seslendirme motoru"
+          label={t('tts.engine')}
           value={engine}
-          options={ENGINE_OPTIONS}
+          options={engineOptions}
           onChange={(v) => pickEngine(v as TtsEngine)}
         />
       )}
 
       {eff === 'server' ? (
         <Field
-          label="Sunucu sesi (Piper)"
-          hint={`${srv.voices.length} ses yüklü. Sunucuda üretilir; telefon dahil her cihazda aynı ses.`}
+          label={t('tts.serverVoice')}
+          hint={t('tts.serverVoiceHint', { count: srv.voices.length })}
         >
           <select
             className={inputCls}
             value={srvVoice}
             onChange={(e) => pickServerVoice(e.target.value)}
           >
-            <option value="">Otomatik (ilk yüklü ses)</option>
+            <option value="">{t('tts.autoServerVoice')}</option>
             {srv.voices.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name} — {v.lang}
@@ -135,11 +130,11 @@ export function TtsSettings() {
       ) : (
         ttsSupported() && (
           <Field
-            label="Tarayıcı sesi"
+            label={t('tts.browserVoice')}
             hint={
               sortedBrowser.length
-                ? `${sortedBrowser.length} ses (☁ = çevrimiçi). Boş = dile göre otomatik. Daha fazlası için Windows dil paketi ekleyin.`
-                : 'Ses listesi yükleniyor veya cihazda TTS sesi yok.'
+                ? t('tts.browserVoiceHint', { count: sortedBrowser.length })
+                : t('tts.browserVoiceEmpty')
             }
           >
             <select
@@ -147,12 +142,12 @@ export function TtsSettings() {
               value={voiceURI}
               onChange={(e) => pickBrowserVoice(e.target.value)}
             >
-              <option value="">Otomatik (dile göre)</option>
+              <option value="">{t('tts.autoBrowserVoice')}</option>
               {sortedBrowser.map((v) => (
                 <option key={v.voiceURI} value={v.voiceURI}>
                   {v.localService ? '' : '☁ '}
                   {v.name} — {v.lang}
-                  {v.default ? ' (varsayılan)' : ''}
+                  {v.default ? ` (${t('tts.defaultVoice')})` : ''}
                 </option>
               ))}
             </select>
@@ -162,7 +157,7 @@ export function TtsSettings() {
 
       {/* Global volume — same value as every chat bubble's inline slider. */}
       <Slider
-        label="Ses seviyesi"
+        label={t('tts.volume')}
         badge={`%${Math.round(volume * 100)}`}
         min={0}
         max={1}
@@ -171,7 +166,7 @@ export function TtsSettings() {
         onChange={changeVolume}
       />
       <Slider
-        label="Hız"
+        label={t('tts.rate')}
         badge={`${rate.toFixed(2)}×`}
         min={TTS_RATE_MIN}
         max={TTS_RATE_MAX}
@@ -182,7 +177,7 @@ export function TtsSettings() {
       {/* Pitch only affects the browser engine (Piper playback has no pitch knob). */}
       {eff !== 'server' && (
         <Slider
-          label="Ton"
+          label={t('tts.pitch')}
           badge={pitch.toFixed(2)}
           min={TTS_PITCH_MIN}
           max={TTS_PITCH_MAX}
@@ -198,7 +193,7 @@ export function TtsSettings() {
         className="flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm font-medium transition hover:border-[var(--color-accent)]"
       >
         <Play size={14} />
-        Sesi dene
+        {t('tts.test')}
       </button>
     </div>
   )

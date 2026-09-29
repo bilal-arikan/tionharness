@@ -5,6 +5,7 @@ import type { Artifact } from '@/types'
 import type { MultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupDnD, type GroupDnD } from '@/shared/hooks/useGroupDnD'
 import { UNGROUPED, artifactGroupKey, artifactId } from './artifactGrouping'
+import { useTranslation } from 'react-i18next'
 
 export interface ArtifactBulkActions {
   // Draft group name + busy flag for the bulk "set group" action on the selection.
@@ -43,6 +44,7 @@ export function useArtifactBulkActions({
   reload,
   onError,
 }: UseArtifactBulkActionsOptions): ArtifactBulkActions {
+  const { t } = useTranslation('artifacts')
   const [bulkGroup, setBulkGroup] = useState('')
   const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
   const [bulkArchiveBusy, setBulkArchiveBusy] = useState(false)
@@ -50,7 +52,7 @@ export function useArtifactBulkActions({
   const bulkDelete = useCallback(async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
-    if (!confirm(`${ids.length} artifact kalıcı olarak silinsin mi?`)) return
+    if (!confirm(t('confirm.bulkDelete', { count: ids.length }))) return
     setList((prev) => prev.filter((a) => !sel.selected.has(a.id)))
     setActiveId((cur) => (cur && sel.selected.has(cur) ? null : cur))
     sel.clear()
@@ -60,7 +62,7 @@ export function useArtifactBulkActions({
       onError((e as Error).message)
       reload()
     }
-  }, [sel, onError, reload, setList, setActiveId])
+  }, [sel, onError, reload, setList, setActiveId, t])
 
   // Bulk-set the `group` of every selected artifact at once, so a batch lands
   // under one collapsible header without opening each artifact. An empty group

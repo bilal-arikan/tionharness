@@ -3,6 +3,7 @@
 // used identically for agents, flows, workspace skills and schedules so each
 // category can be exported item-by-item (not just an all-or-nothing toggle).
 import type { Dispatch, SetStateAction } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
 
 // One selectable row. `emoji` (e.g. an agent avatar) takes precedence over the
@@ -34,6 +35,7 @@ export function ExportPickList({
   emptyHint,
   note,
 }: Props) {
+  const { t } = useTranslation('workspace')
   const allPicked = entries.length > 0 && picked.size === entries.length
   const toggle = (id: string) =>
     setPicked((prev) => {
@@ -58,7 +60,7 @@ export function ExportPickList({
             onClick={toggleAll}
             className="text-xs text-[var(--color-accent)] hover:underline"
           >
-            {allPicked ? 'Tümünü kaldır' : 'Tümünü seç'}
+            {allPicked ? t('export.pickList.clearAll') : t('export.pickList.selectAll')}
           </button>
         )}
       </div>

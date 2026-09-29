@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { Trash2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button, ModalOverlay } from '@/shared/components'
 
 interface Props {
@@ -31,6 +32,7 @@ export function FormModal({
   testId,
   children,
 }: Props) {
+  const { t } = useTranslation('schedules')
   return (
     <ModalOverlay onClose={onClose}>
       <div
@@ -47,8 +49,8 @@ export function FormModal({
             type="button"
             onClick={onClose}
             className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
-            title="Kapat"
-            aria-label="Kapat"
+            title={t('common.close')}
+            aria-label={t('common.close')}
           >
             <X size={16} />
           </button>
@@ -62,15 +64,15 @@ export function FormModal({
               data-testid={deleteTestId}
               onClick={onDelete}
               className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
-              title="Bu kuralı sil"
+              title={t('form.deleteRule')}
             >
               <Trash2 size={14} />
-              Sil
+              {t('common.delete')}
             </button>
           )}
           <div className="flex-1" />
           <Button variant="secondary" onClick={onClose}>
-            İptal
+            {t('common.cancel')}
           </Button>
           <Button onClick={onSubmit}>{submitLabel}</Button>
         </footer>

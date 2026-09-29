@@ -3,6 +3,7 @@
 // facet in the board filter bar so they behave identically.
 
 import { useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 
@@ -35,8 +36,9 @@ export function FacetDropdown({
   selected,
   onChange,
   mode = 'multi',
-  emptyHint = 'Seçenek yok',
+  emptyHint,
 }: Props) {
+  const { t } = useTranslation('tasks')
   const [open, setOpen] = useState(false)
   const ref = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
   const active = selected.length > 0
@@ -78,7 +80,7 @@ export function FacetDropdown({
         <div className="absolute left-0 z-30 mt-1 max-h-72 w-56 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-md)]">
           {options.length === 0 ? (
             <div className="px-2 py-3 text-center text-xs text-[var(--color-text-dim)]">
-              {emptyHint}
+              {emptyHint ?? t('filters.noOptions')}
             </div>
           ) : (
             options.map((opt) => {
@@ -126,7 +128,7 @@ export function FacetDropdown({
               }}
               className="mt-1 w-full rounded px-2 py-1.5 text-left text-xs text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)]"
             >
-              ✕ Temizle
+              ✕ {t('filters.clear')}
             </button>
           )}
         </div>

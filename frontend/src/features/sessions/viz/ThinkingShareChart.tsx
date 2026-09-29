@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
 import { formatTime } from '@/shared/lib/intl'
 import { count } from '@/shared/lib/format'
+import { useTranslation } from 'react-i18next'
 
 // ThinkingShareChart plots the hidden-reasoning share of each llm_call's output
 // over the session, from the debug journal's `think`/`out` fields. The API bills
@@ -10,6 +11,7 @@ import { count } from '@/shared/lib/format'
 // otherwise-invisible reasoning cost legible turn by turn. Renders nothing when
 // the session did no measurable thinking (a thinking-off agent is silent).
 export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) {
+  const { t } = useTranslation('sessions')
   const model = useMemo(() => {
     const calls = events.filter((e) => e.type === 'llm_call' && (e.out ?? 0) > 0)
     let totalOut = 0
@@ -28,7 +30,7 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
   if (!model) {
     return (
       <p className="text-[10px] text-[var(--color-text-dim)]">
-        Bu oturumda ölçülebilir gizli akıl yürütme yok (thinking kapalı ajan sessizdir).
+        {t('visualization.thinking.empty')}
       </p>
     )
   }
@@ -37,10 +39,10 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
     <div>
       <div className="mb-1.5 flex items-center gap-1.5 text-[10px]">
         <span className="rounded bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] px-1.5 py-px font-medium text-[var(--color-accent)]">
-          Ortalama düşünme: %{Math.round(model.share * 100)}
+          {t('visualization.thinking.average', { percent: Math.round(model.share * 100) })}
         </span>
         <span className="text-[var(--color-text-dim)]">
-          {count(model.totalThink)} tok gizli akıl yürütme
+          {t('visualization.thinking.total', { tokens: count(model.totalThink) })}
         </span>
       </div>
       {/* Per-call bars: height ∝ thinking share of that call's output. */}
@@ -48,14 +50,19 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
         {model.bars.map((b, i) => (
           <div
             key={i}
-            title={`${formatTime(new Date(b.ts), { timeStyle: 'medium' })} · %${Math.round(b.share * 100)} · ${b.think}/${b.out} tok`}
+            title={t('visualization.thinking.barTitle', {
+              time: formatTime(new Date(b.ts), { timeStyle: 'medium' }),
+              percent: Math.round(b.share * 100),
+              thinking: b.think,
+              output: b.out,
+            })}
             className="w-1.5 shrink-0 rounded-sm bg-[color-mix(in_srgb,var(--color-accent)_60%,transparent)]"
             style={{ height: `${Math.max(2, Math.round(b.share * 100))}%` }}
           />
         ))}
       </div>
       <p className="mt-1 text-[9px] text-[var(--color-text-dim)]">
-        Her çubuk bir LLM çağrısı; yükseklik = o çağrının çıktısının düşünmeye giden oranı.
+        {t('visualization.thinking.help')}
       </p>
     </div>
   )

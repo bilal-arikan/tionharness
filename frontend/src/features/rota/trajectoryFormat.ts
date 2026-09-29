@@ -1,15 +1,19 @@
 // Small formatters for trajectory metrics (Rota F3).
+import { i18next } from '@/i18n'
 
 export function fmtDurationSec(sec: number): string {
-  if (!sec || sec < 0) return '0 sn'
-  if (sec < 60) return `${Math.round(sec)} sn`
+  if (!sec || sec < 0) return i18next.t('duration.seconds', { ns: 'rota', count: 0 })
+  if (sec < 60) return i18next.t('duration.seconds', { ns: 'rota', count: Math.round(sec) })
   const m = Math.floor(sec / 60)
-  if (m < 60) return `${m} dk`
+  if (m < 60) return i18next.t('duration.minutes', { ns: 'rota', count: m })
   const h = Math.floor(m / 60)
   const rm = m % 60
-  if (h < 24) return rm ? `${h} sa ${rm} dk` : `${h} sa`
+  if (h < 24)
+    return rm
+      ? i18next.t('duration.hoursMinutes', { ns: 'rota', hours: h, minutes: rm })
+      : i18next.t('duration.hours', { ns: 'rota', count: h })
   const d = Math.floor(h / 24)
-  return `${d} g ${h % 24} sa`
+  return i18next.t('duration.daysHoursShort', { ns: 'rota', days: d, hours: h % 24 })
 }
 
 export function fmtTokens(n: number): string {

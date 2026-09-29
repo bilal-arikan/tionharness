@@ -2,6 +2,9 @@ import { AlarmClock } from 'lucide-react'
 import type { Message } from '@/types'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
+import { useTranslation } from 'react-i18next'
+
+const EM_DASH = String.fromCharCode(0x2014)
 
 // AutoPromptNote renders an auto-generated prompt (schedule_wake resume / scheduled
 // routine) as a centered "⏰ continuation" note instead of a user bubble — the
@@ -13,6 +16,7 @@ export function AutoPromptNote({
   message: Message
   onDelete?: (id: string) => void
 }) {
+  const { t } = useTranslation('chat')
   const m = message
   return (
     <div className="group flex flex-col items-center gap-1">
@@ -21,12 +25,17 @@ export function AutoPromptNote({
         <span className="min-w-0">
           <span className="font-medium text-[var(--color-accent)]">
             {m.origin === 'schedule'
-              ? 'Zamanlanmış görev'
+              ? t('autoPrompt.schedule')
               : m.origin === 'automation'
-                ? 'Otomasyon tetiği'
-                : 'Otomatik devam'}
+                ? t('autoPrompt.automation')
+                : t('autoPrompt.continuation')}
           </span>
-          {m.text.trim() && <span className="text-[var(--color-text-dim)]"> — {m.text}</span>}
+          {m.text.trim() && (
+            <span className="text-[var(--color-text-dim)]">
+              {' '}
+              {EM_DASH} {m.text}
+            </span>
+          )}
         </span>
       </div>
       <div className="flex items-center gap-2">
