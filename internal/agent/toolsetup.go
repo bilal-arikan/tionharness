@@ -341,7 +341,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		builtins = append(builtins, tools.NewReadSessionDebugTool(r.db))
 	}
 	if r.tun != nil {
-		builtins = append(builtins, tools.NewReadDeciderDebugTool(r.deciderHub))
+		builtins = append(builtins, tools.NewReadDeciderDebugTool(r.deciderHub, r.WorkspaceID()))
 	}
 
 	// get_view: the PULL channel of the projection layer — a compact, deterministic

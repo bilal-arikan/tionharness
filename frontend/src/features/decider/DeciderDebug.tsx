@@ -9,7 +9,15 @@ import { formatTime } from '@/shared/lib/intl'
 import { groupDebugEvents } from './debugModel'
 import { DeciderDebugTrace } from './DeciderDebugTrace'
 
-export function DeciderDebug({ view }: { view: DeciderView }) {
+export function DeciderDebug({
+  view,
+  sessionId,
+  workspaceId,
+}: {
+  view: DeciderView
+  sessionId?: string
+  workspaceId?: string
+}) {
   const { t } = useTranslation('decider')
   const [report, setReport] = useState<DeciderDebugReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -17,15 +25,22 @@ export function DeciderDebug({ view }: { view: DeciderView }) {
   const [authority, setAuthority] = useState('')
   const [instance, setInstance] = useState('')
   const [days, setDays] = useState(7)
-  const [refDraft, setRefDraft] = useState('')
-  const [ref, setRef] = useState('')
+  const [refDraft, setRefDraft] = useState(sessionId ?? '')
+  const [ref, setRef] = useState(sessionId ?? '')
   const [revision, setRevision] = useState(0)
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     let active = true
     api
-      .getDeciderDebug({ days, authority, instance, ref, limit: 500 })
+      .getDeciderDebug({
+        days,
+        authority,
+        instance,
+        ref: sessionId ?? ref,
+        workspaceId,
+        limit: 500,
+      })
       .then((result) => {
         if (active) {
           setReport(result)
@@ -41,7 +56,7 @@ export function DeciderDebug({ view }: { view: DeciderView }) {
     return () => {
       active = false
     }
-  }, [days, authority, instance, ref, revision])
+  }, [days, authority, instance, ref, revision, sessionId, workspaceId])
 
   const reload = () => {
     setLoading(true)
@@ -50,7 +65,14 @@ export function DeciderDebug({ view }: { view: DeciderView }) {
   const download = async () => {
     setExporting(true)
     try {
-      const data = await api.getDeciderDebug({ days, authority, instance, ref, limit: 5000 })
+      const data = await api.getDeciderDebug({
+        days,
+        authority,
+        instance,
+        ref: sessionId ?? ref,
+        workspaceId,
+        limit: 5000,
+      })
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
       )
@@ -82,10 +104,10 @@ export function DeciderDebug({ view }: { view: DeciderView }) {
           reload()
         }}
       >
-        <label className="text-xs">
+        <label className="min-w-0 text-xs">
           {t('debug.authority')}
           <select
-            className={inputCls}
+            className={`${inputCls} block min-w-0 w-full`}
             value={authority}
             onChange={(e) => {
               setLoading(true)
@@ -101,10 +123,10 @@ export function DeciderDebug({ view }: { view: DeciderView }) {
             <option value="model-test">{t('debug.modelTest')}</option>
           </select>
         </label>
-        <label className="text-xs">
+        <label className="min-w-0 text-xs">
           {t('authorities.model')}
           <select
-            className={inputCls}
+            className={`${inputCls} block min-w-0 w-full`}
             value={instance}
             onChange={(e) => {
               setLoading(true)
@@ -119,10 +141,10 @@ export function DeciderDebug({ view }: { view: DeciderView }) {
             ))}
           </select>
         </label>
-        <label className="text-xs">
+        <label className="min-w-0 text-xs">
           {t('debug.window')}
           <select
-            className={inputCls}
+            className={`${inputCls} block min-w-0 w-full`}
             value={days}
             onChange={(e) => {
               setLoading(true)
@@ -136,11 +158,12 @@ export function DeciderDebug({ view }: { view: DeciderView }) {
             ))}
           </select>
         </label>
-        <label className="text-xs">
+        <label className="min-w-0 text-xs">
           {t('debug.reference')}
           <input
-            className={inputCls}
+            className={`${inputCls} block min-w-0 w-full`}
             value={refDraft}
+            readOnly={!!sessionId}
             maxLength={128}
             onChange={(e) => setRefDraft(e.target.value)}
             placeholder={t('debug.referenceHint')}

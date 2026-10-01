@@ -60,17 +60,19 @@ const (
 
 // Settings groups, in display order.
 const (
-	GroupSafety       = "safety"
-	GroupCoordination = "coordination"
-	GroupFlows        = "flows"
-	GroupRouting      = "routing"
-	GroupContext      = "context"
-	GroupHousekeeping = "housekeeping"
+	GroupSafety        = "safety"
+	GroupSession       = "session"
+	GroupCollaboration = "collaboration"
+	GroupCoordination  = "coordination"
+	GroupFlows         = "flows"
+	GroupRouting       = "routing"
+	GroupContext       = "context"
+	GroupHousekeeping  = "housekeeping"
 )
 
 // Groups lists the settings groups in display order.
 func Groups() []string {
-	return []string{GroupSafety, GroupCoordination, GroupFlows, GroupRouting, GroupContext, GroupHousekeeping}
+	return []string{GroupSession, GroupContext, GroupCollaboration, GroupSafety, GroupCoordination, GroupFlows, GroupRouting, GroupHousekeeping}
 }
 
 var (

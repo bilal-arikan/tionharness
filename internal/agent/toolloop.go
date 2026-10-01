@@ -180,6 +180,12 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	//
 	// The decider's tool-risk check (decide_toolrisk.go) rides the turn context
 	// so permGate finds it for every call of the turn; an off site adds nothing.
+	if !isAuxiliaryKind(callKindFrom(ctx)) {
+		agent, provider, req = r.routeDecisionTurn(ctx, agent, provider, req)
+		r.prepareDecisionSetup(ctx, agent, &req)
+		r.applyDecisionContext(ctx, agent, &req)
+		ctx = r.withDecisionClarification(ctx, agent, latestPolicyPrompt(req))
+	}
 	ctx = r.withToolRiskCheck(ctx, agent)
 	t := &toolLoopTurn{r: r, ctx: ctx, agent: agent, provider: provider, req: req, autonomous: autonomous, onStep: onStep}
 	prepCleanup, err := t.prepare()

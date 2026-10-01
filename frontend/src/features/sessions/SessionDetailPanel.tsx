@@ -24,6 +24,7 @@ import { SessionContextUsage } from './SessionContextUsage'
 import { SessionAgentsSection } from './SessionAgentsSection'
 import { SessionUsageCard } from './SessionUsageCard'
 import { SessionExecutionCard } from './SessionExecutionCard'
+import { SessionDecisionsCard } from './SessionDecisionsCard'
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { formatBytes, formatDate, cacheRemaining } from './sessionDetailFormat'
 import { serverNow } from '@/shared/lib/serverClock'
@@ -57,7 +58,7 @@ interface Props {
   // Open the Debug / observability panel (SessionDebugModal). Lives here in the
   // action list rather than in the chat header. Optional so legacy/test usages
   // still compile; the button hides when absent.
-  onOpenDebug?: () => void
+  onOpenDebug?: (tab?: 'runtime' | 'decisions') => void
 }
 
 // SessionDetailPanel is the right-hand inspector for the active chat session:
@@ -487,6 +488,12 @@ export function SessionDetailPanel({
             )}
 
             {/* Context window usage (/context-style) */}
+            <SessionDecisionsCard
+              sessionId={sessionId}
+              refreshKey={(refreshKey ?? 0) + localRefresh}
+              onError={onError}
+              onOpenDebug={onOpenDebug ? () => onOpenDebug('decisions') : undefined}
+            />
             <SessionContextUsage
               info={info}
               ctxWindow={ctxWindow}
@@ -512,7 +519,11 @@ export function SessionDetailPanel({
             <Section title={t('detail.tools')}>
               <div className="flex flex-col gap-1.5">
                 {onOpenDebug && (
-                  <ActionBtn icon={Bug} label={t('debug.title')} onClick={onOpenDebug} />
+                  <ActionBtn
+                    icon={Bug}
+                    label={t('debug.title')}
+                    onClick={() => onOpenDebug('runtime')}
+                  />
                 )}
                 <ActionBtn
                   icon={info.pinned ? PinOff : Pin}

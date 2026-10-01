@@ -1,4 +1,21 @@
 {
+  "workflow": {
+    "masterDisabled": "Ana anahtar kapalıyken karar iş akışları duraklatılır.",
+    "empty": "Kullanılabilir karar iş akışı yok.",
+    "selectHint": "Bir karar iş akışı seç",
+    "detailHint": "Bu iş akışının ne zaman uygulanacağını ve kararların nasıl kontrol edileceğini ayarla.",
+    "groups": {
+      "session": "Oturum başlangıcı",
+      "context": "Bağlam",
+      "collaboration": "Worker iş birliği"
+    },
+    "limits": "İş akışı sınırları",
+    "candidateLimit": "En fazla aday",
+    "selectionLimit": "En fazla seçim",
+    "remindEvery": "Hatırlatmalar arasındaki compact sayısı",
+    "contextBudget": "Yüklenen bağlam bütçesi (bayt)",
+    "measureHint": "Uyum oranı davranış farkını ölçer. Faydayı değerlendirmek için oturum geri bildirimini ve uygulanan sonuçları incele."
+  },
   "title": "Karar mercileri",
   "intro": "Karar mercileri, uygulamada kararı bir karar sağlayıcısına devreden noktalardır. Karar sağlayıcısı, tipli sorulara (evet/hayır, birini seç, puanla) bir saniyenin çok altında cevap veren bir modeldir. Her merci kapalı kalabilir, gölgede çalışabilir (arka planda sorulur ve mevcut mantığın yanında ölçülür, hiçbir şeyi değiştirmez) ya da açılabilir; her biri kendi sağlayıcısını, yedeğini ve rakibini kullanabilir.",
   "privacy": "Yargılanan içerik (bir shell komutu, bir koordinatör mesajı, bir flow çıktısı, bir transkript kesiti) belirgin sırlar maskelendikten sonra karar modeline gönderilir. Kendi makinendeki bir model içeriği yerelde tutar.",
@@ -200,6 +217,36 @@
     "triage": "sınıflandır"
   },
   "authority": {
+    "session-setup": {
+      "label": "Skill ve araç hazırlığı",
+      "description": "Oturum başlangıcında izin verilen skill ve araçları tek çağrıda seçer. Skill talimatlarını bütçe içinde yükler ve ek izin vermeden araç şemalarını etkinleştirir.",
+      "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
+    },
+    "model-router": {
+      "label": "Çalıştırma modeli yönlendirme",
+      "description": "İlk turda yapılandırılmış kullanılabilir bir modeli seçer ve rotayı sabit tutar. Yerel API sağlayıcıları aynı aktarım türü içinde değişebilir; CLI oturumları sağlayıcı örneğini korur.",
+      "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
+    },
+    "clarification": {
+      "label": "Kullanıcıya soru kontrolü",
+      "description": "İsteğe bağlı açıklama sorularını inceler. Zorunlu bilgi, eylem onayı ve izin soruları her zaman kullanıcıya ulaşır.",
+      "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
+    },
+    "compact-retention": {
+      "label": "Compact bağlam koruması",
+      "description": "Yönetilen compact öncesinde eski parçaları korur, özetler veya özet girdisinden çıkarır. Transkript korunur; sabitlenen bağlam kullanılabilir kalır.",
+      "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
+    },
+    "context-reminder": {
+      "label": "Bağlam hatırlatmaları",
+      "description": "Ayarlanan compact aralığından sonra mevcut görev için kayıtlı bağlam parçalarını geri getirir. Başarılı yönetilen ve CLI compact işlemlerini sayar.",
+      "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
+    },
+    "worker-review": {
+      "label": "Worker sonucu inceleme",
+      "description": "Koordinatörün sentezi için doğrulama, alternatifler, varsayımlar, çelişkiler ve sonraki adım bakışlarını seçer. Karar modeli hata verse de worker sonucu teslim edilir.",
+      "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
+    },
     "stall-judge": {
       "label": "Koordinatör takılma yargıcı",
       "description": "Koordinatörün son mesajı hiç açılmamış worker'lar açtığını mı iddia ediyor? Boşta kalan her koordinatör turundaki Haiku çağrısının yerini alır.",

@@ -39,7 +39,11 @@ type AuthorityConfig struct {
 	// Challenger is asked the same question in the background after every
 	// answer; the two verdicts land in the ledger, so a new model can be
 	// measured against the current one on real traffic before it takes over.
-	Challenger string `json:"challenger,omitempty"`
+	Challenger     string `json:"challenger,omitempty"`
+	CandidateLimit int    `json:"candidateLimit,omitempty"`
+	SelectionLimit int    `json:"selectionLimit,omitempty"`
+	RemindEvery    int    `json:"remindEvery,omitempty"`
+	ContextBudget  int    `json:"contextBudget,omitempty"`
 }
 
 // Config is the decider's persisted configuration: the master switch, the
@@ -95,6 +99,10 @@ func (c Config) Normalized() Config {
 			ac.Threshold = a.DefaultThreshold
 		}
 		ac.Threshold = min(max(ac.Threshold, minThreshold), maxThreshold)
+		// Preserve the persisted shape of authorities that do not use workflow limits.
+		if ac.CandidateLimit != 0 || ac.SelectionLimit != 0 || ac.RemindEvery != 0 || ac.ContextBudget != 0 {
+			ac = ac.WithWorkflowDefaults()
+		}
 		ac.Model = strings.TrimSpace(ac.Model)
 		ac.Fallback = strings.TrimSpace(ac.Fallback)
 		ac.Challenger = strings.TrimSpace(ac.Challenger)

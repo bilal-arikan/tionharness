@@ -1,4 +1,59 @@
 {
+  "decisions": {
+    "runtimeJournal": "Runtime records",
+    "decisionsJournal": "Decision records",
+    "title": "Session decisions",
+    "compactCount": "Compactions: {{count}}",
+    "refresh": "Refresh",
+    "loading": "Loading decisions…",
+    "empty": "No decision has been recorded for this session yet.",
+    "executionModel": "Execution model",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "skills": "Loaded skills",
+    "tools": "Activated tools",
+    "memories": "Retained context",
+    "required": "Required",
+    "pinContext": "Pin context: {{label}}",
+    "preview": "Preview",
+    "reminded": "Last reminder at compaction {{count}}",
+    "recent": "Recent decisions",
+    "status": {
+      "applied": "Applied",
+      "observed": "Observed",
+      "fallback": "Fallback"
+    },
+    "mode": {
+      "off": "Off",
+      "shadow": "Observe",
+      "on": "Active"
+    },
+    "recommended": "Recommended",
+    "applied": "Applied",
+    "baseline": "Previous behavior",
+    "trace": "Trace",
+    "openDebug": "Open debug",
+    "helpful": "Helpful",
+    "correction": "Needs correction",
+    "authority": {
+      "session-setup": "Skills and tools",
+      "model-router": "Execution model routing",
+      "clarification": "Clarification check",
+      "compact-retention": "Compact context protection",
+      "context-reminder": "Context reminders",
+      "worker-review": "Worker result review"
+    },
+    "action": {
+      "select": "Selected",
+      "skip": "Skipped",
+      "keep": "Keep",
+      "summarize": "Summarize",
+      "drop": "Omit",
+      "budget": "Budget limit"
+    },
+    "evidence": "{{applied}} applied · {{observed}} observed · {{fallback}} fallbacks · {{helpful}} helpful · {{correction}} corrections",
+    "evidenceHint": "Feedback describes usefulness; it is not an independent correctness score."
+  },
   "actions": {
     "archive": "Archive",
     "cancel": "Cancel",

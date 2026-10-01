@@ -25,6 +25,10 @@ func WithLocation(sessionID, turnID string) CallOption {
 	return func(o *callOptions) { o.sessionID, o.turnID = sessionID, turnID }
 }
 
+func WithWorkspace(id string) CallOption {
+	return func(o *callOptions) { o.workspaceID = debugToken(id) }
+}
+
 func debugHash(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -39,7 +43,7 @@ func (h *Hub) startDebug(authority string, cfg Config, o callOptions, role strin
 	_, _ = rand.Read(id[:])
 	return &debugCall{hub: h, base: DebugEvent{
 		TraceID: hex.EncodeToString(id[:]), Authority: authority, Mode: cfg.Mode(authority),
-		Ref: o.ref, SessionID: o.sessionID, TurnID: o.turnID, Role: role,
+		Ref: o.ref, SessionID: o.sessionID, WorkspaceID: o.workspaceID, TurnID: o.turnID, Role: role,
 		Threshold: cfg.Threshold(authority), ConfigHash: debugHash(cfg),
 	}}
 }
@@ -60,6 +64,7 @@ func (d *debugCall) emit(e DebugEvent) {
 	e.At = d.hub.now().UnixMilli()
 	e.TraceID, e.Authority, e.Mode = d.base.TraceID, d.base.Authority, d.base.Mode
 	e.Ref, e.SessionID, e.TurnID = d.base.Ref, d.base.SessionID, d.base.TurnID
+	e.WorkspaceID = d.base.WorkspaceID
 	e.ConfigHash, e.Threshold = d.base.ConfigHash, d.base.Threshold
 	e.Role, e.Instance = d.base.Role, d.base.Instance
 	if e.QuestionID == "" {

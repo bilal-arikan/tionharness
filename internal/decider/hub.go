@@ -200,14 +200,15 @@ func (h *Hub) Threshold(authority string) float64 {
 type CallOption func(*callOptions)
 
 type callOptions struct {
-	bill       func(context.Context, *Response)
-	background func(func())
-	ref        string
-	outcome    func(*Response) (string, float64)
-	sessionID  string
-	turnID     string
-	trace      *debugCall
-	role       string
+	bill        func(context.Context, *Response)
+	background  func(func())
+	ref         string
+	outcome     func(*Response) (string, float64)
+	sessionID   string
+	workspaceID string
+	turnID      string
+	trace       *debugCall
+	role        string
 }
 
 // WithBilling records every model call a decision makes — the primary, a

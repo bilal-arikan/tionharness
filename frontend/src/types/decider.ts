@@ -12,6 +12,10 @@ export interface DeciderAuthorityConfig {
   model?: string
   fallback?: string
   challenger?: string
+  candidateLimit?: number
+  selectionLimit?: number
+  remindEvery?: number
+  contextBudget?: number
 }
 
 export interface DeciderConfig {
@@ -264,6 +268,7 @@ export interface DeciderDebugEvent {
   role?: string
   ref?: string
   sessionId?: string
+  workspaceId?: string
   turnId?: string
   configHash?: string
   modelHash?: string
@@ -327,6 +332,7 @@ export interface DeciderDebugReport {
 }
 
 export interface DeciderDebugFilter {
+  workspaceId?: string
   days?: number
   authority?: string
   instance?: string

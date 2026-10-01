@@ -365,6 +365,7 @@ func (t *chatTurn) runStopPasses(lifecycleContext string) bool {
 // copy and resolves the provider it will run on. ok is false when the turn was
 // already failed and must return.
 func (t *chatTurn) prepareAgentRuntime(agentRow *db.Agent) (providers.Provider, bool) {
+	*agentRow = t.wsp.Runtime.RouteSessionAgent(t.ctx, *agentRow, t.req.Message)
 	// Per-turn reasoning override (local copy only — never persisted). Here
 	// "" keeps its own distinct meaning — "no override, use the agent's own
 	// level" — but anything else must be a tier this agent's model actually

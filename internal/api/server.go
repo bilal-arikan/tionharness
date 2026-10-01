@@ -532,6 +532,9 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 
 // registerSessionRoutes registers chat sessions + messages + titling.
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/sessions/{id}/decisions", s.handleSessionDecisions)
+	mux.HandleFunc("PUT /api/sessions/{id}/decisions/pin", s.handleSessionDecisionPin)
+	mux.HandleFunc("POST /api/sessions/{id}/decisions/feedback", s.handleSessionDecisionFeedback)
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/active", s.handleActiveSessions)
 	// Rota canvas: when each of the given sessions was actually working, so an

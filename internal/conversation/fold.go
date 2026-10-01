@@ -67,6 +67,7 @@ func (m *Manager) applyRollingFold(ctx context.Context, in rollingFoldInput) (ro
 	if err != nil {
 		return rollingFoldResult{}, err
 	}
+	foldFinished(context.WithValue(ctx, foldSessionKey{}, in.session.ID))
 	pending := in.keepTail
 	// The overhead was measured BEFORE the fold, so its persisted-Steps term
 	// still charges the trace of the messages just folded away. Drop that part

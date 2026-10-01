@@ -21,6 +21,7 @@ type DebugEvent struct {
 	Role          string            `json:"role,omitempty"`
 	Ref           string            `json:"ref,omitempty"`
 	SessionID     string            `json:"sessionId,omitempty"`
+	WorkspaceID   string            `json:"workspaceId,omitempty"`
 	TurnID        string            `json:"turnId,omitempty"`
 	ConfigHash    string            `json:"configHash,omitempty"`
 	ModelHash     string            `json:"modelHash,omitempty"`

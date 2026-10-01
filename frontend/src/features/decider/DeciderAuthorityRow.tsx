@@ -55,6 +55,7 @@ export function DeciderAuthorityRow({
   const advice = adviceFor(ac.mode, stats)
   const challengerRate = challengerAgreement(stats)
   const cAdvice = challengerAdvice(ac.challenger, stats)
+  const workflow = ['session', 'context', 'collaboration'].includes(authority.group)
   const label = t(`authority.${authority.id}.label`, { defaultValue: authority.label })
   const description = t(`authority.${authority.id}.description`, {
     defaultValue: authority.description,
@@ -129,6 +130,79 @@ export function DeciderAuthorityRow({
         </span>
       </label>
       <p className="text-xs text-[var(--color-text-dim)]">{thresholdHint}</p>
+
+      {workflow && (
+        <details className="rounded-md border border-[var(--color-border)] p-2">
+          <summary className="min-h-11 cursor-pointer content-center text-xs font-medium">
+            {t('workflow.limits', { defaultValue: 'Workflow limits' })}
+          </summary>
+          <div className="grid gap-3 py-2 sm:grid-cols-2">
+            {(
+              [
+                {
+                  key: 'candidateLimit',
+                  value: ac.candidateLimit ?? 32,
+                  min: 4,
+                  max: 48,
+                  show: authority.id !== 'clarification',
+                },
+                {
+                  key: 'selectionLimit',
+                  value: ac.selectionLimit ?? 8,
+                  min: 1,
+                  max: 16,
+                  show: ['session-setup', 'context-reminder', 'worker-review'].includes(
+                    authority.id,
+                  ),
+                },
+                {
+                  key: 'remindEvery',
+                  value: ac.remindEvery ?? 3,
+                  min: 1,
+                  max: 20,
+                  show: authority.id === 'context-reminder',
+                },
+                {
+                  key: 'contextBudget',
+                  value: ac.contextBudget ?? 8192,
+                  min: 1024,
+                  max: 32768,
+                  show: ['session-setup', 'compact-retention', 'context-reminder'].includes(
+                    authority.id,
+                  ),
+                },
+              ] as const
+            )
+              .filter((field) => field.show)
+              .map((field) => (
+                <label key={field.key} className="flex min-w-0 flex-col gap-1 text-xs">
+                  {t(`workflow.${field.key}`, { defaultValue: field.key })}
+                  <input
+                    type="number"
+                    className={inputCls}
+                    min={field.min}
+                    max={field.max}
+                    value={field.value}
+                    disabled={!draft.enabled || ac.mode === 'off'}
+                    onChange={(event) => {
+                      const value = Number(event.target.value)
+                      if (Number.isFinite(value))
+                        set({
+                          [field.key]: Math.round(Math.min(field.max, Math.max(field.min, value))),
+                        })
+                    }}
+                  />
+                </label>
+              ))}
+          </div>
+          <p className="text-xs text-[var(--color-text-dim)]">
+            {t('workflow.measureHint', {
+              defaultValue:
+                'Agreement measures behavior differences. Use session feedback and applied outcomes to assess usefulness.',
+            })}
+          </p>
+        </details>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-xs">
@@ -224,7 +298,7 @@ export function DeciderAuthorityRow({
           </span>
         </p>
       )}
-      {advice && (
+      {advice && !workflow && (
         <p className={`text-xs ${ADVICE_TONE[advice.kind]}`}>{adviceText(advice, false)}</p>
       )}
 

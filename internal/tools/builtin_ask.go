@@ -169,6 +169,7 @@ func (AskUserTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
+    "required_input": { "type": "boolean", "description": "Default true. Set false only for an optional clarification already covered by context; the configured decision policy may recommend continuing. Required facts and action approvals must remain true." },
     "question": { "type": "string", "description": "The question to ask the user." },
     "options": {
       "type": "array",
@@ -213,6 +214,9 @@ func (AskUserTool) Call(ctx context.Context, input json.RawMessage) (string, err
 	}
 	if len(questions) == 0 {
 		return "", fmt.Errorf("question is required")
+	}
+	if text, skip := CheckClarification(ctx, input); skip {
+		return text, nil
 	}
 	// Several questions at once: present them together in one card via the
 	// multi-asker. Fall back to asking each in sequence (and combining the

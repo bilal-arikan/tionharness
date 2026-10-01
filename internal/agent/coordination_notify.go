@@ -55,6 +55,7 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	note = r.reviewDecisionWorker(ctx, coordSessionID, terminalWorkerSessionID, note)
 	slot := r.coordSlotFor(coordSessionID)
 	releaseAdmission, err := acquireCoordinatorAdmission(ctx, slot)
 	if err != nil {

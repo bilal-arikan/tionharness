@@ -1,4 +1,21 @@
 {
+  "workflow": {
+    "masterDisabled": "Decision workflows are paused while the master switch is off.",
+    "empty": "No decision workflows are available.",
+    "selectHint": "Choose a decision workflow",
+    "detailHint": "Configure when this workflow acts and how decisions are checked.",
+    "groups": {
+      "session": "Session start",
+      "context": "Context",
+      "collaboration": "Worker collaboration"
+    },
+    "limits": "Workflow limits",
+    "candidateLimit": "Maximum candidates",
+    "selectionLimit": "Maximum selections",
+    "remindEvery": "Compactions between reminders",
+    "contextBudget": "Loaded context budget (bytes)",
+    "measureHint": "Agreement measures behavior differences. Use session feedback and applied outcomes to assess usefulness."
+  },
   "title": "Decision authorities",
   "intro": "Decision authorities are the places in the app that hand a decision to a decision provider: a model that answers typed questions (yes/no, pick one, rate) in a fraction of a second. Each authority can stay off, run in shadow (asked in the background and measured next to the existing logic, changing nothing) or be switched on, and each can use its own provider with a fallback and a challenger.",
   "privacy": "What is judged (a shell command, a coordinator message, a flow output, a transcript excerpt) is sent to the decision model after obvious secrets are masked. A model on your own machine keeps it local.",
@@ -200,6 +217,36 @@
     "triage": "triage"
   },
   "authority": {
+    "session-setup": {
+      "label": "Skills and tools",
+      "description": "At session start, selects permitted skills and tools in one call. Loads bounded skill instructions and activates tool schemas without adding permissions.",
+      "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
+    },
+    "model-router": {
+      "label": "Execution model routing",
+      "description": "On the first turn, selects an available configured model and keeps the route stable. Native providers can change within the same transport; CLI sessions keep their provider instance.",
+      "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
+    },
+    "clarification": {
+      "label": "Clarification check",
+      "description": "Reviews optional clarification questions. Required input, action confirmations and permission prompts always reach the user.",
+      "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
+    },
+    "compact-retention": {
+      "label": "Compact context protection",
+      "description": "Before managed compaction, keeps, summarizes or omits older fragments from the summary input. The transcript is preserved; pinned context remains available.",
+      "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
+    },
+    "context-reminder": {
+      "label": "Context reminders",
+      "description": "After the configured compact interval, selects saved fragments to restore for the current task. Includes successful managed and CLI compactions.",
+      "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
+    },
+    "worker-review": {
+      "label": "Worker result review",
+      "description": "Selects verification, alternatives, assumptions, conflicts and follow-up perspectives for coordinator synthesis. Worker delivery continues if the judge fails.",
+      "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
+    },
     "stall-judge": {
       "label": "Coordinator stall judge",
       "description": "Does the coordinator's last message claim it opened workers it never opened? Replaces a Haiku call per idle coordinator turn.",

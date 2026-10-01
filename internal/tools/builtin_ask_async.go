@@ -37,6 +37,9 @@ func (AskUserAsyncTool) Call(ctx context.Context, raw json.RawMessage) (string, 
 	if len(questions) == 0 {
 		return "", fmt.Errorf("question is required")
 	}
+	if text, skip := CheckClarification(ctx, raw); skip {
+		return text, nil
+	}
 	id, err := input.Ask(ctx, questions)
 	if err != nil {
 		return "", err

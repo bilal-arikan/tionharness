@@ -12,10 +12,17 @@ import (
 
 // ReadDeciderDebugTool gives agents the same metadata-only decision evidence
 // shown in Settings. A default call is scoped to their current session.
-type ReadDeciderDebugTool struct{ hub func() *decider.Hub }
+type ReadDeciderDebugTool struct {
+	hub         func() *decider.Hub
+	workspaceID string
+}
 
-func NewReadDeciderDebugTool(hub func() *decider.Hub) ReadDeciderDebugTool {
-	return ReadDeciderDebugTool{hub: hub}
+func NewReadDeciderDebugTool(hub func() *decider.Hub, workspace ...string) ReadDeciderDebugTool {
+	id := ""
+	if len(workspace) > 0 {
+		id = workspace[0]
+	}
+	return ReadDeciderDebugTool{hub: hub, workspaceID: id}
 }
 
 func (ReadDeciderDebugTool) Def() providers.ToolDef {
@@ -66,7 +73,11 @@ func (t ReadDeciderDebugTool) Call(ctx context.Context, input json.RawMessage) (
 			return "No current session: pass ref or all_sessions=true.", nil
 		}
 	}
-	report := t.hub().Debug(decider.DebugFilter{Since: time.Now().Add(-time.Duration(in.Days) * 24 * time.Hour), Ref: in.Ref, Authority: in.Authority, Instance: in.Instance, TraceID: in.TraceID, Limit: in.Limit})
+	workspaceID := t.workspaceID
+	if in.All {
+		workspaceID = ""
+	}
+	report := t.hub().Debug(decider.DebugFilter{Since: time.Now().Add(-time.Duration(in.Days) * 24 * time.Hour), Ref: in.Ref, Authority: in.Authority, Instance: in.Instance, TraceID: in.TraceID, Limit: in.Limit, WorkspaceID: workspaceID})
 	if in.Summary == nil || *in.Summary {
 		report.Events = []decider.DebugEvent{}
 	}

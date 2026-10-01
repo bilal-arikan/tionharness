@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -47,17 +48,26 @@ func CompactInFlightMessages(ctx context.Context, database *db.DB, provider prov
 	// Rendered here (not inside the summarizer) so its byte size can be reported
 	// as SavedBytes — the same basis the rolling fold journals.
 	rendered := renderProviderMessages(msgs[:cut])
+	segments := make([]FoldSegment, 0, cut)
+	for i, m := range msgs[:cut] {
+		segments = append(segments, FoldSegment{Key: fmt.Sprintf("inflight:%d", i), Role: m.Role, Text: m.Text, Rendered: renderProviderMessages([]providers.Message{m}), Mandatory: i == cut-1})
+	}
+	plan := foldPlan(ctx, "", segments)
 	before := EstimateProviderTokens(msgs)
-	summary, err := summarizeRendered(ctx, database, provider, agent, "", rendered)
+	summary, err := summarizeRendered(ctx, database, provider, agent, "", plan.Rendered)
 	if err != nil {
 		return nil, ReactiveFold{}, false, err
 	}
 	out = make([]providers.Message, 0, len(msgs)-cut+1)
+	if plan.Protected != "" {
+		summary = strings.TrimSpace(summary + "\n\n" + plan.Protected)
+	}
 	out = append(out, providers.Message{
 		Role: providers.RoleUser,
 		Text: "Summary of earlier conversation:\n" + summary,
 	})
 	out = append(out, msgs[cut:]...)
+	foldFinished(ctx)
 	fold = ReactiveFold{
 		Compaction: Compaction{
 			FoldedMsgs:   cut,

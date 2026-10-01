@@ -5,12 +5,13 @@ import "time"
 // DebugFilter bounds a metadata-only read. Limit applies to events, newest
 // first; Summary describes all retained matches, not just the displayed tail.
 type DebugFilter struct {
-	Since     time.Time
-	Authority string
-	Instance  string
-	Ref       string
-	TraceID   string
-	Limit     int
+	Since       time.Time
+	Authority   string
+	Instance    string
+	Ref         string
+	TraceID     string
+	WorkspaceID string
+	Limit       int
 }
 
 type DebugSummary struct {
@@ -68,6 +69,9 @@ func (h *Hub) Debug(filter DebugFilter) DebugReport {
 	challengerSkipped := 0
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i]
+		if filter.WorkspaceID != "" && e.WorkspaceID != filter.WorkspaceID {
+			continue
+		}
 		if !filter.Since.IsZero() && e.At < filter.Since.UnixMilli() {
 			continue
 		}

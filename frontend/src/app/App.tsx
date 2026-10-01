@@ -271,6 +271,7 @@ export default function App() {
   const [ctxPreviewOpen, setCtxPreviewOpen] = useState(false)
   // Debug/observability modal (opened from the chat header's "Debug" button).
   const [debugOpen, setDebugOpen] = useState(false)
+  const [debugTab, setDebugTab] = useState<'runtime' | 'decisions'>('runtime')
   // Right-hand session detail panel visibility (persisted).
   const [detailOpen, setDetailOpen] = useState(
     () => localStorage.getItem('tionharness.detailOpen') === '1',
@@ -977,7 +978,10 @@ export default function App() {
                 onSetPinned={ctl.setSessionPinned}
                 onSelectSession={ctl.selectSession}
                 onRerun={() => chat.rerunLast()}
-                onOpenDebug={() => setDebugOpen(true)}
+                onOpenDebug={(tab = 'runtime') => {
+                  setDebugTab(tab)
+                  setDebugOpen(true)
+                }}
               />
             </Suspense>
           </div>
@@ -1032,6 +1036,7 @@ export default function App() {
         <Suspense fallback={null}>
           <SessionDebugModal
             sessionId={ctl.activeSessionId}
+            initialTab={debugTab}
             title={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title}
             agentNames={Object.fromEntries(ctl.agents.map((a) => [a.id, a.name]))}
             onClose={() => setDebugOpen(false)}

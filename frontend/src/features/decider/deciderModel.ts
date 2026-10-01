@@ -32,6 +32,10 @@ export function authorityConfig(
     model: ac?.model ?? '',
     fallback: ac?.fallback ?? '',
     challenger: ac?.challenger ?? '',
+    ...(ac?.candidateLimit === undefined ? {} : { candidateLimit: ac.candidateLimit }),
+    ...(ac?.selectionLimit === undefined ? {} : { selectionLimit: ac.selectionLimit }),
+    ...(ac?.remindEvery === undefined ? {} : { remindEvery: ac.remindEvery }),
+    ...(ac?.contextBudget === undefined ? {} : { contextBudget: ac.contextBudget }),
   }
 }
 
@@ -58,7 +62,18 @@ function canonical(config: DeciderConfig): string {
     .sort()
     .map((k) => {
       const a = config.authorities[k]
-      return [k, a.mode, a.threshold, a.model || '', a.fallback || '', a.challenger || '']
+      return [
+        k,
+        a.mode,
+        a.threshold,
+        a.model || '',
+        a.fallback || '',
+        a.challenger || '',
+        a.candidateLimit ?? 32,
+        a.selectionLimit ?? 8,
+        a.remindEvery ?? 3,
+        a.contextBudget ?? 8192,
+      ]
     })
   return JSON.stringify([config.enabled, config.defaultModel || '', authorities])
 }

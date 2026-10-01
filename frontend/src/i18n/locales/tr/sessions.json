@@ -1,4 +1,59 @@
 {
+  "decisions": {
+    "runtimeJournal": "Çalıştırma kayıtları",
+    "decisionsJournal": "Karar kayıtları",
+    "title": "Oturum kararları",
+    "compactCount": "Compact sayısı: {{count}}",
+    "refresh": "Yenile",
+    "loading": "Kararlar yükleniyor…",
+    "empty": "Bu oturum için henüz bir karar kaydedilmedi.",
+    "executionModel": "Çalıştırma modeli",
+    "pin": "Sabitle",
+    "unpin": "Sabitlemeyi kaldır",
+    "skills": "Yüklenen skill’ler",
+    "tools": "Etkinleştirilen araçlar",
+    "memories": "Korunan bağlam",
+    "required": "Zorunlu",
+    "pinContext": "Bağlamı sabitle: {{label}}",
+    "preview": "Ön izleme",
+    "reminded": "Son hatırlatma: {{count}}. compact",
+    "recent": "Son kararlar",
+    "status": {
+      "applied": "Uygulandı",
+      "observed": "Gözlendi",
+      "fallback": "Mevcut akışa dönüldü"
+    },
+    "mode": {
+      "off": "Kapalı",
+      "shadow": "Gözlem",
+      "on": "Aktif"
+    },
+    "recommended": "Önerilen",
+    "applied": "Uygulanan",
+    "baseline": "Önceki davranış",
+    "trace": "İz kaydı",
+    "openDebug": "Debug aç",
+    "helpful": "Faydalı",
+    "correction": "Düzeltilmeli",
+    "authority": {
+      "session-setup": "Skill ve araç hazırlığı",
+      "model-router": "Çalıştırma modeli yönlendirme",
+      "clarification": "Kullanıcıya soru kontrolü",
+      "compact-retention": "Compact bağlam koruması",
+      "context-reminder": "Bağlam hatırlatmaları",
+      "worker-review": "Worker sonucu inceleme"
+    },
+    "action": {
+      "select": "Seçildi",
+      "skip": "Atlandı",
+      "keep": "Koru",
+      "summarize": "Özetle",
+      "drop": "Çıkar",
+      "budget": "Bütçe sınırı"
+    },
+    "evidence": "{{applied}} uygulandı · {{observed}} gözlendi · {{fallback}} geri dönüş · {{helpful}} faydalı · {{correction}} düzeltme",
+    "evidenceHint": "Geri bildirim faydayı belirtir; bağımsız bir doğruluk puanı değildir."
+  },
   "actions": {
     "archive": "Arşivle",
     "cancel": "İptal",

@@ -22,6 +22,7 @@ import (
 // target is stamped and the fold runs exactly as before.
 func (r *Runtime) FoldContext(ctx context.Context, agent db.Agent) context.Context {
 	ctx = conversation.WithCompactPrompt(ctx, r.CompactPromptTemplate())
+	ctx = r.withDecisionFold(ctx, agent)
 	target, ok := r.resolveFoldAgent(agent)
 	if !ok {
 		return ctx

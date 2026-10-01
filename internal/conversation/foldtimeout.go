@@ -34,6 +34,7 @@ func foldCtx(ctx context.Context) context.Context {
 // slow turn.
 func (m *Manager) summarizeTimed(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, sessionID, existing string, msgs []db.Message) (string, error) {
 	started := time.Now()
+	ctx = context.WithValue(ctx, foldSessionKey{}, sessionID)
 	summary, err := m.summarize(ctx, database, provider, agent, existing, msgs)
 	m.recordFoldIdleFloorDebug(database, sessionID, agent.ID, time.Since(started))
 	return summary, err

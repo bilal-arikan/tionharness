@@ -2,6 +2,8 @@ import { Bug, X } from 'lucide-react'
 import { ModalOverlay, PaneHeader } from '@/shared/components'
 import { SessionDebugCard } from './SessionDebugCard'
 import { useTranslation } from 'react-i18next'
+import { useState } from 'react'
+import { SessionDecisionDebug } from './SessionDecisionDebug'
 
 interface Props {
   sessionId: string
@@ -11,6 +13,7 @@ interface Props {
   // labels.
   agentNames?: Record<string, string>
   onClose: () => void
+  initialTab?: 'runtime' | 'decisions'
 }
 
 // SessionDebugModal is the dedicated Debug / observability panel — the debug
@@ -18,8 +21,15 @@ interface Props {
 // plus the workflow visualizations, lifted out of the session-info inspector into
 // its own overlay opened from the chat header's "Debug" button. It reuses
 // SessionDebugCard in alwaysOpen mode (no inner fold; the modal supplies chrome).
-export function SessionDebugModal({ sessionId, title, agentNames, onClose }: Props) {
+export function SessionDebugModal({
+  sessionId,
+  title,
+  agentNames,
+  onClose,
+  initialTab = 'runtime',
+}: Props) {
   const { t } = useTranslation('sessions')
+  const [tab, setTab] = useState(initialTab)
   return (
     <ModalOverlay onClose={onClose} padding="p-6">
       <div
@@ -51,8 +61,32 @@ export function SessionDebugModal({ sessionId, title, agentNames, onClose }: Pro
           }
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <SessionDebugCard sessionId={sessionId} agentNames={agentNames} alwaysOpen />
+        <div
+          className="flex gap-2 border-b border-[var(--color-border)] px-5 py-2"
+          role="tablist"
+          aria-label={t('debug.title')}
+        >
+          {(['runtime', 'decisions'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={`min-h-11 rounded px-3 text-xs ${tab === value ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]' : 'text-[var(--color-text-dim)]'}`}
+            >
+              {t(`decisions.${value}Journal`, {
+                defaultValue: value === 'runtime' ? 'Runtime records' : 'Decision records',
+              })}
+            </button>
+          ))}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5" role="tabpanel">
+          {tab === 'runtime' ? (
+            <SessionDebugCard sessionId={sessionId} agentNames={agentNames} alwaysOpen />
+          ) : (
+            <SessionDecisionDebug sessionId={sessionId} />
+          )}
         </div>
       </div>
     </ModalOverlay>

@@ -12,6 +12,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/decider"
 	"github.com/bilal-arikan/tionharness/internal/interaction"
 	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -95,6 +96,9 @@ func (b *interactionBackend) hydrateActivated(token string) {
 
 	var names []string
 	if store, sessionID := b.activationStore(token); store != nil {
+		if decisions, err := store.ReadSessionDecisions(context.Background(), sessionID); err == nil && b.tun != nil && b.tun.Decider().Mode("session-setup") == decider.ModeOn {
+			names = append(names, decisions.SelectedTools...)
+		}
 		got, ok, err := store.ReadActivatedTools(sessionID)
 		switch {
 		case err != nil:
@@ -102,7 +106,7 @@ func (b *interactionBackend) hydrateActivated(token string) {
 				b.apiSrv.logger.Error("read activated tools sidecar", "session", sessionID, "err", err)
 			}
 		case ok:
-			names = got
+			names = append(names, got...)
 		}
 	}
 
@@ -970,6 +974,9 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	case "ask_user_async":
 		if run.autonomous {
 			return interaction.CallResult{Text: "no interactive session is available", IsError: true}, nil
+		}
+		if text, skip := b.reviewCLIClarification(ctx, run, args); skip {
+			return interaction.CallResult{Text: text}, nil
 		}
 		input := run.asyncInputFor()
 		if input == nil {

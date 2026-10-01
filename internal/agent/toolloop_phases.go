@@ -264,6 +264,8 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	t.req.OnCLICompaction = func(ev providers.CLICompactionEvent) {
 		if err := t.r.db.AppendCLICompactionEvent(SessionIDFrom(t.ctx), t.agent.ID, ev); err != nil {
 			t.r.logger.Error("persist cli compaction lifecycle failed", "error", err)
+		} else if ev.Phase == providers.CLICompactionSuccess {
+			t.r.recordDecisionCompact(t.ctx)
 		}
 	}
 
@@ -476,6 +478,7 @@ func (t *toolLoopTurn) prepareNativeLoop() (resp *providers.Response, steps []Tu
 		return resp, nil, err, true
 	}
 	toolFilter := t.r.toolFilter(t.ctx, t.agent)
+	t.r.seedDecisionTools(t.ctx, t.agent, t.reg, t.active)
 	t.reg.ConfigureAutoActivation(t.active, toolFilter)
 	// Native (server-side) tool search — first-party anthropic only: the full
 	// catalog ships with lazy tools marked defer_loading + the search server

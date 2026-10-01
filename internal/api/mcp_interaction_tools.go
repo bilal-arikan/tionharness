@@ -23,6 +23,9 @@ func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args jso
 	if len(questions) == 0 {
 		return interaction.CallResult{Text: "question is required", IsError: true}, nil
 	}
+	if text, skip := b.reviewCLIClarification(ctx, run, args); skip {
+		return interaction.CallResult{Text: text}, nil
+	}
 	// Several questions: emit one combined-form step and fold the JSON-array answer
 	// into a single labeled block (mirrors the native ask_user multi path).
 	if len(questions) > 1 {

@@ -553,6 +553,7 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	if err != nil {
 		return Compaction{}, "", err
 	}
+	foldFinished(context.WithValue(ctx, foldSessionKey{}, session.ID))
 	fold = Compaction{
 		FoldedMsgs:   len(foldMsgs),
 		BeforeTokens: beforeTokens,
@@ -623,7 +624,12 @@ func foldBoundary(history []db.Message, start, keepRecent int) (fold, keepTail [
 
 // summarize folds stored messages into the existing summary via the provider.
 func (m *Manager) summarize(ctx context.Context, database *db.DB, provider providers.Provider, agent db.Agent, existing string, msgs []db.Message) (string, error) {
-	return summarizeRendered(ctx, database, provider, agent, existing, renderDBMessages(msgs))
+	plan := foldPlan(ctx, existing, dbFoldSegments(msgs))
+	summary, err := summarizeRendered(ctx, database, provider, agent, existing, plan.Rendered)
+	if err == nil && plan.Protected != "" {
+		summary = strings.TrimSpace(summary + "\n\n" + plan.Protected)
+	}
+	return summary, err
 }
 
 // summarizeRendered is the single compaction core shared by the rolling-summary

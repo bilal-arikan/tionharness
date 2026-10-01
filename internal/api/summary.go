@@ -465,6 +465,7 @@ func (s *Server) runNativeCompact(ctx context.Context, wsp *workspace.Workspace,
 	if err != nil {
 		return summaryResult{}, err
 	}
+	agentRow = wsp.Runtime.RouteSessionAgent(agent.WithSessionID(ctx, session.ID), agentRow, "")
 	provider, err := s.providers.Get(agentRow.ProviderRef())
 	if err != nil {
 		return summaryResult{}, err
@@ -510,6 +511,7 @@ func (s *Server) runNativeCompact(ctx context.Context, wsp *workspace.Workspace,
 				s.logger.Error("persist cli compaction lifecycle failed", "session", session.ID, "error", jerr)
 			} else if ev.Phase == providers.CLICompactionSuccess {
 				successDebugPersisted.Store(true)
+				wsp.Runtime.RecordDecisionCompact(agent.WithSessionID(ctx, session.ID))
 			}
 		},
 		OnEvent: func(trace providers.TraceStep) {
