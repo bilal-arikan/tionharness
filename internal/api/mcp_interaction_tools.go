@@ -303,8 +303,9 @@ func (b *interactionBackend) callUseSkill(run *chatRun, args json.RawMessage) (i
 		return interaction.CallResult{Text: "skills are not available for this turn", IsError: true}, nil
 	}
 	var in struct {
-		Slug  string `json:"slug"`
-		Force bool   `json:"force"`
+		Slug   string `json:"slug"`
+		Force  bool   `json:"force"`
+		Reason string `json:"reason"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
 		return interaction.CallResult{Text: "invalid use_skill input: " + err.Error(), IsError: true}, nil
@@ -317,7 +318,7 @@ func (b *interactionBackend) callUseSkill(run *chatRun, args json.RawMessage) (i
 	// loaded in this fold epoch gets a pointer instead of the body. Grants are
 	// still (re)applied so the skill's tools stay allowed either way.
 	ledger, epoch := run.skillLedgerFor()
-	if !in.Force && ledger != nil {
+	if (!in.Force || strings.TrimSpace(in.Reason) == "") && ledger != nil {
 		if already, ordinal := ledger.Note(slug, epoch); already {
 			b.grantSkillToolsCLI(run, slug)
 			return interaction.CallResult{Text: tools.SkillReloadPointer(slug, ordinal)}, nil

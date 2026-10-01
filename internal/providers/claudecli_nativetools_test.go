@@ -41,8 +41,8 @@ func TestNativeToolArgsReachBothLaunchers(t *testing.T) {
 func TestNativeClaudeModel(t *testing.T) {
 	cases := map[string]string{
 		"haiku":                     "claude-haiku-4-5-20251001",
-		"Sonnet":                    "claude-sonnet-5",
-		"opus":                      "claude-opus-5",
+		"Sonnet":                    "claude-sonnet-5-5",
+		"opus":                      "claude-opus-5-5",
 		"fable":                     "claude-fable-5-1",
 		"claude-opus-4-8":           "claude-opus-4-8",
 		"":                          "claude-haiku-4-5-20251001",

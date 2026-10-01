@@ -44,7 +44,8 @@ func (UseSkillTool) Def() providers.ToolDef {
   "type": "object",
   "properties": {
     "slug": { "type": "string", "description": "The skill slug exactly as shown in the Available Skills list." },
-    "force": { "type": "boolean", "description": "Re-send the full body even if this session already loaded this skill. Default false." }
+    "force": { "type": "boolean", "description": "Reload an already loaded skill only with a reason describing missing or changed instructions. Default false." },
+    "reason": { "type": "string", "description": "For a forced reload: what instructions are missing or changed? Routine turn-start reloads are unnecessary." }
   },
   "required": ["slug"],
   "additionalProperties": false
@@ -54,8 +55,9 @@ func (UseSkillTool) Def() providers.ToolDef {
 
 func (t UseSkillTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Slug  string `json:"slug"`
-		Force bool   `json:"force"`
+		Slug   string `json:"slug"`
+		Force  bool   `json:"force"`
+		Reason string `json:"reason"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErrFor("use_skill", err)
@@ -72,7 +74,7 @@ func (t UseSkillTool) Call(ctx context.Context, input json.RawMessage) (string, 
 	// read so a duplicate load costs neither the disk read nor the tokens. The
 	// grants below still run — re-granting is idempotent and the skill's tools must
 	// stay allowed whether or not the body was resent.
-	if !in.Force {
+	if !in.Force || strings.TrimSpace(in.Reason) == "" {
 		if ledger, epoch := SkillLedgerFrom(ctx); ledger != nil {
 			if already, ordinal := ledger.Note(slug, epoch); already {
 				t.grantSkillTools(ctx, slug)

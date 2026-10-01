@@ -7,7 +7,7 @@ import (
 )
 
 func TestCodexGPT6CatalogAndWire(t *testing.T) {
-	for _, model := range []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
 		t.Run(model, func(t *testing.T) {
 			var found *ModelInfo
 			for _, entry := range Catalog() {
@@ -64,7 +64,7 @@ func TestCodexGPT6CatalogAndWire(t *testing.T) {
 }
 
 func TestGPT6TransportWindows(t *testing.T) {
-	for _, model := range []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
 		for _, alias := range []string{model, " " + strings.ToUpper(model) + " "} {
 			if got := ContextWindowFor("codex-cli", alias); got != 272_000 {
 				t.Errorf("CLI %q: %d", alias, got)
@@ -86,8 +86,10 @@ func TestGPT6EquivalentAPICost(t *testing.T) {
 	for _, tc := range []struct {
 		model         string
 		input, output float64
+		cacheRead     float64
 	}{
-		{"gpt-6-astra", 10, 50}, {"gpt-6-sol", 2, 10}, {"gpt-6-luna", 0.1, 0.5},
+		{"gpt-6.1-sol", 2, 10, 0.05},
+		{"gpt-6-astra", 10, 50, 0.1}, {"gpt-6-sol", 2, 10, 0.1}, {"gpt-6-luna", 0.1, 0.5, 0.1},
 	} {
 		t.Run(tc.model, func(t *testing.T) {
 			p, ok := EstimateFor("codex-cli", tc.model)
@@ -97,14 +99,14 @@ func TestGPT6EquivalentAPICost(t *testing.T) {
 			if p.InputPerMTok != tc.input || p.OutputPerMTok != tc.output {
 				t.Fatalf("wrong rates: %+v", p)
 			}
-			if p.CacheReadMultOverride != 0.1 || p.CacheWriteMultOverride != 1.25 {
+			if p.CacheReadMultOverride != tc.cacheRead || p.CacheWriteMultOverride != 1.25 {
 				t.Fatalf("wrong cache rates: %+v", p)
 			}
 			if _, billed := PriceFor("codex-cli", tc.model); billed {
 				t.Error("subscription must not become API billing")
 			}
 			const in, out, read, write = 200_000, 1000, 80_000, 10_000
-			want := (float64(in)*tc.input*2 + float64(read)*tc.input*0.1*2 + float64(write)*tc.input*1.25*2 + float64(out)*tc.output*1.5) / 1_000_000
+			want := (float64(in)*tc.input*2 + float64(read)*tc.input*tc.cacheRead*2 + float64(write)*tc.input*1.25*2 + float64(out)*tc.output*1.5) / 1_000_000
 			if got := p.CostDetailed(in, out, read, write); !approx(got, want) {
 				t.Errorf("long context cost = %v, want %v", got, want)
 			}

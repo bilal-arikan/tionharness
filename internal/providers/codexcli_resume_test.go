@@ -19,6 +19,32 @@ func TestCodexBuildArgsScopedResumeIsDurable(t *testing.T) {
 	}
 }
 
+func TestCodexAuxiliaryCallsKeepRolloutForAccounting(t *testing.T) {
+	c := NewCodexCLI("codex", "", t.TempDir())
+	if args := c.buildArgs(Request{}, ""); slices.Contains(args, "--ephemeral") || slices.Contains(args, "resume") {
+		t.Fatalf("auxiliary call cannot measure independent calls: %v", args)
+	}
+	home, cleanup, err := prepareCodexTurnHome(c.configDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "sessions"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "sessions", "rollout-thread-1.jsonl"), []byte(usageRecord("a", 100, 80, 10)+usageRecord("b", 200, 150, 20)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resp := &Response{SessionID: "thread-1"}
+	applyCodexRolloutUsage(resp, home, codexUsageCheckpoint{})
+	cleanup()
+	if resp.ProviderCalls != 2 || resp.FirstCallPromptTokens != 100 || resp.Usage.InputTokens != 70 {
+		t.Fatalf("auxiliary accounting: %+v", resp)
+	}
+	if _, err := os.Stat(home); !os.IsNotExist(err) {
+		t.Fatal("auxiliary rollout retained after accounting")
+	}
+}
+
 func TestCodexScopedResumeHomeOwnsThread(t *testing.T) {
 	base := t.TempDir()
 	if err := os.WriteFile(filepath.Join(base, "auth.json"), []byte(`{"token":"test"}`), 0o600); err != nil {

@@ -8,9 +8,9 @@ import (
 // Challenger comparisons. An authority may name a challenger model: after every
 // answer the same request goes to the challenger in the background, and both
 // verdicts land in the ledger as one challenger record (Outcome = challenger,
-// Baseline = the model that answered). Agreement per authority then tells,
-// on real traffic and without changing any behaviour, whether a new model —
-// a local OpenJev, a cheaper hosted one — can take over.
+// Baseline = the model that answered). Agreement measures consistency on real
+// traffic without changing behaviour. Independently labeled evaluations are
+// still required before a new model takes over.
 const (
 	// maxConcurrentChallenges bounds background challenger calls; a challenge
 	// that finds no free slot is skipped, never queued.
@@ -36,13 +36,22 @@ func (h *Hub) challenge(ctx context.Context, authority string, mode Mode, challe
 		select {
 		case h.challengeSlots <- struct{}{}:
 		default:
+			o.trace.forModel(challenger, "challenger").emit(DebugEvent{Stage: "skipped", Error: "challenger_busy"})
 			return
 		}
 		defer func() { <-h.challengeSlots }()
 		cctx, cancel := context.WithTimeout(bg, challengeDeadline)
 		defer cancel()
-		resp, err := h.ask(cctx, challenger, req, o, false)
+		challengeOptions := o
+		challengeOptions.role = "challenger"
+		resp, err := h.ask(cctx, challenger, req, challengeOptions, false)
+		if resp != nil && o.trace != nil {
+			resp.DebugID = o.trace.base.TraceID
+		}
 		rec := NewRecord(authority, mode, resp, err)
+		if o.trace != nil {
+			rec.DebugID = o.trace.base.TraceID
+		}
 		rec.Role, rec.Ref, rec.Baseline = RoleChallenger, o.ref, baseline
 		if rec.Instance == "" {
 			rec.Instance = challenger

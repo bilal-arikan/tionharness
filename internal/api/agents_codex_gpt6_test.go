@@ -10,7 +10,7 @@ import (
 
 func TestCodexGPT6AgentCreateAndUpdate(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
-	for _, model := range []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
 		t.Run(model, func(t *testing.T) {
 			created := postAgent(t, s, wsp, `{"name":"GPT6","provider":"codex-cli","model":"`+model+`","thinkingLevel":"high"}`)
 			if created.Code != http.StatusCreated {

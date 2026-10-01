@@ -100,6 +100,13 @@ func classifyTurnSteps(steps []TurnStep) (turnOutcome, bool) {
 		if step.Kind != StepRecovery {
 			continue
 		}
+		if step.Operation == "cli_interrupted" {
+			status := turnStatusIncomplete
+			if step.Status == turnStatusTimeout {
+				status = turnStatusTimeout
+			}
+			return turnOutcome{Status: status, Note: "Provider execution ended before completion. The task is unfinished; inspect the preserved partial work before continuing."}, true
+		}
 		switch termReason(step.Reason) {
 		case termMaxIters:
 			return turnOutcome{

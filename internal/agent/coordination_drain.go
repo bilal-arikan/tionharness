@@ -525,11 +525,13 @@ func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID st
 		turnCtx context.Context
 		meta    *turnMeta
 	)
+	upward := &pendingUpwardReport{}
 	turnStart := time.Now()
 	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(drainCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), coordSessionID))
 			turnCtx, meta = WithTurnMeta(turnCtx)
+			turnCtx = withPendingUpwardReport(turnCtx, upward)
 			p := "" // the coordinator drains its inbox via history, not a prompt
 			if attempt > 1 {
 				p = resumeContinuationPrompt("", prevOutput)
@@ -589,6 +591,18 @@ func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID st
 	// text was pre-composed above (success output / failure / stop / empty note).
 	if addErr := r.recordAssistantMessage(ctx, coordSessionID, agent.ID, text, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
 		r.logger.Warn("coordination: failed to record coordinator reply", "coordinator", coordSessionID, "error", addErr)
+		err = addErr
+	}
+	if err != nil || truncated {
+		coord, _, reported := upward.take()
+		if reported {
+			note := formatTaskNotification(coordSessionID, agent.ID, agent.Name, agent.Model, turnStatusIncomplete,
+				"The reporting turn failed or was cut short. Its earlier completion claim is not valid.\n\n"+text,
+				countToolSteps(steps), time.Since(turnStart).Milliseconds())
+			r.NotifyCoordinator(coord, note)
+		}
+	} else {
+		r.flushUpwardReport(upward, coordSessionID)
 	}
 	r.publish(events.Event{
 		Type:   events.TypeChat,

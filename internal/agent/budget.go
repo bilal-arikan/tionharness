@@ -168,6 +168,12 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 			req.Model = fallback.Model
 			return r.guardedComplete(ctx, fallback, req, autonomous)
 		}
+		if fallback, ok := r.systemAuthFallback(ctx, agent, err); ok {
+			r.logger.Warn("unpinned system provider rejected authentication; retrying on caller provider",
+				"systemKey", agent.SystemKey, "from", agent.ProviderRef(), "to", fallback.ProviderRef())
+			req.Model = fallback.Model
+			return r.guardedComplete(ctx, fallback, req, autonomous)
+		}
 		// Mirror recordedComplete's logging: guardedComplete is the funnel for the
 		// non-tool autonomous calls (reflect/summary/title), so a provider failure
 		// here must surface in the logs too — not just propagate up silently.

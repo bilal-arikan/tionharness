@@ -43,6 +43,10 @@ func (r *Runtime) FoldContext(ctx context.Context, agent db.Agent) context.Conte
 			"provider", target.ProviderRef(), "error", err)
 		return ctx
 	}
+	if err := r.PinCLIHome(provider); err != nil {
+		r.logger.Warn("fold target CLI home unavailable", "provider", target.ProviderRef(), "error", err)
+		return ctx
+	}
 	return conversation.WithFoldTarget(ctx, provider, target)
 }
 

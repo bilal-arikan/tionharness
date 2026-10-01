@@ -11,11 +11,20 @@ import type {
   DeciderAuthorityStats,
   DeciderTestResult,
   DeciderView,
+  DeciderDebugFilter,
+  DeciderDebugReport,
 } from '@/types/decider'
 
 const modelPath = (id: string) => `/api/decider/models/${encodeURIComponent(id)}`
 
 export const deciderApi = {
+  getDeciderDebug: (filter: DeciderDebugFilter = {}) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') query.set(key, String(value))
+    }
+    return req<DeciderDebugReport>(`/api/decider/debug?${query}`)
+  },
   getDecider: () => req<DeciderView>('/api/decider'),
   saveDecider: (config: DeciderConfig) =>
     req<DeciderView>('/api/decider', { method: 'PUT', body: JSON.stringify(config) }),

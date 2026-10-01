@@ -74,7 +74,7 @@ func artifactsContextBlock(ctx context.Context, database *db.DB, sessionID strin
 	}
 	var b strings.Builder
 	b.WriteString("## Artifacts in this session\n")
-	b.WriteString("You have already created these artifacts. To revise one, call update_artifact with its id and the FULL new content — do not create a duplicate. Create a new artifact only for genuinely new content.\n")
+	b.WriteString("You have already created these artifacts. To revise one, call update_artifact with its id and sourcePath for an updated file on disk, or content for an inline body. Do not read and resend an entire file just to synchronize its artifact. Create a new artifact only for new content.\n")
 	const max = 30
 	for i, a := range arts {
 		if i >= max {
@@ -141,7 +141,7 @@ func (s artifactSink) CreateArtifact(ctx context.Context, spec tools.CreateArtif
 	// workspace-relative path (copying the file in if it lives outside) so the
 	// viewer can stream it and the artifact owns a stable copy.
 	if spec.SourcePath != "" {
-		rel, err := s.db.ImportMediaSource(s.sessionID, spec.SourcePath)
+		rel, err := s.db.ImportMediaSource(s.sessionID, s.sourcePath(ctx, spec.SourcePath))
 		if err != nil {
 			return tools.ArtifactRef{}, err
 		}

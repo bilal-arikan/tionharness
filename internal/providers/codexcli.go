@@ -165,12 +165,9 @@ func codexSandboxArgs(mode string) []string {
 // process command line at ~32 KB and a full turn prompt overflows that.
 func (c *CodexCLI) buildArgs(req Request, model string) []string {
 	args := []string{"exec", "--json"}
-	// A scoped chat turn needs Codex's rollout file for `exec resume` on the next
-	// turn. Every other invocation (title, compaction summary, insight, auth probe)
-	// stays ephemeral inside its disposable shadow home.
-	if req.CLIResumeScope == "" {
-		args = append(args, "--ephemeral")
-	}
+	// Every turn needs per-response rollout accounting, including auxiliary and
+	// worker calls. Unscoped homes are deleted after accounting, so persistence
+	// here does not create a resumable or retained auxiliary conversation.
 	args = append(args,
 		// The workspace sandbox is not necessarily a git repo; without this codex
 		// refuses to run outside one.
@@ -326,7 +323,7 @@ func (c *CodexCLI) Complete(ctx context.Context, req Request) (*Response, error)
 // retrying once on a clean crash and once more after disabling an MCP server
 // that refused to start. args and prompt are parameters rather than derived
 // here so tests can drive the whole recovery path with a fake codex binary.
-func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, model string, req Request) (*Response, error) {
+func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, model string, req Request) (response *Response, resultErr error) {
 	home, cleanupHome, err := prepareCodexTurnHome(c.configDir, req.CLIResumeScope)
 	if err != nil {
 		return nil, fmt.Errorf("codex CLI: prepare turn CODEX_HOME: %w", err)
@@ -338,6 +335,19 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 	// "[codex error]" lines — text trace steps, streamed live when the caller
 	// listens and carried in the response trace either way.
 	var mcpNotes []TraceStep
+	defer func() {
+		if resultErr != nil && len(mcpNotes) > 0 {
+			for i := range mcpNotes {
+				if mcpNotes[i].Operation == "mcp_startup" && mcpNotes[i].Status == "retrying" {
+					mcpNotes[i].Status = "failed"
+					if req.OnEvent != nil {
+						req.OnEvent(mcpNotes[i])
+					}
+				}
+			}
+			resultErr = &CLITraceError{Cause: resultErr, Trace: append([]TraceStep(nil), mcpNotes...)}
+		}
+	}()
 	note := func(text string) {
 		step := TraceStep{Kind: "text", Text: text}
 		mcpNotes = append(mcpNotes, step)
@@ -386,8 +396,20 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 			}
 		}
 		if len(dropped) > 0 {
-			note("[codex] unreachable MCP server(s) omitted from this turn: " +
-				strings.Join(dropped, ", ") + " — their tools are unavailable until the server is back up.")
+			step := TraceStep{ID: "cli-mcp-preflight", Kind: "text", Operation: "mcp_startup", Status: "degraded", Provider: "codex-cli", Target: dropped,
+				Text: "Unreachable MCP servers were omitted from this turn."}
+			for _, key := range dropped {
+				if key == "tionharness_interaction" || key == "tionharness_extended" {
+					step.Status = "failed"
+				}
+			}
+			mcpNotes = append(mcpNotes, step)
+			if req.OnEvent != nil {
+				req.OnEvent(step)
+			}
+			if step.Status == "failed" {
+				return nil, fmt.Errorf("codex CLI: required TionHarness bridge unavailable: %s", strings.Join(dropped, ", "))
+			}
 		}
 	} else if len(c.mcpServers) > 0 {
 		return nil, fmt.Errorf("codex CLI: MCP servers configured but no CODEX_HOME set — cannot write config.toml")
@@ -401,10 +423,20 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 	// error so the usage it carries can be folded into whatever finally succeeds.
 	var failed []error
 	mcpFallbackUsed := false
+	mcpStartupRetried := false
 	idleRetried := false
 	for range 3 {
+		attemptStart := time.Now()
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req, home)
 		if err == nil {
+			for i := range mcpNotes {
+				if mcpNotes[i].Operation == "mcp_startup" && mcpNotes[i].Status == "retrying" {
+					mcpNotes[i].Status = "recovered"
+					if req.OnEvent != nil {
+						req.OnEvent(mcpNotes[i])
+					}
+				}
+			}
 			if len(mcpNotes) > 0 {
 				resp.Trace = append(append([]TraceStep{}, mcpNotes...), resp.Trace...)
 			}
@@ -412,6 +444,21 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 			return resp, nil
 		}
 		failed = append(failed, err)
+		if partial, _ := InterruptedResponse(err); partial != nil {
+			for i := range mcpNotes {
+				if mcpNotes[i].Operation == "mcp_startup" && mcpNotes[i].Status == "retrying" {
+					mcpNotes[i].Status = "recovered"
+					if req.OnEvent != nil {
+						req.OnEvent(mcpNotes[i])
+					}
+				}
+			}
+			if len(mcpNotes) > 0 {
+				partial.Trace = append(append([]TraceStep{}, mcpNotes...), partial.Trace...)
+			}
+			foldFailedAttempts(partial, failed[:len(failed)-1])
+			return nil, WithUsage(err, partial.Model, partial.Usage, partial.ProviderCalls)
+		}
 		if ctx.Err() != nil {
 			return nil, err
 		}
@@ -421,18 +468,46 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 		// answers, the protocol handshake is what fails — so recover here by
 		// dropping the offending server(s) and running the turn once more.
 		if !mcpFallbackUsed && home != "" && codexMCPStartupFailure(err.Error()) {
+			// A stdio bootstrap can time out while its detached daemon is still
+			// warming up. Give the unchanged server set one more handshake before
+			// removing tools. Never repeat a turn after a tool could have run.
+			if retryable && !mcpStartupRetried {
+				mcpStartupRetried = true
+				step := TraceStep{ID: "cli-mcp-startup", Kind: "text", Operation: "mcp_startup", Status: "retrying",
+					Provider: "codex-cli", Target: codexNamedMCPServers(err.Error(), cfg.Servers),
+					DurationMs: time.Since(attemptStart).Milliseconds(), Output: safeCLIStartupDetail(err.Error()),
+					Text: "[codex] MCP startup failed before any tool ran; retrying the same server set once."}
+				mcpNotes = append(mcpNotes, step)
+				if req.OnEvent != nil {
+					req.OnEvent(step)
+				}
+				continue
+			}
+			if !retryable {
+				return nil, err
+			}
 			drop := codexNamedMCPServers(err.Error(), cfg.Servers)
 			if len(drop) == 0 {
 				drop = codexRemoteServerKeys(cfg.Servers)
 			}
 			if len(drop) > 0 {
+				for _, key := range drop {
+					if key == "tionharness_interaction" || key == "tionharness_extended" {
+						return nil, err
+					}
+				}
 				mcpFallbackUsed = true
 				cfg.Servers = codexServersWithout(cfg.Servers, drop)
 				if _, werr := writeConfig(); werr != nil {
 					return nil, werr
 				}
-				note("[codex] MCP server(s) failed to start and were disabled for this turn: " +
-					strings.Join(drop, ", ") + " — retrying without their tools.")
+				step := TraceStep{ID: "cli-mcp-degraded", Kind: "text", Operation: "mcp_startup", Status: "degraded", Provider: "codex-cli",
+					Target: append([]string(nil), drop...), Output: safeCLIStartupDetail(err.Error()),
+					Text: "[codex] MCP server(s) failed to start and were disabled for this turn: " + strings.Join(drop, ", ") + " — retrying without their tools."}
+				mcpNotes = append(mcpNotes, step)
+				if req.OnEvent != nil {
+					req.OnEvent(step)
+				}
 				continue
 			}
 		}
@@ -533,6 +608,7 @@ func codexIdleOutputWindow() time.Duration {
 // produced no terminal-classified failure, no salvageable content, and ran no
 // tool.
 func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request, home string) (resp *Response, retryable bool, err error) {
+	usageStart := checkpointCodexUsage(home, req.ResumeSessionID)
 	// Ledger entry + stop path for this transport process; ctx is shadowed so a
 	// panel stop travels the same route as a user stop (see watchCLI).
 	ctx, stopCLI, watch := watchCLI(ctx, "codex-cli", c.binPath, args)
@@ -714,6 +790,7 @@ readLoop:
 	}
 	runErr := cmd.Wait()
 	watch.Finish(runErr)
+	applyCodexRolloutUsage(p.resp, home, usageStart)
 
 	// Every failure from here on happens AFTER the subprocess ran, so the request
 	// may have reached the provider and spent tokens: each one goes out through
@@ -744,7 +821,20 @@ readLoop:
 	}
 	// Preserve any content parsed before either a normal exit or watchdog kill.
 	if partial := p.salvage(); partial != nil {
-		return partial, false, nil
+		reason, window := "cli_stream_incomplete", time.Duration(0)
+		cause := parseErr
+		switch {
+		case ctx.Err() != nil:
+			reason, cause = "cli_cancelled", context.Cause(ctx)
+		case idleHang:
+			reason, window = "cli_idle_timeout", idleWindow
+		case startupHang:
+			reason, window = "cli_startup_timeout", codexStartupTimeout
+		case runErr != nil:
+			reason, cause = "cli_process_exit", runErr
+		}
+		partial.StopReason = StopInterrupted
+		return nil, false, p.usageError(&CLIInterruption{Partial: partial, Reason: reason, Window: window, Cause: cause})
 	}
 	if startupHang {
 		return nil, true, p.usageError(fmt.Errorf(

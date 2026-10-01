@@ -36,6 +36,7 @@ func init() {
 			},
 			Models: []ModelInfo{
 				{ID: "", Label: "codex oturum modeli", Description: "codex oturumunun aktif modelini kullanır"},
+				{ID: "gpt-6.1-sol", Label: "GPT-6.1 Sol", Description: "Near-Astra performance for complex coding at lower cost. Codex effort: low through ultra; verified CLI context: 272K. Availability depends on the signed-in account."},
 				{ID: "gpt-6-astra", Label: "GPT-6 Astra", Description: "Frontier reasoning and coding. Codex effort: low through ultra; verified CLI context: 272K. Availability depends on the signed-in account."},
 				{ID: "gpt-6-sol", Label: "GPT-6 Sol", Description: "Balanced coding and agentic workflows. Codex effort: low through ultra; verified CLI context: 272K. Availability depends on the signed-in account."},
 				{ID: "gpt-6-luna", Label: "GPT-6 Luna", Description: "Efficient focused tasks. Codex effort: low through max; verified CLI context: 272K. Availability depends on the signed-in account."},

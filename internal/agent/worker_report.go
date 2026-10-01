@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/tools"
@@ -28,6 +29,17 @@ import (
 //     instead of paying for it on every subsequent turn. This is the
 //     "preview envelope + artifact handle" pattern applied to worker reports.
 const coordinatorResultCapChars = 6000
+
+var workerPassVerdict = regexp.MustCompile(`(?im)^\s*(?:\*\*)?VERDICT\s*:\s*PASS\b`)
+
+// A text-only turn can complete analysis, but cannot establish that validation
+// commands ran. Keep the original claim for inspection and mark it incomplete.
+func guardWorkerVerificationClaim(status, text string, steps []TurnStep) (string, string) {
+	if status == turnStatusCompleted && countToolSteps(steps) == 0 && workerPassVerdict.MatchString(text) {
+		return turnStatusIncomplete, "Verification is not established: this turn reported PASS without any recorded tool execution. Inspect the worker evidence or run independent validation.\n\n" + text
+	}
+	return status, text
+}
 
 // capText truncates s to at most maxRunes runes, appending a short notice of how
 // many runes were dropped. Returns the (possibly truncated) text and whether a

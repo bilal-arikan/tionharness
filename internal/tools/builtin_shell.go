@@ -439,6 +439,11 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, label string, onC
 
 	cmd := build(runCtx, command)
 	cmd.Dir = sb.Root
+	cleanupScript, scriptErr := prepareShellScript(cmd, label)
+	if scriptErr != nil {
+		return "", scriptErr
+	}
+	defer cleanupScript()
 
 	// Ledger entry (internal/procwatch): a foreground shell blocks the turn for up
 	// to the hard timeout, so it is exactly the kind of process the user needs to

@@ -175,7 +175,7 @@ func (d *DB) ImportMediaSource(sessionID, src string) (string, error) {
 		}
 		return "", fmt.Errorf("source file not found in the workspace: %s (resolved to %s)", src, abs)
 	}
-	if info.IsDir() {
+	if !info.Mode().IsRegular() {
 		return "", fmt.Errorf("sourcePath is a directory, not a file: %s", src)
 	}
 	// Already inside the workspace → store a clean relative path, no copy.
@@ -184,16 +184,25 @@ func (d *DB) ImportMediaSource(sessionID, src string) (string, error) {
 		return filepath.ToSlash(rel), nil
 	}
 	// Outside the workspace → copy in under artifacts/<sessionDir>/.
-	rel := "artifacts/" + artifactSessionDir(sessionID) + "/" +
-		fmt.Sprintf("media-%d%s", now(), filepath.Ext(abs))
-	dst := filepath.Join(wsDir, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	dir := d.ArtifactsDir(sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp(dir, "media-*"+filepath.Ext(abs))
+	if err != nil {
+		return "", err
+	}
+	dst := f.Name()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(dst)
 		return "", err
 	}
 	if err := copyFileContents(abs, dst); err != nil {
+		_ = os.Remove(dst)
 		return "", err
 	}
-	return rel, nil
+	rel, err := filepath.Rel(wsDir, dst)
+	return filepath.ToSlash(rel), err
 }
 
 // copyFileContents copies src to dst (truncating dst), streaming so large media

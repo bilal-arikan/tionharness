@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// This optional test consumes two small model requests. It uses the production
+// This optional test consumes three small model requests. It uses the production
 // transport with disposable shadow homes and a temporary working directory;
 // no repository content is sent and no tools are requested.
 func TestCodexGPT6Live(t *testing.T) {
@@ -21,7 +21,7 @@ func TestCodexGPT6Live(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, model := range []string{"gpt-6-astra", "gpt-6-sol"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol"} {
 		t.Run(model, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()

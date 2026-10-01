@@ -320,10 +320,11 @@ func (r *Runtime) coordinationFuncsFor(sess db.Session, callerID string) *tools.
 // different plan than it was given is worse than a refused spawn.
 func (r *Runtime) workerSpecFor(spec tools.WorkerSpawnSpec) (WorkerSpec, error) {
 	out := WorkerSpec{
-		ModelOverride: spec.ModelOverride,
-		Coordinator:   spec.Coordinator,
-		Workflow:      strings.TrimSpace(spec.Workflow),
-		WorkingDir:    strings.TrimSpace(spec.WorkingDir),
+		ExpectedDeliverables: append([]string(nil), spec.ExpectedDeliverables...),
+		ModelOverride:        spec.ModelOverride,
+		Coordinator:          spec.Coordinator,
+		Workflow:             strings.TrimSpace(spec.Workflow),
+		WorkingDir:           strings.TrimSpace(spec.WorkingDir),
 	}
 	if out.Workflow != "" {
 		maxTurns, err := skills.ResolveCoordinatorWorkflow(r.Skills(), out.Workflow)
@@ -465,7 +466,8 @@ func (r *Runtime) HasQueuedMessage(id string) bool { return r.hasQueuedMessage(i
 // pair: whether the new worker is itself a coordinator (the nesting switch) and,
 // if so, which recipe it runs under.
 type WorkerSpec struct {
-	ModelOverride string
+	ExpectedDeliverables []string
+	ModelOverride        string
 	// Coordinator makes the spawned worker a sub-coordinator: it gets the
 	// coordination tools and may nest another level. Rejected past
 	// CoordinatorMaxDepth rather than silently downgraded to a plain worker — a
@@ -604,7 +606,20 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	// item, or SpawnSession failing outright. Both must report the zero-crossing —
 	// only the observer of the transition may fold the all-idle note.
 	dropped := releaseOnce(slot)
+	contractCwd := cwd
+	if contractCwd == "" {
+		contractCwd = r.WorkspaceDefaultDir()
+	}
+	expected, deliverableErr := normalizeWorkerDeliverables(spec.ExpectedDeliverables, contractCwd)
+	if deliverableErr != nil {
+		dropped()
+		return SpawnResult{}, deliverableErr
+	}
+	if len(expected) > 0 {
+		task += "\n\nRequired delivery files (presence checked before completion; independent acceptance remains separate):\n" + strings.Join(expected, "\n") + "\nWrite and verify these files before reporting completion."
+	}
 	res, err := r.SpawnSession(ctx, agentRef, task, SpawnOptions{
+		ExpectedDeliverables:     expected,
 		ModelOverride:            spec.ModelOverride,
 		WorkingDir:               cwd,
 		CreatedBy:                createdBy,

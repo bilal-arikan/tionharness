@@ -8,8 +8,8 @@ import "strings"
 // the API does not, so a call re-routed from the CLI to the API must translate.
 var claudeAliasModels = map[string]string{
 	"haiku":  "claude-haiku-4-5-20251001",
-	"sonnet": "claude-sonnet-5",
-	"opus":   "claude-opus-5",
+	"sonnet": "claude-sonnet-5-5",
+	"opus":   "claude-opus-5-5",
 	"fable":  "claude-fable-5-1",
 }
 

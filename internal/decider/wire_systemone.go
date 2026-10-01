@@ -132,11 +132,14 @@ func (c systemOneCall) decide(ctx context.Context, req Request) (*Response, erro
 	for k, q := range req.Questions {
 		wa, ok := out.Answers[k]
 		if !ok {
-			return nil, fmt.Errorf("%s: response has no answer for question %q", c.prefix, k)
+			return nil, fmt.Errorf("%w: %s: response has no answer for question %q", ErrInvalidResponse, c.prefix, k)
 		}
 		a, err := fromWireAnswer(q.Type, wa)
+		if err == nil {
+			err = validateDecisionAnswer(q, a)
+		}
 		if err != nil {
-			return nil, fmt.Errorf("%s: question %q: %w", c.prefix, k, err)
+			return nil, fmt.Errorf("%w: %s: question %q: %w", ErrInvalidResponse, c.prefix, k, err)
 		}
 		resp.Answers[k] = a
 	}
@@ -182,7 +185,6 @@ func fromWireAnswer(want QuestionType, w soAnswer) (Answer, error) {
 		default:
 			return Answer{}, fmt.Errorf("noul answer carries no probability")
 		}
-		a.Probability = clamp01(a.Probability)
 	case QuestionChoice:
 		if w.Choice == nil || *w.Choice == "" {
 			return Answer{}, fmt.Errorf("choice answer names no option")

@@ -36,10 +36,12 @@ func (r *fakeRunner) Start(ctx context.Context, binPath string, env []string, ar
 	}
 
 	killed := make(chan struct{})
+	finished := make(chan struct{})
 	var killOnce = make(chan struct{}, 1)
 	killOnce <- struct{}{}
 
 	go func() {
+		defer close(finished)
 		pw.Write([]byte(script.prompt))
 		select {
 		case <-time.After(script.delay):
@@ -54,7 +56,9 @@ func (r *fakeRunner) Start(ctx context.Context, binPath string, env []string, ar
 	}()
 
 	wait := func() error {
-		<-time.After(script.delay + 10*time.Millisecond)
+		// Model process termination, not a separate timer that can win before
+		// the writer goroutine creates auth.json under scheduler/file-system load.
+		<-finished
 		return script.exitErr
 	}
 	kill := func() {

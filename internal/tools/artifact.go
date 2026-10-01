@@ -22,6 +22,12 @@ type ArtifactSink interface {
 	UpdateArtifact(ctx context.Context, id, content string) (ArtifactRef, error)
 }
 
+// ArtifactSourceSink refreshes a saved file without echoing its body through
+// the model. Optional so existing content-only sinks remain compatible.
+type ArtifactSourceSink interface {
+	UpdateArtifactSource(ctx context.Context, id, sourcePath string) (ArtifactRef, error)
+}
+
 // CreateArtifactSpec describes a new artifact. For text kinds (markdown/code/
 // html/text/svg/mermaid) Content holds the body. For media/file kinds (image/
 // video/audio/file) SourcePath points at the file on disk — absolute or

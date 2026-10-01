@@ -8,7 +8,7 @@ import (
 
 // winBashUTF8Prelude forces UTF-8 for a POSIX shell launched on Windows. The
 // chcp guard keeps shells without the Windows console helper unaffected.
-const winBashUTF8Prelude = "export LC_ALL=C.UTF-8 LANG=C.UTF-8; " +
+const winBashUTF8Prelude = "export LC_ALL=C.UTF-8 LANG=C.UTF-8 PYTHONUTF8=1 PYTHONIOENCODING=utf-8; " +
 	"command -v chcp.com >/dev/null 2>&1 && chcp.com 65001 >/dev/null 2>&1; "
 
 // winPSUTF8Prelude makes Windows PowerShell 5.1 emit and read UTF-8 so non-ASCII

@@ -19,6 +19,8 @@ import { CacheBreakCard } from './CacheBreakCard'
 import { CompactionCard } from './CompactionCard'
 import { isEditToolBase, synthDiffData } from '@/shared/lib/diff'
 import { toolBase } from './tools'
+import { ExecutionNotice } from './ExecutionNotice'
+import { isExecutionNotice } from './executionEvidence'
 
 interface Props {
   steps: TurnStep[]
@@ -52,6 +54,8 @@ function renderStep(
   onOpenFile?: (path: string) => void,
   onOpenArtifact?: (id: string) => void,
 ) {
+  if (isExecutionNotice(step))
+    return <ExecutionNotice key={key} step={step} onOpenFile={onOpenFile} />
   if (step.kind === 'thinking') return <ThinkingBlock key={key} text={step.text || ''} />
   if (step.kind === 'todo') return <TodoCard key={key} step={step} />
   if (step.kind === 'diff') return <DiffCard key={key} step={step} onOpenFile={onOpenFile} />

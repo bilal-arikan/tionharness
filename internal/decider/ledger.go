@@ -28,6 +28,7 @@ const (
 // latency and spend per authority and per model, and deliberately nothing of
 // the state that was judged (the ledger is a metrics log, not a transcript).
 type Record struct {
+	DebugID string `json:"debugId,omitempty"`
 	// At is when the decision finished, in unix milliseconds.
 	At        int64  `json:"at"`
 	Authority string `json:"authority"`

@@ -81,7 +81,8 @@ func SkillReloadPointer(slug string, ordinal int) string {
 			"You loaded this skill earlier in THIS session (load #%d) and its instructions are\n"+
 			"still in your context above. The body was not sent again to save tokens.\n\n"+
 			"Scroll back to that load and follow it. If the instructions are genuinely no longer\n"+
-			"visible to you, re-request them explicitly: use_skill with slug=%q and force=true.",
+			"visible to you, re-request them explicitly: use_skill with slug=%q, force=true,\n"+
+			"and reason describing the missing or changed instructions. Do not reload at every turn start.",
 		slug, ordinal, slug)
 }
 

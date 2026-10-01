@@ -1,4 +1,26 @@
 {
+  "executionNotice": {
+    "traceUnavailable": "Kaydedilmiş işlem ayrıntıları okunamadı. Worker raporu hâlâ görüntülenebilir.",
+    "interrupted": "Çalışma kesildi — tamamlanmadı",
+    "filesPresent": "Beklenen dosyalar mevcut",
+    "filesMissing": "Teslim eksik — beklenen dosyalar bulunamadı",
+    "connectionRecovered": "Araç bağlantısı kurtarıldı",
+    "connectionDegraded": "Bazı araç bağlantıları kullanılamıyor",
+    "connectionRetry": "Araç bağlantısının kurtarılması gerekiyor",
+    "contextWarm": "Bağlam devam ettirildi",
+    "contextCold": "Yeni bağlam başlatıldı",
+    "contextDisabled": "Bağlam yeniden kullanılamıyor",
+    "partialSaved": "Kısmi çalışma kaydedildi. Bu tur bitmedi ve görevin tamamlandığını göstermiyor.",
+    "presenceOnly": "Bu kontrol, dosyaların boş olmayan normal dosyalar olduğunu gösterir. İçerik doğruluğu ve bağımsız kabul ayrıca doğrulanmalıdır.",
+    "connectionDetail": "Araçlar çalışmadan önce başlangıç bağlantısı başarısız oldu. Sunucu adları ve sınırlandırılmış hata ayrıntısı aşağıdadır.",
+    "compacted": "Özetlenmiş konuşmadan yeni bağlam başlatıldı.",
+    "responderChanged": "Yanıtlayan ajanın kimliği güvenle yeniden kullanılamadı. Konuşma geçmişi yeni bağlama aktarıldı.",
+    "threadUnavailable": "Önceki sağlayıcı oturumu bulunamadı. Konuşma geçmişi yeni bağlama aktarıldı.",
+    "reused": "Aynı ajan, yalnızca yeni mesajları alarak sağlayıcı oturumuna devam etti.",
+    "newContext": "Konuşma geçmişi yeni sağlayıcı bağlamına aktarıldı.",
+    "filePresent": "Dosya mevcut",
+    "fileMissing": "Dosya eksik, boş veya erişilemiyor"
+  },
   "optimizer": {
     "degradedTitle": "{{kind}}: komut BAŞARISIZ oldu ve yukarıdaki metin ham çıktı değil, {{kind}} özeti. Test/derleme hataları korunur ama kurulum hataları (bozuk go.mod, eksik toolchain) anlamsız bir özete inebilir. Gerçek nedeni görmek için aynı komutu no_compress ile tekrar çalıştır.",
     "command": "Çalıştırılan: {{command}}",
@@ -99,7 +121,16 @@
     "parallel_other": "{{count}} paralel araç çağrısı (tek istekte)"
   },
   "taskNotification": {
-    "status": { "completed": "tamamlandı", "failed": "başarısız", "killed": "durduruldu" },
+    "status": {
+      "completed": "tamamlandı",
+      "failed": "başarısız",
+      "killed": "durduruldu",
+      "timeout": "zaman aşımı",
+      "incomplete": "eksik"
+    },
+    "runtimeOutcome": "Worker turu tamamlandı. Test başarısı, çalıştırma kayıtlarıyla desteklenmelidir.",
+    "laterReport": "Bu worker için daha yeni bir rapor var: {{status}}. Bu sonuca güvenmeden önce yeni raporu inceleyin.",
+    "reportedOutcome": "Tamamlandığı bildirildi. Bu bildirim testlerin geçtiğini kanıtlamaz; kanıt için worker oturumunu açın.",
     "collapse": "Worker sonucunu daralt",
     "expand": "Worker sonucunu genişlet",
     "openSession": "{{name}} worker oturumunu aç",

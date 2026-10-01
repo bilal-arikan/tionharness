@@ -601,6 +601,8 @@ type Session struct {
 	// NOT inherited by child coordinators: a recursive recipe (e.g. tournament)
 	// would otherwise repeat itself forever down the tree.
 	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
+	// Optional task-specific file contract. Presence is not functional acceptance.
+	ExpectedDeliverables []string `json:"expectedDeliverables,omitempty"`
 	// CoordinatorReportPending marks a MID-LEVEL node whose finished turn was NOT
 	// reported to its coordinator, because its own workers were still running at
 	// the time (see agent/coordination_tree.go). It therefore still owes an upward

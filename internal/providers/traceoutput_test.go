@@ -1,9 +1,17 @@
 package providers
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestCapToolOutputPreservesBoundedJSONDocuments(t *testing.T) {
+	body, _ := json.Marshal(map[string]string{"document": strings.Repeat("ş", 12000), "last": "retained"})
+	if got := CapToolOutput(string(body)); got != string(body) {
+		t.Fatal("bounded JSON was corrupted by the per-line trace cap")
+	}
+}
 
 func TestCapToolOutputPassesSmallOutput(t *testing.T) {
 	in := "line one\nline two\n"

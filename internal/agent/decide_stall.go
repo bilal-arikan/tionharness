@@ -56,6 +56,7 @@ func (r *Runtime) decideCoordinatorStalled(ctx context.Context, agent db.Agent, 
 	threshold := r.deciderThreshold(authStallJudge)
 	resp, err := r.decide(ctx, authStallJudge, agent, stallDecisionRequest(text), decider.WithOutcome(stallOutcome(threshold)))
 	rec := decider.NewRecord(authStallJudge, decider.ModeOn, resp, err)
+	rec.Ref = SessionIDFrom(ctx)
 	if err != nil {
 		if !decisionOff(err) {
 			r.logger.Info("stall decision unavailable; using the LLM judge", "agent", agent.ID, "error", err)

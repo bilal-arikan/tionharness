@@ -259,13 +259,14 @@ func (a *Anthropic) contextMgmt() *contextManagement {
 // {type:"adaptive"} (budget_tokens is rejected there); legacy models take
 // {type:"enabled", budget_tokens:N}.
 type thinkingParam struct {
-	Type         string `json:"type"`                    // "adaptive" | "disabled" | "enabled"
+	Type         string `json:"type"`                    // "adaptive" | "between_tools" | "disabled" | "enabled"
 	BudgetTokens int    `json:"budget_tokens,omitempty"` // legacy enabled shape only
 	Display      string `json:"display,omitempty"`       // "summarized" — adaptive class defaults to "omitted" (empty traces)
 	// BlockBinding (beta betaThinkingBinding) tells the API what to do with a
 	// thinking block whose signature no longer matches the conversation prefix:
 	// "drop_block" degrades (the block and every later one are dropped, reported
-	// in input_transformations), "error" fails the request. Fable/Mythos 5.1 only.
+	// in input_transformations), "error" fails the request. Fable/Mythos 5.1 and
+	// Claude 5.5 adaptive thinking support this policy.
 	BlockBinding *blockBinding `json:"block_binding,omitempty"`
 }
 
@@ -283,6 +284,11 @@ type blockBinding struct {
 // the binding needs a carrier, so {type:"adaptive"} is materialised then.
 func applyThinkingBinding(model string, thinking *thinkingParam) (*thinkingParam, bool) {
 	if !SupportsThinkingBinding(model) {
+		return thinking, false
+	}
+	// Sonnet 5.5's between_tools accepts only its type field, so attaching
+	// block_binding would reject an otherwise valid low-thinking request.
+	if thinking != nil && thinking.Type == "between_tools" {
 		return thinking, false
 	}
 	if thinking == nil {
@@ -359,8 +365,8 @@ func applyTaskBudget(model string, budget int, cfg *outputConfig) (*outputConfig
 // Sonnet 5): the legacy enabled+budget shape 400s, so the budget is translated
 // to {type:"adaptive"} + output_config.effort, with display:"summarized" so the
 // thinking trace carries text (these models default to "omitted"). Budget 0 →
-// explicit {type:"disabled"}, except always-on models (Fable/Mythos) where
-// disabled also 400s and the field is omitted entirely.
+// explicit {type:"disabled"} on older adaptive models. Fable/Mythos omit the
+// field; Opus 5.5 stays adaptive, and Sonnet 5.5 uses type-only between_tools.
 //
 // Coarse-effort models (DeepSeek V4.x, GLM-5.3) carry their depth in
 // output_config.effort instead — see coarseEffortThinking.
@@ -370,6 +376,12 @@ func applyTaskBudget(model string, budget int, cfg *outputConfig) (*outputConfig
 func thinkingFor(model string, budget, maxTokens int) (*thinkingParam, *outputConfig, int) {
 	if UsesAdaptiveThinking(model) {
 		if budget <= 0 {
+			switch claude55Tier(model) {
+			case "opus":
+				return &thinkingParam{Type: "adaptive", Display: "summarized"}, nil, maxTokens
+			case "sonnet":
+				return &thinkingParam{Type: "between_tools"}, nil, maxTokens
+			}
 			if AlwaysOnThinking(model) {
 				return nil, nil, maxTokens
 			}
@@ -627,7 +639,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	// carry the fallbacks param so a policy decline is transparently re-served by
 	// Opus 4.8 inside the same call. First-party endpoint only — protocol
 	// lookalikes (minimax-anthropic, custom) would reject the param.
-	refusalFallback := a.refusalFallback && a.name == "anthropic" && AlwaysOnThinking(model)
+	refusalFallback := a.refusalFallback && a.name == "anthropic" && fableModel(model)
 	if refusalFallback {
 		body.Fallbacks = []fallbackParam{{Model: refusalFallbackModel}}
 	}
@@ -660,7 +672,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 			// Fable 5 requires 30-day data retention: a ZDR/short-retention org
 			// gets 400 on EVERY request with a payload-shaped error. Attach the
 			// actionable hint so the user doesn't debug the request body.
-			if AlwaysOnThinking(model) && strings.Contains(strings.ToLower(msg), "retention") {
+			if fableModel(model) && strings.Contains(strings.ToLower(msg), "retention") {
 				msg += " (hint: the Claude Fable 5.x class requires 30-day data retention; organizations configured for zero/short retention get 400 on every request — check the org's data-retention setting, not the request)"
 			}
 			return nil, fmt.Errorf("anthropic API error (%s): %s%s", parsed.Error.Type, msg, raSuffix)
@@ -846,7 +858,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 	}
 	// Same refusal-fallback policy as Complete: a plain streamed chat turn on a
 	// Fable-class model must not fall over on a classifier decline either.
-	refusalFallback := a.refusalFallback && a.name == "anthropic" && AlwaysOnThinking(model)
+	refusalFallback := a.refusalFallback && a.name == "anthropic" && fableModel(model)
 	if refusalFallback {
 		body.Fallbacks = []fallbackParam{{Model: refusalFallbackModel}}
 	}
@@ -1138,6 +1150,11 @@ func (a *Anthropic) betaHeader() string {
 // caching OFF there is no cached prefix to protect, so both the summary and the
 // dynamic fold back into the system prompt (byte-parity with the pre-cache path).
 func (a *Anthropic) buildSystemAndMessages(req Request, model string) (any, []anthropicMessage) {
+	if claude55Tier(model) == "sonnet" && req.ThinkingBudget <= 0 {
+		// between_tools cannot carry the drop_block policy. History and tool
+		// prefixes can change across turns, so omit their signed thinking.
+		req.Messages = withoutBetweenToolsThinking(req.Messages)
+	}
 	if a.extendedCache {
 		msgs := prependSummaryMessage(req.Messages, req.Summary)
 		return a.systemField(req.System, req.SystemDynamic), toAnthropicMessages(msgs, true, req.SystemDynamic, model)

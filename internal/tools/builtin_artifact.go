@@ -35,8 +35,9 @@ type createArtifactInput struct {
 
 // updateArtifactInput is the ask shape for update_artifact.
 type updateArtifactInput struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
+	ID         string `json:"id"`
+	Content    string `json:"content"`
+	SourcePath string `json:"sourcePath"`
 }
 
 // CreateArtifactTool lets the agent save a substantial, self-contained piece of
@@ -119,15 +120,17 @@ func NewUpdateArtifactTool() UpdateArtifactTool { return UpdateArtifactTool{} }
 func (UpdateArtifactTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "update_artifact",
-		Description: "Replace the content of an existing artifact (created with create_artifact). " +
-			"Pass the FULL new content, not a diff.",
+		Description: "Revise an existing artifact by id. For a file already on disk, pass sourcePath " +
+			"instead of reading and resending its body. Otherwise pass the full content, not a diff. " +
+			"Supply exactly one of content or sourcePath.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "id": { "type": "string", "description": "The artifact id returned by create_artifact." },
-    "content": { "type": "string", "description": "The full new content (replaces the old)." }
+    "content": { "type": "string", "description": "The full new content (replaces the old)." },
+    "sourcePath": { "type": "string", "description": "Path to the updated file, absolute or relative to this session's working directory. Avoids duplicating the file body in context." }
   },
-  "required": ["id", "content"],
+  "required": ["id"],
   "additionalProperties": false
 }`),
 	}
@@ -142,14 +145,24 @@ func (UpdateArtifactTool) Call(ctx context.Context, input json.RawMessage) (stri
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	if strings.TrimSpace(in.Content) == "" {
-		return "", fmt.Errorf("content is required")
+	in.SourcePath = strings.TrimSpace(in.SourcePath)
+	if (strings.TrimSpace(in.Content) == "") == (in.SourcePath == "") {
+		return "", fmt.Errorf("supply exactly one of content or sourcePath")
 	}
 	sink := artifactsFrom(ctx)
 	if sink == nil {
 		return "", fmt.Errorf("artifacts are not available in this context (only in interactive chat)")
 	}
-	ref, err := sink.UpdateArtifact(ctx, in.ID, in.Content)
+	var ref ArtifactRef
+	if in.SourcePath != "" {
+		updater, ok := sink.(ArtifactSourceSink)
+		if !ok {
+			return "", fmt.Errorf("artifact source updates are not available in this context")
+		}
+		ref, err = updater.UpdateArtifactSource(ctx, in.ID, in.SourcePath)
+	} else {
+		ref, err = sink.UpdateArtifact(ctx, in.ID, in.Content)
+	}
 	if err != nil {
 		return "", fmt.Errorf("update artifact: %w", err)
 	}

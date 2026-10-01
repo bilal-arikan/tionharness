@@ -57,7 +57,15 @@ func (r *Runtime) recordAssistantMessage(ctx context.Context, sessionID, agentID
 		Steps:     encodeSteps(steps),
 	}
 	meta.apply(&msg, elapsedMs)
-	_, err := r.db.AddMessage(ctx, msg)
+	var state db.CLIReplyState
+	if meta != nil {
+		state = meta.CLIState
+	}
+	if state == (db.CLIReplyState{}) {
+		_, err := r.db.AddMessage(ctx, msg)
+		return err
+	}
+	_, err := r.db.AddMessageWithCLIState(ctx, msg, state)
 	return err
 }
 

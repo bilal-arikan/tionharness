@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"encoding/json"
 	"strings"
 	"unicode/utf8"
 )
@@ -26,6 +27,11 @@ const (
 // marker, and a truncated result gains a trailing note. Nothing is dropped
 // silently.
 func CapToolOutput(s string) string {
+	// Machine-readable JSON often contains a complete document on one line.
+	// Preserve it within the existing total cap instead of corrupting it at 4KB.
+	if len(s) <= traceOutputMaxBytes && json.Valid([]byte(s)) {
+		return s
+	}
 	if len(s) <= traceOutputMaxLineBytes && len(s) <= traceOutputMaxBytes {
 		return s // fast path: nothing can be over either limit
 	}

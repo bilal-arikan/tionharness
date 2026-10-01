@@ -340,6 +340,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	if r.tun != nil && r.tun.DebugJournalEnabled() {
 		builtins = append(builtins, tools.NewReadSessionDebugTool(r.db))
 	}
+	if r.tun != nil {
+		builtins = append(builtins, tools.NewReadDeciderDebugTool(r.deciderHub))
+	}
 
 	// get_view: the PULL channel of the projection layer — a compact, deterministic
 	// summary of a large entity (today: flow runs) instead of reading its raw state.

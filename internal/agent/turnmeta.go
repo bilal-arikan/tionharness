@@ -15,9 +15,11 @@ import (
 // runSessionTurn / complete) don't need new return values: completeTraced writes
 // the final completion's values here, the caller reads them after.
 type turnMeta struct {
-	Model      string
-	StopReason string
-	Usage      providers.Usage
+	Model        string
+	StopReason   string
+	Usage        providers.Usage
+	CLIState     db.CLIReplyState
+	CLIColdStart bool
 }
 
 type turnMetaKey struct{}
@@ -64,6 +66,16 @@ func (m *turnMeta) apply(msg *db.Message, durMs int64) {
 	msg.Model = m.Model
 	msg.StopReason = m.StopReason
 	msg.Usage = usageMsg(m.Usage)
+	msg.CLIColdStart = m.CLIColdStart
+}
+
+// SetTurnCLIState commits autonomous resume bookkeeping with its eventual reply.
+// Advancing a cursor before the reply is durable would skip unseen messages.
+func SetTurnCLIState(ctx context.Context, state db.CLIReplyState, coldStart bool) {
+	if m := turnMetaFrom(ctx); m != nil {
+		m.CLIState = state
+		m.CLIColdStart = coldStart
+	}
 }
 
 // sumUsage adds two provider Usage values field-by-field. Used by the native tool

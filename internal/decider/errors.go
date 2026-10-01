@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
 
 var (
+	ErrInvalidResponse = errors.New("invalid decision response")
 	// ErrDisabled: the decider is switched off in settings.
 	ErrDisabled = errors.New("decider is disabled")
 	// ErrSiteOff: the calling authority is set to off.
@@ -68,6 +70,7 @@ func errorClass(err error) string {
 		return ""
 	}
 	var he *HTTPError
+	var ne net.Error
 	switch {
 	case errors.As(err, &he):
 		return fmt.Sprintf("http_%d", he.Status)
@@ -81,10 +84,16 @@ func errorClass(err error) string {
 		return "backoff"
 	case errors.Is(err, ErrInvalidRequest):
 		return "invalid_request"
+	case errors.Is(err, ErrInvalidResponse):
+		return "invalid_response"
 	case errors.Is(err, ErrDisabled), errors.Is(err, ErrSiteOff):
 		return "off"
+	case errors.Is(err, context.Canceled):
+		return "cancelled"
 	case isTimeout(err):
 		return "timeout"
+	case errors.As(err, &ne):
+		return "network"
 	default:
 		return "error"
 	}

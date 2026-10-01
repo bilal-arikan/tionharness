@@ -8,10 +8,11 @@ func gpt6Tier(model string) string {
 	m := strings.ToLower(strings.TrimSpace(model))
 	m = strings.TrimPrefix(m, "openai/")
 	m = strings.Replace(m, "gpt6-", "gpt-6-", 1)
+	m = strings.Replace(m, "gpt6.1-", "gpt-6.1-", 1)
 	switch m {
 	case "gpt-6-astra":
 		return "astra"
-	case "gpt-6-sol":
+	case "gpt-6-sol", "gpt-6.1-sol":
 		return "sol"
 	case "gpt-6-luna":
 		return "luna"
@@ -20,8 +21,8 @@ func gpt6Tier(model string) string {
 	}
 }
 
-// codexGPT6ThinkingTiers reflects the installed Codex 0.153.3 model catalog
-// verified on 2026-09-28. API reasoning levels are not the CLI capability list:
+// codexGPT6ThinkingTiers reflects the Codex 0.159.0 model catalog verified on
+// 2026-09-30, including GPT-6.1 Sol. API levels are not the CLI capability list:
 // none is not offered here, and ultra is offered only for Astra and Sol.
 func codexGPT6ThinkingTiers(tier string) []string {
 	tiers := []string{"low", "medium", "high", "xhigh", "max"}

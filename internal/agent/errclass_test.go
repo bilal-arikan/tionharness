@@ -23,6 +23,8 @@ func TestClassifyProviderError(t *testing.T) {
 		{"context deadline exceeded", errTimeout},
 		{"anthropic HTTP 401: authentication_error", errAuth},
 		{"anthropic HTTP 403: forbidden", errAuth},
+		{"claude CLI authentication failed: Your organization has disabled Claude subscription access", errAuth},
+		{"workspace claude-home is not logged in", errAuth},
 		{"anthropic HTTP 402: insufficient credit", errBilling},
 		{"your credit balance is too low", errBilling},
 		{"prompt is too long: 250000 tokens > 200000 maximum", errContextOverflow},

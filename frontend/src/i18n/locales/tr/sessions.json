@@ -165,6 +165,7 @@
     "you": "siz"
   },
   "contextUsage": {
+    "explanation": "Bu, sıradaki isteğin tahmini büyüklüğüdür. Oturumun toplam token kullanımı tüm model çağrılarını toplar; bağlam penceresinde şu anda tutulan miktar değildir.",
     "estimated": "Karakter tabanlı tahmin",
     "exact": "Kesin sayım / ölçülmüş",
     "exceeded": "Pencere aşıldı — sonraki turda eski turlar özete sıkıştırılır.",

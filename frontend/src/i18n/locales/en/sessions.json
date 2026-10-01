@@ -165,6 +165,7 @@
     "you": "you"
   },
   "contextUsage": {
+    "explanation": "This is the estimated size of the next request. Lifetime token usage adds up every model call and is not the amount currently held in the context window.",
     "estimated": "Character-based estimate",
     "exact": "Exact count / measured",
     "exceeded": "Window exceeded — older turns will be compressed into a summary on the next turn.",

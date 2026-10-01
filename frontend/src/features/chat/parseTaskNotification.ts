@@ -1,4 +1,4 @@
-import type { TurnStep } from '@/types'
+import type { Message, TurnStep } from '@/types'
 import { extractFileChanges } from '@/shared/lib/fileChanges'
 
 // <task-notification> envelope parser. Split out so TaskNotificationNote.tsx
@@ -13,6 +13,7 @@ interface ParsedNotification {
   result: string
   toolUses: string
   durationMs: string
+  source: string
 }
 
 // tagText extracts the inner text of the FIRST <tag>...</tag> occurrence. The
@@ -21,7 +22,15 @@ interface ParsedNotification {
 // span many lines, hence the s-flag equivalent via [\s\S].
 function tagText(text: string, tag: string): string {
   const m = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
-  return m ? m[1].trim() : ''
+  return m
+    ? m[1]
+        .trim()
+        .replace(
+          /&(amp|lt|gt|quot|#34|#39);/g,
+          (_, entity: string) =>
+            ({ amp: '&', lt: '<', gt: '>', quot: '"', '#34': '"', '#39': "'" })[entity] ?? _,
+        )
+    : ''
 }
 
 // parseTaskNotification pulls the display fields out of a <task-notification>
@@ -39,6 +48,7 @@ export function parseTaskNotification(text: string): ParsedNotification | null {
     result: tagText(text, 'result'),
     toolUses: tagText(text, 'tool_uses'),
     durationMs: tagText(text, 'duration_ms'),
+    source: tagText(text, 'source'),
   }
 }
 
@@ -55,4 +65,21 @@ export function notificationChanges(stepsJSON?: string): TurnStep[] {
     created: change.created,
     patchTruncated: change.truncated,
   }))
+}
+
+// Keep the original report visible while pointing readers to later outcomes.
+// A worker session can be reused, so a later failure does not rewrite history.
+export function laterNotificationStatuses(messages: Message[]): Map<string, string> {
+  const latest = new Map<string, string>()
+  const later = new Map<string, string>()
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message.origin !== 'worker-note') continue
+    const parsed = parseTaskNotification(message.text)
+    if (!parsed?.taskId) continue
+    const status = latest.get(parsed.taskId)
+    if (status) later.set(message.id, status)
+    else latest.set(parsed.taskId, parsed.status)
+  }
+  return later
 }

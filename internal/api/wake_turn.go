@@ -7,6 +7,8 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // wakeTurnRunner builds the history-aware self-wake turn runner for a runtime. A
@@ -34,6 +36,9 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: provider: %w", err)
 		}
+		if err := wsp.Runtime.PinCLIHome(provider); err != nil {
+			return "", nil, fmt.Errorf("wake turn: CLI home: %w", err)
+		}
 		history, err := wsp.DB.ListMessages(ctx, sessionID)
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: history: %w", err)
@@ -41,6 +46,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// Annotate the history with each assistant turn's author (no-op in a
 		// single-agent session) so a woken agent in a shared thread can still tell
 		// who said what.
+		rawHistory := history
 		history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, ag.ID, history)
 		toolRecap := recentToolActivityBlock(history)
 		feedbackRecap := recentFeedbackBlock(history)
@@ -87,7 +93,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		if prep.Compacted {
 			wsp.Runtime.DropWarmCLISession(session.ID)
 		}
-		if prep.NativeCompacted {
+		if prep.NativeCompacted || prep.Compacted {
 			session, err = wsp.DB.GetSession(ctx, session.ID)
 			if err != nil {
 				return "", nil, fmt.Errorf("wake turn: reload session after native compaction: %w", err)
@@ -95,6 +101,8 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		}
 		// freshSession=false: a wake always continues an existing conversation.
 		req := s.composeTurnRequest(ctx, wsp, session, ag, []db.Agent{ag}, prompt, prep, false, multiAgent, toolRecap, feedbackRecap, "")
+		resumePlan := s.planCLIResume(ctx, provider, 1, session, ag, rawHistory, prep.Compacted, &req)
+		ctx = tools.WithSkillLedger(ctx, s.skillLedgers.forSession(wsp.ID, session.ID), session.CompactionCount)
 		// autonomous=true: a wake is a headless, budget-gated run (no live client);
 		// completeTraced auto-wires the Interaction MCP bridge for CLI agents. The
 		// session-step emitter streams this turn's activity to the bus so a window
@@ -106,6 +114,13 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// a watching window and prepended to the persisted trace below so it survives a
 		// refresh. This is the path that carried the invisible SES548 spawned-turn fold.
 		var compactionStep *agent.TurnStep
+		if prep.FoldFailed {
+			st := foldFailedLeadStep(prep.FoldError)
+			compactionStep = &st
+			if emit != nil {
+				emit(st)
+			}
+		}
 		if prep.Compacted {
 			st := compactionLeadStep(prep.Fold, provider)
 			compactionStep = &st
@@ -114,6 +129,12 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 			}
 		}
 		resp, steps, err := wsp.Runtime.CompleteWithToolsStream(ctx, ag, provider, req, true, emit)
+		if continuation := cliContinuationStep(resumePlan); continuation != nil {
+			steps = append([]agent.TurnStep{*continuation}, steps...)
+			if emit != nil {
+				emit(*continuation)
+			}
+		}
 		// Prepend on both success and error so a folded-then-failed turn still records
 		// that the compaction happened.
 		if compactionStep != nil {
@@ -122,6 +143,27 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		if err != nil {
 			return "", steps, err
 		}
+		boundary, compacted := cliCompactionBoundary(steps, len(rawHistory))
+		state := db.CLIReplyState{
+			UpdateResume:          resumePlan.active && resp.SessionID != "",
+			ResumeSessionID:       resp.SessionID,
+			ResumeSentMsgCount:    resumePlan.sentCount + 1,
+			ResumeInputMsgCount:   resumePlan.sentCount,
+			UpdateCompactBoundary: compacted, CompactMsgCount: boundary,
+			ClearNativeCompactionPending: resumePlan.nativeCompactionRecovery,
+			RetireResume:                 resumePlan.retireNativeRecovery || (resumePlan.nativeCompactionRecovery && (!resumePlan.active || resp.SessionID == "")),
+		}
+		if state.RetireResume {
+			state.ResumeSessionID = ""
+			state.ResumeSentMsgCount = 0
+		}
+		if resp.StopReason == providers.StopInterrupted {
+			state.UpdateResume = false
+			state.RetireResume = true
+			state.ResumeSessionID = ""
+			state.ResumeSentMsgCount = 0
+		}
+		agent.SetTurnCLIState(ctx, state, resumePlan.active && resumePlan.coldStart)
 		return resp.Text, steps, nil
 	}
 }

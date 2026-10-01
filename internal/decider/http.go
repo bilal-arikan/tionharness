@@ -47,7 +47,15 @@ func postJSON(ctx context.Context, client *http.Client, prefix, url string, auth
 	}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
+		started := time.Now()
 		retry, wait, err := postOnce(ctx, client, prefix, url, authorize, timeout, payload, out)
+		if trace, _ := ctx.Value(debugCallKey{}).(*debugCall); trace != nil {
+			event := DebugEvent{Stage: "transport", HTTPAttempt: attempt, LatencyMs: time.Since(started).Milliseconds(), Error: errorClass(err)}
+			if retry && attempt < 2 && ctx.Err() == nil {
+				event.RetryWaitMs = wait.Milliseconds()
+			}
+			trace.emit(event)
+		}
 		if err == nil {
 			return nil
 		}
@@ -104,7 +112,7 @@ func postOnce(ctx context.Context, client *http.Client, prefix, url string, auth
 		return retryableStatus(resp.StatusCode), wait, he
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return false, 0, fmt.Errorf("%s: decode response (status %d): %w", prefix, resp.StatusCode, err)
+		return false, 0, fmt.Errorf("%w: %s: decode response (status %d): %w", ErrInvalidResponse, prefix, resp.StatusCode, err)
 	}
 	return false, 0, nil
 }

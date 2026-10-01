@@ -67,6 +67,7 @@ var defaultToolTiers = map[string]string{
 	"list_sessions":           VisibilityNameOnly,
 	"conversation_search":     VisibilityNameOnly,
 	"read_session_debug":      VisibilityNameOnly,
+	"read_decider_debug":      VisibilityNameOnly,
 	"get_session_info":        VisibilityNameOnly,
 	"update_user_preferences": VisibilityNameOnly,
 	// Artifact revise + meta — create_artifact stays eager (behavioral); revise

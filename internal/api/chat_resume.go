@@ -12,6 +12,7 @@ import (
 // cliResumePlan captures one CLI resume decision so the caller can persist the
 // returned session/thread id and updated transcript boundary afterwards.
 type cliResumePlan struct {
+	reason                   string
 	active                   bool
 	sentCount                int // raw message count the CLI will know AFTER this turn's user msg
 	nativeCompactionRecovery bool
@@ -56,7 +57,7 @@ func (s *Server) planCLIResume(ctx context.Context, provider providers.Provider,
 // thread unverifiable and forces a cold, full-summary restart.
 func (s *Server) planCodexResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, agentRow db.Agent, rawHistory []db.Message, compacted bool, llmReq *providers.Request) cliResumePlan {
 	resumer, ok := provider.(providers.ScopedCLIResumer)
-	multiParticipant := len(db.SessionParticipants(session)) > 1
+	multiParticipant := len(db.SessionParticipants(session)) > 1 && !workerResumeOwner(session, agentRow.ID, rawHistory)
 	personaMatch := strings.TrimSpace(session.AgentID) != "" && session.AgentID == agentRow.ID
 	scope := strings.Join([]string{
 		session.ID,
@@ -68,7 +69,21 @@ func (s *Server) planCodexResume(ctx context.Context, provider providers.Provide
 	enabled := ok && agentCount == 1 && !multiParticipant && personaMatch && resumer.ResumeScopeReady(scope)
 	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory), compacted)
 	if !enabled {
+		plan.reason = "resume_unavailable"
+		if multiParticipant {
+			plan.reason = "multiple_responders"
+		}
+		if !personaMatch {
+			plan.reason = "persona_changed"
+		}
 		return plan
+	}
+	plan.reason = "first_turn"
+	if resumeID != "" {
+		plan.reason = "continued"
+	}
+	if compacted {
+		plan.reason = "compacted"
 	}
 
 	// The scope is required even on a cold turn: it selects the durable, isolated
@@ -84,6 +99,7 @@ func (s *Server) planCodexResume(ctx context.Context, provider providers.Provide
 		// turn really does start a new Codex conversation, so re-flag it cold.
 		resumeID = ""
 		plan.coldStart = true
+		plan.reason = "thread_unavailable"
 	}
 	if resumeID != "" {
 		llmReq.ResumeSessionID = resumeID

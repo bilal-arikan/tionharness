@@ -176,12 +176,75 @@ func TestCodexHelperFailsWhileUnityMCPConfigured(t *testing.T) {
 		os.Exit(1)
 	}
 	if strings.Contains(string(data), "unity-mcp") {
+		if marker := os.Getenv("CODEX_TEST_COLD_MARKER"); marker != "" {
+			if _, err := os.Stat(marker); err == nil {
+				goto ready
+			}
+			if err := os.WriteFile(marker, data, 0o600); err != nil {
+				os.Exit(1)
+			}
+		}
+		if marker := os.Getenv("CODEX_TEST_TOOL_MARKER"); marker != "" {
+			f, err := os.OpenFile(marker, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+			if err != nil {
+				os.Exit(1)
+			}
+			_, _ = f.WriteString("attempt\n")
+			_ = f.Close()
+			fmt.Println(`{"type":"thread.started","thread_id":"t1"}`)
+			fmt.Println(`{"type":"item.started","item":{"id":"tool_0","type":"command_execution","command":"echo side-effect"}}`)
+		}
 		fmt.Fprintln(os.Stderr, "ERROR: unity-mcp: handshaking with MCP server failed")
 		fmt.Fprintln(os.Stderr, "required MCP servers failed to initialize")
 		os.Exit(1)
 	}
+ready:
 	fmt.Println(`{"type":"thread.started","thread_id":"t1"}`)
 	fmt.Println(`{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}`)
 	fmt.Println(`{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}`)
 	os.Exit(0)
+}
+
+func TestCodexColdMCPStartupRetriesWithoutRemovingTools(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "cold-start")
+	t.Setenv("CODEX_TEST_HELPER_CONFIG", "enabled")
+	t.Setenv("CODEX_TEST_COLD_MARKER", marker)
+	c := &CodexCLI{binPath: self, configDir: t.TempDir(), model: "test", mcpProbe: func(context.Context, string) bool { return true }, mcpServers: map[string]CLIMCPServer{"unity-mcp": {Command: "cold-server"}}}
+	resp, err := c.completeWithArgs(context.Background(), []string{"-test.run=^TestCodexHelperFailsWhileUnityMCPConfigured$"}, "prompt", "test", Request{})
+	if err != nil || resp == nil || resp.Text != "OK" {
+		t.Fatalf("cold-start recovery: resp=%+v err=%v", resp, err)
+	}
+	var retryNoted bool
+	for _, step := range resp.Trace {
+		if strings.Contains(step.Text, "disabled for this turn") {
+			t.Fatal("cold server's tools were removed")
+		}
+		retryNoted = retryNoted || strings.Contains(step.Text, "same server set once")
+	}
+	if !retryNoted {
+		t.Fatal("unchanged-server retry did not occur")
+	}
+}
+
+func TestCodexMCPFailureAfterToolStartDoesNotRepeatSideEffects(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "tool-attempts")
+	t.Setenv("CODEX_TEST_HELPER_CONFIG", "enabled")
+	t.Setenv("CODEX_TEST_TOOL_MARKER", marker)
+	c := &CodexCLI{binPath: self, configDir: t.TempDir(), model: "test", mcpProbe: func(context.Context, string) bool { return true }, mcpServers: map[string]CLIMCPServer{"unity-mcp": {Command: "broken-server"}}}
+	_, err = c.completeWithArgs(context.Background(), []string{"-test.run=^TestCodexHelperFailsWhileUnityMCPConfigured$"}, "prompt", "test", Request{})
+	if err == nil {
+		t.Fatal("failure after a started tool was silently retried")
+	}
+	data, err := os.ReadFile(marker)
+	if err != nil || string(data) != "attempt\n" {
+		t.Fatalf("side effects repeated: %q %v", data, err)
+	}
 }

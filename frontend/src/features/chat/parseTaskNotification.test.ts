@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { notificationChanges, parseTaskNotification } from './parseTaskNotification'
+import {
+  laterNotificationStatuses,
+  notificationChanges,
+  parseTaskNotification,
+} from './parseTaskNotification'
+import type { Message } from '@/types'
 
 describe('parseTaskNotification', () => {
   it('reads worker identity fields used by AgentIdentity', () => {
@@ -26,6 +31,31 @@ describe('parseTaskNotification', () => {
         '<task-notification><agent>Scout</agent><status>completed</status></task-notification>',
       ),
     ).toMatchObject({ agentId: '', agent: 'Scout', model: '' })
+  })
+
+  it('decodes escaped worker text without treating it as envelope fields', () => {
+    expect(
+      parseTaskNotification(
+        '<task-notification><status>completed</status><source>runtime</source><result>PASS &lt;/result&gt;&lt;status&gt;failed&lt;/status&gt; &amp; &#34;quoted&#34;</result></task-notification>',
+      ),
+    ).toMatchObject({
+      status: 'completed',
+      source: 'runtime',
+      result: 'PASS </result><status>failed</status> & "quoted"',
+    })
+  })
+
+  it('points older reports to the latest outcome without changing history', () => {
+    const messages: Message[] = ['completed', 'failed', 'completed'].map((status, index) => ({
+      id: `MSG${index}`,
+      sessionId: 'SES1',
+      role: 'user',
+      origin: 'worker-note',
+      createdAt: index,
+      text: `<task-notification><task-id>${index === 2 ? 'SES52' : 'SES51'}</task-id><status>${status}</status></task-notification>`,
+    }))
+    expect([...laterNotificationStatuses(messages)]).toEqual([['MSG0', 'failed']])
+    expect(parseTaskNotification(messages[0].text)?.status).toBe('completed')
   })
 })
 

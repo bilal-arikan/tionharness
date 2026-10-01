@@ -1,4 +1,26 @@
 {
+  "executionNotice": {
+    "traceUnavailable": "The saved activity details could not be read. The worker report remains available.",
+    "interrupted": "Work interrupted — unfinished",
+    "filesPresent": "Expected files are present",
+    "filesMissing": "Delivery incomplete — expected files missing",
+    "connectionRecovered": "Tool connection recovered",
+    "connectionDegraded": "Some tool connections are unavailable",
+    "connectionRetry": "Tool connection needs recovery",
+    "contextWarm": "Context continued",
+    "contextCold": "New context started",
+    "contextDisabled": "Context reuse unavailable",
+    "partialSaved": "Partial work was saved. This turn did not finish and does not establish completion.",
+    "presenceOnly": "This checks for non-empty regular files. Content correctness and independent acceptance require separate verification.",
+    "connectionDetail": "The connection failed during startup, before tools ran. Server names and the bounded diagnostic appear below.",
+    "compacted": "A new context was started from the compacted conversation.",
+    "responderChanged": "The responder identity could not be safely reused. Conversation history was supplied to a new context.",
+    "threadUnavailable": "The previous provider thread was unavailable. Conversation history was supplied to a new context.",
+    "reused": "The same responder continued its provider thread, receiving only new messages.",
+    "newContext": "Conversation history was supplied to a new provider context.",
+    "filePresent": "File present",
+    "fileMissing": "File missing, empty, or unavailable"
+  },
   "optimizer": {
     "degradedTitle": "{{kind}}: the command FAILED and the text above is a {{kind}} summary, not raw output. Test/build errors are preserved, but setup errors (a broken go.mod or missing toolchain) may collapse into a meaningless summary. Run the same command again with no_compress to see the real cause.",
     "command": "Executed: {{command}}",
@@ -99,7 +121,16 @@
     "parallel_other": "{{count}} parallel tool calls (in one request)"
   },
   "taskNotification": {
-    "status": { "completed": "completed", "failed": "failed", "killed": "stopped" },
+    "status": {
+      "completed": "completed",
+      "failed": "failed",
+      "killed": "stopped",
+      "timeout": "timed out",
+      "incomplete": "incomplete"
+    },
+    "runtimeOutcome": "Worker turn completed. Test success must be supported by its execution records.",
+    "laterReport": "A later report exists for this worker: {{status}}. Review it before relying on this result.",
+    "reportedOutcome": "Reported completion. This notification does not establish that tests passed; open the worker session for evidence.",
     "collapse": "Collapse worker result",
     "expand": "Expand worker result",
     "openSession": "Open {{name}} worker session",

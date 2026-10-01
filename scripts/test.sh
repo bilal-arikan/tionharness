@@ -19,7 +19,16 @@ run_go() {
 
 run_frontend() {
   echo "== frontend vitest"
-  (cd frontend && npm test --silent 2>&1 | tail -8) || status=$?
+  local output
+  output="$(mktemp)"
+  if (cd frontend && npm test --silent > "$output" 2>&1); then
+    tail -8 "$output"
+  else
+    status=$?
+    # Keep the assertion/timeout diagnosis, not only the final failure count.
+    tail -80 "$output"
+  fi
+  rm -f "$output"
 }
 
 case "$mode" in

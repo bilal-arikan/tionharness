@@ -211,10 +211,13 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 // CLIReplyState is session bookkeeping committed with an assistant reply.
 // Update flags distinguish an absent update from a deliberate zero value.
 type CLIReplyState struct {
-	UpdateResume                 bool
-	RetireResume                 bool
-	ResumeSessionID              string
-	ResumeSentMsgCount           int
+	UpdateResume       bool
+	RetireResume       bool
+	ResumeSessionID    string
+	ResumeSentMsgCount int
+	// Transcript boundary sent at turn start. Notes appended while the CLI runs
+	// must stay beyond the cursor even when they precede its persisted reply.
+	ResumeInputMsgCount          int
 	UpdateCompactBoundary        bool
 	CompactMsgCount              int
 	ClearNativeCompactionPending bool
@@ -281,6 +284,11 @@ func (d *DB) AddMessageWithCLIState(ctx context.Context, m Message, state CLIRep
 	targetMsgs := msgs
 	if appended {
 		targetMsgs = append(append([]Message(nil), msgs...), m)
+	}
+	if state.UpdateResume && state.ResumeInputMsgCount > 0 && len(msgs) > state.ResumeInputMsgCount {
+		// The CLI already knows its answer, but not these concurrent notes. Replay
+		// the answer on the next delta rather than skipping an unseen worker note.
+		state.ResumeSentMsgCount = state.ResumeInputMsgCount
 	}
 	applyCLIReplyState(&target, state)
 	toolDelta := target.ToolCallCount - s.ToolCallCount

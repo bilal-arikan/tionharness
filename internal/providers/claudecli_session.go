@@ -398,7 +398,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	// tool batching — see Request.DisableThinking). Safe to pin at launch: the
 	// pool key is per (session, agent), so the agent's level is stable for the
 	// process lifetime.
-	if req.DisableThinking {
+	if req.DisableThinking && claude55Tier(model) != "opus" {
 		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
 	}
 	// Native subagent menu is part of the launch fingerprint, so pinning it for

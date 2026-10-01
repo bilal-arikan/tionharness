@@ -207,9 +207,17 @@ func (m *ShellManager) Start(ctx context.Context, sb Sandbox, command, label str
 
 	cmd := build(runCtx, command)
 	cmd.Dir = sb.Root
+	cleanupScript, scriptErr := prepareShellScript(cmd, label)
+	if scriptErr != nil {
+		cancel()
+		p.finish(-1)
+		p.watch.Finish(scriptErr)
+		return "", scriptErr
+	}
 	cmd.Stdout = p.w
 	cmd.Stderr = p.w
 	if err := cmd.Start(); err != nil {
+		cleanupScript()
 		cancel()
 		p.finish(-1)
 		p.watch.Finish(err)
@@ -217,6 +225,7 @@ func (m *ShellManager) Start(ctx context.Context, sb Sandbox, command, label str
 	}
 	p.watch.Started(cmd)
 	go func() {
+		defer cleanupScript()
 		err := cmd.Wait()
 		cancel() // release the context regardless of how it exited
 		code := 0

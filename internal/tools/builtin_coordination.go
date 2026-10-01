@@ -47,7 +47,8 @@ func IsCoordinationTool(name string) bool {
 // WorkerSpawnSpec carries the nesting options of one spawn_worker call from the
 // tool layer down to the runtime.
 type WorkerSpawnSpec struct {
-	ModelOverride string
+	ExpectedDeliverables []string
+	ModelOverride        string
 	// Coordinator makes the spawned worker a sub-coordinator (it may spawn its own
 	// workers). Rejected past the depth limit rather than downgraded.
 	Coordinator bool
@@ -132,12 +133,13 @@ func CoordinationFrom(ctx context.Context) *CoordinationFuncs {
 // ---- spawn_worker ----
 
 type spawnWorkerInput struct {
-	Agent         string `json:"agent"`
-	Task          string `json:"task"`
-	ModelOverride string `json:"modelOverride"`
-	Coordinator   bool   `json:"coordinator"`
-	Workflow      string `json:"workflow"`
-	Cwd           string `json:"cwd"`
+	ExpectedDeliverables []string `json:"expectedDeliverables"`
+	Agent                string   `json:"agent"`
+	Task                 string   `json:"task"`
+	ModelOverride        string   `json:"modelOverride"`
+	Coordinator          bool     `json:"coordinator"`
+	Workflow             string   `json:"workflow"`
+	Cwd                  string   `json:"cwd"`
 }
 
 // SpawnWorkerTool launches an async background worker under the current
@@ -178,7 +180,8 @@ func (SpawnWorkerTool) Def() providers.ToolDef {
     "modelOverride": { "type": "string", "description": "Optional model id override (provider unchanged)." },
     "coordinator": { "type": "boolean", "description": "Make this worker a sub-coordinator that may spawn its own workers. Default false (a plain leaf worker). Only for tasks that genuinely decompose further." },
     "workflow": { "type": "string", "description": "Optional coordinator recipe slug for the sub-coordinator (only with coordinator: true). Not inherited from you — set it deliberately or leave empty for free coordination." },
-    "cwd": { "type": "string", "description": "Absolute path the worker runs in. Defaults to YOUR working directory. Set it whenever the task targets a different repository — a path written in the task text is only prose, it does not move the worker." }
+    "cwd": { "type": "string", "description": "Absolute path the worker runs in. Defaults to YOUR working directory. Set it whenever the task targets a different repository — a path written in the task text is only prose, it does not move the worker." },
+    "expectedDeliverables": { "type": "array", "maxItems": 16, "items": { "type": "string" }, "description": "Optional concrete files required for completion (absolute or relative to cwd). Missing/empty files mark the turn incomplete. Presence does not prove correctness or test acceptance. Applies to this worker task and its continuations." }
   },
   "required": ["agent", "task"],
   "additionalProperties": false
@@ -206,10 +209,11 @@ func (SpawnWorkerTool) Call(ctx context.Context, input json.RawMessage) (string,
 		return "", fmt.Errorf("\"workflow\" only applies to a sub-coordinator; pass \"coordinator\": true or drop it")
 	}
 	res, err := f.Spawn(ctx, in.Agent, in.Task, WorkerSpawnSpec{
-		ModelOverride: strings.TrimSpace(in.ModelOverride),
-		Coordinator:   in.Coordinator,
-		Workflow:      strings.TrimSpace(in.Workflow),
-		WorkingDir:    strings.TrimSpace(in.Cwd),
+		ExpectedDeliverables: append([]string(nil), in.ExpectedDeliverables...),
+		ModelOverride:        strings.TrimSpace(in.ModelOverride),
+		Coordinator:          in.Coordinator,
+		Workflow:             strings.TrimSpace(in.Workflow),
+		WorkingDir:           strings.TrimSpace(in.Cwd),
 	})
 	if err != nil {
 		return "", err

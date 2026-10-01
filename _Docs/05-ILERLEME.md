@@ -15436,3 +15436,75 @@ ve kart drill-down'ında tur sayısı. Bütçe sabiti `agent`'tan `db`'ye taşı
   geçer, policy `propose`, kapsam boş, tüm metrikler ölçülebilir; tohumlama
   idempotent ve silme sonrası diriltmiyor. `scripts/test.sh fast` (db + workspace)
   temiz; `internal/goals` ayrıca elle koşuldu.
+
+## Codex oturumları: sayaçlar, dosya araçları ve belge güncellemeleri (2026-09-30)
+
+- Devam ettirilen Codex oturumlarında thread boyunca biriken kullanım her turda
+  yeniden toplanmıyor. Yalnız denemenin rollout dosyasına eklediği model çağrıları
+  sayılıyor; çağrı sayısı ve ilk çağrının girdi ölçümü de buradan alınıyor.
+- CLI köprüsündeki dosya araçları oturumun çalışma dizinine bağlanıyor;
+  dosya değişiklik koruması ve otonom çalışma dizini sınırları korunuyor.
+- Uzun Bash komutları geçici betik dosyasından çalışıyor; Windows Python çıktısı
+  UTF-8 kullanıyor. Toplam sınır içindeki JSON araç çıktıları satır sınırından
+  dolayı bozulmuyor.
+- `update_artifact`, `sourcePath` ile sohbet ve otonom görevlerde dosyadan
+  güncelleyebiliyor. Metin güncellemesi diskteki gövdeyi de yeniliyor; dışarıdan
+  içe aktarılan dosyalar benzersiz isimlerle birbirini ezmiyor.
+- MCP ilk açılışta gecikirse araçlar kaldırılmadan bir kez daha deneniyor.
+  Çalışmaya başlamış bir araç varsa yan etkileri tekrarlayan retry yapılmıyor.
+- SES4'ün eski sayaçları yedekli ve kilitli onarımla 4.938.096 token / 48 model
+  çağrısına düzeltildi; üç belge ekinin gösterilen eski kopyası son kaydedilmiş
+  içerikle yenilendi. İkinci çalıştırma değişiklik yapmıyor.
+- Onarım aracı ve testleri: `scripts/codex_usage/README.md`. Regresyonlar;
+  devam ettirilen kullanım, eksik rollout, MCP retry, uzun Unicode heredoc,
+  Python kodlaması, çalışma dizini, belge sahipliği ve tekrar onarımı kapsıyor.
+- Doğrulama: `scripts/test.sh full` temiz; tüm Go testleri, 168 dosyada 1.186
+  arayüz testi, bağımlılık yönleri ve diff kontrolü geçti. Altı Python onarım
+  testi ayrıca geçti. Yeni derleme çalıştırıldı; sağlık, kullanım ve zvec MCP
+  bağlantısı canlı uygulamada doğrulandı.
+
+## SES36: koordinasyon doğruluğu ve context maliyeti (2026-10-01)
+
+- CLI araç köprüsü worker'ın tur sonu rapor bağlamını koruyor. Erken
+  `report_to_coordinator` üst koordinatörü uyandırmıyor; başarısız terminal sonuç
+  erken PASS iddiasını geçersiz kılıyor. Çalışan worker için dış bağlamdan rapor
+  gönderimi reddediliyor. Otomatik alt-koordinatör raporu da tur sonunda iletiliyor.
+- Worker yanıtının veya terminal durumunun kalıcı kaydı başarısızsa tamamlandı
+  bildirimi üretilmiyor. Hiç araç izi olmayan `VERDICT: PASS`, eksik doğrulama olarak
+  işaretleniyor; normal metin analizi tamamlanabiliyor.
+- Worker bildirimi metni XML için kaçışlanıyor; sonuç gövdesi durum alanını
+  değiştiremiyor. Arayüz runtime sonucu ile öz bildirimi ayırıyor, test kanıtının
+  ayrıca gerektiğini açıklıyor ve aynı worker'ın sonraki raporuna işaret ediyor.
+  Eski SES51 başarı kartında sonraki başarısızlık görünür; geçmiş silinmedi.
+- Otomatik turlar normal sohbetin CLI devam planını kullanıyor. Devam kimliği ve
+  mesaj sınırı yanıtla aynı kalıcı işlemde saklanıyor. Tur sırasında eklenen worker
+  mesajları sayacı ileri atlatmıyor; sonraki turda mutlaka gönderiliyor.
+- Geçici Codex çağrıları da rollout üretiyor; model çağrısı sayısı ve kullanım
+  ölçümden sonra okunuyor, ardından geçici home siliniyor. Eski, rollout'u
+  silinmiş çağrıların iç döngü sayısı tahminle onarılmadı.
+- Compaction hedefi ve otomatik tur sağlayıcısı uygulamanın CLI home'una
+  bağlanıyor. Ambient kullanıcı config'ine düşüş önleniyor; kullanıcıya ait
+  global config değiştirilmedi.
+- Sohbet ve otomatik turlar beceri defterini paylaşıyor. Fold sonrası güncel
+  epoch aynı turda uygulanıyor. Tekrarlanan zorunlu yüklemede gerekçe yoksa
+  mevcut metne kısa işaretçi dönüyor; fold sonrası gerçek yeniden yükleme açık.
+- Varsayılan, sabitlenmemiş sistem sağlayıcısı kimlik doğrulamayı reddederse
+  yardımcı çağrı çalışan çağıran sağlayıcısına dönebiliyor. Reddedilen sistem
+  sağlayıcısı yapılandırma nesli değişene kadar tekrar seçilmiyor. Kullanıcının
+  sabitlediği sağlayıcı seçimi korunuyor; CLI auth hataları doğru sınıflanıyor.
+- Context paneli sıradaki isteğin tahmini büyüklüğü ile tüm oturum boyunca
+  toplanan token kullanımının farklı olduğunu açıklıyor. Koordinatör promptu
+  tekrarlanan tam belge/skill okumaları yerine ilgili bölümleri istemeye yönlendiriyor.
+- Tarayıcıda SES36/SES51 eski bildirim uyarıları, sonuç aç/kapa, worker oturumuna
+  geçiş ve gerçek timeout kaydı doğrulandı. Chrome mesaj kanalı hatalarının
+  uygulama mı eklenti mi olduğu belirlenmedi; konsolun tamamen temiz olduğu iddia
+  edilmiyor. Odaklı backend regresyonları ve bildirim arayüz testleri geçti.
+- Son doğrulama: arayüz derlemesi başarılı; `scripts/test.sh full` bütün Go
+  paketlerinde ve 168 dosyadaki 1.189 arayüz testinde geçti. Bağımlılık yönü ve
+  `git diff --check` temiz. Derleme sırasında dosya silme ile Go embed taraması
+  çakıştığı ilk koşu başarısız oldu; arayüz derlemesi ve tam geçit sırayla
+  yeniden çalıştırılarak bu hata giderildi.
+- Çalışan WS30 oturumları kesilmedi. Backend güncellemeleri başarıyla derlenen
+  `bin/tionharness-ses36-fixed.exe` dosyasında hazır; etkinleşmeleri için backend'in yeniden başlatılması
+  gerekir. Arayüz değişiklikleri geliştirme ekranında doğrulandı.
+- Değişen arayüz bileşenlerinin ESLint kontrolü de geçti. Commit oluşturulmadı.

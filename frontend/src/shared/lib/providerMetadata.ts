@@ -50,6 +50,16 @@ const providerLabelAliases: Record<string, string[]> = {
 
 const modelMetadata: Record<string, Record<string, ModelMetadata>> = {
   anthropic: {
+    'claude-opus-5-5': model(
+      'anthropic.opus55',
+      'Claude Opus 5.5',
+      'Long-running coding and knowledge work; 1M context, adaptive thinking always on, $4/$20 per million tokens.',
+    ),
+    'claude-sonnet-5-5': model(
+      'anthropic.sonnet55',
+      'Claude Sonnet 5.5',
+      'Balanced speed and intelligence; 1M context, adaptive thinking, between-tools mode for low thinking, $2/$10 per million tokens.',
+    ),
     'claude-fable-5-1': model(
       'anthropic.fable51',
       'Claude Fable 5.1 — öncü',
@@ -87,6 +97,16 @@ const modelMetadata: Record<string, Record<string, ModelMetadata>> = {
     ),
   },
   'claude-cli': {
+    'claude-opus-5-5': model(
+      'claudeCli.opus55',
+      'Claude Opus 5.5',
+      'Pinned Opus 5.5 for coding and knowledge work; adaptive thinking always on. Access depends on the configured account.',
+    ),
+    'claude-sonnet-5-5': model(
+      'claudeCli.sonnet55',
+      'Claude Sonnet 5.5',
+      'Pinned Sonnet 5.5 for balanced speed and intelligence; adaptive thinking. Access depends on the configured account.',
+    ),
     '': model(
       'claudeCli.session',
       'claude oturum modeli',
@@ -106,6 +126,11 @@ const modelMetadata: Record<string, Record<string, ModelMetadata>> = {
       'codexCli.session',
       'codex oturum modeli',
       'codex oturumunun aktif modelini kullanır',
+    ),
+    'gpt-6.1-sol': model(
+      'codexCli.gpt61Sol',
+      'GPT-6.1 Sol',
+      'Near-Astra performance for complex coding at lower cost. Codex effort: low through ultra; verified CLI context: 272K. Availability depends on the signed-in account.',
     ),
     'gpt-6-astra': model(
       'codexCli.gpt6Astra',
@@ -251,6 +276,16 @@ const modelMetadata: Record<string, Record<string, ModelMetadata>> = {
     ),
   },
   openrouter: {
+    'anthropic/claude-opus-5.5': model(
+      'openRouter.claudeOpus55',
+      'Claude Opus 5.5',
+      'Long-running coding and knowledge work; 1M context, adaptive thinking always on, $4/$20 per million tokens.',
+    ),
+    'anthropic/claude-sonnet-5.5': model(
+      'openRouter.claudeSonnet55',
+      'Claude Sonnet 5.5',
+      'Balanced speed and intelligence; 1M context, adaptive thinking, $2/$10 per million tokens.',
+    ),
     'anthropic/claude-fable-5.1': model(
       'openRouter.claudeFable51',
       'Claude Fable 5.1 — öncü',

@@ -54,6 +54,7 @@ func (r *Runtime) decide(ctx context.Context, authority string, caller db.Agent,
 		decider.WithBilling(func(bctx context.Context, resp *decider.Response) { r.recordDecisionUsage(bctx, caller, resp) }),
 		decider.WithBackground(func(f func()) { r.startBackgroundTurn(f) }),
 		decider.WithRef(SessionIDFrom(ctx)),
+		decider.WithLocation(SessionIDFrom(ctx), TurnIDFrom(ctx)),
 	}, opts...)
 	return hub.Decide(ctx, authority, req, all...)
 }

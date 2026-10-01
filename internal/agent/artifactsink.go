@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
@@ -53,6 +54,11 @@ func (s *artifactSink) CreateArtifact(ctx context.Context, spec tools.CreateArti
 	// Media/file kinds carry a file path, not inline bytes: resolve to a
 	// workspace-relative path (copying the file in if it lives outside).
 	if spec.SourcePath != "" {
+		if !filepath.IsAbs(spec.SourcePath) {
+			if session, err := s.db.GetSession(ctx, s.sessionID); err == nil && session.WorkingDir != "" {
+				spec.SourcePath = filepath.Join(session.WorkingDir, spec.SourcePath)
+			}
+		}
 		rel, err := s.db.ImportMediaSource(s.sessionID, spec.SourcePath)
 		if err != nil {
 			return tools.ArtifactRef{}, err
@@ -64,6 +70,15 @@ func (s *artifactSink) CreateArtifact(ctx context.Context, spec tools.CreateArti
 		return tools.ArtifactRef{}, err
 	}
 	s.notify(a, "oluşturuldu")
+	return tools.ArtifactRef{ID: a.ID, Title: a.Title, Kind: a.Kind}, nil
+}
+
+func (s *artifactSink) UpdateArtifactSource(ctx context.Context, id, path string) (tools.ArtifactRef, error) {
+	a, err := s.db.UpdateArtifactFromSource(ctx, id, s.sessionID, path)
+	if err != nil {
+		return tools.ArtifactRef{}, err
+	}
+	s.notify(a, "updated")
 	return tools.ArtifactRef{ID: a.ID, Title: a.Title, Kind: a.Kind}, nil
 }
 

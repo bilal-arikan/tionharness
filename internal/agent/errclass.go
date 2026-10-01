@@ -94,7 +94,7 @@ func classifyProviderError(err error) errClass {
 	case strings.Contains(msg, "timeout"), strings.Contains(msg, "timed out"), strings.Contains(msg, "deadline exceeded"):
 		return errTimeout
 	case strings.Contains(msg, "http 401"), strings.Contains(msg, "http 403"),
-		strings.Contains(msg, "authentication_error"), strings.Contains(msg, "invalid x-api-key"):
+		strings.Contains(msg, "authentication_error"), strings.Contains(msg, "invalid x-api-key"), isAuthErrorText(msg):
 		return errAuth
 	case strings.Contains(msg, "http 402"), strings.Contains(msg, "credit balance"),
 		strings.Contains(msg, "insufficient credit"), strings.Contains(msg, "quota exceeded"):

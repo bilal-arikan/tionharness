@@ -322,6 +322,11 @@ func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, su
 	if sess.CoordinatorSessionID == "" {
 		return fmt.Errorf("this session has no coordinator to report to")
 	}
+	// A caller outside this worker's turn cannot publish completion while the
+	// real turn is still running. CLI bridge calls must carry the terminal stash.
+	if pendingUpwardReportFrom(ctx) == nil && r.workerTurnActive(sessionID) {
+		return fmt.Errorf("cannot report while this session is still running outside its terminal report context")
+	}
 	if status == turnStatusCompleted {
 		running, err := r.activeSubtreeWorkers(ctx, sessionID)
 		if err != nil {
@@ -344,6 +349,7 @@ func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, su
 		return err
 	}
 	note := formatTaskNotification(sessionID, sess.AgentID, r.agentName(sess.AgentID), sess.Model, status, summary, 0, 0)
+	note = strings.Replace(note, "<source>runtime</source>", "<source>self-report</source>", 1)
 	deferred := false
 	if stash := pendingUpwardReportFrom(ctx); stash != nil {
 		stash.stash(sess.CoordinatorSessionID, note, status)

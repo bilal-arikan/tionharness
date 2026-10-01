@@ -670,9 +670,25 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 		}
 	}
 
+	status, replyText = guardWorkerVerificationClaim(status, replyText, steps)
+	if workerSession, getErr := r.db.GetSession(context.WithoutCancel(ctx), workerSessionID); getErr == nil {
+		var delivery *TurnStep
+		status, replyText, delivery = checkWorkerDeliverables(status, replyText, workerSession.ExpectedDeliverables)
+		if delivery != nil {
+			steps = append(steps, *delivery)
+			if emit := r.SessionStepEmitter(turnCtx); emit != nil {
+				emit(*delivery)
+			}
+		}
+	} else {
+		status = turnStatusFailed
+		replyText = "Worker delivery contract could not be read; completion is not established: " + getErr.Error()
+	}
 	// replyText was pre-composed above (success output / failure / kill / empty note).
 	if addErr := r.recordAssistantMessage(ctx, workerSessionID, agent.ID, replyText, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
 		r.logger.Warn("worker: failed to record reply", "session", workerSessionID, "error", addErr)
+		status = turnStatusFailed
+		replyText = "Worker execution record could not be persisted; completion is not established: " + addErr.Error()
 	}
 	// Persist the terminal outcome AFTER AddMessage updates the shared lifetime
 	// counters. mutateSessionLocked rewrites session.json, making the same
@@ -680,6 +696,8 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 	// The error is surfaced because a missing terminal write must stay observable.
 	if rsErr := r.db.SetSessionRunState(ctx, workerSessionID, status, time.Now().Unix()); rsErr != nil {
 		r.logger.Error("worker: failed to persist terminal session state", "session", workerSessionID, "status", status, "error", rsErr)
+		status = turnStatusFailed
+		replyText = "Worker terminal state could not be persisted; completion is not established: " + rsErr.Error()
 	}
 	r.emitWorkerEvent(agent, workerSessionID, coordSessionID, status)
 

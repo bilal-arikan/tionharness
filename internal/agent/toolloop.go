@@ -137,6 +137,10 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 	ev := db.DebugEvent{Type: db.DebugTurn, AgentID: agent.ID, DurMs: time.Since(start).Milliseconds()}
 	if resp != nil {
 		ev.Stop = string(resp.StopReason)
+		if resp.StopReason == providers.StopInterrupted {
+			ev.Err = true
+			ev.Detail = "Provider completion was interrupted; partial work preserved."
+		}
 	}
 	if err != nil {
 		ev.Err = true

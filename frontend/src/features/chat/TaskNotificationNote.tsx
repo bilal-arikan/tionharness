@@ -9,6 +9,8 @@ import { notificationChanges, parseTaskNotification } from './parseTaskNotificat
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { AgentIdentity, type AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { DiffCard } from './DiffCard'
+import { ExecutionNotice } from './ExecutionNotice'
+import { notificationExecutionSteps, notificationTraceInvalid } from './executionEvidence'
 
 // TaskNotificationNote renders a coordinator's <task-notification> injection
 // (Message.origin === "worker-note") as a compact worker-result card instead of
@@ -20,6 +22,8 @@ const STATUS_META: Record<string, { cls: string; Icon: typeof CheckCircle2 }> = 
   completed: { cls: 'text-[var(--color-success)]', Icon: CheckCircle2 },
   failed: { cls: 'text-[var(--color-danger)]', Icon: XCircle },
   killed: { cls: 'text-[var(--color-warning)]', Icon: OctagonX },
+  timeout: { cls: 'text-[var(--color-warning)]', Icon: Clock },
+  incomplete: { cls: 'text-[var(--color-warning)]', Icon: Bot },
 }
 
 // fmtDuration parses the notification's millisecond field (a string in the
@@ -36,12 +40,14 @@ export function TaskNotificationNote({
   onSelectSession,
   onOpenFile,
   onDelete,
+  laterStatus,
 }: {
   message: Message
   agent?: AgentLike
   onSelectSession?: (id: string) => void
   onOpenFile?: (path: string) => void
   onDelete?: (id: string) => void
+  laterStatus?: string
 }) {
   const { t } = useTranslation('chatStatus')
   const [open, setOpen] = useState(false)
@@ -64,7 +70,9 @@ export function TaskNotificationNote({
         model: p.model || agent?.model,
       }
     : undefined
-  const changes = notificationChanges(message.steps)
+  const traceInvalid = notificationTraceInvalid(message.steps)
+  const changes = traceInvalid ? [] : notificationChanges(message.steps)
+  const executionSteps = notificationExecutionSteps(message.steps)
 
   return (
     <div className="group flex flex-col items-center gap-1" data-testid="task-notification">
@@ -142,6 +150,47 @@ export function TaskNotificationNote({
             </div>
           )}
         </div>
+        {laterStatus && (
+          <div
+            className="border-t border-[var(--color-border)] px-3 py-1.5 text-[10px] text-[var(--color-warning)]"
+            data-testid="task-later-report"
+          >
+            {t('taskNotification.laterReport', {
+              status: t(`taskNotification.status.${laterStatus}`, { defaultValue: laterStatus }),
+            })}
+          </div>
+        )}
+        {p?.status === 'completed' && (
+          <div
+            className="border-t border-[var(--color-border)] px-3 py-1.5 text-[10px] text-[var(--color-text-dim)]"
+            data-testid="task-report-evidence"
+          >
+            {t(
+              p.source === 'runtime'
+                ? 'taskNotification.runtimeOutcome'
+                : 'taskNotification.reportedOutcome',
+            )}
+          </div>
+        )}
+        {traceInvalid && (
+          <p
+            role="status"
+            className="border-t border-[var(--color-border)] px-3 py-2 text-[var(--color-warning)]"
+          >
+            {t('executionNotice.traceUnavailable')}
+          </p>
+        )}
+        {executionSteps.length > 0 && (
+          <div className="border-t border-[var(--color-border)] px-3 py-1">
+            {executionSteps.map((step, index) => (
+              <ExecutionNotice
+                key={step.id ?? `${step.operation}-${index}`}
+                step={step}
+                onOpenFile={onOpenFile}
+              />
+            ))}
+          </div>
+        )}
         {open && (
           <div className="max-h-80 space-y-2 overflow-y-auto border-t border-[color-mix(in_srgb,var(--color-accent)_20%,var(--color-border))] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text)]">
             <Markdown>{body}</Markdown>

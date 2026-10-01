@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"strings"
 	"time"
 
@@ -304,19 +305,20 @@ func (r *Runtime) emitWorkerEvent(agent db.Agent, workerSessionID, coordSessionI
 func formatTaskNotification(workerSessionID, agentID, agentName, agentModel, status, result string, toolUses int, durationMs int64) string {
 	var b strings.Builder
 	b.WriteString("<task-notification>\n")
-	fmt.Fprintf(&b, "<task-id>%s</task-id>\n", workerSessionID)
-	fmt.Fprintf(&b, "<agent-id>%s</agent-id>\n", agentID)
-	fmt.Fprintf(&b, "<agent>%s</agent>\n", agentName)
-	fmt.Fprintf(&b, "<model>%s</model>\n", agentModel)
-	fmt.Fprintf(&b, "<status>%s</status>\n", status)
-	fmt.Fprintf(&b, "<summary>Worker %q %s</summary>\n", agentName, status)
+	b.WriteString("<source>runtime</source>\n")
+	fmt.Fprintf(&b, "<task-id>%s</task-id>\n", html.EscapeString(workerSessionID))
+	fmt.Fprintf(&b, "<agent-id>%s</agent-id>\n", html.EscapeString(agentID))
+	fmt.Fprintf(&b, "<agent>%s</agent>\n", html.EscapeString(agentName))
+	fmt.Fprintf(&b, "<model>%s</model>\n", html.EscapeString(agentModel))
+	fmt.Fprintf(&b, "<status>%s</status>\n", html.EscapeString(status))
+	fmt.Fprintf(&b, "<summary>%s</summary>\n", html.EscapeString(fmt.Sprintf("Worker %q %s", agentName, status)))
 	if trimmed := strings.TrimSpace(result); trimmed != "" {
 		// Defensive structural cap for EVERY caller (leaf-worker results are already
 		// shaped by buildWorkerResult, but a sub-coordinator's report_to_coordinator
 		// summary and the settle backstop's salvaged text arrive here uncapped). Cap
 		// is rune-safe; overflow gets a short truncation notice.
 		capped, _ := capText(trimmed, coordinatorResultCapChars)
-		fmt.Fprintf(&b, "<result>%s</result>\n", capped)
+		fmt.Fprintf(&b, "<result>%s</result>\n", html.EscapeString(capped))
 	}
 	b.WriteString("<usage>")
 	fmt.Fprintf(&b, "<tool_uses>%d</tool_uses><duration_ms>%d</duration_ms>", toolUses, durationMs)

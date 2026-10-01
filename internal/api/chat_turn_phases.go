@@ -52,9 +52,10 @@ type chatTurn struct {
 	freshSession bool
 	// started flips once the user message is persisted (the turn is committed);
 	// emitted flips once a terminal event was published by the success path.
-	started    bool
-	emitted    bool
-	inflightID string
+	started     bool
+	emitted     bool
+	inflightID  string
+	interrupted bool
 }
 
 func (t *chatTurn) clearInflight() {
@@ -337,6 +338,9 @@ func (t *chatTurn) runStopPasses(lifecycleContext string) bool {
 			if !t.runAgentPass(i, agentRow, passContext) {
 				return false
 			}
+			if t.interrupted {
+				return true
+			}
 		}
 
 		// Stop lifecycle hook (Claude Code parity): the main agent(s) finished this
@@ -494,13 +498,18 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	if !prep.Compacted && !prep.NativeCompacted && !prep.FoldFailed {
 		out.estimatedTokens = prep.ContextTokens + overhead
 	}
-	if prep.NativeCompacted {
+	if prep.NativeCompacted || prep.Compacted {
 		t.session, cerr = t.database.GetSession(t.ctx, t.session.ID)
 		if cerr != nil {
 			t.failTurn(agentRow.ID, "session_reload_failed", "reload session after native compaction: "+cerr.Error())
 			return out, false
 		}
 	}
+	// A fold removed earlier skill bodies. Both tool paths must use the new
+	// epoch during this very turn, rather than suppressing a legitimate reload.
+	ledger := t.s.skillLedgers.forSession(t.wsp.ID, t.session.ID)
+	t.ctx = tools.WithSkillLedger(t.ctx, ledger, t.session.CompactionCount)
+	t.run.setSkillLedger(ledger, t.session.CompactionCount)
 
 	llmReq := t.s.composeTurnRequest(t.ctx, t.wsp, t.session, agentRow, t.agents, t.req.Message, prep, t.freshSession, multiAgent, toolRecap, feedbackRecap, passContext)
 	// Prompt-epoch drift step: if the static context changed since the frozen
@@ -690,7 +699,7 @@ func (t *chatTurn) installAgentSinks(agentRow db.Agent) context.Context {
 	// them through the same registry the native loop uses. Empty when
 	// self-manage is off. Re-point the CLI MCP endpoint for THIS agent turn so
 	// its allowlist carries the static interaction tools + the bridged tools.
-	bridgeDefs, bridgeCall := t.wsp.Runtime.BridgeTools(turnCtx, agentRow)
+	bridgeDefs, bridgeCall := t.wsp.Runtime.BridgeTools(turnCtx, agentRow, t.run.autonomous)
 	t.run.setBridge(bridgeDefs, bridgeCall)
 	// Visibility-aware CLI wire split: full→core (eager), summary/name-only→
 	// extended (deferred), hidden→neither. Installed on the run so tools/list
@@ -918,6 +927,7 @@ func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, repl
 		UpdateResume:          prep.resumePlan.active && resp.SessionID != "",
 		ResumeSessionID:       resp.SessionID,
 		ResumeSentMsgCount:    prep.resumePlan.sentCount + 1,
+		ResumeInputMsgCount:   prep.resumePlan.sentCount,
 		UpdateCompactBoundary: compacted,
 		CompactMsgCount:       boundary,
 	}
@@ -927,6 +937,16 @@ func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, repl
 			state.RetireResume = true
 			state.ResumeSentMsgCount = 0
 		}
+	}
+	if continuation := cliContinuationStep(prep.resumePlan); continuation != nil {
+		steps = append([]agent.TurnStep{*continuation}, steps...)
+	}
+	if resp.StopReason == providers.StopInterrupted {
+		t.interrupted = true
+		state.UpdateResume = false
+		state.RetireResume = true
+		state.ResumeSessionID = ""
+		state.ResumeSentMsgCount = 0
 	}
 	reply := db.Message{
 		ID:         replyID,
@@ -947,7 +967,7 @@ func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, repl
 	var failureReason, failureDetail string
 	current := t.withGeneration(func() {
 		var aerr error
-		if state.UpdateResume || state.UpdateCompactBoundary || state.ClearNativeCompactionPending {
+		if state.UpdateResume || state.UpdateCompactBoundary || state.ClearNativeCompactionPending || state.RetireResume {
 			replyMsg, aerr = t.database.AddMessageWithCLIState(t.ctx, reply, state)
 		} else {
 			replyMsg, aerr = t.database.AddMessage(t.ctx, reply)

@@ -25,6 +25,8 @@ func init() {
 			},
 			Models: []ModelInfo{
 				{ID: "", Label: "claude oturum modeli", Description: "claude oturumunun aktif modelini kullanır"},
+				{ID: "claude-opus-5-5", Label: "Claude Opus 5.5", Description: "Pinned Opus 5.5 for coding and knowledge work; adaptive thinking always on. Access depends on the configured account."},
+				{ID: "claude-sonnet-5-5", Label: "Claude Sonnet 5.5", Description: "Pinned Sonnet 5.5 for balanced speed and intelligence; adaptive thinking. Access depends on the configured account."},
 				{ID: "fable", Label: "Fable — öncü", Description: "CLI'nin güncel Fable'ı (5.1); 1M bağlam, adaptif düşünme (daima açık)"},
 				{ID: "opus", Label: "Opus — en güçlü", Description: "En yetenekli; en yavaş/pahalı"},
 				{ID: "sonnet", Label: "Sonnet — dengeli", Description: "Hız/kalite dengesi (günlük kullanım)"},

@@ -37,6 +37,8 @@ func init() {
 			// against OpenRouter's live /models catalog. IDs evolve and OpenRouter
 			// exposes hundreds more, so AllowCustomModel lets the user type any slug.
 			Models: []ModelInfo{
+				{ID: "anthropic/claude-opus-5.5", Label: "Claude Opus 5.5", Description: "Long-running coding and knowledge work; 1M context, adaptive thinking always on, $4/$20 per million tokens."},
+				{ID: "anthropic/claude-sonnet-5.5", Label: "Claude Sonnet 5.5", Description: "Balanced speed and intelligence; 1M context, adaptive thinking, $2/$10 per million tokens."},
 				{ID: "anthropic/claude-fable-5.1", Label: "Claude Fable 5.1 — öncü", Description: "En yeni Anthropic nesli; 1M bağlam, adaptif düşünme (daima açık), ucuz cache-read"},
 				{ID: "anthropic/claude-fable-5", Label: "Claude Fable 5 — önceki öncü", Description: "Fable 5.1'in öncülü; 1M bağlam, adaptif düşünme (daima açık)"},
 				{ID: "anthropic/claude-opus-5", Label: "Claude Opus 5 — en yetenekli", Description: "En yeni Anthropic amiral; 1M bağlam, öncü ajan/kodlama + computer-use"},

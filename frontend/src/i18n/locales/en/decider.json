@@ -25,7 +25,7 @@
     },
     "enable": {
       "title": "Decision authorities",
-      "text": "On the Decision authorities screen turn on “Use the decision layer”; run authorities in Shadow first and switch them On once the agreement is high.",
+      "text": "On the Decision authorities screen turn on “Use the decision layer”; run authorities in Shadow first and validate accuracy on independently labeled examples before switching them On.",
       "goAuthorities": "Go to Decision authorities →"
     }
   },
@@ -174,7 +174,7 @@
   },
   "authorities": {
     "title": "Decision authorities",
-    "hint": "Every place in the app that can hand a decision to a decision provider. Start in shadow, watch the agreement, switch on when you trust it. A fallback answers when the provider cannot; a challenger is asked the same question in the background, so a new provider can be measured before it takes over.",
+    "hint": "Every place in the app that can hand a decision to a decision provider. Start in shadow and compare against independently labeled examples before switching on. A fallback answers when the provider cannot; a challenger is asked the same question in the background, so a new provider can be measured before it takes over.",
     "model": "Provider",
     "modelDefault": "Default ({{label}})",
     "fallback": "Fallback",
@@ -252,13 +252,13 @@
     "latency": "p50 / p95",
     "latencyValue": "{{p50}} / {{p95}} ms",
     "cost": "Cost",
-    "readyToSwitch": "High agreement: ready to switch on.",
+    "readyToSwitch": "High agreement; validate accuracy on labeled examples before switching on.",
     "keepShadow": "Low agreement: keep it in shadow.",
     "needsData": "Collecting data ({{done}} / {{needed}} comparisons).",
     "challenger": "Challenger {{label}}",
     "challengerLine": "agreement {{rate}} over {{done}} comparisons · p50 {{p50}} ms · {{cost}}",
     "challengerNone": "no comparisons yet",
-    "challengerReady": "The challenger agrees often enough to take over.",
+    "challengerReady": "High challenger agreement; verify quality on labeled examples before changing providers.",
     "challengerKeep": "The challenger disagrees too often to take over.",
     "challengerCollect": "Measuring the challenger ({{done}} / {{needed}} comparisons)."
   },
@@ -270,5 +270,68 @@
     "failed": "failed: {{error}}",
     "challenger": "challenger",
     "fallback": "fallback"
+  },
+  "debug": {
+    "title": "Decision debug",
+    "privacy": "Metadata only: no conversation, commands, question text or credentials are stored. Provider tests may incur provider charges.",
+    "authority": "Authority",
+    "all": "All",
+    "modelTest": "Provider tests",
+    "window": "Time window",
+    "days": "{{n}} days",
+    "reference": "Session / run / turn",
+    "referenceHint": "Exact ID",
+    "refresh": "Apply filters / refresh",
+    "export": "Export JSON",
+    "summary": "{{calls}} decisions · {{errors}} errors · {{retries}} retries · {{fallbacks}} fallback attempts · {{challengers}} challenger attempts · {{applied}} applied · observed cost {{cost}}",
+    "agreement": "{{n}} comparisons · {{rate}} agreement",
+    "evidenceHint": "Agreement is not accuracy. Confidence is not a correctness guarantee. Review independently labeled examples before changing thresholds or enabling an authority.",
+    "retention": "{{shown}} / {{matched}} matching events shown · {{retained}} / {{cap}} events retained · oldest retained: {{oldest}}",
+    "truncated": "The displayed tail may omit the start of a decision. Narrow the filters or export the retained events. This is not lifetime history.",
+    "empty": "No matching debug events yet. Existing ledger records are not reconstructed. New decisions and provider tests will appear here.",
+    "pending": "Outcome not recorded",
+    "trace": "Call ID",
+    "threshold": "Threshold",
+    "turn": "Turn",
+    "comparison": "Outcome: {{outcome}} · comparison: {{baseline}}",
+    "attempt": "HTTP attempt {{n}}",
+    "retryWait": "Retry wait: {{ms}} ms",
+    "input": "State {{before}} → {{after}} · {{n}} questions",
+    "trimmed": "Context trimmed",
+    "fingerprint": "Request fingerprint",
+    "configFingerprint": "Settings fingerprint",
+    "probability": "P(yes) = {{p}}",
+    "confidence": "confidence {{p}}",
+    "tokens": "{{input}} input / {{output}} output tokens",
+    "stage": {
+      "started": "Started",
+      "attempt": "Model attempt",
+      "transport": "HTTP request",
+      "completed": "Completed",
+      "outcome": "Applied / compared outcome",
+      "skipped": "Skipped"
+    },
+    "role": {
+      "primary": "Primary",
+      "fallback": "Fallback",
+      "challenger": "Challenger",
+      "test": "Test"
+    },
+    "warning": {
+      "missing_logprobs": "Probabilities unavailable; answers may be hard 0/1.",
+      "backend_warning": "The backend reported a reliability warning."
+    },
+    "issue": {
+      "insufficient_evidence": "Only {{n}} comparisons retained; this does not establish usefulness or accuracy.",
+      "high_error_rate": "Elevated error rate: {{n}} failed decisions.",
+      "slow_decisions": "Slow decisions: p95 {{n}} ms.",
+      "degraded_probabilities": "{{n}} model attempts reported degraded probabilities.",
+      "trimmed_context": "{{n}} model attempts used trimmed context.",
+      "challenger_busy": "{{n}} challenger calls skipped because all slots were busy."
+    },
+    "duration": "{{ms}} ms",
+    "budget": "Attempt timeout {{ms}} ms · context budget {{tokens}} tokens",
+    "question": "Question",
+    "testSummary": "{{n}} provider tests · {{errors}} failed · challenger agreement {{rate}} over {{compared}} comparisons"
   }
 }

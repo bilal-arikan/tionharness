@@ -23,6 +23,12 @@ activate them.
 
 ## Activating a tool yourself
 
+If a tool is already callable, use it directly. Codex CLI receives the full
+extended catalog and does not need activation. Prefer `create_task`/`update_task`
+for board work; do not inspect settings, locks, source code or REST routes to
+rediscover operations already exposed as tools. The activation steps below
+apply only to clients where the requested tool is actually deferred.
+
 The self-management tools are registered but their names+schemas are not in your
 prompt. To use one:
 

@@ -33,7 +33,7 @@ func (r *Runtime) systemAgentExecutor(key string, caller db.Agent, systemAgent d
 		// A pinned provider is the user's explicit choice and always wins (an
 		// unavailable one fails visibly, which is right); the built-in default is
 		// only taken when the registry can actually serve it.
-		if !same && (pinsProvider(systemAgent) || (r.providers != nil && r.providers.Available(inst))) {
+		if !same && (pinsProvider(systemAgent) || (r.providers != nil && r.providers.Available(inst) && !r.systemRouteQuarantined(inst))) {
 			exec.Provider = systemAgent.Provider
 			exec.ProviderInstanceID = inst
 		}

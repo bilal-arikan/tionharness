@@ -275,12 +275,20 @@ func TestTeardown_DrainsBridgeCallBeforeSuccess(t *testing.T) {
 	if err := s.teardownSessionRuntimeWithGrace(testWS("WS1"), "SES", time.Second); err != nil {
 		t.Fatalf("teardown: %v", err)
 	}
+	// The admitted handler must already be drained. Its caller's channel send
+	// runs after the deferred lease release and may need another scheduling slice.
+	run.callMu.Lock()
+	activeCalls := run.activeCalls
+	run.callMu.Unlock()
+	if activeCalls != 0 {
+		t.Fatalf("teardown retained %d active bridge calls", activeCalls)
+	}
 	select {
 	case err := <-callDone:
 		if err != nil {
 			t.Fatalf("bridge call: %v", err)
 		}
-	default:
+	case <-time.After(time.Second):
 		t.Fatal("teardown returned before bridge call ended")
 	}
 }

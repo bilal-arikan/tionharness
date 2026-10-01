@@ -291,7 +291,25 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 func (t *toolLoopTurn) completeAndTraceCLI() (*providers.Response, []TurnStep, error) {
 	resp, err := t.r.recordedComplete(t.ctx, t.agent, t.provider, t.req)
 	if err != nil {
-		return nil, nil, err
+		partial, interruption := providers.InterruptedResponse(err)
+		if partial == nil {
+			return nil, t.r.traceToSteps(providers.CLIErrorTrace(err)), err
+		}
+		steps := t.r.traceToSteps(partial.Trace)
+		partial.StopReason = providers.StopInterrupted
+		status := turnStatusIncomplete
+		if interruption.Reason == "cli_idle_timeout" || interruption.Reason == "cli_startup_timeout" {
+			status = turnStatusTimeout
+		}
+		st := TurnStep{Kind: StepRecovery, Operation: "cli_interrupted", Reason: interruption.Reason,
+			Status: status, Provider: t.provider.Name(), DurationMs: interruption.Window.Milliseconds(),
+			Text: "The provider stopped before confirming completion. Partial work is preserved; the task is unfinished."}
+		steps = append(steps, st)
+		if t.onStep != nil {
+			t.onStep(st)
+		}
+		t.r.emitCLIToolDebug(t.ctx, t.agent, partial.Trace)
+		return partial, steps, nil
 	}
 	// claude-cli surfaces its own tool/thinking trace via stream-json.
 	t.r.emitCLIToolDebug(t.ctx, t.agent, resp.Trace)
@@ -332,7 +350,7 @@ func (t *toolLoopTurn) runPlain() (*providers.Response, []TurnStep, error) {
 	}
 	resp, steps, err := t.completeAndTraceCLI()
 	if err != nil {
-		return nil, nil, err
+		return nil, steps, err
 	}
 	// A CLI-native checklist (claude TodoWrite, codex update_plan) reaches the
 	// progress file through the trace, the way a bridged todo_write call reaches
@@ -525,12 +543,11 @@ func (t *toolLoopTurn) prepareNativeLoop() (resp *providers.Response, steps []Tu
 	// everywhere else the portable Text+ToolCalls echo stays, so
 	// inherited-context subagents on other providers see no behaviour change.
 	//
-	// Always-on-thinking models (Fable/Mythos 5) are ALWAYS raw-echoed: they
-	// think on every response — tool loop included — and the API requires those
-	// thinking blocks back exactly as received on the same model; the
-	// constructed Text+ToolCalls echo would drop them and break the turn.
+	// Always-on and preserved-thinking models also need their signed blocks
+	// echoed exactly. Claude 5.5 binds these blocks to the conversation;
+	// constructing only Text+ToolCalls would drop them and lose continuity.
 	t.rawEcho = func(raw json.RawMessage) json.RawMessage {
-		if nativeSearch || ptcMode || webMode || serverCompact || providers.AlwaysOnThinking(t.agent.Model) {
+		if nativeSearch || ptcMode || webMode || serverCompact || providers.AlwaysOnThinking(t.agent.Model) || providers.SupportsThinkingBinding(t.agent.Model) {
 			return raw
 		}
 		return nil

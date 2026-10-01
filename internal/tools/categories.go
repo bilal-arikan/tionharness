@@ -111,7 +111,7 @@ var builtinCategory = map[string]string{
 	"announce_release": CategoryConfig,
 
 	// Diagnostics, validators, tool loading
-	"read_logs": CategoryDiagnostics, "read_session_debug": CategoryDiagnostics,
+	"read_logs": CategoryDiagnostics, "read_session_debug": CategoryDiagnostics, "read_decider_debug": CategoryDiagnostics,
 	"list_processes":   CategoryDiagnostics,
 	"get_view":         CategoryDiagnostics,
 	"expand":           CategoryDiagnostics,

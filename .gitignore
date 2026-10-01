@@ -17,6 +17,10 @@
 coverage.out
 *.cover
 
+# Python repair tooling caches
+__pycache__/
+*.pyc
+
 # Go workspace (machine-local)
 go.work
 go.work.sum

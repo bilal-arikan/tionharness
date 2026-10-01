@@ -16,9 +16,10 @@ const (
 
 // Stop reasons reported by Complete.
 const (
-	StopEndTurn = "end_turn" // model finished a normal textual reply
-	StopToolUse = "tool_use" // model wants one or more tools executed
-	StopMaxTok  = "max_tokens"
+	StopEndTurn     = "end_turn" // model finished a normal textual reply
+	StopToolUse     = "tool_use" // model wants one or more tools executed
+	StopMaxTok      = "max_tokens"
+	StopInterrupted = "interrupted"
 	// StopPauseTurn: a server-side tool loop (e.g. native tool search) hit its
 	// internal iteration limit mid-turn. The caller resumes by re-sending the
 	// conversation WITH the assistant's content appended verbatim (no extra user
@@ -39,7 +40,7 @@ const (
 // as the single allow-list source instead of duplicating provider constants.
 func IsCanonicalStopReason(reason string) bool {
 	switch reason {
-	case StopEndTurn, StopToolUse, StopMaxTok, StopPauseTurn, StopRefusal, StopContextWindow:
+	case StopEndTurn, StopToolUse, StopMaxTok, StopPauseTurn, StopRefusal, StopContextWindow, StopInterrupted:
 		return true
 	default:
 		return false

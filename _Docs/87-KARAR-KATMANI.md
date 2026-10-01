@@ -319,6 +319,12 @@ hazır" / "rakip devralabilir", < %80 "gölgede tut" / "rakip çok ayrışıyor"
 
 ## 11. Test haritası
 
+2026-10-01 ekleri: [Karar debug ve inceleme](87-KARAR-DEBUG.md),
+[JEV ile 20 kullanım fikri](87-JEV-FIKIRLERI.md). Karar Mercileri ekranındaki
+debug zaman çizelgesi ve `read_decider_debug` yeni kararların model/HTTP
+denemelerini, oturum/tur bağlantısını ve uygulanmış sonuçlarını izler.
+Eski kayıtların girdileri yeniden oluşturulmaz; uyum doğruluk değildir.
+
 - `internal/decider`: `hub_test` (anahtarlar, ödünç/kendi kimlik bilgisi, önbellek,
   model başına karantina ve circuit, yedek, rakip + faturalama + sözlük, redaksiyon,
   kalıcılık, v1 dönüşümü, maliyet doldurma), `modelstore_test`, `config_test`,

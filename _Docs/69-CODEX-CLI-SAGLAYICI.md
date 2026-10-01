@@ -237,8 +237,9 @@ sonra atomik olarak yerine taşınır; her tur bağımsız bir snapshot kullanı
 kurulum kimliğini yeniden edinmek için cold-start ağ turu yapmasını önler. Bu
 dosyalardan biri yoksa kopyalama bilinçli bir no-op'tur; özellikle auth yokluğunda
 Codex normal "login yok" hatasını üretir. Tur sonunda yalnız shadow dizin silinir;
-base home ve kalıcı durum korunur. Bu çağrılar oturum dosyası bırakmamak üzere
-`--json --ephemeral` ile çalışır.
+base home ve kalıcı durum korunur. Bu çağrılar `--json` ile çalışır; `--ephemeral`
+kullanılmaz. İç model çağrılarının kullanımını rollout'tan ölçebilmek için dosya
+tur boyunca tutulur, ölçümden sonra shadow home ile birlikte silinir.
 
 Normal tek-katılımcılı chat turları farklıdır: API, session + varsayılan persona +
 provider/model + donmuş statik sistem promptundan opak bir resume scope üretir;
@@ -1019,7 +1020,8 @@ yalnız aktive edilen araçlar kadar büyür).
    takılabilir (ajan → ajan delegasyonu için alternatif desen).
 6. **`-o/--output-last-message`** — final cevabı dosyaya alma; akış parse
    başarısız olsa bile kurtarma yolu.
-7. **`--ephemeral`** — oturum dosyası yazmadan koşma (geçici/spawn turları için).
+7. **`--ephemeral`** — oturum dosyası yazmadan koşma. TionHarness bunu normal
+   LLM çağrılarında kullanmaz; geçici çağrıda bile ölçüm için rollout gerekir.
 
 ---
 
@@ -1330,13 +1332,50 @@ kontrolleri daha kapsamlı olsa da dört bağımlılık çözümünün tamamı s
 `codex_gpt6_test.go` katalog, model/effort iletimi, fiyat ve taşıyıcıya göre bağlamı;
 `agents_codex_gpt6_test.go` ajan oluşturma/güncelleme doğrulamasını kapsar.
 `codex_gpt6_live_test.go` normal testlerde atlanır. Kimliği doğrulanmış bir Codex
-eviyle açıkça etkinleştirilince Astra/Sol için birer kısa istek tüketir:
+eviyle açıkça etkinleştirilince Sol 6.1/Astra 6/Sol 6 için birer kısa istek tüketir:
 
 ```bash
 TIONHARNESS_CODEX_GPT6_LIVE_HOME=/path/to/codex-home go test ./internal/providers -run '^TestCodexGPT6Live$' -count=1 -v
 ```
 
 Hesap/model erişim reddi başarılı test gibi gizlenmez; canlı test hata döndürür.
+
+## 15. Sol 6.1 desteği (2026-09-30)
+
+`gpt-6.1-sol`, Codex CLI model kataloğuna ve arayüz metadatasına eklendi.
+Model kimliği CLI'ye olduğu gibi iletilir; ajan oluşturma/güncelleme ve
+`low`, `medium`, `high`, `xhigh`, `max`, `ultra` düşünme seviyeleri desteklenir.
+`off` kabul edilmez. Mevcut ajanların model seçimi korunur.
+
+Codex 0.159.0'ın 2026-09-30 tarihli yerel `models_cache.json` kaydı Sol 6.1 için
+**272.000 CLI bağlamı** ve yukarıdaki altı düşünme seviyesini doğruladı.
+[Resmî model sayfasındaki](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
+1.050.000 API bağlamı CLI sınırı olarak kullanılmaz. API ailesi mevcut muhafazakâr
+1.048.576 bağlam ve 128.000 çıktı sınırını kullanmaya devam eder.
+
+Standart API eşdeğeri tahmin 1 milyon token başına **$2 giriş / $10 çıktı**,
+**$0,10 cache okuma / $2,50 cache yazma** olarak tanımlandı. Sol 6.1 cache okuma
+çarpanı `0.05`'tir; Sol 6'nın `0.10` değeri korunur. 272.000 toplam giriş tokenı
+aşıldığında giriş/cache için 2×, çıktı için 1,5× uygulanır. Bu değerler abonelik
+faturalandırması oluşturmaz; yalnız mevcut eşdeğer API tahminini sağlar.
+
+PATH'teki Node 24.21.0 kurulumu ile TionHarness sağlayıcısında `cliPath` üzerinden
+seçilmiş Node 24.18.1 kurulumu **Codex CLI 0.159.1** sürümüne güncellendi.
+Uygulamanın `~/.tionharness/codex-home` hesabıyla, üretim Codex taşıyıcısı üzerinden
+Sol 6.1'e tek kısa istek gönderildi ve beklenen yanıt alındı. Bu deneme model
+erişimini ve taşıyıcı akışını doğrular; kodlama performansı ölçümü değildir.
+
+`codex_gpt6_test.go` model kataloğunu, CLI model/effort iletimini, bağlamı ve
+cache dahil maliyet tahminini kapsar. `codex_gpt61sol_test.go` takma adları ve
+henüz doğrulanmamış model sürümlerinin yanlış sınıflandırılmamasını denetler.
+`agents_codex_gpt6_test.go` Sol 6.1 için ajan oluşturma ve güncelleme akışını kapsar.
+
+Doğrulama: sağlayıcı ve API paketleri, Sol 6.1 canlı yanıtı, 168 arayüz test
+dosyasındaki 1.186 test, arayüz derlemesi, bağımlılık kontrolü ve yama biçimi
+kontrolü geçti. Tam test paketi başarılı sayılmaz:
+`TestManagedIndexRealCreateFromMissing`, geçici depoda gerçek `zg index` çalışması
+üç dakika içinde tamamlanmadığı için başarısız oldu. Bu testte ve indeks yönetimi
+kodunda bu görev kapsamında değişiklik yapılmadı.
 
 ## İlgili dokümanlar
 

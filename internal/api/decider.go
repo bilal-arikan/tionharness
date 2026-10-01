@@ -27,6 +27,7 @@ func (s *Server) registerDeciderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/decider", s.handlePutDecider)
 	mux.HandleFunc("POST /api/decider/test", s.handleTestDecider)
 	mux.HandleFunc("GET /api/decider/stats", s.handleDeciderStats)
+	mux.HandleFunc("GET /api/decider/debug", s.handleDeciderDebug)
 	s.registerDeciderModelRoutes(mux)
 }
 

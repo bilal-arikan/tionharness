@@ -178,6 +178,11 @@ var priceTable = map[string]map[string]Price{
 	// when caching is on, so writes carry the 2× extended premium here (not the
 	// standard 1.25×).
 	"anthropic": {
+		// Claude 5.5 Standard prices verified on 2026-10-01 from the model
+		// overview pages at https://platform.claude.com/docs/en/models/.
+		// Opus cache reads are 0.05x; Sonnet retains 0.10x. Native writes use 1h TTL.
+		"claude-opus-5-5":   {InputPerMTok: 4, OutputPerMTok: 20, CacheReadMultOverride: 0.05, CacheWriteMultOverride: CacheWrite1hMult},
+		"claude-sonnet-5-5": {InputPerMTok: 2, OutputPerMTok: 10, CacheReadMultOverride: 0.10, CacheWriteMultOverride: CacheWrite1hMult},
 		// Opus 5 (2026-07-24) keeps Opus-tier pricing unchanged ($5/$25 per MTok).
 		"claude-opus-5":   {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
 		"claude-opus-4-8": {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
@@ -215,6 +220,11 @@ var priceTable = map[string]map[string]Price{
 	// checked — guessing one is worse than omitting it (PriceFor/EstimateFor
 	// correctly report unpriced for anything absent here).
 	"openai": {
+		// GPT-6.1 Sol Standard API rates verified on 2026-09-30:
+		// https://developers.openai.com/api/docs/models/gpt-6.1-sol
+		// Cache reads cost 0.05x input; writes and long-context multipliers
+		// match GPT-6. These remain equivalent-API estimates for Codex login.
+		"gpt-6.1-sol": {InputPerMTok: 2.00, OutputPerMTok: 10.00, CacheReadMultOverride: 0.05, CacheWriteMultOverride: 1.25, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
 		// GPT-6 Standard API rates verified on 2026-09-28:
 		// https://developers.openai.com/api/docs/models/gpt-6-astra
 		// https://developers.openai.com/api/docs/models/gpt-6-sol
@@ -245,6 +255,8 @@ var priceTable = map[string]map[string]Price{
 	// "openai/gpt-…": {InputPerMTok: …, OutputPerMTok: …, CacheReadMultOverride: 0.25}).
 	// Unlisted models fall through to unpriced (the screen is explicitly ballpark).
 	"openrouter": {
+		"anthropic/claude-opus-5.5":   {InputPerMTok: 4, OutputPerMTok: 20, CacheReadMultOverride: 0.05, CacheWriteMultOverride: 1.25},
+		"anthropic/claude-sonnet-5.5": {InputPerMTok: 2, OutputPerMTok: 10, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-opus-5":     {InputPerMTok: 5, OutputPerMTok: 25, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-opus-4.8":   {InputPerMTok: 5, OutputPerMTok: 25, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-sonnet-5":   {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},

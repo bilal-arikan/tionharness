@@ -24,6 +24,7 @@ import {
 import { DeciderSetupGuide } from './DeciderSetupGuide'
 import { DeciderAuthorities } from './DeciderAuthorities'
 import { DeciderActivity } from './DeciderActivity'
+import { DeciderDebug } from './DeciderDebug'
 
 interface Props {
   onError: (msg: string) => void
@@ -246,6 +247,7 @@ export function DeciderPanel({ onError, onOpenProviders }: Props) {
         </p>
       )}
 
+      <DeciderDebug view={view} />
       <DeciderActivity
         records={view.recent}
         days={view.statsDays}

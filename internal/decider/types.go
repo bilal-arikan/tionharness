@@ -112,6 +112,8 @@ type Usage struct {
 
 // Response is a decision model's answers plus accounting.
 type Response struct {
+	// DebugID correlates model attempts, transport retries and the applied outcome.
+	DebugID string `json:"debugId,omitempty"`
 	// ID is the service's generation id, when it returns one.
 	ID string `json:"id,omitempty"`
 	// Backend is the backend that served the call.

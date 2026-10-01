@@ -16,7 +16,7 @@ var wantNameOnlyDefaults = []string{
 	"deactivate_tools", "delete_lesson", "expand", "focus_view",
 	"get_session_info", "handoff_session", "insight_apply_finding",
 	"insight_list_findings", "insight_scan", "list_sessions", "mermaid_validate",
-	"monitor", "notify", "read_lessons", "read_session_debug", "render_template",
+	"monitor", "notify", "read_decider_debug", "read_lessons", "read_session_debug", "render_template",
 	"run_adhoc_flow", "send_message", "shell_manage", "skill_validate", "update_artifact",
 	"update_session", "update_user_preferences", "wait_for_mcp_servers",
 }

@@ -331,7 +331,10 @@ type Runtime struct {
 	// auxiliary route (systemagent_route.go): instance id → the provider
 	// configuration generation the rejection was seen under.
 	auxRouteBad sync.Map
-	spawnClose  sync.Once
+	// Unpinned system transports rejected by authentication sit out until their
+	// provider configuration changes. Explicit user pins always remain visible.
+	systemRouteBad sync.Map
+	spawnClose     sync.Once
 
 	// spawnLifeMu / spawnClosing / spawnWG form the shutdown barrier for background
 	// TURN goroutines (spawn, worker, inbox delivery) — the same contract as
@@ -1184,7 +1187,12 @@ func workspaceLedgerDir(workDir string) string {
 // and the same per-agent allowlist. Returns an empty catalog when self-management
 // is off (no lazy built-ins are registered). The dispatcher runs any built-in by
 // name (the catalog is the gate); unknown/foreign names return an error.
-func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
+func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent, autonomous ...bool) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
+	// Bridge installation precedes turn composition. Bind filesystem tools to
+	// the session now, just as the shell runner does at each call.
+	if _, ok := resolvedWorkDirFromCtx(ctx); !ok {
+		ctx = withResolvedWorkDir(ctx, r.effectiveWorkDir(ctx), len(autonomous) > 0 && autonomous[0])
+	}
 	reg := r.buildRegistry(ctx, agent)
 	allow := r.toolFilter(ctx, agent)
 	// Bridge ALL lazy built-ins INCLUDING the hidden tier. With the gateway dynamic
@@ -1237,6 +1245,7 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	// lacks the turn's current-session id; inject it (captured from the build ctx)
 	// so session-scoped bridged tools (read_session_debug) default to this session.
 	sid := SessionIDFrom(ctx)
+	upwardReport := pendingUpwardReportFrom(ctx)
 
 	// Coordination tools (M2): bridge them to the CLI path too, so a claude-cli
 	// coordinator can drive workers, a claude-cli sub-coordinator can report up, and
@@ -1257,6 +1266,11 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	}
 
 	call := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+		// HTTP tool calls have their own context. Preserve the worker's terminal
+		// report stash so an early self-report cannot wake its parent mid-turn.
+		if upwardReport != nil {
+			ctx = withPendingUpwardReport(ctx, upwardReport)
+		}
 		if sid != "" {
 			ctx = tools.WithCurrentSession(ctx, sid)
 			ctx = WithSessionID(ctx, sid)

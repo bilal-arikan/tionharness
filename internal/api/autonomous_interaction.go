@@ -71,6 +71,9 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// reports "artifacts are not available for this turn"). Mirrors the chat path's
 		// setArtifacts. Only when we know the session to stamp artifacts with.
 		if sessionID != "" {
+			if ledger, epoch := tools.SkillLedgerFrom(ctx); ledger != nil {
+				run.setSkillLedger(ledger, epoch)
+			}
 			// Permission grants (CLI path): bind the SAME session-scoped grant set the
 			// chat path uses, so an "Always allow" decision is remembered across turns and
 			// SK-3's allowed-tools auto-grant actually lands — grantSkillToolsCLI bails out
@@ -148,7 +151,7 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		if sessionID != "" {
 			ctx = agent.WithSessionID(ctx, sessionID)
 		}
-		bridgeDefs, bridgeCall := rt.BridgeTools(ctx, ag)
+		bridgeDefs, bridgeCall := rt.BridgeTools(ctx, ag, true)
 		run.setBridge(bridgeDefs, bridgeCall)
 
 		// Visibility-aware CLI wire split (see chat_stream): full→core, summary/

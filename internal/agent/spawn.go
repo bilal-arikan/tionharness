@@ -26,10 +26,11 @@ const spawnTimeout = 10 * time.Minute
 // agent's provider is always preserved); Title overrides the auto-generated one;
 // CreatedBy records provenance (the spawning agent's id, or "" for user/API).
 type SpawnOptions struct {
-	ModelOverride  string
-	Title          string
-	CreatedBy      string
-	IdempotencyKey string
+	ExpectedDeliverables []string
+	ModelOverride        string
+	Title                string
+	CreatedBy            string
+	IdempotencyKey       string
 	// RuntimeBaseAgentID supplies provider/model/permission settings for a worker
 	// system agent while leaving its identity, soul, and allowlist intact.
 	RuntimeBaseAgentID string
@@ -262,6 +263,7 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		sourceID = "spawn-dispatch:" + opts.IdempotencyKey
 	}
 	newSession := db.Session{
+		ExpectedDeliverables:     append([]string(nil), opts.ExpectedDeliverables...),
 		AgentID:                  agent.ID,
 		Kind:                     kind,
 		SourceID:                 sourceID,

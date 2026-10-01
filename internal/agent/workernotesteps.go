@@ -53,6 +53,12 @@ func digestWorkerSteps(steps []TurnStep) []TurnStep {
 // — notably NOT Output, which is where the megabytes were.
 func keepWorkerStep(st TurnStep) (TurnStep, bool) {
 	switch {
+	case st.Operation == "cli_interrupted" || st.Operation == "delivery_check" || st.Operation == "cli_resume" || st.Operation == "mcp_startup":
+		// Only bounded execution evidence travels to the parent. Full tool output
+		// remains in the worker transcript; file contracts contain metadata only.
+		return TurnStep{Kind: st.Kind, ID: st.ID, Operation: st.Operation,
+			Status: st.Status, Reason: st.Reason, Provider: st.Provider,
+			Text: st.Text, Target: st.Target, DurationMs: st.DurationMs, Output: st.Output}, true
 	case st.Kind == StepDiff:
 		return TurnStep{
 			Kind:    StepDiff,

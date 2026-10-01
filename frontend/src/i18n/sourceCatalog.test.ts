@@ -152,4 +152,5 @@ it('resolves static translation keys in every supported locale', () => {
     scanCalls(source)
   }
   expect(missing, 'UI translation calls without catalog entries').toEqual([])
-})
+  // Whole-project AST validation can exceed the default 5s under parallel load.
+}, 30_000)

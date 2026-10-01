@@ -57,7 +57,7 @@ func (r *Runtime) judgePhaseGate(ctx context.Context, t db.Trajectory, phase db.
 			fmt.Sprintf("Judging by this transcript, has the exit condition of the %q phase been met? Condition: %s", label, condition),
 			condition,
 			"The condition has not been met yet, or the transcript does not show that it has.")},
-	}, decider.WithRef(t.ID), decider.WithOutcome(outcome))
+	}, decider.WithRef(t.ID), decider.WithLocation(t.RootSessionID, TurnIDFrom(ctx)), decider.WithOutcome(outcome))
 	rec := decider.NewRecord(authPhaseGate, decider.ModeOn, resp, err)
 	rec.Ref = t.ID
 	if err != nil {

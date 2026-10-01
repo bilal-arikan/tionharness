@@ -814,7 +814,8 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// Thinking parity: "Kapalı" turns extended thinking fully off in the CLI
 	// (MAX_THINKING_TOKENS=0). Also restores parallel tool batching on claude-code
 	// ≥2.1.203 ("think XOR batch") — see Request.DisableThinking.
-	if req.DisableThinking {
+	// Opus 5.5 requires adaptive thinking, so never force it off here.
+	if req.DisableThinking && claude55Tier(model) != "opus" {
 		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
 	}
 	cmd.Env = append(cmd.Env, nativeSubagentEnv(req)...)

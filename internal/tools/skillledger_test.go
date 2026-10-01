@@ -27,7 +27,7 @@ func (s *stubSkillLib) AllowedTools(string) []string { return nil }
 
 func callSkill(t *testing.T, ctx context.Context, tool UseSkillTool, slug string, force bool) string {
 	t.Helper()
-	in, err := json.Marshal(map[string]any{"slug": slug, "force": force})
+	in, err := json.Marshal(map[string]any{"slug": slug, "force": force, "reason": "Instructions were removed from the visible history"})
 	if err != nil {
 		t.Fatalf("marshal input: %v", err)
 	}
@@ -90,6 +90,23 @@ func TestUseSkillForceResendsAndRearms(t *testing.T) {
 	after := callSkill(t, ctx, tool, "doctrine", false)
 	if strings.Contains(after, lib.body) {
 		t.Fatalf("load after a force must dedupe again, got %q", after)
+	}
+}
+
+func TestRoutineForceReloadDoesNotDuplicateBody(t *testing.T) {
+	lib := &stubSkillLib{body: "Instructions already visible"}
+	tool := NewUseSkillTool(lib)
+	ledger := NewSkillLedger()
+	ctx := WithSkillLedger(context.Background(), ledger, 0)
+	callSkill(t, ctx, tool, "doctrine", false)
+	out, err := tool.Call(ctx, json.RawMessage(`{"slug":"doctrine","force":true}`))
+	if err != nil || strings.Contains(out, lib.body) || lib.reads != 1 {
+		t.Fatalf("routine reload duplicated instructions: %q / %v", out, err)
+	}
+	ctx = WithSkillLedger(context.Background(), ledger, 1)
+	out, err = tool.Call(ctx, json.RawMessage(`{"slug":"doctrine","force":true}`))
+	if err != nil || !strings.Contains(out, lib.body) {
+		t.Fatal("fold must allow instructions to be loaded again without a reason")
 	}
 }
 

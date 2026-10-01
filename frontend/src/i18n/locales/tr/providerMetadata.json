@@ -79,6 +79,14 @@
   },
   "models": {
     "anthropic": {
+      "opus55": {
+        "label": "Claude Opus 5.5",
+        "description": "Long-running coding and knowledge work; 1M context, adaptive thinking always on, $4/$20 per million tokens."
+      },
+      "sonnet55": {
+        "label": "Claude Sonnet 5.5",
+        "description": "Balanced speed and intelligence; 1M context, adaptive thinking, between-tools mode for low thinking, $2/$10 per million tokens."
+      },
       "fable51": {
         "label": "Claude Fable 5.1 — öncü",
         "description": "Genel erişime açık en yetenekli model; 1M bağlam, 128K çıktı, adaptif düşünme (daima açık) ve Opus fiyatının yarısına cache okuma ($0.25/MTok). Fable 5 ile aynı fiyat. Farklar: zorunlu tool_choice yoktur ve düşünme blokları konuşmaya bağlıdır (TionHarness bunu drop_block ile tolere eder). 30 günlük veri saklama gerektirir; güvenlik retlerinde Opus 4.8'e geçilir (Ayarlar)"
@@ -109,6 +117,14 @@
       }
     },
     "claudeCli": {
+      "opus55": {
+        "label": "Claude Opus 5.5",
+        "description": "Pinned Opus 5.5 for coding and knowledge work; adaptive thinking always on. Access depends on the configured account."
+      },
+      "sonnet55": {
+        "label": "Claude Sonnet 5.5",
+        "description": "Pinned Sonnet 5.5 for balanced speed and intelligence; adaptive thinking. Access depends on the configured account."
+      },
       "session": {
         "label": "Claude oturum modeli",
         "description": "Claude oturumunun etkin modelini kullan"
@@ -134,6 +150,10 @@
       "session": {
         "label": "Codex oturum modeli",
         "description": "Codex oturumunun etkin modelini kullan"
+      },
+      "gpt61Sol": {
+        "label": "GPT-6.1 Sol",
+        "description": "Near-Astra performance for complex coding at lower cost. Codex effort: low through ultra; verified CLI context: 272K. Availability depends on the signed-in account."
       },
       "gpt6Astra": {
         "label": "GPT-6 Astra",
@@ -251,6 +271,14 @@
       }
     },
     "openRouter": {
+      "claudeOpus55": {
+        "label": "Claude Opus 5.5",
+        "description": "Long-running coding and knowledge work; 1M context, adaptive thinking always on, $4/$20 per million tokens."
+      },
+      "claudeSonnet55": {
+        "label": "Claude Sonnet 5.5",
+        "description": "Balanced speed and intelligence; 1M context, adaptive thinking, $2/$10 per million tokens."
+      },
       "claudeFable51": {
         "label": "Claude Fable 5.1 — öncü",
         "description": "En yeni Anthropic nesli; 1M bağlam, adaptif düşünme (daima açık) ve ucuz cache okuma"

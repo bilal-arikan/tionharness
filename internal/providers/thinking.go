@@ -98,7 +98,7 @@ func ValidateThinkingLevelForProvider(providerKind, model, level string) error {
 // enabled+budget_tokens thinking shape and requires {type:"adaptive"} +
 // output_config.effort instead.
 func UsesAdaptiveThinking(model string) bool {
-	if AlwaysOnThinking(model) {
+	if AlwaysOnThinking(model) || claude55Tier(model) != "" {
 		return true
 	}
 	m := strings.ToLower(model)
@@ -111,12 +111,10 @@ func UsesAdaptiveThinking(model string) bool {
 }
 
 // AlwaysOnThinking reports whether the model runs with thinking permanently on
-// (the Fable/Mythos 5 class): both the legacy enabled shape AND an explicit
-// {type:"disabled"} return 400 there, so "off" must omit the thinking field
-// entirely (the server thinks anyway).
+// (Fable/Mythos 5 and Opus 5.5). Both the legacy enabled shape and an explicit
+// {type:"disabled"} are rejected; the transport keeps adaptive thinking active.
 func AlwaysOnThinking(model string) bool {
-	m := strings.ToLower(model)
-	return strings.Contains(m, "fable") || strings.Contains(m, "mythos")
+	return fableModel(model) || claude55Tier(model) == "opus"
 }
 
 // SupportsTaskBudget reports whether the model accepts the (beta) task-budget
@@ -131,6 +129,9 @@ func SupportsTaskBudget(model string) bool { return UsesAdaptiveThinking(model) 
 // matrix: Fable/Mythos 5, Opus 4.8, Sonnet 5, Haiku 4.5, plus legacy Opus
 // 4.5/4.1 — notably NOT Opus 4.6/4.7 or Sonnet 4.6.
 func SupportsStructuredOutputs(model string) bool {
+	if claude55Tier(model) != "" {
+		return true
+	}
 	m := strings.ToLower(model)
 	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
 		return true
@@ -148,6 +149,9 @@ func SupportsStructuredOutputs(model string) bool {
 // operator channel): Claude Opus 4.8, Opus 5 and the Fable/Mythos 5.x class —
 // NOT Sonnet 5 (folded into the preceding user turn there).
 func SupportsSystemInMessages(model string) bool {
+	if claude55Tier(model) != "" {
+		return true
+	}
 	m := strings.ToLower(model)
 	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
 		return true
@@ -169,6 +173,9 @@ func SupportsSystemInMessages(model string) bool {
 // (block_binding.prefix_mismatch_behavior = drop_block + its beta) for exactly
 // this class so such edits degrade to a re-plan instead of failing the turn.
 func SupportsThinkingBinding(model string) bool {
+	if claude55Tier(model) != "" {
+		return true
+	}
 	m := strings.ToLower(model)
 	for _, s := range []string{"fable-5-1", "fable-5.1", "mythos-5-1", "mythos-5.1"} {
 		if strings.Contains(m, s) {
@@ -183,6 +190,9 @@ func SupportsThinkingBinding(model string) bool {
 // 4.6/4.7/4.8, Sonnet 4.6, Sonnet 5, Fable/Mythos. Older models use the basic
 // variants instead.
 func SupportsDynamicWebTools(model string) bool {
+	if claude55Tier(model) != "" {
+		return true
+	}
 	m := strings.ToLower(model)
 	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
 		return true
@@ -202,6 +212,9 @@ func SupportsDynamicWebTools(model string) bool {
 // tool calling (code_execution_20260120 + allowed_callers): Claude Opus 4.5+
 // and Sonnet 4.5+ (incl. Sonnet 5) and the Fable/Mythos class.
 func SupportsProgrammaticTools(model string) bool {
+	if claude55Tier(model) != "" {
+		return true
+	}
 	m := strings.ToLower(model)
 	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
 		return true

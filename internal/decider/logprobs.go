@@ -346,6 +346,11 @@ type chatCompletion struct {
 
 // ask puts one question to the model and reads the label distribution.
 func (c *logprobsClient) ask(ctx context.Context, model, state, key string, q Question) questionResult {
+	if trace, _ := ctx.Value(debugCallKey{}).(*debugCall); trace != nil {
+		questionTrace := *trace
+		questionTrace.base.QuestionID = debugToken(key)
+		ctx = context.WithValue(ctx, debugCallKey{}, &questionTrace)
+	}
 	labels := labelsFor(q)
 	body := map[string]any{}
 	maps.Copy(body, c.opts.extraBody)

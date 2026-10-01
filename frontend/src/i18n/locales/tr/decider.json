@@ -25,7 +25,7 @@
     },
     "enable": {
       "title": "Karar mercileri",
-      "text": "Karar Mercileri ekranında “Karar katmanını kullan”ı aç; mercileri önce Gölge'de çalıştır, uyum yükselince Açık'a al.",
+      "text": "Karar Mercileri ekranında “Karar katmanını kullan”ı aç; mercileri önce Gölge'de çalıştır, Açık'a almadan önce bağımsız etiketli örneklerde doğruluğu doğrula.",
       "goAuthorities": "Karar Mercileri'ne git →"
     }
   },
@@ -174,7 +174,7 @@
   },
   "authorities": {
     "title": "Karar mercileri",
-    "hint": "Uygulamada kararı bir karar sağlayıcısına devredebilen her nokta. Gölgede başla, uyum oranını izle, güvendiğinde aç. Yedek, sağlayıcı cevap veremediğinde devreye girer; rakip aynı soruyu arka planda cevaplar, böylece yeni bir sağlayıcı devralmadan önce ölçülebilir.",
+    "hint": "Uygulamada kararı bir karar sağlayıcısına devredebilen her nokta. Gölgede başla, açmadan önce bağımsız etiketli örneklerde doğruluğu karşılaştır. Yedek, sağlayıcı cevap veremediğinde devreye girer; rakip aynı soruyu arka planda cevaplar, böylece yeni bir sağlayıcı devralmadan önce ölçülebilir.",
     "model": "Sağlayıcı",
     "modelDefault": "Varsayılan ({{label}})",
     "fallback": "Yedek",
@@ -252,13 +252,13 @@
     "latency": "p50 / p95",
     "latencyValue": "{{p50}} / {{p95}} ms",
     "cost": "Maliyet",
-    "readyToSwitch": "Uyum yüksek: açmaya hazır.",
+    "readyToSwitch": "Uyum yüksek; açmadan önce etiketli örneklerde doğruluğu doğrulayın.",
     "keepShadow": "Uyum düşük: gölgede tut.",
     "needsData": "Veri toplanıyor ({{done}} / {{needed}} karşılaştırma).",
     "challenger": "Rakip {{label}}",
     "challengerLine": "{{done}} karşılaştırmada uyum {{rate}} · p50 {{p50}} ms · {{cost}}",
     "challengerNone": "henüz karşılaştırma yok",
-    "challengerReady": "Rakip model devralacak kadar sık aynı kararı veriyor.",
+    "challengerReady": "Rakip uyumu yüksek; sağlayıcıyı değiştirmeden önce etiketli örneklerde kaliteyi doğrulayın.",
     "challengerKeep": "Rakip model devralmak için çok sık ayrışıyor.",
     "challengerCollect": "Rakip ölçülüyor ({{done}} / {{needed}} karşılaştırma)."
   },
@@ -270,5 +270,68 @@
     "failed": "başarısız: {{error}}",
     "challenger": "rakip",
     "fallback": "yedek"
+  },
+  "debug": {
+    "title": "Karar debug",
+    "privacy": "Yalnız metadata kaydedilir; konuşma, komut, soru metni ve kimlik bilgileri saklanmaz. Sağlayıcı testleri sağlayıcı ücreti oluşturabilir.",
+    "authority": "Merci",
+    "all": "Tümü",
+    "modelTest": "Sağlayıcı testleri",
+    "window": "Zaman aralığı",
+    "days": "{{n}} gün",
+    "reference": "Oturum / koşu / tur",
+    "referenceHint": "Tam kimlik",
+    "refresh": "Filtrele / yenile",
+    "export": "JSON'u indir",
+    "summary": "{{calls}} karar · {{errors}} hata · {{retries}} tekrar · {{fallbacks}} yedek deneme · {{challengers}} rakip deneme · {{applied}} uygulanan · gözlenen maliyet {{cost}}",
+    "agreement": "{{n}} karşılaştırma · {{rate}} uyum",
+    "evidenceHint": "Uyum, doğruluk değildir. Güven skoru doğruluk garantisi değildir. Eşik değiştirmeden veya mercii açmadan önce bağımsız etiketli örnekleri inceleyin.",
+    "retention": "{{matched}} eşleşen olaydan {{shown}} gösteriliyor · {{cap}} olay sınırında {{retained}} kayıt · en eski saklanan: {{oldest}}",
+    "truncated": "Gösterilen son kayıtlar kararın başlangıcını içermeyebilir. Filtreyi daraltın veya saklanan olayları indirin. Bu görünüm tüm geçmiş değildir.",
+    "empty": "Henüz eşleşen debug olayı yok. Eski karar defterinin ayrıntıları yeniden oluşturulmaz. Yeni kararlar ve sağlayıcı testleri burada görünür.",
+    "pending": "Sonuç kaydedilmedi",
+    "trace": "Çağrı kimliği",
+    "threshold": "Eşik",
+    "turn": "Tur",
+    "comparison": "Sonuç: {{outcome}} · karşılaştırılan: {{baseline}}",
+    "attempt": "HTTP denemesi {{n}}",
+    "retryWait": "Tekrar beklemesi: {{ms}} ms",
+    "input": "Girdi {{before}} → {{after}} · {{n}} soru",
+    "trimmed": "Bağlam kırpıldı",
+    "fingerprint": "İstek izi",
+    "configFingerprint": "Ayar izi",
+    "probability": "P(evet) = {{p}}",
+    "confidence": "güven skoru {{p}}",
+    "tokens": "{{input}} girdi / {{output}} çıktı token",
+    "stage": {
+      "started": "Başladı",
+      "attempt": "Model denemesi",
+      "transport": "HTTP isteği",
+      "completed": "Tamamlandı",
+      "outcome": "Uygulanan / karşılaştırılan sonuç",
+      "skipped": "Atlandı"
+    },
+    "role": {
+      "primary": "Birincil",
+      "fallback": "Yedek",
+      "challenger": "Rakip",
+      "test": "Test"
+    },
+    "warning": {
+      "missing_logprobs": "Olasılıklar alınamadı; cevaplar kesin 0/1 olabilir.",
+      "backend_warning": "Backend bir güvenilirlik uyarısı bildirdi."
+    },
+    "issue": {
+      "insufficient_evidence": "Saklanan karşılaştırma sayısı {{n}}; bu, fayda veya doğruluk kanıtı oluşturmaz.",
+      "high_error_rate": "Yüksek hata oranı: {{n}} başarısız karar.",
+      "slow_decisions": "Yavaş kararlar: p95 {{n}} ms.",
+      "degraded_probabilities": "{{n}} model denemesinde olasılık uyarısı var.",
+      "trimmed_context": "{{n}} model denemesinde bağlam kırpıldı.",
+      "challenger_busy": "Tüm yuvalar dolu olduğundan {{n}} rakip çağrısı atlandı."
+    },
+    "duration": "{{ms}} ms",
+    "budget": "Deneme zaman aşımı {{ms}} ms · bağlam bütçesi {{tokens}} token",
+    "question": "Soru",
+    "testSummary": "{{n}} sağlayıcı testi · {{errors}} başarısız · {{compared}} karşılaştırmada rakip uyumu {{rate}}"
   }
 }

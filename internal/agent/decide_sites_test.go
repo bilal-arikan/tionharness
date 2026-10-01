@@ -28,12 +28,13 @@ func TestFlowJudgeBranchMapsArms(t *testing.T) {
 	if !strings.Contains(body, `"arm2":"Feature request"`) || !strings.Contains(body, "Which option best describes") {
 		t.Errorf("request body = %s", body)
 	}
-	// An option key the model made up is "unsure", not a crash.
+	// An invented option is an invalid provider response; the engine uses its
+	// default arm and the failure stays visible in decision diagnostics.
 	stub.set(func(s *decisionStub) { s.choice[flowArmKey] = "arm9" })
-	if pick, _, err := f.JudgeBranch(context.Background(), req); err != nil || pick != -1 {
+	if pick, _, err := f.JudgeBranch(context.Background(), req); !errors.Is(err, decider.ErrInvalidResponse) || pick != -1 {
 		t.Errorf("unknown option: pick = %d, err = %v", pick, err)
 	}
-	if recs := hub.Recent(1); len(recs) != 1 || recs[0].Outcome != "unsure" {
+	if recs := hub.Recent(1); len(recs) != 1 || recs[0].Error != "invalid_response" || recs[0].Outcome != "" {
 		t.Errorf("ledger = %+v", recs)
 	}
 	// Disabled decider: an error the engine turns into the default arm.

@@ -181,6 +181,7 @@ export interface DeciderAuthorityStats {
 }
 
 export interface DeciderRecord {
+  debugId?: string
   at: number
   authority: string
   mode: DeciderMode
@@ -212,7 +213,7 @@ export interface DeciderView {
   statsDays: number
 }
 
-interface DeciderAnswer {
+export interface DeciderAnswer {
   type: 'noul' | 'choice' | 'score'
   probability?: number
   choice?: string
@@ -222,6 +223,7 @@ interface DeciderAnswer {
 }
 
 interface DeciderResponse {
+  debugId?: string
   id?: string
   backend: string
   instance?: string
@@ -251,4 +253,84 @@ export interface DeciderModelDeleted {
   deleted: boolean
   usedBy: string[]
   view: DeciderView
+}
+
+export interface DeciderDebugEvent {
+  at: number
+  traceId: string
+  authority: string
+  mode: DeciderMode
+  stage: string
+  role?: string
+  ref?: string
+  sessionId?: string
+  turnId?: string
+  configHash?: string
+  modelHash?: string
+  questionId?: string
+  timeoutMs?: number
+  contextTokens?: number
+  threshold: number
+  instance?: string
+  backend?: string
+  model?: string
+  servedModel?: string
+  requestHash?: string
+  stateBytes?: number
+  preparedBytes?: number
+  stateTrimmed?: boolean
+  questionTypes?: Record<string, number>
+  answers?: Record<string, DeciderAnswer>
+  warnings?: string[]
+  latencyMs?: number
+  httpAttempt?: number
+  retryWaitMs?: number
+  error?: string
+  inputTokens?: number
+  outputTokens?: number
+  costUsd?: number
+  outcome?: string
+  baseline?: string
+  strength?: number
+  applied?: boolean
+}
+
+export interface DeciderDebugReport {
+  events: DeciderDebugEvent[]
+  summary: {
+    decisions: number
+    errors: number
+    skipped: number
+    attempts: number
+    fallbacks: number
+    challengers: number
+    retries: number
+    applied: number
+    compared: number
+    agreed: number
+    challengerCompared: number
+    challengerAgreed: number
+    tests: number
+    testErrors: number
+    warnings: number
+    trimmed: number
+    p50Ms: number
+    p95Ms: number
+    costUsd: number
+  }
+  issues: Array<{ code: string; count: number }>
+  retainedEvents: number
+  matchedEvents: number
+  oldestAt?: number
+  truncated: boolean
+  capacity: number
+}
+
+export interface DeciderDebugFilter {
+  days?: number
+  authority?: string
+  instance?: string
+  ref?: string
+  traceId?: string
+  limit?: number
 }

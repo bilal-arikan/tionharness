@@ -14,7 +14,7 @@ import { AgentHeader } from './AgentHeader'
 import { WorkingDots } from './WorkingDots'
 import { AutoPromptNote } from './AutoPromptNote'
 import { TaskNotificationNote } from './TaskNotificationNote'
-import { parseTaskNotification } from './parseTaskNotification'
+import { laterNotificationStatuses, parseTaskNotification } from './parseTaskNotification'
 import { UserTurn } from './UserTurn'
 import { UserBubble } from './UserBubble'
 import { PeerTurn } from './PeerTurn'
@@ -118,6 +118,7 @@ export function MessageList({
   const onOpenAgent = useStableCallback(onOpenAgentProp)
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtual = useTranscriptWindow(messages, scrollRef)
+  const laterReports = useMemo(() => laterNotificationStatuses(messages), [messages])
   const paging = transcriptPaging
     ? {
         ...transcriptPaging,
@@ -528,6 +529,7 @@ export function MessageList({
                 <TaskNotificationNote
                   message={m}
                   agent={agentById(parseTaskNotification(m.text)?.agentId)}
+                  laterStatus={laterReports.get(m.id)}
                   onSelectSession={onSelectSession}
                   onOpenFile={onOpenFile}
                   onDelete={onDeleteMessage}

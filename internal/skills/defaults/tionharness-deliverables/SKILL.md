@@ -33,6 +33,12 @@ To revise an existing artifact, prefer `update_artifact` by its `id` over
 creating a duplicate (the session's existing artifacts are surfaced to you each
 turn for exactly this reason).
 
+For a document already written to disk, use `update_artifact` with `id` and
+`sourcePath`. Do not read the whole file and resend it as `content` merely to
+synchronize its artifact. Use `Read`/`Write`/`Edit`/`apply_patch` for document
+work; activate those tools once rather than building files with many tiny shell
+append commands. Read only the sections needed for the current revision.
+
 ## 2. Content meant to be SEEN in the chat → put it INLINE in your reply
 
 Some output is meant to be looked at *in the conversation*. That renders inline

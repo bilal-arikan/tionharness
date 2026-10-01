@@ -180,7 +180,15 @@ func (d *DB) UpdateArtifactContent(ctx context.Context, id, content string) (Art
 	}
 	a.Content = content
 	a.UpdatedAt = now()
-	return a, d.persistArtifactLocked(&a)
+	// An existing ContentFile makes persistence retain its bytes. Rewrite the
+	// owned body explicitly, including an empty replacement, before saving metadata.
+	if isTextArtifact(a.Kind) {
+		if err := d.writeArtifactContent(&a); err != nil {
+			return Artifact{}, err
+		}
+	}
+	err := d.persistArtifactLocked(&a)
+	return a, err
 }
 
 // UpdateArtifactMeta edits an artifact's title/kind/language. Empty fields are
@@ -221,6 +229,11 @@ func (d *DB) UpdateArtifactSource(ctx context.Context, id, sourcePath string) (A
 	}
 	old := a.SourcePath
 	a.SourcePath = sourcePath
+	if !isTextArtifact(a.Kind) {
+		// Media/file artifacts are served from SourcePath. Drop any ignored
+		// legacy inline body so it cannot masquerade as their current revision.
+		a.Content = ""
+	}
 	a.UpdatedAt = now()
 	return a, old, d.persistArtifactLocked(&a)
 }

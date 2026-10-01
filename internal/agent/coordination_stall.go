@@ -394,6 +394,11 @@ type stallJudgeVerdict struct {
 // is therefore remembered per coordinator until the text changes; a judge error
 // is never memoised.
 func (r *Runtime) judgeCoordinatorStalled(ctx context.Context, coordSessionID string, agent db.Agent, text string) (bool, error) {
+	// Sweeper calls have a background context; preserve the session for usage,
+	// decision diagnostics and shadow comparisons before invoking either judge.
+	if coordSessionID != "" {
+		ctx = WithSessionID(ctx, coordSessionID)
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return false, nil

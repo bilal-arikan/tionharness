@@ -31,7 +31,7 @@ function notification(taskId = 'SES9') {
 </task-notification>`
 }
 
-function renderNote(taskId = 'SES9', onSelectSession = vi.fn()) {
+function renderNote(taskId = 'SES9', onSelectSession = vi.fn(), laterStatus?: string) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -45,7 +45,13 @@ function renderNote(taskId = 'SES9', onSelectSession = vi.fn()) {
     createdAt: 1,
   }
   act(() =>
-    root.render(<TaskNotificationNote message={message} onSelectSession={onSelectSession} />),
+    root.render(
+      <TaskNotificationNote
+        message={message}
+        onSelectSession={onSelectSession}
+        laterStatus={laterStatus}
+      />,
+    ),
   )
   return { container, onSelectSession }
 }
@@ -60,6 +66,16 @@ afterEach(() => {
 })
 
 describe('TaskNotificationNote', () => {
+  it('shows uncertainty and later failure before expanding an old PASS report', () => {
+    const { container } = renderNote('SES51', vi.fn(), 'failed')
+    expect(container.querySelector('[data-testid="task-report-evidence"]')?.textContent).toContain(
+      'does not establish that tests passed',
+    )
+    expect(container.querySelector('[data-testid="task-later-report"]')?.textContent).toContain(
+      'failed',
+    )
+    expect(container.textContent).not.toContain('Sonuç gövdesi')
+  })
   it('opens the worker session from agent identity without expanding the result', () => {
     const { container, onSelectSession } = renderNote()
     const agentButton = container.querySelector('button[aria-label="Open Ada worker session"]')!

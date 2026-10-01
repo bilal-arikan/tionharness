@@ -59,6 +59,7 @@ type Hub struct {
 	opts   HubOptions
 	logger *slog.Logger
 	ledger *Ledger
+	debug  *DebugJournal
 	models *ModelStore
 
 	mu  sync.RWMutex
@@ -104,6 +105,7 @@ func NewHub(opts HubOptions) *Hub {
 		dir = filepath.Join(opts.DataDir, "decider")
 	}
 	h.ledger = OpenLedger(dir, logger)
+	h.debug = openDebugJournal(dir, logger)
 	h.models = OpenModelStore(dir, opts.Secrets, logger)
 	if opts.Now != nil {
 		h.models.now = opts.Now
@@ -202,6 +204,10 @@ type callOptions struct {
 	background func(func())
 	ref        string
 	outcome    func(*Response) (string, float64)
+	sessionID  string
+	turnID     string
+	trace      *debugCall
+	role       string
 }
 
 // WithBilling records every model call a decision makes — the primary, a
@@ -241,24 +247,37 @@ func newCallOptions(opts []CallOption) callOptions {
 // then its fallback when that model cannot answer, and — after an answer — its
 // challenger in the background. It fails fast with ErrDisabled / ErrSiteOff
 // when the authority is off; callers fall back to their own logic on any error.
-func (h *Hub) Decide(ctx context.Context, authority string, req Request, opts ...CallOption) (*Response, error) {
+func (h *Hub) Decide(ctx context.Context, authority string, req Request, opts ...CallOption) (resp *Response, err error) {
 	if h == nil {
 		return nil, ErrDisabled
 	}
 	cfg := h.Config()
+	o := newCallOptions(opts)
+	o.trace, o.role = h.startDebug(authority, cfg, o, "primary"), "primary"
+	start := time.Now()
+	defer func() {
+		o.trace.finish(resp, err, start)
+		if err != nil {
+			err = &debugError{id: o.trace.base.TraceID, err: err}
+		}
+	}()
 	if !cfg.Enabled {
+		o.trace.emit(DebugEvent{Stage: "skipped", Error: "disabled"})
 		return nil, ErrDisabled
 	}
 	mode := cfg.Mode(authority)
 	if mode == ModeOff {
+		o.trace.emit(DebugEvent{Stage: "skipped", Error: "authority_off"})
 		return nil, ErrSiteOff
 	}
-	o := newCallOptions(opts)
+	o.trace.emit(DebugEvent{Stage: "started"})
 	ac := cfg.Authority(authority)
 	primary := h.effectiveModel(cfg, ac.Model)
-	resp, err := h.ask(ctx, primary, req, o, false)
+	resp, err = h.ask(ctx, primary, req, o, false)
 	if err != nil && ac.Fallback != "" && ac.Fallback != primary && fallbackWorthy(ctx, err) {
-		fb, ferr := h.ask(ctx, ac.Fallback, req, o, false)
+		fallbackOptions := o
+		fallbackOptions.role = "fallback"
+		fb, ferr := h.ask(ctx, ac.Fallback, req, fallbackOptions, false)
 		if ferr != nil {
 			return nil, errors.Join(err, ferr)
 		}
@@ -279,11 +298,16 @@ func (h *Hub) Decide(ctx context.Context, authority string, req Request, opts ..
 // model when id is ""), regardless of the master switch, the authorities and
 // the model's own enabled flag, so the settings screen can check a model
 // before relying on it. Nothing is billed; the model's health is updated.
-func (h *Hub) Test(ctx context.Context, id string) (*Response, error) {
+func (h *Hub) Test(ctx context.Context, id string) (resp *Response, err error) {
 	if id == "" {
 		id = h.effectiveModel(h.Config(), "")
 	}
-	return h.ask(ctx, id, testRequest(), callOptions{}, true)
+	o := callOptions{role: "test"}
+	o.trace = h.startDebug("model-test", h.Config(), o, "test")
+	start := time.Now()
+	o.trace.emit(DebugEvent{Stage: "started"})
+	defer func() { o.trace.finish(resp, err, start) }()
+	return h.ask(ctx, id, testRequest(), o, true)
 }
 
 func testRequest() Request {
@@ -309,7 +333,15 @@ func (e *ModelError) Error() string { return e.Err.Error() }
 func (e *ModelError) Unwrap() error { return e.Err }
 
 // ask puts req to one decision model.
-func (h *Hub) ask(ctx context.Context, id string, req Request, o callOptions, allowDisabled bool) (*Response, error) {
+func (h *Hub) ask(ctx context.Context, id string, req Request, o callOptions, allowDisabled bool) (resp *Response, err error) {
+	trace := o.trace.forModel(id, o.role)
+	start := time.Now()
+	event := DebugEvent{Stage: "attempt"}
+	defer func() {
+		event.Error, event.LatencyMs = errorClass(err), time.Since(start).Milliseconds()
+		debugResponse(resp, &event)
+		trace.emit(event)
+	}()
 	if id == "" {
 		return nil, ErrNoModel
 	}
@@ -317,6 +349,8 @@ func (h *Hub) ask(ctx context.Context, id string, req Request, o callOptions, al
 	if !ok {
 		return nil, &ModelError{Instance: id, Err: fmt.Errorf("%w: %q", ErrNoModel, id)}
 	}
+	event.Model, event.Backend, event.ModelHash = debugToken(m.Model), debugToken(m.Backend), debugHash(m)
+	event.TimeoutMs = int(m.Timeout().Milliseconds())
 	if !m.Enabled && !allowDisabled {
 		return nil, &ModelError{Instance: id, Err: ErrModelDisabled}
 	}
@@ -338,12 +372,21 @@ func (h *Hub) ask(ctx context.Context, id string, req Request, o callOptions, al
 	if contextTokens <= 0 {
 		contextTokens = manifest.ContextTokens
 	}
+	event.ContextTokens, event.StateBytes = contextTokens, debugStateBytes(req.State)
 	state, err := prepareState(req.State, req.Questions, contextTokens)
 	if err != nil {
 		return nil, &ModelError{Instance: id, Err: err}
 	}
 	req.State = state
-	resp, err := client.Decide(ctx, req)
+	req = copyQuestionMetadata(req)
+	metadata := debugRequest(req)
+	event.RequestHash, event.QuestionTypes = metadata.RequestHash, metadata.QuestionTypes
+	event.PreparedBytes = metadata.StateBytes
+	event.StateTrimmed = event.PreparedBytes < event.StateBytes
+	if trace != nil {
+		ctx = context.WithValue(ctx, debugCallKey{}, trace)
+	}
+	resp, err = client.Decide(ctx, req)
 	if err != nil {
 		h.noteFailure(ctx, m, err)
 		return nil, &ModelError{Instance: id, Err: err}
@@ -400,12 +443,13 @@ func (h *Hub) Log(rec Record) {
 		return
 	}
 	h.ledger.Append(rec)
+	h.debugOutcome(rec)
 }
 
 // NewRecord starts a ledger record for one call: authority, mode, model,
 // latency, cost and error class filled from its result. Callers add the verdicts.
 func NewRecord(authority string, mode Mode, resp *Response, err error) Record {
-	rec := Record{Authority: authority, Mode: mode, Error: errorClass(err)}
+	rec := Record{Authority: authority, Mode: mode, Error: errorClass(err), DebugID: debugID(resp, err)}
 	if resp != nil {
 		rec.Instance = resp.Instance
 		rec.Model = resp.Model
