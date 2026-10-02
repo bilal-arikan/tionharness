@@ -14,7 +14,10 @@
       "unexpected": "Unexpected server response (HTTP {{status}})."
     },
     "network": {
-      "connectionFailed": "Could not connect to the server. Check your network connection and whether the backend is running."
+      "connectionFailed": "Could not connect to the server. Check your network connection and whether the backend is running.",
+      "requestTimedOut": "The server took too long to respond. Check for changes before retrying the request.",
+      "reconnecting": "Live updates are disconnected. Reconnecting automatically…",
+      "retryConnection": "Reconnect now"
     },
     "sharedAgent": {
       "confirm": "Save changes to \"{{agentName}}\"?\n\nThis shared agent affects these workspaces:\n{{workspaces}}\n\nThe central profile will be updated for all of them.",

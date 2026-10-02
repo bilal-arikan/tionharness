@@ -9,6 +9,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/billing"
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/decider"
 )
 
 // kindStat is one origin's slice of consumption in a budget response.
@@ -338,7 +339,8 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"day": today,
+		"decisionSpend": s.decisionSpend(days),
+		"day":           today,
 		"totals": map[string]any{
 			"calls":            totals.Calls,
 			"inputTokens":      totals.InputTokens,
@@ -375,4 +377,12 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			"coolingWasteEstimated": totalCoolingEstimated,
 		},
 	})
+}
+
+func (s *Server) decisionSpend(days int) *decider.SpendReport {
+	if s.tun == nil || s.tun.Decider() == nil {
+		return nil
+	}
+	report := s.tun.Decider().Spend(days)
+	return &report
 }

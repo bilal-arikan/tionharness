@@ -130,10 +130,10 @@ type openRouterClient struct {
 // OpenRouter credit.
 func (c *openRouterClient) Decide(ctx context.Context, req Request) (*Response, error) {
 	resp, err := c.call.decide(ctx, req)
-	if err != nil {
-		return nil, err
+	if resp == nil {
+		return resp, err
 	}
 	resp.Backend = OpenRouterBackendID
 	resp.BillingProvider = billingOpenRouter
-	return resp, nil
+	return resp, err
 }

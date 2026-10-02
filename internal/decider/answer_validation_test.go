@@ -43,7 +43,7 @@ func TestSystemOneDoesNotClampInvalidProbabilityIntoApproval(t *testing.T) {
 	defer srv.Close()
 	c := systemOneCall{url: srv.URL, prefix: "test", model: OpenJevModel}
 	resp, err := c.decide(context.Background(), yesNo())
-	if resp != nil || !errors.Is(err, ErrInvalidResponse) || errorClass(err) != "invalid_response" {
+	if resp == nil || len(resp.Answers) != 0 || !errors.Is(err, ErrInvalidResponse) || errorClass(err) != "invalid_response" {
 		t.Fatalf("answer = %+v %v", resp, err)
 	}
 }

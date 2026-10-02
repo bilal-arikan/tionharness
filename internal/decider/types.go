@@ -108,6 +108,8 @@ type Usage struct {
 	OutputTokens int `json:"outputTokens"`
 	// CostUSD is the cost the service reported, 0 when it reported none.
 	CostUSD float64 `json:"costUsd"`
+	// CostSource distinguishes a measured zero from missing or estimated pricing.
+	CostSource string `json:"costSource,omitempty"`
 }
 
 // Response is a decision model's answers plus accounting.

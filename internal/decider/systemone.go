@@ -154,8 +154,8 @@ type systemOneClient struct {
 
 func (c *systemOneClient) Decide(ctx context.Context, req Request) (*Response, error) {
 	resp, err := c.call.decide(ctx, req)
-	if err != nil {
-		return nil, err
+	if resp == nil {
+		return resp, err
 	}
 	resp.Backend = SystemOneBackendID
 	resp.BillingProvider = c.billing
@@ -164,5 +164,5 @@ func (c *systemOneClient) Decide(ctx context.Context, req Request) (*Response, e
 	if c.billing == billingOpenRouter && !strings.Contains(resp.Model, "/") {
 		resp.BillingModel = "typesafe/" + resp.Model
 	}
-	return resp, nil
+	return resp, err
 }

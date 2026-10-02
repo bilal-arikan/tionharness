@@ -24,6 +24,7 @@ import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { useAsync } from '@/shared/hooks/useAsync'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import { DecisionSpendSection } from './DecisionSpendSection'
 
 interface Props {
   onError: (msg: string) => void
@@ -396,6 +397,7 @@ export function BudgetPanel({ onError }: Props) {
           </div>
         ) : (
           <>
+            {usage.decisionSpend && <DecisionSpendSection report={usage.decisionSpend} />}
             {/* Summary cards — today */}
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <SummaryCard

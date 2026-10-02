@@ -41,6 +41,7 @@ func (r *Runtime) sessionPolicy(ctx context.Context, agent db.Agent, authority s
 	if mode == decider.ModeOff || SessionIDFrom(ctx) == "" {
 		return
 	}
+	req = r.fitDecisionEvidence(authority, req)
 	run := func(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 		defer cancel()

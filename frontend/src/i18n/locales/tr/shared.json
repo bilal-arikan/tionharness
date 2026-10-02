@@ -14,7 +14,10 @@
       "unexpected": "Beklenmeyen sunucu yanıtı (HTTP {{status}})."
     },
     "network": {
-      "connectionFailed": "Sunucuya bağlanılamadı. Ağ bağlantını ve backend'in çalışıp çalışmadığını kontrol et."
+      "connectionFailed": "Sunucuya bağlanılamadı. Ağ bağlantını ve backend'in çalışıp çalışmadığını kontrol et.",
+      "requestTimedOut": "Sunucu yanıtı gecikti. Tekrar denemeden önce işlemin tamamlanıp tamamlanmadığını kontrol et.",
+      "reconnecting": "Canlı güncellemeler kesildi. Otomatik olarak yeniden bağlanılıyor…",
+      "retryConnection": "Şimdi yeniden bağlan"
     },
     "sharedAgent": {
       "confirm": "\"{{agentName}}\" ajanındaki değişiklikler kaydedilsin mi?\n\nBu paylaşılan ajan şu çalışma alanlarını etkiler:\n{{workspaces}}\n\nMerkezi profil bu alanların tümü için güncellenecek.",

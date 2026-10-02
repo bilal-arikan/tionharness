@@ -939,6 +939,7 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/logs", s.handleClientLog)
 	// Autonomous event feed (task/schedule) — SSE, global.
 	mux.HandleFunc("GET /api/events", s.handleEvents)
+	mux.HandleFunc("GET /api/live/stream", s.handleLiveStream)
 	// Detect optional external tools on this host and read the version each one
 	// reports — surfaced by the Settings diagnostics panel. Path resolution runs
 	// nothing; the version probe runs only `<tool> --version` (3s cap).
@@ -1063,7 +1064,7 @@ func workspaceOptionalPath(path string) bool {
 	// path is exempt.
 	case path == "/api/search-indexes":
 		return true
-	case path == "/api/events":
+	case path == "/api/events" || path == "/api/live/stream":
 		return true
 	case path == "/health":
 		return true

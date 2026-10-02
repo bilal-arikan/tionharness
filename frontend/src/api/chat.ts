@@ -108,6 +108,7 @@ export const chatApi = {
   chat: (sessionId: string, message: string) =>
     req<ChatResponse>('/api/chat', {
       method: 'POST',
+      timeoutMs: 0, // Legacy blocking turn: the runtime owns its execution deadline.
       body: JSON.stringify({ sessionId, message }),
     }),
 

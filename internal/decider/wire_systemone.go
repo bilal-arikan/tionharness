@@ -47,9 +47,9 @@ type soResponse struct {
 	Provider string              `json:"provider"`
 	Answers  map[string]soAnswer `json:"answers"`
 	Usage    struct {
-		InputTokens  int     `json:"input_tokens"`
-		OutputTokens int     `json:"output_tokens"`
-		Cost         float64 `json:"cost"`
+		InputTokens  int      `json:"input_tokens"`
+		OutputTokens int      `json:"output_tokens"`
+		Cost         *float64 `json:"cost"`
 	} `json:"usage"`
 }
 
@@ -126,20 +126,26 @@ func (c systemOneCall) decide(ctx context.Context, req Request) (*Response, erro
 		Model:       model,
 		ServedModel: out.Model,
 		Answers:     make(map[string]Answer, len(out.Answers)),
-		Usage:       Usage{InputTokens: out.Usage.InputTokens, OutputTokens: out.Usage.OutputTokens, CostUSD: out.Usage.Cost},
+		Usage:       Usage{InputTokens: out.Usage.InputTokens, OutputTokens: out.Usage.OutputTokens},
 		LatencyMs:   time.Since(start).Milliseconds(),
+	}
+	if out.Usage.Cost != nil && *out.Usage.Cost >= 0 {
+		resp.Usage.CostUSD = *out.Usage.Cost
+		resp.Usage.CostSource = "reported"
 	}
 	for k, q := range req.Questions {
 		wa, ok := out.Answers[k]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s: response has no answer for question %q", ErrInvalidResponse, c.prefix, k)
+			resp.Answers = nil
+			return resp, fmt.Errorf("%w: %s: response has no answer for question %q", ErrInvalidResponse, c.prefix, k)
 		}
 		a, err := fromWireAnswer(q.Type, wa)
 		if err == nil {
 			err = validateDecisionAnswer(q, a)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s: question %q: %w", ErrInvalidResponse, c.prefix, k, err)
+			resp.Answers = nil
+			return resp, fmt.Errorf("%w: %s: question %q: %w", ErrInvalidResponse, c.prefix, k, err)
 		}
 		resp.Answers[k] = a
 	}

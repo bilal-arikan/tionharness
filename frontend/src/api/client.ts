@@ -3,6 +3,7 @@
 // backend database.
 
 import { sharedText } from '@/shared/lib/sharedI18n'
+import { requestDeadline } from './requestDeadline'
 
 const WS_KEY = 'tionharness.workspaceId'
 let activeWorkspaceId: string | null = localStorage.getItem(WS_KEY)
@@ -73,16 +74,38 @@ export async function errorFromResponse(res: Response): Promise<string> {
   return describeHttpError(res.status)
 }
 
-export async function req<T>(path: string, init?: RequestInit): Promise<T> {
+export type APIRequestInit = RequestInit & { timeoutMs?: number }
+
+export async function req<T>(path: string, options?: APIRequestInit): Promise<T> {
+  const { timeoutMs, ...init } = options ?? {}
+  const deadline = requestDeadline(init.signal, timeoutMs)
+  try {
+    return await requestWithDeadline<T>(path, init, deadline)
+  } catch (error) {
+    if (init?.signal?.aborted) throw error
+    if (deadline.timedOut())
+      throw new Error(sharedText('api.network.requestTimedOut'), { cause: error })
+    throw error
+  } finally {
+    deadline.close()
+  }
+}
+
+async function requestWithDeadline<T>(
+  path: string,
+  init: RequestInit,
+  deadline: ReturnType<typeof requestDeadline>,
+): Promise<T> {
+  const { signal } = deadline
   let res: Response
   try {
     // no-store: API responses are live workspace state, never cacheable. Without
     // this the browser may heuristically serve a stale GET (e.g. /api/hooks after
     // an out-of-band change), so a panel shows outdated data until a hard reload.
     // A caller may still override via init.cache.
-    res = await fetch(path, { cache: 'no-store', headers: wsHeaders(), ...init })
+    res = await fetch(path, { cache: 'no-store', headers: wsHeaders(), ...init, signal })
   } catch (error) {
-    if (init?.signal?.aborted) throw error
+    if (signal.aborted) throw error
     // fetch rejects (no response at all) when the dev server / network is down.
     throw new Error(sharedText('api.network.connectionFailed'), { cause: error })
   }
@@ -93,6 +116,9 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
         .json()
         .catch(() => null)
       if (body?.confirmationRequired === true) {
+        // Human approval is not a network stall. A confirmed retry gets its
+        // own deadline rather than inheriting time spent in the dialog.
+        deadline.close()
         const names = (body.workspaces as { workspaceName: string }[])
           .map((workspace) => `• ${workspace.workspaceName}`)
           .join('\n')

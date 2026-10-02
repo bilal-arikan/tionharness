@@ -6,7 +6,8 @@
 // _Docs/58-QUEUE-SENKRON.md for the protocol's reasoning.
 import { getActiveWorkspace } from './client'
 import { noteServerTime } from '@/shared/lib/serverClock'
-import { SESSION_STREAM_CLOSED_MESSAGE } from '@/shared/lib/expectedAbort'
+import { parseLiveFrame } from './liveFrames'
+import { reconnectLiveConnection, subscribeLiveChannel } from './liveConnection'
 
 // One hub event as delivered by the server. Payload is kind-specific JSON the
 // caller narrows on `kind`. sessionId is empty on workspace-stream events.
@@ -32,34 +33,13 @@ export interface HubStreamHandlers {
   onClose?: () => void
 }
 
-function abortHubStream(controller: AbortController): void {
-  controller.abort(new DOMException(SESSION_STREAM_CLOSED_MESSAGE, 'AbortError'))
-}
-
 // subscribeHubStream opens the stream at `path` (an /api route without query)
 // and keeps it alive across reconnects. Returns an unsubscribe function that
 // stops the loop and aborts the fetch.
 export function subscribeHubStream(path: string, handlers: HubStreamHandlers): () => void {
-  let closed = false
-  let ac: AbortController | null = null
+  const workspaceId = getActiveWorkspace() ?? ''
   let since = 0 // last durable seq applied (the cursor)
   let epoch = '' // server epoch this cursor belongs to
-  let backoff = 500
-
-  const parseFrame = (frame: string): { event: string; data: unknown } | null => {
-    let event = 'message'
-    const dataLines: string[] = []
-    for (const line of frame.split('\n')) {
-      if (line.startsWith('event:')) event = line.slice(6).trim()
-      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
-    }
-    if (dataLines.length === 0) return null
-    try {
-      return { event, data: JSON.parse(dataLines.join('\n')) }
-    } catch {
-      return null
-    }
-  }
 
   // handle returns true to force an immediate reconnect (gap detected).
   const handle = (event: string, data: unknown): boolean => {
@@ -82,6 +62,9 @@ export function subscribeHubStream(path: string, handlers: HubStreamHandlers): (
       }
       case 'hub': {
         const ev = data as HubEvent
+        // Subscribe+replay can overlap a live publish. Each durable fact is
+        // applied once, including when another channel changes the transport.
+        if (ev.seq > 0 && ev.seq <= since) return false
         // Gap detection: a durable frame that skips ahead means we dropped one
         // under load. Reconnect from the last good seq so the ring gap-fills it.
         if (ev.seq > 0 && since > 0 && ev.seq > since + 1) {
@@ -96,73 +79,23 @@ export function subscribeHubStream(path: string, handlers: HubStreamHandlers): (
     }
   }
 
-  const connect = async () => {
-    while (!closed) {
-      ac = new AbortController()
-      try {
-        const ws = getActiveWorkspace()
-        const qs = new URLSearchParams()
-        if (since > 0) qs.set('since', String(since))
-        if (epoch) qs.set('epoch', epoch)
-        if (ws) qs.set('ws', ws)
-        const res = await fetch(`${path}?${qs.toString()}`, {
-          headers: ws ? { 'X-Workspace-Id': ws } : {},
-          signal: ac.signal,
-        })
-        if (!res.ok || !res.body) {
-          throw new Error(`stream HTTP ${res.status}`)
-        }
-        backoff = 500 // a successful open resets the backoff
-        handlers.onOpen?.()
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buf = ''
-        let forceReconnect = false
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buf += decoder.decode(value, { stream: true })
-          let idx: number
-          while ((idx = buf.indexOf('\n\n')) >= 0) {
-            const frame = buf.slice(0, idx)
-            buf = buf.slice(idx + 2)
-            if (!frame.trim() || frame.startsWith(':')) continue // ping/comment
-            const parsed = parseFrame(frame)
-            if (parsed && handle(parsed.event, parsed.data)) {
-              forceReconnect = true
-              break
-            }
-          }
-          if (forceReconnect) break
-        }
-        handlers.onClose?.()
-        try {
-          abortHubStream(ac)
-        } catch {
-          /* already aborting */
-        }
-        if (forceReconnect) continue // immediate reconnect to gap-fill
-      } catch {
-        handlers.onClose?.()
-        if (closed) break
-      }
-      if (closed) break
-      // Bounded backoff before reconnecting on end/error.
-      await new Promise((r) => setTimeout(r, backoff))
-      backoff = Math.min(backoff * 2, 10_000)
-    }
-  }
-
-  void connect()
-
-  return () => {
-    closed = true
-    if (ac) {
-      try {
-        abortHubStream(ac)
-      } catch {
-        /* noop */
-      }
-    }
-  }
+  const sessionId = path.match(/^\/api\/sessions\/([^/]+)\/stream$/)?.[1]
+  return subscribeLiveChannel(
+    () => ({
+      key: `${workspaceId}:${path}`,
+      scope: sessionId ? 'session' : 'workspace',
+      workspaceId,
+      sessionId,
+      since,
+      epoch,
+    }),
+    {
+      onOpen: handlers.onOpen,
+      onClose: handlers.onClose,
+      onFrame: (raw) => {
+        const parsed = parseLiveFrame(raw)
+        if (parsed && handle(parsed.event, parsed.data)) reconnectLiveConnection()
+      },
+    },
+  )
 }

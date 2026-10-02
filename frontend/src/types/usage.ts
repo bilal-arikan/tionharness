@@ -1,6 +1,8 @@
 // Budget screen data: today's workspace-wide spend with a per-origin breakdown,
 // a per-agent table, and a daily trend. Mirrors GET /api/usage.
 
+import type { DecisionSpendReport } from './decisionSpend'
+
 export interface KindStat {
   calls: number
   inputTokens: number
@@ -90,6 +92,7 @@ interface BudgetCumulative {
 }
 
 export interface WorkspaceUsage {
+  decisionSpend?: DecisionSpendReport | null
   day: string
   totals: {
     calls: number

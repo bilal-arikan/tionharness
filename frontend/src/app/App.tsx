@@ -19,6 +19,7 @@ import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
 import { UpdateBanner } from './UpdateBanner'
+import { ConnectionNotice } from './ConnectionNotice'
 import {
   FlowsPanel,
   RotaPanel,
@@ -692,6 +693,7 @@ export default function App() {
             unless the release feed reported a newer version that the user has
             not dismissed. */}
         <UpdateBanner />
+        <ConnectionNotice />
 
         {!HEADERLESS_VIEWS.has(view) && (
           <AppHeader

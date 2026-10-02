@@ -128,6 +128,7 @@ export const flowApi = {
   runFlow: (id: string, input: string) =>
     req<{ run: FlowRun; sessionId: string }>(`/api/flows/${id}/run`, {
       method: 'POST',
+      timeoutMs: 0, // Blocking flow runs use the runtime's execution limits.
       body: JSON.stringify({ input }),
     }).then((r) => r.run),
   listFlowRuns: (flowId: string) =>

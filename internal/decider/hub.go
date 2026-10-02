@@ -59,6 +59,7 @@ type Hub struct {
 	opts   HubOptions
 	logger *slog.Logger
 	ledger *Ledger
+	spends *spendStore
 	debug  *DebugJournal
 	models *ModelStore
 
@@ -105,6 +106,7 @@ func NewHub(opts HubOptions) *Hub {
 		dir = filepath.Join(opts.DataDir, "decider")
 	}
 	h.ledger = OpenLedger(dir, logger)
+	h.spends = openSpendStore(dir, logger, h.now())
 	h.debug = openDebugJournal(dir, logger)
 	h.models = OpenModelStore(dir, opts.Secrets, logger)
 	if opts.Now != nil {
@@ -298,7 +300,7 @@ func (h *Hub) Decide(ctx context.Context, authority string, req Request, opts ..
 // Test runs a small fixed request through one decision model (the default
 // model when id is ""), regardless of the master switch, the authorities and
 // the model's own enabled flag, so the settings screen can check a model
-// before relying on it. Nothing is billed; the model's health is updated.
+// before relying on it. Its cost is tracked; no agent budget is charged.
 func (h *Hub) Test(ctx context.Context, id string) (resp *Response, err error) {
 	if id == "" {
 		id = h.effectiveModel(h.Config(), "")
@@ -388,31 +390,61 @@ func (h *Hub) ask(ctx context.Context, id string, req Request, o callOptions, al
 		ctx = context.WithValue(ctx, debugCallKey{}, trace)
 	}
 	resp, err = client.Decide(ctx, req)
+	provider, model := "unknown", m.Model
+	usage := Usage{CostSource: "unknown"}
+	if manifest.ID == OpenRouterBackendID {
+		provider = billingOpenRouter
+	}
+	if resp != nil {
+		resp.Instance = id
+		fillCost(manifest, resp)
+		provider, model, usage = resp.BillingProvider, resp.BilledModel(), resp.Usage
+		debugResponse(resp, &event)
+		if o.bill != nil {
+			o.bill(ctx, resp)
+		}
+	}
+	if h.spends != nil {
+		authority := ""
+		if trace != nil {
+			authority = trace.base.Authority
+		}
+		if spendErr := h.spends.record(h.now(), authority, o.role, provider, model, usage, err != nil); spendErr != nil {
+			h.logger.Warn("decision spend could not be persisted", "error", spendErr)
+		}
+	}
 	if err != nil {
 		h.noteFailure(ctx, m, err)
 		return nil, &ModelError{Instance: id, Err: err}
 	}
 	h.noteSuccess(id)
-	resp.Instance = id
-	fillCost(manifest, resp)
-	if o.bill != nil {
-		o.bill(ctx, resp)
-	}
 	return resp, nil
 }
 
 // fillCost prices a call the service did not price (TypeSafe's own API reports
 // tokens only) from the backend's model list. A local server stays free.
 func fillCost(m Manifest, resp *Response) {
-	if resp.Usage.CostUSD > 0 || resp.BillingProvider == billingLocal {
+	if resp.Usage.CostSource == "reported" || resp.Usage.CostUSD > 0 {
+		resp.Usage.CostSource = "reported"
+		return
+	}
+	if resp.BillingProvider == billingLocal {
+		resp.Usage.CostSource = "local"
 		return
 	}
 	for _, mod := range m.Models {
 		if mod.ID == resp.Model {
 			resp.Usage.CostUSD = (float64(resp.Usage.InputTokens)*mod.InputPerMTok + float64(resp.Usage.OutputTokens)*mod.OutputPerMTok) / 1e6
+			resp.Usage.CostSource = "estimated"
 			return
 		}
 	}
+	resp.Usage.CostSource = "unknown"
+}
+
+// Spend reports application-wide decision costs without recharging agent budgets.
+func (h *Hub) Spend(days int) SpendReport {
+	return h.spends.report(h.now(), days)
 }
 
 // effectiveModel resolves an authority's model: its own, else the default

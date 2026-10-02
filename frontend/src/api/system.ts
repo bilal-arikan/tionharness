@@ -24,6 +24,7 @@ import type {
   WorkspaceArchives,
 } from '@/types'
 import { req } from './client'
+import { LiveEventSource } from './liveEventSource'
 import { localizeCatalogEntry } from '@/shared/lib/providerMetadata'
 
 // subscribeEvents opens the global autonomous-event SSE feed via EventSource
@@ -39,7 +40,7 @@ import { localizeCatalogEntry } from '@/shared/lib/providerMetadata'
 // HTTP/1.1 SSE keep-alives against the backend.
 type EventCb = (e: AppEvent) => void
 type LogCb = (e: LogEntry) => void
-let sharedES: EventSource | null = null
+let sharedES: LiveEventSource | null = null
 const eventSubs = new Set<EventCb>()
 const stepSubs = new Set<EventCb>()
 const flowNodeSubs = new Set<EventCb>()
@@ -56,25 +57,9 @@ let everConnected = false
 
 function ensureConnection(): void {
   if (sharedES) return
-  sharedES = new EventSource('/api/events')
-  // The browser only auto-reconnects on transport-level drops (readyState stays
-  // CONNECTING). A non-2xx from the dev proxy (Vite 502/504 during a backend
-  // blip) or any hard error puts the source in CLOSED permanently and it never
-  // retries — the live UI silently goes dark while the server is fine. Detect
-  // that terminal state and rebuild the connection ourselves after a short
-  // backoff, but only while someone still cares (so an idle close stays closed).
-  sharedES.onerror = () => {
-    if (!sharedES || sharedES.readyState !== EventSource.CLOSED) return
-    sharedES = null
-    const hasSubs =
-      eventSubs.size > 0 ||
-      stepSubs.size > 0 ||
-      flowNodeSubs.size > 0 ||
-      flowNodeStepSubs.size > 0 ||
-      logSubs.size > 0 ||
-      processSubs.size > 0
-    if (hasSubs) setTimeout(ensureConnection, 2000)
-  }
+  sharedES = new LiveEventSource()
+  // The shared transport retries HTTP and network failures while subscribers
+  // exist; no orphan EventSource rebuild timer can reopen an idle connection.
   sharedES.addEventListener('notify', (ev) => {
     let parsed: AppEvent
     try {
