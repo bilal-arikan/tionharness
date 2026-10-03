@@ -133,13 +133,13 @@ func TestValidateAutomationShape(t *testing.T) {
 
 	valid := []Automation{
 		{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: agent, PromptTemplate: "run"},
-		{TriggerKind: "", TriggerTag: "loop", FlowID: "FL1", PromptTemplate: "run"}, // "" == tag
-		{TriggerKind: TriggerBoard, BoardAction: BoardActionArchive},                // archive needs no target
+		{TriggerKind: "", TriggerTag: "loop", TargetAgentID: "AGT1", PromptTemplate: "run"}, // "" == tag
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionArchive},                        // archive needs no target
 		{TriggerKind: TriggerBoard, BoardAction: BoardActionMove, BoardToState: "review", BoardMoveToState: "done"},
 		{TriggerKind: TriggerBoard, BoardAction: "", TargetAgentID: agent, PromptTemplate: "run"}, // "" == spawn
-		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, FlowID: "FL1", PromptTemplate: "run"},
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, TargetAgentID: "AGT1", PromptTemplate: "run"},
 		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: agent, PromptTemplate: "run"},
-		{TriggerKind: TriggerToken, TokenScope: TokenScopeWorkspace, TokenThreshold: 100_000, FlowID: "FL1", PromptTemplate: "run"},
+		{TriggerKind: TriggerToken, TokenScope: TokenScopeWorkspace, TokenThreshold: 100_000, TargetAgentID: "AGT1", PromptTemplate: "run"},
 		{TriggerKind: TriggerTag, TriggerTag: "loop", SessionMode: SessionModeContinue, TargetAgentID: agent, PromptTemplate: "run"},
 		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, SessionMode: SessionModeSpawn, TargetAgentID: agent, PromptTemplate: "run"},
 	}

@@ -2,110 +2,214 @@ package db
 
 import "encoding/json"
 
-const FlowRunStateDeltaVersion = 1
-
-// FlowRunStateDelta is one ordered mutation relative to the immutable legacy
-// FlowRun.State checkpoint. CheckpointID is the SHA-256 digest of that state.
-type FlowRunStateDelta struct {
-	Version       int                        `json:"version"`
-	CheckpointID  string                     `json:"checkpointId"`
-	Sequence      uint64                     `json:"sequence"`
-	Scalars       map[string]json.RawMessage `json:"scalars,omitempty"`
-	OutputsUpsert map[string]string          `json:"outputsUpsert,omitempty"`
-	OutputsDelete []string                   `json:"outputsDelete,omitempty"`
-	TraceAppend   []json.RawMessage          `json:"traceAppend,omitempty"`
-	ThreadAppend  []json.RawMessage          `json:"threadAppend,omitempty"`
-	Spawned       json.RawMessage            `json:"spawned,omitempty"`
-}
-
 // Flow run statuses.
 const (
 	FlowRunning = "running"
 	FlowSuccess = "success"
 	FlowFailure = "failure"
-	// FlowWaiting: the run paused at an await-input node and is durably suspended
-	// until external input arrives (see ResumeWaitingFlow). Unlike "running", a
-	// waiting run is NOT auto-resumed on boot — it sleeps until input, so it is
-	// never an orphan.
-	FlowWaiting = "waiting"
 )
 
-// Flow is a reusable multi-agent orchestration protocol. Graph holds the JSON
-// node graph (see internal/orchestration.Graph).
-type Flow struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Graph string `json:"graph"` // JSON
-	// Emoji is an optional cosmetic glyph shown wherever the flow is presented or
-	// picked (flow list, title bar, schedule/automation flow badges, run views).
-	// Persisted independently via SetFlowEmoji so it survives graph/name saves.
-	Emoji string `json:"emoji,omitempty"`
-	// Tags are free-form labels on the flow, editable by both the user (UI) and
-	// agents (set_flow_tags). Organizational only (they do not drive automations —
-	// only session tags do).
-	Tags []string `json:"tags,omitempty"`
-	// Seed, when non-empty, marks this flow as a shipped built-in default
-	// provisioned by EnsureDefaultFlows. The value is the stable seed key; it
-	// lets seeding skip an already-present default and lets the UI recognize a
-	// default. User- and agent-created flows leave it "".
-	Seed string `json:"seed,omitempty"`
-	// CreatedBy is the ID of the agent that created this flow via a
-	// self-management tool ("" = created by the user). Agents may only
-	// edit/delete agent-created flows.
-	CreatedBy string `json:"createdBy,omitempty"`
-	// Ephemeral marks a hidden flow row written by run_adhoc_flow to back one
-	// ad-hoc run: the graph the model submitted lives here so get_view
-	// kind=flowrun, cancellation and run lineage work unchanged. It is kept OUT of
-	// the flow catalog (ListFlows), so it never shows up as a saved flow. The
-	// field is omitted when false, so existing flow files need no migration.
-	Ephemeral bool  `json:"ephemeral,omitempty"`
-	CreatedAt int64 `json:"createdAt"`
-	UpdatedAt int64 `json:"updatedAt"`
+// Flow evolution policies: who may change a flow on its own.
+const (
+	FlowPolicyOff     = "off"     // the observer never runs
+	FlowPolicyPropose = "propose" // the observer files proposals; a human applies them
+	FlowPolicyAuto    = "auto"    // the observer applies confident proposals itself
+)
+
+// Who authored a flow version / prompt version / proposal.
+const (
+	FlowAuthorUser     = "user"
+	FlowAuthorAgent    = "agent"
+	FlowAuthorObserver = "observer"
+	FlowAuthorSystem   = "system"
+)
+
+// Proposal statuses.
+const (
+	ProposalPending  = "pending"
+	ProposalApplied  = "applied"
+	ProposalRejected = "rejected"
+	ProposalInvalid  = "invalid"
+)
+
+// FlowAuthor records who made a change: the kind plus the agent id when an
+// agent or the observer did it.
+type FlowAuthor struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id,omitempty"`
 }
 
-// FlowRun is one execution instance of a flow. State is the legacy-compatible
-// restart checkpoint; DB readers materialize its ordered delta sidecar.
-type FlowRun struct {
-	ID     string `json:"id"`
-	FlowID string `json:"flowId"`
-	// SessionID links this run to the per-run transcript session it produced
-	// (Session.Kind "flow"), so a flow session resolves back to the exact run.
-	// Empty on pre-link runs.
-	SessionID   string `json:"sessionId,omitempty"`
-	DispatchKey string `json:"dispatchKey,omitempty"`
-	// ParentRunID is the run that launched this one — a subflow/spawn node, or an
-	// agent node's run_flow tool call. Empty means this is a ROOT run (started by
-	// a user, schedule or automation). Child runs stay first-class: they get their
-	// own row, status and viewer, and can also be launched standalone (in which
-	// case they are roots themselves).
-	ParentRunID string `json:"parentRunId,omitempty"`
-	// ParentNodeID is the node in the PARENT's graph that launched this run. Needed
-	// to attribute a child to the right node when one graph has several subflow or
-	// spawn nodes. Empty on root runs (and on children launched by run_flow from an
-	// agent node, where the node id is the agent node's).
-	ParentNodeID string `json:"parentNodeId,omitempty"`
-	// RootRunID is the top of this run's tree, so the whole tree is one query
-	// instead of a level-by-level walk of ParentRunID. EMPTY MEANS SELF (this run
-	// is the root) — never write a self-reference here, so a root needs no second
-	// write after its id is generated. Use RootOf to read it.
-	RootRunID string `json:"rootRunId,omitempty"`
-	Status    string `json:"status"`
-	Input     string `json:"input"`
-	State     string `json:"state"` // JSON
-	Output    string `json:"output"`
-	Error     string `json:"error"`
+// FlowPolicy configures the observer (the end-of-run optimizer) for one flow.
+type FlowPolicy struct {
+	Mode string `json:"mode"` // off | propose | auto
+	// EveryRuns is how many new runs accumulate before the observer looks again.
+	EveryRuns int `json:"everyRuns"`
+	// MinConfidence gates auto-apply: a proposal below it is filed, not applied.
+	MinConfidence float64 `json:"minConfidence"`
+	// MaxNodes is the growth budget the observer and agents may not exceed.
+	MaxNodes int `json:"maxNodes"`
+	// AllowPromptChanges lets the observer also propose soul/identity edits.
+	AllowPromptChanges bool `json:"allowPromptChanges"`
+}
+
+// DefaultFlowPolicy is what a new flow gets.
+func DefaultFlowPolicy() FlowPolicy {
+	return FlowPolicy{Mode: FlowPolicyPropose, EveryRuns: 5, MinConfidence: 0.7, MaxNodes: 16, AllowPromptChanges: true}
+}
+
+// Normalized fills zero fields with the defaults.
+func (p FlowPolicy) Normalized() FlowPolicy {
+	d := DefaultFlowPolicy()
+	switch p.Mode {
+	case FlowPolicyOff, FlowPolicyPropose, FlowPolicyAuto:
+	default:
+		p.Mode = d.Mode
+	}
+	if p.EveryRuns <= 0 {
+		p.EveryRuns = d.EveryRuns
+	}
+	if p.MinConfidence <= 0 || p.MinConfidence > 1 {
+		p.MinConfidence = d.MinConfidence
+	}
+	if p.MaxNodes <= 0 {
+		p.MaxNodes = d.MaxNodes
+	}
+	return p
+}
+
+// FlowStats is the rolling bookkeeping the store keeps per flow.
+type FlowStats struct {
+	Runs        int    `json:"runs"`
+	Success     int    `json:"success"`
+	Failure     int    `json:"failure"`
+	LastRunAt   int64  `json:"lastRunAt,omitempty"`
+	LastRunID   string `json:"lastRunId,omitempty"`
+	TotalMs     int64  `json:"totalMs"`
+	TotalTokens int64  `json:"totalTokens"`
+	// RunsAtOptimize is Runs when the observer last looked; the policy's
+	// EveryRuns counts from here.
+	RunsAtOptimize int   `json:"runsAtOptimize"`
+	LastOptimizeAt int64 `json:"lastOptimizeAt,omitempty"`
+	// Graded / GradeSum keep the decision model's quality grades (1..5) so
+	// the average is one division away (see FlowRun.Grade).
+	Graded   int `json:"graded,omitempty"`
+	GradeSum int `json:"gradeSum,omitempty"`
+}
+
+// AvgGrade is the mean grade of the graded runs (0 when none).
+func (s FlowStats) AvgGrade() float64 {
+	if s.Graded <= 0 {
+		return 0
+	}
+	return float64(s.GradeSum) / float64(s.Graded)
+}
+
+// Flow is an agent's main flow: the head graph plus policy and stats. The
+// version history lives beside it (FlowVersion rows); Graph always equals the
+// head version's graph.
+type Flow struct {
+	ID      string     `json:"id"`
+	AgentID string     `json:"agentId"`
+	Name    string     `json:"name"`
+	Graph   string     `json:"graph"` // JSON of flow.Graph (head)
+	Version int        `json:"version"`
+	Policy  FlowPolicy `json:"policy"`
+	Stats   FlowStats  `json:"stats"`
+	// Note is a free-form description agents and the observer may update to
+	// explain what the flow is for.
+	Note      string `json:"note,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
 }
 
-// RootOf returns the id of the top of this run's tree, resolving the "empty
-// means self" encoding of RootRunID. A root run reports its own id.
-func (r FlowRun) RootOf() string {
-	if r.RootRunID != "" {
-		return r.RootRunID
-	}
-	return r.ID
+// FlowVersion is one immutable snapshot of a flow's graph.
+type FlowVersion struct {
+	FlowID     string     `json:"flowId"`
+	Version    int        `json:"version"`
+	Parent     int        `json:"parent,omitempty"`
+	Graph      string     `json:"graph"`
+	Author     FlowAuthor `json:"author"`
+	Reason     string     `json:"reason,omitempty"`
+	ProposalID string     `json:"proposalId,omitempty"`
+	// Diff summarizes what changed against Parent ("+critic, ~respond").
+	Diff      string `json:"diff,omitempty"`
+	CreatedAt int64  `json:"createdAt"`
 }
 
-// IsRootRun reports whether this run is the top of its tree (nothing launched it).
-func (r FlowRun) IsRootRun() bool { return r.ParentRunID == "" }
+// FlowRunUsage is the token footprint of one run.
+type FlowRunUsage struct {
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
+	LLMCalls     int   `json:"llmCalls"`
+}
+
+// FlowRun is one execution of a flow — one agent turn.
+type FlowRun struct {
+	ID        string `json:"id"`
+	FlowID    string `json:"flowId"`
+	AgentID   string `json:"agentId"`
+	SessionID string `json:"sessionId,omitempty"`
+	// MessageID is the assistant message the run produced (set when known).
+	MessageID string `json:"messageId,omitempty"`
+	Version   int    `json:"version"`
+	Trigger   string `json:"trigger,omitempty"` // call kind: chat | schedule | spawn | …
+	Status    string `json:"status"`
+	Input     string `json:"input"`
+	Output    string `json:"output,omitempty"`
+	Error     string `json:"error,omitempty"`
+	// Steps is the node trace (flow.Step JSON array).
+	Steps      json.RawMessage `json:"steps,omitempty"`
+	StepCount  int             `json:"stepCount"`
+	DurationMs int64           `json:"durationMs"`
+	Usage      FlowRunUsage    `json:"usage"`
+	// Feedback mirrors the user's rating of the produced message (+1 / -1 / 0).
+	Feedback int `json:"feedback,omitempty"`
+	// Grade is the decision model's quality grade of the reply (1..5, 0 =
+	// not graded; the flow-grade authority) with the confidence behind it.
+	Grade           int     `json:"grade,omitempty"`
+	GradeConfidence float64 `json:"gradeConfidence,omitempty"`
+	CreatedAt       int64   `json:"createdAt"`
+	UpdatedAt       int64   `json:"updatedAt"`
+}
+
+// FlowPromptChange is the observer's optional edit of the agent's prompts.
+type FlowPromptChange struct {
+	Soul     *string `json:"soul,omitempty"`
+	Identity *string `json:"identity,omitempty"`
+}
+
+// FlowProposal is one suggested change to a flow (and optionally its agent's
+// prompts), filed by the observer or an agent. Ops is a flow.Op JSON array.
+type FlowProposal struct {
+	ID          string            `json:"id"`
+	FlowID      string            `json:"flowId"`
+	AgentID     string            `json:"agentId"`
+	BaseVersion int               `json:"baseVersion"`
+	Author      FlowAuthor        `json:"author"`
+	Trigger     string            `json:"trigger,omitempty"` // auto | manual | agent
+	Ops         json.RawMessage   `json:"ops,omitempty"`
+	Prompt      *FlowPromptChange `json:"prompt,omitempty"`
+	Reason      string            `json:"reason"`
+	Expected    string            `json:"expected,omitempty"` // expected effect, in words
+	Confidence  float64           `json:"confidence"`
+	Evidence    string            `json:"evidence,omitempty"` // which runs it looked at
+	Status      string            `json:"status"`
+	// AppliedVersion is the flow version the proposal produced when applied.
+	AppliedVersion int    `json:"appliedVersion,omitempty"`
+	Error          string `json:"error,omitempty"` // why it is invalid / failed to apply
+	CreatedAt      int64  `json:"createdAt"`
+	ResolvedAt     int64  `json:"resolvedAt,omitempty"`
+}
+
+// AgentPromptVersion is one snapshot of an agent's soul + identity, kept so
+// prompt evolution is as reversible as flow evolution.
+type AgentPromptVersion struct {
+	AgentID    string     `json:"agentId"`
+	Version    int        `json:"version"`
+	Soul       string     `json:"soul"`
+	Identity   string     `json:"identity"`
+	Author     FlowAuthor `json:"author"`
+	Reason     string     `json:"reason,omitempty"`
+	ProposalID string     `json:"proposalId,omitempty"`
+	CreatedAt  int64      `json:"createdAt"`
+}

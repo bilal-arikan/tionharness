@@ -9,22 +9,6 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
-func TestFlowPartialUpdatePreservesName(t *testing.T) {
-	s, wsp := newWorkspaceServer(t)
-	flow, err := wsp.DB.CreateFlow(context.Background(), db.Flow{Name: "kept", Graph: `{}`})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec := doJSON(t, s.Routes(), http.MethodPut, "/api/flows/"+flow.ID, map[string]any{"graph": map[string]any{}}, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
-	}
-	got, _ := wsp.DB.GetFlow(context.Background(), flow.ID)
-	if got.Name != "kept" {
-		t.Fatalf("name = %q", got.Name)
-	}
-}
-
 func TestAutomationPartialUpdatePreservesOptionalFields(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
 	agent, err := wsp.DB.CreateAgent(context.Background(), db.Agent{Name: "agent"})
@@ -98,9 +82,7 @@ func TestTaskReferencesAreValidated(t *testing.T) {
 		body               map[string]any
 	}{
 		{"create owner", http.MethodPost, "/api/tasks", map[string]any{"title": "new", "ownerAgentId": "missing"}},
-		{"create flow", http.MethodPost, "/api/tasks", map[string]any{"title": "new", "flowId": "missing"}},
 		{"update owner", http.MethodPut, "/api/tasks/" + task.ID, map[string]any{"ownerAgentId": "missing"}},
-		{"update flow", http.MethodPut, "/api/tasks/" + task.ID, map[string]any{"flowId": "missing"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

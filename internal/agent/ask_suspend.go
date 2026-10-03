@@ -279,6 +279,16 @@ func (r *Runtime) driveResumedAsk(ctx context.Context, ask db.SessionAsk, agentR
 	return resp, all, nil, nil
 }
 
+// waitingSweepInterval is how often the durable-ask (and flow-run retention)
+// sweepers tick.
+const waitingSweepInterval = 30 * time.Second
+
+// awaitTimeoutExceeded reports whether something suspended at updatedAt (unix
+// seconds) with the given TimeoutSec (0 = never) has blown its deadline by now.
+func awaitTimeoutExceeded(timeoutSec int, updatedAt, now int64) bool {
+	return timeoutSec > 0 && now-updatedAt >= int64(timeoutSec)
+}
+
 // StartWaitingAskSweeper launches the durable-ask timeout sweeper: it periodically
 // fails any waiting ask/permission whose TimeoutSec has elapsed, so a card nobody
 // ever answers can't sleep forever. Stops when ctx is cancelled. TimeoutSec is 0

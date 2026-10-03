@@ -12,14 +12,13 @@ import (
 )
 
 // TestLivenessComposesSources: the snapshot folds the turn slots, the api probe,
-// durable asks, waiting flow runs and coordinator slots, and reports capacity.
+// durable asks and coordinator slots, and reports capacity.
 func TestLivenessComposesSources(t *testing.T) {
 	rt, tun := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 	a, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic", Model: "m"})
 	busy, _ := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Title: "busy"})
 	asked, _ := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Title: "asked"})
-	flowSess, _ := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Kind: "flow", SourceID: "FLW1"})
 	idle, _ := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Title: "idle"})
 	chat, _ := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Title: "chat"})
 
@@ -31,12 +30,6 @@ func TestLivenessComposesSources(t *testing.T) {
 	// A parked durable ask.
 	if _, err := rt.db.CreateSessionAsk(ctx, db.SessionAsk{SessionID: asked.ID, AgentID: a.ID, Status: db.SessionAskWaiting, Kind: "ask", CallID: "c1", Payload: `{"question":"ok?"}`}); err != nil {
 		t.Fatalf("create ask: %v", err)
-	}
-	// A flow run suspended at await-input, owned by flowSess.
-	flow, _ := rt.db.CreateFlow(ctx, db.Flow{Name: "f", Graph: `{"start":"s","nodes":[{"id":"s","type":"start"}]}`})
-	run, _ := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flow.ID, SessionID: flowSess.ID})
-	if err := rt.db.MarkFlowRunWaiting(ctx, run.ID, `{}`); err != nil {
-		t.Fatalf("mark waiting: %v", err)
 	}
 	// A coordinator with one live worker and an owed drain turn.
 	coord := newTestCoordinator(t, rt, 0)
@@ -54,11 +47,10 @@ func TestLivenessComposesSources(t *testing.T) {
 
 	snap := rt.Liveness(ctx)
 	want := map[string]liveness.State{
-		busy.ID:     liveness.Running,
-		chat.ID:     liveness.Running,
-		asked.ID:    liveness.WaitingAsk,
-		flowSess.ID: liveness.WaitingInput,
-		coord:       liveness.Queued, // an owed drain beats "awaiting workers"
+		busy.ID:  liveness.Running,
+		chat.ID:  liveness.Running,
+		asked.ID: liveness.WaitingAsk,
+		coord:    liveness.Queued, // an owed drain beats "awaiting workers"
 	}
 	for sid, st := range want {
 		if !snap.Is(sid, st) {
@@ -76,7 +68,7 @@ func TestLivenessComposesSources(t *testing.T) {
 		t.Errorf("chat entry = %+v, want reason turn:chat", e)
 	}
 	set := snap.RunningSet()
-	if !set[busy.ID] || !set[chat.ID] || set[asked.ID] || set[flowSess.ID] || set[coord] {
+	if !set[busy.ID] || !set[chat.ID] || set[asked.ID] || set[coord] {
 		t.Errorf("RunningSet = %v", set)
 	}
 	if snap.Capacity.SpawnMax != tun.SpawnMaxConcurrent() || snap.Capacity.QueueMax != tun.SpawnQueueMax() || snap.Capacity.BusyTurns != 1 {

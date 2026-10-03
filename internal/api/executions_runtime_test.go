@@ -59,23 +59,12 @@ func TestExecutionRuntimeMergesLiveStateWithoutStoreMutation(t *testing.T) {
 func TestExecutionRuntimePreservesHistoricalStatusesAndLineage(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
 	ctx := t.Context()
-	old, err := wsp.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "F1"})
+	task, err := wsp.DB.CreateTask(ctx, db.Task{Title: "t"})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := wsp.DB.FinishFlowRun(ctx, old.ID, db.FlowFailure, "", "failed"); err != nil {
-		t.Fatal(err)
-	}
-	newer, err := wsp.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "F1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := wsp.DB.FinishFlowRun(ctx, newer.ID, db.FlowSuccess, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, seed := range []db.Session{
-		{Kind: "flow", SourceID: "F1", Origin: &db.SessionOrigin{Kind: db.OriginFlow, EntityID: "F1", RunID: old.ID}},
-		{Kind: "flow", SourceID: "F1"},
+		{Kind: "task", SourceID: task.ID},
 		{Kind: "chat"},
 		{Kind: "spawned", CoordinatorSessionID: "parent", RootCoordinatorSessionID: "root"},
 	} {
@@ -84,11 +73,9 @@ func TestExecutionRuntimePreservesHistoricalStatusesAndLineage(t *testing.T) {
 		}
 	}
 	all, _ := wsp.DB.ListSessions(ctx, "")
-	runs, _ := wsp.DB.ListFlowRuns(ctx, "")
-	flows, byRun := newestFlowRunStatus(runs), flowRunStatusByID(runs)
 	want := map[string]executionRuntimeItem{}
 	for _, session := range all {
-		status := s.lastStatusFor(ctx, wsp, session, flows, byRun)
+		status := s.lastStatusFor(ctx, wsp, session)
 		if status != "" || session.CoordinatorSessionID != "" {
 			want[session.ID] = executionRuntimeItem{SessionID: session.ID, LastStatus: status, CoordinatorSessionID: session.CoordinatorSessionID, RootCoordinatorSessionID: session.RootCoordinator()}
 		}

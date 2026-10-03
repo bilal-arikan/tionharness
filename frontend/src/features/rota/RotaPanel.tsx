@@ -33,7 +33,6 @@ interface Props {
   workspaceId: string
   onError: (msg: string) => void
   onOpenSession?: (sessionId: string) => void
-  onOpenFlowRun?: (flowId: string) => void
   // Zoomed trajectory (deep link #/w/WS/rota/RTA12); null = workspace lanes.
   trajectoryId: string | null
   onTrajectory: (id: string | null) => void
@@ -47,7 +46,6 @@ export function RotaPanel({
   workspaceId,
   onError,
   onOpenSession,
-  onOpenFlowRun,
   trajectoryId,
   onTrajectory,
 }: Props) {
@@ -260,7 +258,6 @@ export function RotaPanel({
             lanes: layout.rows.filter((r) => r.depth === 0).length,
             sessions: lanes.sessions.size,
             trajectories: lanes.trajectories.size,
-            runs: lanes.flowRuns.size,
             triggers: lanes.fires.length,
           })}
         </span>
@@ -313,7 +310,6 @@ export function RotaPanel({
               selected={selected}
               onSelect={setSelected}
               onOpenSession={onOpenSession}
-              onOpenFlowRun={onOpenFlowRun}
               onBack={() => {
                 setSelected(null)
                 onTrajectory(null)
@@ -326,7 +322,6 @@ export function RotaPanel({
               selected={selected}
               onSelect={setSelected}
               onOpenSession={onOpenSession}
-              onOpenFlowRun={onOpenFlowRun}
               collapseGaps={collapseGaps}
               normalizeBars={normalizeBars}
               zoom={zoom}

@@ -20,7 +20,7 @@ type TrajectoryInput struct {
 const trajectoryTopN = 12
 
 // ProjectTrajectory renders a trajectory: the declared phases with their
-// states, what actually happened under them (sessions, flow runs, automation
+// states, what actually happened under them (sessions, automation
 // fires) and how much of the declared plan is still a ghost. The same text an
 // agent gets from get_view is what the Rota screen's side panel shows.
 func ProjectTrajectory(in TrajectoryInput, level Level) (View, error) {
@@ -49,7 +49,7 @@ func ProjectTrajectory(in TrajectoryInput, level Level) (View, error) {
 		return v, nil
 	}
 
-	var phases, sessions, runs, autos, gates []db.TrajectoryNode
+	var phases, sessions, autos, gates []db.TrajectoryNode
 	ghosts := 0
 	for _, n := range t.Nodes {
 		switch n.Kind {
@@ -57,8 +57,6 @@ func ProjectTrajectory(in TrajectoryInput, level Level) (View, error) {
 			phases = append(phases, n)
 		case db.TrajNodeSession:
 			sessions = append(sessions, n)
-		case db.TrajNodeFlowRun:
-			runs = append(runs, n)
 		case db.TrajNodeAutomation:
 			autos = append(autos, n)
 		case db.TrajNodeGate:
@@ -79,8 +77,8 @@ func ProjectTrajectory(in TrajectoryInput, level Level) (View, error) {
 		}
 		l.add("fazlar: %s", strings.Join(parts, " → "))
 	}
-	l.add("gözlenen: %d oturum · %d akış koşusu · %d otomasyon · %d kapı · %d hayalet",
-		len(sessions), len(runs), len(autos), len(gates), ghosts)
+	l.add("gözlenen: %d oturum · %d otomasyon · %d kapı · %d hayalet",
+		len(sessions), len(autos), len(gates), ghosts)
 	declared, observed := 0, 0
 	for _, n := range t.Nodes {
 		if n.Origin == db.TrajOriginDeclared {
@@ -197,8 +195,6 @@ func nodeGlyph(kind string) string {
 	switch kind {
 	case db.TrajNodeSession:
 		return "⌘"
-	case db.TrajNodeFlowRun:
-		return "⇶"
 	case db.TrajNodeAutomation:
 		return "⚡"
 	case db.TrajNodeGate:

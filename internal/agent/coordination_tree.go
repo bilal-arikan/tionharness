@@ -572,3 +572,25 @@ func (r *Runtime) RecoverPendingReports(ctx context.Context) {
 // synthesis turn loses the race and the parent gets a needless "incomplete";
 // too long and a genuinely stalled branch keeps its coordinator waiting.
 const DefaultCoordinatorSettleGraceSec = 30
+
+// lastAssistantText returns the newest assistant reply in a session ("" when
+// there is none or the transcript cannot be read).
+func (r *Runtime) lastAssistantText(ctx context.Context, sessionID string) string {
+	msg, ok, err := r.db.LastMessage(ctx, sessionID)
+	if err != nil || !ok {
+		return ""
+	}
+	if msg.Role == "assistant" {
+		return msg.Text
+	}
+	msgs, _, err := r.db.ListMessagesTail(ctx, sessionID, 20)
+	if err != nil {
+		return ""
+	}
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "assistant" {
+			return msgs[i].Text
+		}
+	}
+	return ""
+}

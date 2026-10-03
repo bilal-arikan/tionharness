@@ -82,7 +82,6 @@ type createTaskReq struct {
 	Description  string   `json:"description"`
 	Prompt       string   `json:"prompt"`
 	OwnerAgentID string   `json:"ownerAgentId"`
-	FlowID       string   `json:"flowId"`
 	BoardState   string   `json:"boardState"`
 	Dependencies string   `json:"dependencies"` // JSON array of task IDs
 	Priority     string   `json:"priority"`
@@ -140,18 +139,11 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if req.FlowID != "" {
-		if _, err := wsp.DB.GetFlow(ctx, req.FlowID); err != nil {
-			writeError(w, http.StatusBadRequest, "flow not found")
-			return
-		}
-	}
 	task, err := wsp.DB.CreateTask(ctx, db.Task{
 		Title:        title,
 		Description:  req.Description,
 		Prompt:       req.Prompt,
 		OwnerAgentID: req.OwnerAgentID,
-		FlowID:       req.FlowID,
 		BoardState:   req.BoardState,
 		Dependencies: req.Dependencies,
 		Priority:     req.Priority,
@@ -208,7 +200,6 @@ type updateTaskReq struct {
 	Description  *string   `json:"description"`
 	Prompt       *string   `json:"prompt"`
 	OwnerAgentID *string   `json:"ownerAgentId"`
-	FlowID       *string   `json:"flowId"`
 	BoardState   *string   `json:"boardState"`
 	Dependencies *string   `json:"dependencies"` // JSON array of task IDs
 	Priority     *string   `json:"priority"`
@@ -231,7 +222,6 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	// publish a single, focused "board" event downstream.
 	oldTitle := task.Title
 	oldOwner := task.OwnerAgentID
-	oldFlowID := task.FlowID
 	oldPriority := task.Priority
 	oldTags := append([]string(nil), task.Tags...)
 
@@ -265,15 +255,6 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		task.OwnerAgentID = *req.OwnerAgentID
-	}
-	if req.FlowID != nil {
-		if *req.FlowID != "" {
-			if _, err := wsp.DB.GetFlow(r.Context(), *req.FlowID); err != nil {
-				writeError(w, http.StatusBadRequest, "flow not found")
-				return
-			}
-		}
-		task.FlowID = *req.FlowID
 	}
 	if req.BoardState != nil {
 		if !db.IsValidBoardKey(*req.BoardState) {
@@ -314,7 +295,6 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		// a useless refresh elsewhere.
 		changed := task.Title != oldTitle ||
 			task.OwnerAgentID != oldOwner ||
-			task.FlowID != oldFlowID ||
 			task.Priority != oldPriority ||
 			!equalStringSlice(task.Tags, oldTags)
 		if changed {

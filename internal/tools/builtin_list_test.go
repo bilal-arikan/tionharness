@@ -176,40 +176,6 @@ func TestListTasksFiltersAndPagination(t *testing.T) {
 
 // ---- list_flows ----
 
-func TestListFlowsTagsAndPagination(t *testing.T) {
-	ctx := context.Background()
-	d := openTestDB(t)
-	for _, f := range []db.Flow{
-		{Name: "Onboard", Tags: []string{"core"}},
-		{Name: "Report", Tags: []string{"core", "nightly"}},
-		{Name: "Cleanup", Tags: []string{"ops"}},
-	} {
-		if _, err := d.CreateFlow(ctx, f); err != nil {
-			t.Fatalf("create flow: %v", err)
-		}
-	}
-	tool := NewListFlowsTool(d, "actor-1")
-
-	out, err := tool.Call(ctx, json.RawMessage(`{"tags":"core"}`))
-	if err != nil {
-		t.Fatalf("list_flows: %v", err)
-	}
-	env := parseListEnv(t, out)
-	if env.Total != 2 {
-		t.Fatalf("tags=core total = %d, want 2", env.Total)
-	}
-	out, _ = tool.Call(ctx, json.RawMessage(`{"tags":"core, nightly"}`))
-	env = parseListEnv(t, out)
-	if env.Total != 1 {
-		t.Fatalf("tags=core,nightly total = %d, want 1", env.Total)
-	}
-	out, _ = tool.Call(ctx, json.RawMessage(`{"limit":2}`))
-	env = parseListEnv(t, out)
-	if env.Total != 3 || !env.HasMore {
-		t.Fatalf("limit=2 = %+v; want total 3, hasMore", env)
-	}
-}
-
 // ---- list_automations ----
 
 func TestListAutomationsFiltersAndPagination(t *testing.T) {

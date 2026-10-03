@@ -1,6 +1,6 @@
 ---
 name: "Koordinatör (Çoklu-Ajan)"
-description: "MEKANİK (nasıl çağrılır), politika DEĞİL: koordinatör/worker araçlarının somut kullanımı — spawn_worker ile fan-out, <task-notification> ile geri bildirim, send_to_worker ile devam, stop_worker ile durdurma, guardrail'ler (worker/derinlik sınırları) ve alt-koordinatör derinliği. M1 (run_subagent sync), M3 (send_message peer), M4 (flow) arasından hangi yöntemi seçeceğini de açıklar. Kartın ne zaman done olacağına dair KARAR kuralları için: orchestrator-doctrine."
+description: "MEKANİK (nasıl çağrılır), politika DEĞİL: koordinatör/worker araçlarının somut kullanımı — spawn_worker ile fan-out, <task-notification> ile geri bildirim, send_to_worker ile devam, stop_worker ile durdurma, guardrail'ler (worker/derinlik sınırları) ve alt-koordinatör derinliği. M1 (run_subagent sync), M3 (send_message peer) arasından hangi yöntemi seçeceğini de açıklar. Kartın ne zaman done olacağına dair KARAR kuralları için: orchestrator-doctrine."
 when_to_use: "Araçların kendisini kullanman gerektiğinde: koordinatör modunu açmak, worker spawn etmek/durdurmak, bildirimleri işlemek, hangi koordinasyon yönteminin (M1–M4) uygun olduğunu seçmek, bir guardrail hatasını çözmek. Yalnız 'kartı done'a taşıyabilir miyim / doğrulamayı kime veririm' gibi disiplin sorusu için bunu YÜKLEME."
 icon: "🧭"
 color: "#0ea5e9"

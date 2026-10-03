@@ -40,7 +40,7 @@ func TestDeciderSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("GET: %d %s", rec.Code, rec.Body.String())
 	}
 	view := decodeInto[deciderView](t, rec)
-	if view.Config.Enabled || len(view.Authorities) != 10 || len(view.Backends) != 3 || len(view.Groups) == 0 {
+	if view.Config.Enabled || len(view.Authorities) != 13 || len(view.Backends) != 3 || len(view.Groups) == 0 {
 		t.Errorf("initial view = %+v", view)
 	}
 	// The first run seeds one model: Jev through the first OpenRouter account.

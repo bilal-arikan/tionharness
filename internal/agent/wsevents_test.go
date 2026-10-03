@@ -8,7 +8,6 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // collectWS attaches a bus to the runtime and returns a drain that collects the
@@ -106,46 +105,6 @@ func TestSessionHookEmitsLifecycleEvents(t *testing.T) {
 	if len(traj) != 2 || traj[0].Op != db.TrajectoryOpCreate || traj[0].TrajectoryID != tr.ID || traj[0].Revision != 1 || traj[1].Op != db.TrajectoryOpDelete {
 		t.Fatalf("trajectory events = %+v, want create(rev 1) then delete", traj)
 	}
-}
-
-// TestFlowRunEmitsStatusEvents: a recorded flow run announces running at
-// creation (already linked to its session) and its terminal status at the end.
-func TestFlowRunEmitsStatusEvents(t *testing.T) {
-	rt, _ := newTestRuntime(t, t.TempDir())
-	rt.wsID = "WS-test"
-	drain := collectWS(t, rt)
-	configureSessionCtxProvider(rt)
-	ctx := context.Background()
-
-	a, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "flow node", Provider: "flow-session-ctx-test", Model: "test"})
-	g := orchestration.Graph{
-		Start: "start",
-		Nodes: []orchestration.Node{
-			{ID: "start", Type: orchestration.NodeStart, Next: "n1"},
-			{ID: "n1", Type: orchestration.NodeAgent, AgentID: a.ID, Prompt: "{{input}}"},
-		},
-	}
-	flowID := createFlow(t, rt, g)
-	run, sessionID, err := rt.RunFlowRecorded(ctx, flowID, "go", false, nil)
-	if err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	var statuses []FlowRunPayload
-	for _, e := range drain() {
-		if e.Type == events.TypeWSFlowRun {
-			statuses = append(statuses, decodeData[FlowRunPayload](t, e))
-		}
-	}
-	if len(statuses) != 2 {
-		t.Fatalf("flow_run events = %+v, want running then terminal", statuses)
-	}
-	if statuses[0].Status != db.FlowRunning || statuses[0].RunID != run.ID || statuses[0].SessionID != sessionID || statuses[0].RootRunID != run.ID {
-		t.Fatalf("start event = %+v, want running/%s linked to %s", statuses[0], run.ID, sessionID)
-	}
-	if statuses[1].Status != db.FlowSuccess || statuses[1].RunID != run.ID {
-		t.Fatalf("finish event = %+v, want success/%s", statuses[1], run.ID)
-	}
-	drainSpawns(t, rt)
 }
 
 // TestScheduleArmedEmitsFireAt: rebuilding the scheduler announces the next

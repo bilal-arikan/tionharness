@@ -37,7 +37,7 @@ func (s *fakeStore) ListSessions(_ context.Context, agentID string) ([]db.Sessio
 	}
 	return out, nil
 }
-func (s *fakeStore) ListFlowRuns(_ context.Context, _ string) ([]db.FlowRun, error) {
+func (s *fakeStore) ListFlowRuns(_ context.Context, _ string, _ int) ([]db.FlowRun, error) {
 	return s.runs, nil
 }
 func (s *fakeStore) ListAgents(_ context.Context) ([]db.Agent, error)         { return s.agents, nil }
@@ -45,8 +45,6 @@ func (s *fakeStore) ListActiveTasks(_ context.Context) ([]db.Task, error)     { 
 func (s *fakeStore) ListTasks(_ context.Context) ([]db.Task, error)           { return s.tasks, nil }
 func (s *fakeStore) ListMCPServers(_ context.Context) ([]db.MCPServer, error) { return s.mcp, nil }
 
-func (s *fakeStore) GetFlowRun(context.Context, string) (db.FlowRun, error) { return db.FlowRun{}, nil }
-func (s *fakeStore) GetFlow(context.Context, string) (db.Flow, error)       { return db.Flow{}, nil }
 func (s *fakeStore) GetSession(_ context.Context, id string) (db.Session, error) {
 	for _, session := range s.sessions {
 		if session.ID == id {
@@ -128,11 +126,11 @@ func TestChildrenWorkspaceIsElevenNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
-	if len(hs) != 11 {
-		t.Fatalf("workspace children = %d, want 11: %+v", len(hs), hs)
+	if len(hs) != 10 {
+		t.Fatalf("workspace children = %d, want 10: %+v", len(hs), hs)
 	}
-	// The map's shape is fixed: seven group nodes plus board/logs/budget/tools.
-	want := map[Kind]int{KindCategory: 7, KindBoard: 1, KindLogs: 1, KindBudget: 1, KindTools: 1}
+	// The map's shape is fixed: six group nodes plus board/logs/budget/tools.
+	want := map[Kind]int{KindCategory: 6, KindBoard: 1, KindLogs: 1, KindBudget: 1, KindTools: 1}
 	got := kindsOf(hs)
 	for k, n := range want {
 		if got[k] != n {
@@ -170,7 +168,7 @@ func TestChildrenSessionsCategoryExcludesArchived(t *testing.T) {
 	}
 }
 
-func TestChildrenAgentsAndFlows(t *testing.T) {
+func TestChildrenAgents(t *testing.T) {
 	p := childrenFixture()
 	agents, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategoryAgents})
 	if err != nil {
@@ -178,13 +176,6 @@ func TestChildrenAgentsAndFlows(t *testing.T) {
 	}
 	if len(agents) != 2 || kindsOf(agents)[KindAgent] != 2 {
 		t.Errorf("agents category wrong: %+v", agents)
-	}
-	flows, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategoryFlows})
-	if err != nil {
-		t.Fatalf("flows: %v", err)
-	}
-	if len(flows) != 2 || kindsOf(flows)[KindFlowRun] != 2 {
-		t.Errorf("flows category wrong: %+v", flows)
 	}
 }
 
@@ -308,7 +299,7 @@ func TestNeighborhoodRootLeafMultiParentCycleSelfLoopAndNoCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("root neighborhood: %v", err)
 	}
-	if len(root.Parents) != 0 || len(root.Children) != 11 {
+	if len(root.Parents) != 0 || len(root.Children) != 10 {
 		t.Fatalf("root neighborhood parents=%d children=%d", len(root.Parents), len(root.Children))
 	}
 

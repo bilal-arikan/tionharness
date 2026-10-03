@@ -59,7 +59,6 @@ describe('cueForType', () => {
 describe('viewIdForType', () => {
   it('maps a type to the nav view whose unread dot it lights', () => {
     expect(viewIdForType('chat')).toBe('chat')
-    expect(viewIdForType('flow')).toBe('flows')
     expect(viewIdForType('schedule')).toBe('schedules')
     expect(viewIdForType('artifact')).toBe('artifacts')
   })

@@ -9,8 +9,9 @@
 > üzerinden **herhangi bir yerel LLM** (Ollama, LM Studio, llama.cpp, vLLM).
 > **Karar mercileri** (`Authority`) kararı modele devreden noktalardır; kendi
 > paketlerinden kayıt olur ve her biri `off / shadow / on`, eşik, kendi modeli,
-> **yedek** ve **rakip** model alır. On merci bağlıdır: tool-risk, stall-judge,
-> flow-judge, phase-gate ve [JEV iş akışlarındaki](92-JEV-IS-AKISLARI.md) altı
+> **yedek** ve **rakip** model alır. On üç merci bağlıdır: tool-risk, stall-judge,
+> flow-judge, flow-criteria, flow-grade, flow-proposal-gate ([93 §8](93-EVRILEN-AKISLAR.md)),
+> phase-gate ve [JEV iş akışlarındaki](92-JEV-IS-AKISLARI.md) altı
 > oturum/bağlam/işbirliği noktası. Ortak `Pick` yardımcısı ve merciye özel soru
 > kurucuları kullanılır. Durum: **uygulandı**; karar sağlayıcıları Ayarlar →
 > Sağlayıcılar, merciler Ayarlar → Karar Mercileri.
@@ -201,7 +202,10 @@ etkilemez: yerel sunucu kapalıyken barındırılan yedek çalışmaya devam ede
 |---|---|---|---|---|
 | `tool-risk` | safety · gate | shadow, 0,80 | noul `needs_approval` + score `risk` | Komut eskisi gibi çalışır |
 | `stall-judge` | coordination · gate | shadow, 0,70 | noul `stalled` (stall-judge prompt'unun karşılığı) | LLM yargıcına döner |
-| `flow-judge` | flows · pick | on (açık), 0,60 | choice `arm` / noul `holds` | Varsayılan dal; döngüde sınıra kadar |
+| `flow-judge` | flows · pick | on (açık), 0,60 | choice `arm` | Varsayılan dal; döngüde sınıra kadar |
+| `flow-criteria` | flows · select | on (açık), 0,60 | ölçüt başına noul `c1..cN` (tek çağrı); hepsi ≥ eşik → `pass` | Varsayılan dal; adım ayrıntısına "checker unavailable" |
+| `flow-grade` | flows · rate | off, 0,50 | score `grade` (useless … excellent → 1..5) | Koşu puansız kalır; gözlemci ve akış otomasyonları puana bakmaz |
+| `flow-proposal-gate` | flows · gate | shadow, 0,70 | noul `improves` (akış + istatistik + öneri + diff) | Öneri eskisi gibi uygulanır (auto politika) |
 | `phase-gate` | flows · gate | on (açık, fail-closed), 0,80 | noul `holds` (kök oturumun son 40 mesajı) | **Kapı kapalı kalır** |
 | `session-setup` | session · select | off | İzinli skill ve araç adaylarına noul | Mevcut hazırlık/keşif yolu |
 | `model-router` | session · pick | off | Kullanılabilir model adaylarına choice | Ajanın/kullanıcının seçimi |
@@ -216,8 +220,10 @@ CLI sınırları [92-JEV-IS-AKISLARI.md](92-JEV-IS-AKISLARI.md) içindedir.
 Ayrıntılar (değişmedi): tool-risk salt-okunur komutları sormaz, `on`'da riskli
 komutu onay istemine çevirir (`exec:decider`), gözetimsiz turu asla bloklamaz,
 işaretli çağrıda "her zaman izin ver" tam komutu onaylar; claude-cli izin aracı da
-aynı kontrolü kullanır. flow-judge: dallanmada `matchMode: "judge"`, döngüde
-`untilMode: "judge"`. phase-gate: kapı türü `judge`, değeri çıkış koşulu.
+aynı kontrolü kullanır. flow-judge: route düğümünde `mode: "judge"`; flow-criteria:
+`mode: "criteria"` + `criteria[]`; flow-grade her başarılı akış koşusundan sonra
+arka planda; flow-proposal-gate yalnız `auto` politikalı akışlarda uygulanmadan önce
+([93 §8](93-EVRILEN-AKISLAR.md)). phase-gate: kapı türü `judge`, değeri çıkış koşulu.
 
 ## 6. Desenler (yeni merci yazarken)
 

@@ -40,7 +40,6 @@ interface Props {
   selected: RotaSelection | null
   onSelect: (sel: RotaSelection | null) => void
   onOpenSession?: (sessionId: string) => void
-  onOpenFlowRun?: (flowId: string) => void
   onBack: () => void
 }
 
@@ -73,8 +72,6 @@ function nodeFill(n: TrajectoryNode): string {
 
 function nodeGlyph(n: TrajectoryNode): string {
   switch (n.kind) {
-    case 'flowrun':
-      return '▶'
     case 'gate':
       return '⏸'
     case 'automation':
@@ -113,8 +110,6 @@ function selectionFor(n: TrajectoryNode, t: Trajectory): RotaSelection | null {
   switch (n.kind) {
     case 'session':
       return n.refId ? { kind: 'session', id: n.refId } : null
-    case 'flowrun':
-      return n.refId ? { kind: 'flowrun', id: n.refId } : null
     case 'automation':
       return n.refId ? { kind: 'automation', id: n.refId } : null
     case 'gate': {
@@ -133,7 +128,6 @@ export function RotaTrajectoryView({
   selected,
   onSelect,
   onOpenSession,
-  onOpenFlowRun,
   onBack,
 }: Props) {
   const { t: translate } = useTranslation('rota')
@@ -260,7 +254,6 @@ export function RotaTrajectoryView({
             selected={selected}
             onSelect={onSelect}
             onOpenSession={onOpenSession}
-            onOpenFlowRun={onOpenFlowRun}
             trajectoryId={trajectoryId}
             onPickPhase={setPickedPhase}
           />
@@ -293,12 +286,6 @@ function SummaryChips({ s }: { s: NonNullable<Trajectory['summary']> }) {
         {t('summary.workers', { count: s.sessions })}
         {s.failedSessions ? ` · ${s.failedSessions} ✗` : ''}
       </span>
-      {s.flowRuns > 0 && (
-        <span className={chip}>
-          {t('summary.runs', { count: s.flowRuns })}
-          {s.failedRuns ? ` · ${s.failedRuns} ✗` : ''}
-        </span>
-      )}
       {s.gates > 0 && (
         <span className={chip} title={t('summary.gatesTitle')}>
           ⏸ {t('summary.gates', { count: s.gates })} · {fmtDurationSec(s.gateWaitSec)}
@@ -349,7 +336,6 @@ interface SvgProps {
   selected: RotaSelection | null
   onSelect: (sel: RotaSelection | null) => void
   onOpenSession?: (sessionId: string) => void
-  onOpenFlowRun?: (flowId: string) => void
   trajectoryId: string
   onPickPhase: (phase: string | null) => void
 }
@@ -361,7 +347,6 @@ function TrajectorySvg({
   selected,
   onSelect,
   onOpenSession,
-  onOpenFlowRun,
   trajectoryId,
   onPickPhase,
 }: SvgProps) {
@@ -604,7 +589,6 @@ function TrajectorySvg({
         const b = boxById.get(p.node.id)!
         const sel = selectionFor(p.node, t)
         const n = p.node
-        const run = n.kind === 'flowrun'
         return (
           <g
             key={n.id}
@@ -616,15 +600,14 @@ function TrajectorySvg({
             onDoubleClick={(ev) => {
               ev.stopPropagation()
               if (n.kind === 'session' && n.refId) onOpenSession?.(n.refId)
-              else if (run && n.refId) onOpenFlowRun?.(n.refId)
             }}
           >
             <title>{`${translate(`nodeKind.${n.kind}`, { defaultValue: n.kind })} · ${nodeLabel(n)} · ${translate(`phase.state.${n.state}`, { defaultValue: n.state })}${n.origin === 'declared' ? ` · ${translate('trajectory.declared')}` : ''}${n.reason ? ` · ${n.reason}` : ''}`}</title>
             <rect
               x={b.x}
-              y={run ? b.y + 6 : b.y}
+              y={b.y}
               width={b.w}
-              height={run ? b.h - 12 : b.h}
+              height={b.h}
               rx={n.kind === 'gate' ? 13 : 5}
               fill={nodeFill(n)}
               opacity={p.ghost ? 1 : 0.9}

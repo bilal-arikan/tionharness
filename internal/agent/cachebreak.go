@@ -83,7 +83,7 @@ func cachePrefixSig(req providers.Request) uint64 {
 // only produce spurious "prompt changed" breaks.
 func isConversationKind(k CallKind) bool {
 	switch k {
-	case KindChat, KindTask, KindSchedule, KindFlow, KindSpawn:
+	case KindChat, KindTask, KindSchedule, KindSpawn:
 		return true
 	default:
 		return false

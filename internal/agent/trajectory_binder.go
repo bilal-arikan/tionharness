@@ -16,7 +16,7 @@ import (
 // The binder is the runtime-side writer of db.Trajectory. It creates the
 // trajectory of a coordinator tree the first time the tree does something
 // observable (or at creation, when the root carries a recipe) and appends the
-// OBSERVED facts as they happen: a worker spawned, a worker reported, a flow
+// OBSERVED facts as they happen: a worker spawned, a worker reported, an
 // run launched from inside the tree, a session forked off it, a durable ask
 // opened or answered, the root archived. Declared facts (phases) come from the
 // recipe at seed time or from the agent through the trajectory tool
@@ -294,12 +294,11 @@ func (r *Runtime) onSessionChangeForTrajectory(ev db.SessionChangeEvent) {
 
 // bindForkedSession records a new ROOT session that another trajectory's
 // member started (an automation fire, a handoff, a spawn_session) as a node of
-// that trajectory with a fired / forked_from edge from the trigger. Flow
-// transcript sessions are skipped: the flow RUN node stands for them. Reports
+// that trajectory with a fired / forked_from edge from the trigger. Reports
 // whether the session was bound into a trigger's trajectory.
 func (r *Runtime) bindForkedSession(ctx context.Context, s db.Session) bool {
 	o := s.Lineage()
-	if o.TriggerSessionID == "" || o.TriggerSessionID == s.ID || o.Kind == db.OriginFlow {
+	if o.TriggerSessionID == "" || o.TriggerSessionID == s.ID {
 		return false
 	}
 	trigger, err := r.db.GetSession(ctx, o.TriggerSessionID)
@@ -331,62 +330,6 @@ func (r *Runtime) bindForkedSession(ctx context.Context, s db.Session) bool {
 		return nil
 	})
 	return bound
-}
-
-// --- flow runs ---
-
-// bindFlowRunToTrajectory records a flow run launched from inside a
-// trajectory (its transcript session's trigger is a tree member) and keeps the
-// node's state in step with the run's status. Called from emitFlowRunEvent,
-// the single flow-run status emit point.
-func (r *Runtime) bindFlowRunToTrajectory(run db.FlowRun) {
-	if run.SessionID == "" {
-		return
-	}
-	ctx := context.Background()
-	transcript, err := r.db.GetSession(ctx, run.SessionID)
-	if err != nil {
-		return
-	}
-	trigger := transcript.Lineage().TriggerSessionID
-	if trigger == "" {
-		return
-	}
-	trig, err := r.db.GetSession(ctx, trigger)
-	if err != nil {
-		return
-	}
-	state := db.TrajStateActive
-	switch run.Status {
-	case db.FlowSuccess:
-		state = db.TrajStateDone
-	case db.FlowFailure:
-		state = db.TrajStateFailed
-	}
-	r.updateTrajectoryByRoot(ctx, trig.RootSession(), func(t *db.Trajectory) error {
-		from := trajectory.SessionNodeID(trig.ID)
-		if trajectory.NodePtr(t, from) == nil {
-			return nil
-		}
-		id := trajectory.FlowRunNodeID(run.ID)
-		n := trajectory.NodePtr(t, id)
-		if n == nil {
-			trajectory.AddNode(t, db.TrajectoryNode{
-				ID: id, Kind: db.TrajNodeFlowRun, Origin: db.TrajOriginObserved,
-				Label: transcript.Title, RefKind: "flowrun", RefID: run.ID, PhaseID: trajectory.ActivePhase(t),
-				Lane: trajectory.NextLane(t), State: state, StartMs: run.CreatedAt * 1000,
-			})
-			trajectory.AddEdge(t, from, id, db.TrajEdgeSpawned, db.TrajOriginObserved)
-			n = trajectory.NodePtr(t, id)
-		}
-		n.State = state
-		n.Reason = run.Error
-		if state != db.TrajStateActive {
-			n.EndMs = run.UpdatedAt * 1000
-		}
-		trajectory.DeriveStatus(t)
-		return nil
-	})
 }
 
 // --- durable asks (human gates) ---

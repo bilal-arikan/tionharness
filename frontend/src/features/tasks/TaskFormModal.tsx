@@ -11,13 +11,13 @@ import {
   X,
 } from 'lucide-react'
 import { api } from '@/api'
-import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority, Artifact } from '@/types'
+import type { Agent, Task, BoardState, BoardColumnDef, TaskPriority, Artifact } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { DependencyPicker } from './DependencyPicker'
 import { TaskArtifactRefs } from './TaskArtifactRefs'
 import { reviewGateBadge } from './reviewGate'
 import { Button, ModalOverlay, toast } from '@/shared/components'
-import { avatarForeground, normalizeAvatar } from '@/shared/lib/avatar'
+import { avatarForeground } from '@/shared/lib/avatar'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 
 function parseDeps(raw: string): string[] {
@@ -41,7 +41,6 @@ interface Props {
   mode: 'create' | 'edit'
   task?: Task
   agents: Agent[]
-  flows: Flow[]
   columns: BoardColumnDef[]
   tasks: Task[]
   defaultBoardState?: string
@@ -67,13 +66,12 @@ function excerpt(text: string, max = 60): string {
 
 // TaskFormModal is the obsidian-pm-style card editor: a centered popup that
 // creates and edits a board task with its attributes (priority, tags, assignee,
-// flow, dependencies). Replaces the old right-hand TaskDetailPanel and the
+// dependencies). Replaces the old right-hand TaskDetailPanel and the
 // inline create form.
 export function TaskFormModal({
   mode,
   task,
   agents,
-  flows,
   columns,
   tasks,
   defaultBoardState,
@@ -91,7 +89,6 @@ export function TaskFormModal({
   const [boardState, setBoardState] = useState<BoardState>(task?.boardState ?? firstCol)
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? 'medium')
   const [ownerAgentId, setOwnerAgentId] = useState(task?.ownerAgentId ?? '')
-  const [flowId, setFlowId] = useState(task?.flowId ?? '')
   const [tags, setTags] = useState<string[]>(task?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
   const [depIds, setDepIds] = useState<string[]>(() => parseDeps(task?.dependencies ?? '[]'))
@@ -135,7 +132,6 @@ export function TaskFormModal({
     title: title.trim(),
     description: description.trim(),
     ownerAgentId,
-    flowId,
     boardState,
     dependencies: JSON.stringify(depIds),
     priority,
@@ -176,7 +172,6 @@ export function TaskFormModal({
       description: p.description,
       prompt: '',
       ownerAgentId: p.ownerAgentId,
-      flowId: p.flowId,
       boardState: p.boardState,
       dependencies: p.dependencies,
       priority: p.priority,
@@ -402,20 +397,6 @@ export function TaskFormModal({
                   clearable
                 />
               </div>
-            </Field>
-            <Field label={t('form.flow')}>
-              <select
-                value={flowId}
-                onChange={(e) => setFlowId(e.target.value)}
-                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
-              >
-                <option value="">🔀 {t('form.noFlow')}</option>
-                {flows.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {normalizeAvatar(f.emoji) ?? '🔀'} {f.name}
-                  </option>
-                ))}
-              </select>
             </Field>
           </div>
 

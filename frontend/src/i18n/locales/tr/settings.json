@@ -86,12 +86,18 @@
         "label": "Zamanlamalar",
         "hint": "Zamanlanmış prompt çalıştı ya da başarısız oldu."
       },
-      "flow": { "label": "Akışlar", "hint": "Akış çalışması tamamlandı ya da başarısız oldu." },
+      "flow": {
+        "label": "Akışlar",
+        "hint": "Bir ajanın akışı evrildi, gözlemci öneri üretti veya kanvas kaydedildi."
+      },
       "spawned": {
         "label": "Spawn",
         "hint": "Alt oturum çalışması tamamlandı ya da başarısız oldu."
       },
-      "worker": { "label": "Worker", "hint": "Koordinatör worker durumu değişti." },
+      "worker": {
+        "label": "Worker",
+        "hint": "Koordinatör worker durumu değişti."
+      },
       "coordination": {
         "label": "Koordinasyon",
         "hint": "Koordinatör tur limiti gibi koordinasyon uyarıları."
@@ -100,7 +106,10 @@
         "label": "Rota",
         "hint": "Bir rota başladı, bitti, başarısız oldu ya da insan yanıtı bekliyor."
       },
-      "automation": { "label": "Otomasyonlar", "hint": "Etiket ya da pano otomasyonu tetiklendi." },
+      "automation": {
+        "label": "Otomasyonlar",
+        "hint": "Etiket ya da pano otomasyonu tetiklendi."
+      },
       "artifact": {
         "label": "Artifact'ler",
         "hint": "Bir artifact oluşturuldu ya da güncellendi."
@@ -331,7 +340,11 @@
     "types": "türlerden",
     "introSuffix": " oluşur. Aşağıda her türün anlamı, kalıcı mı yalnız canlı mı olduğu ve şu anda etkin olup olmadığı listelenir.",
     "source": "Kaynak",
-    "status": { "active": "aktif", "legacy": "eski oturum uyumu", "infra": "altyapı hazır" },
+    "status": {
+      "active": "aktif",
+      "legacy": "eski oturum uyumu",
+      "infra": "altyapı hazır"
+    },
     "persisted": "kalıcı",
     "liveOnly": "yalnız canlı",
     "items": {
@@ -437,7 +450,12 @@
   "workspace": {
     "introPrefix": "Bu ayarlar yalnızca",
     "introSuffix": "workspace'ine özeldir. Her ajanın sağlayıcı ve modeli açıkça belirtilir; yeni ajanlar mevcut ilk ajanın kurulumunu miras alır.",
-    "stats": { "agents": "Ajan", "sessions": "Oturum", "tasks": "Görev", "created": "Oluşturma" },
+    "stats": {
+      "agents": "Ajan",
+      "sessions": "Oturum",
+      "tasks": "Görev",
+      "created": "Oluşturma"
+    },
     "name": "Workspace adı",
     "icon": "İkon (emoji)",
     "responseStyle": "Yanıt stili",

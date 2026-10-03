@@ -59,6 +59,15 @@ func (d *DB) SetMessageFeedback(ctx context.Context, sessionID, messageID string
 	} else {
 		msgs[idx].Feedback = &MessageFeedback{Rating: rating, Note: note, At: now()}
 	}
+	// Mirror the rating onto the flow run that produced the reply (_Docs/93): the
+	// observer reads feedback from the run row, not the transcript.
+	for id, r := range d.flowRuns {
+		if r.MessageID == messageID {
+			r.Feedback = rating
+			_ = dbPersistLocked(d, d.flowRuns, dirAgentFlowRuns, id, r)
+			break
+		}
+	}
 	return d.persistTranscriptEditLocked(s, msgs)
 }
 

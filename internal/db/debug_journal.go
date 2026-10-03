@@ -93,7 +93,7 @@ var debugEnumValues = map[string]map[string]struct{}{
 		debugCLICompactionDedupe: {},
 	},
 	"Kind": {
-		"automation-run": {}, "chat": {}, "command": {}, "flow": {}, "flow-coordinator": {},
+		"automation-run": {}, "chat": {}, "command": {},
 		"btw": {}, "compact": {}, "decide": {}, "delegate": {}, "other": {}, "reflect": {},
 		"schedule": {}, "schedule-run": {}, "spawned": {}, "subagent": {}, "summary": {},
 		"system": {}, "task": {}, "title": {}, "worker": {},

@@ -44,7 +44,7 @@
 > (parallel fan-out / koordinatör-işçi / takım-karatahta / flow) tek bir çatı
 > altında seçilebilir olsun.
 
-İlgili dokümanlar: `22-SPAWN-SESSION`, `28-PEER-MESAJLASMA`, `15-FLOW-CANVAS`,
+İlgili dokümanlar: `22-SPAWN-SESSION`, `28-PEER-MESAJLASMA`, `93-EVRILEN-AKISLAR`,
 `35-CONTEXT-RESET-HANDOFF`, `46-ETIKET-OTOMASYON`, `24-SELF-MANAGEMENT`.
 
 > **İnce koordinatör + validator (2026-08-06):** Amaç, koordinatörün context'ini
@@ -1000,7 +1000,7 @@ oturumu açar, prompt'u yazar ve yerleşmeyi bekler. İki koordinatör-özel far
   çocuklarda yarış yok: `runWorker`, worker sayacını azaltan `defer`'inden önce
   `NotifyCoordinator`'ı çağırır.
 
-Sözleşme + alanlar + UI: `_Docs/15-FLOW-CANVAS.md` → "`coordinator` node tipi".
+Sözleşme + alanlar + UI: `_Docs/arsiv/15-FLOW-CANVAS.md` (tarihsel; `coordinator` node tipi 2026-10-04'te kaldırıldı) → "`coordinator` node tipi".
 
 ---
 

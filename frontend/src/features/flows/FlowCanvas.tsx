@@ -1,323 +1,423 @@
-import { useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import {
-  ReactFlow,
-  ReactFlowProvider,
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
+  Handle,
+  MarkerType,
   MiniMap,
   Panel,
-  MarkerType,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  getSmoothStepPath,
   useReactFlow,
-  addEdge,
   type Connection,
-  type Edge,
-  type EdgeChange,
-  type NodeChange,
+  type EdgeProps,
+  type EdgeTypes,
+  type NodeProps,
   type NodeTypes,
   type OnSelectionChangeParams,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './flowCanvas.css'
-import type { Agent, FlowNodeType } from '@/types'
-import type { FlowRFNode } from './flowGraph'
-import { AgentsContext, NodeActionsContext, chromeFor, type NodeActions } from './nodeStyles'
-import { AgentNode } from './AgentNode'
-import { BranchNode } from './BranchNode'
-import { ParallelNode } from './ParallelNode'
-import { DelayNode } from './DelayNode'
-import { TransformNode } from './TransformNode'
-import { LoopNode } from './LoopNode'
-import { AwaitInputNode } from './AwaitInputNode'
-import { SubflowNode } from './SubflowNode'
-import { StartNode } from './StartNode'
-import { EndNode } from './EndNode'
-import { SpawnNode } from './SpawnNode'
-import { JoinNode } from './JoinNode'
-import { CoordinatorNode } from './CoordinatorNode'
+import { LayoutGrid, Maximize2, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { FlowNodeType } from '@/types'
+import { ADDABLE_TYPES, NODE_CHROME, statusRing } from './nodeChrome'
+import { NODE_W, type FlowNodeData, type FlowRFEdge, type FlowRFNode } from './flowGraph'
 
-// CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
-// ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
-// asks the parent to re-layout, then re-centers once positions settle (editable
-// only). The mini-map show/hide toggle is always available. (Fit/zoom already
-// live in the bottom-left Controls, so there's no separate center button.)
-function CanvasTools({
-  onAutoLayout,
-  showMinimap,
-  onToggleMinimap,
-}: {
-  onAutoLayout?: () => void
+// ---- node card ----
+
+function excerpt(s: string | undefined, n = 90): string {
+  if (!s) return ''
+  const one = s.replace(/\s+/g, ' ').trim()
+  return one.length > n ? one.slice(0, n - 1) + '…' : one
+}
+
+const FlowNodeCard = memo(function FlowNodeCard({ data, selected }: NodeProps<FlowRFNode>) {
+  const { t } = useTranslation('flows')
+  const { node, status, arms, agentName, automationName } = data as FlowNodeData
+  const chrome = NODE_CHROME[node.type]
+  const Icon = chrome.Icon
+  const ring = statusRing(status)
+  const boxShadow = selected
+    ? [ring === 'none' ? '' : ring, `0 0 0 3px ${chrome.accent}`, 'var(--shadow-md)']
+        .filter(Boolean)
+        .join(', ')
+    : ring === 'none'
+      ? 'var(--shadow-sm)'
+      : ring
+  const body = (() => {
+    switch (node.type) {
+      case 'llm':
+        return (
+          <>
+            <p className="line-clamp-2 text-[11px] text-[var(--color-text-dim)]">
+              {excerpt(node.prompt) || '{{input}}'}
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+              <span className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">
+                {t(`context.${node.context ?? 'thread'}`)}
+              </span>
+              {node.tools === 'none' && (
+                <span className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">
+                  {t('tools.none')}
+                </span>
+              )}
+              {agentName && (
+                <span className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">{agentName}</span>
+              )}
+              {node.model && (
+                <span className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 font-mono">
+                  {node.model}
+                </span>
+              )}
+            </div>
+          </>
+        )
+      case 'route':
+        return (
+          <div className="space-y-0.5 text-[11px]">
+            <div className="text-[var(--color-text-dim)]">
+              {t(`mode.${node.mode ?? 'contains'}`)} ·{' '}
+              {t('route.maxVisits', { count: node.maxVisits || 3 })}
+            </div>
+            {node.mode === 'criteria' && (
+              <div className="text-[10px] text-[var(--color-text-dim)]">
+                {t('route.criteriaCount', { count: (node.criteria ?? []).length })}
+              </div>
+            )}
+            {(arms ?? []).map((a, i) => (
+              <div key={i} className="flex items-center gap-1 font-mono text-[10px]">
+                <span className="rounded bg-[var(--color-surface-2)] px-1">{a.when || '*'}</span>
+                <span className="opacity-60">→ {a.to}</span>
+              </div>
+            ))}
+          </div>
+        )
+      case 'trigger':
+        return (
+          <div className="space-y-0.5 text-[11px]">
+            <div className="truncate text-[var(--color-text-dim)]">
+              {automationName ?? (node.automationId ? node.automationId : t('node.triggerUnset'))}
+            </div>
+            <p className="line-clamp-2 font-mono text-[10px] text-[var(--color-text-dim)]">
+              {excerpt(node.template) || '{{last}}'}
+            </p>
+          </div>
+        )
+      case 'transform':
+      case 'output':
+        return (
+          <p className="line-clamp-2 font-mono text-[10px] text-[var(--color-text-dim)]">
+            {excerpt(node.template) || '{{last}}'}
+          </p>
+        )
+      default:
+        return <p className="text-[11px] text-[var(--color-text-dim)]">{t('node.inputHint')}</p>
+    }
+  })()
+  return (
+    <div
+      className={`rounded-lg border bg-[var(--color-surface)] text-[var(--color-text)] transition-shadow ${status === 'running' ? 'animate-pulse' : ''}`}
+      style={{
+        width: NODE_W,
+        borderColor: selected ? chrome.accent : 'var(--color-border)',
+        boxShadow,
+      }}
+      data-testid={`flow-node-${node.id}`}
+    >
+      {node.type !== 'input' && (
+        <Handle type="target" position={Position.Top} className="!bg-[var(--color-text-dim)]" />
+      )}
+      <div
+        className="flex items-center gap-1.5 rounded-t-lg px-2.5 py-1.5 text-xs font-medium"
+        style={{ background: `color-mix(in srgb, ${chrome.accent} 18%, var(--color-surface))` }}
+      >
+        <Icon size={13} style={{ color: chrome.accent }} />
+        <span className="min-w-0 flex-1 truncate">{node.title || node.id}</span>
+        <span className="shrink-0 font-mono text-[9px] uppercase tracking-wide opacity-60">
+          {t(`types.${node.type}`)}
+        </span>
+      </div>
+      <div className="px-2.5 py-1.5">{body}</div>
+      {node.type !== 'output' && (
+        <Handle type="source" position={Position.Bottom} style={{ background: chrome.accent }} />
+      )}
+    </div>
+  )
+})
+
+// ---- edge with arm label ----
+
+function FlowEdgeLine({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  selected,
+}: EdgeProps<FlowRFEdge>) {
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    borderRadius: 12,
+  })
+  const isRoute = !!data?.isRoute
+  const loopBack = targetY < sourceY
+  const stroke = selected
+    ? 'var(--color-accent)'
+    : loopBack
+      ? 'var(--color-warning)'
+      : 'var(--color-text-dim)'
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={`url(#flow-arrow-${selected ? 'sel' : loopBack ? 'loop' : 'base'})`}
+        style={{
+          stroke,
+          strokeWidth: selected ? 2.2 : 1.6,
+          strokeDasharray: loopBack ? '6 4' : undefined,
+        }}
+      />
+      {isRoute && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan pointer-events-none absolute rounded border px-1.5 py-0.5 font-mono text-[10px]"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              background: 'var(--color-surface)',
+              borderColor: selected ? 'var(--color-accent)' : 'var(--color-border)',
+              color: data?.when ? 'var(--color-text)' : 'var(--color-text-dim)',
+            }}
+          >
+            {data?.when || '*'}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  )
+}
+
+const nodeTypes: NodeTypes = { flow: FlowNodeCard }
+const edgeTypes: EdgeTypes = { flow: FlowEdgeLine }
+
+// Arrowheads in the theme's colours (React Flow's built-in marker is fixed grey).
+function ArrowDefs() {
+  const marker = (id: string, color: string) => (
+    <marker
+      id={id}
+      viewBox="0 0 10 10"
+      refX="9"
+      refY="5"
+      markerWidth="8"
+      markerHeight="8"
+      orient="auto-start-reverse"
+    >
+      <path d="M 0 0 L 10 5 L 0 10 z" fill={color} />
+    </marker>
+  )
+  return (
+    <svg width="0" height="0" className="absolute">
+      <defs>
+        {marker('flow-arrow-base', 'var(--color-text-dim)')}
+        {marker('flow-arrow-loop', 'var(--color-warning)')}
+        {marker('flow-arrow-sel', 'var(--color-accent)')}
+      </defs>
+    </svg>
+  )
+}
+
+interface ToolsProps {
+  readOnly: boolean
+  onAdd: (type: FlowNodeType) => void
+  onAutoLayout: () => void
   showMinimap: boolean
-  onToggleMinimap: () => void
-}) {
+}
+
+function CanvasTools({ readOnly, onAdd, onAutoLayout }: ToolsProps) {
   const { t } = useTranslation('flows')
   const { fitView } = useReactFlow()
   return (
-    <Panel position="top-right">
-      <div className="flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-xs shadow-lg">
-        {onAutoLayout && (
-          <button
-            data-testid="flow-canvas-auto-layout"
-            onClick={() => {
-              onAutoLayout()
-              setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 60)
-            }}
-            className="rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
-            title={t('canvas.autoLayoutTitle')}
-          >
-            {t('actions.autoLayout')}
-          </button>
-        )}
+    <Panel position="top-left">
+      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-xs shadow-[var(--shadow-md)]">
+        {!readOnly &&
+          ADDABLE_TYPES.map((type) => {
+            const Icon = NODE_CHROME[type].Icon
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => onAdd(type)}
+                data-testid={`flow-add-${type}`}
+                title={t('canvas.addNode', { type: t(`types.${type}`) })}
+                className="flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
+              >
+                <Plus size={12} />
+                <Icon size={13} style={{ color: NODE_CHROME[type].accent }} />
+                <span className="max-sm:hidden">{t(`types.${type}`)}</span>
+              </button>
+            )
+          })}
+        <span className="mx-0.5 h-4 w-px bg-[var(--color-border)]" />
         <button
-          data-testid="flow-canvas-toggle-minimap"
-          onClick={onToggleMinimap}
-          aria-pressed={showMinimap}
-          className={`rounded px-2 py-1 hover:bg-[var(--color-surface-2)] ${
-            showMinimap ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'
-          }`}
-          title={showMinimap ? t('canvas.hideMinimap') : t('canvas.showMinimap')}
+          type="button"
+          onClick={() => {
+            onAutoLayout()
+            setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50)
+          }}
+          title={t('canvas.autoLayout')}
+          className="flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
         >
-          {t('actions.showMap')}
+          <LayoutGrid size={13} />
+          <span className="max-sm:hidden">{t('canvas.autoLayout')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => fitView({ padding: 0.2, duration: 300 })}
+          title={t('canvas.fit')}
+          className="flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-surface-2)]"
+        >
+          <Maximize2 size={13} />
         </button>
       </div>
     </Panel>
   )
 }
 
-const nodeTypes: NodeTypes = {
-  agent: AgentNode,
-  branch: BranchNode,
-  parallel: ParallelNode,
-  delay: DelayNode,
-  transform: TransformNode,
-  loop: LoopNode,
-  'await-input': AwaitInputNode,
-  subflow: SubflowNode,
-  start: StartNode,
-  end: EndNode,
-  spawn: SpawnNode,
-  join: JoinNode,
-  coordinator: CoordinatorNode,
-}
-
-// Parallel-node edge colors so the two outgoing roles read at a glance: the
-// fan-out edges (concurrent children) vs the single join edge (runs after all
-// children finish; matches the parallel node's violet accent + join handle).
-const FAN_EDGE_COLOR = '#0ea5e9' // sky — concurrent fan-out
-const JOIN_EDGE_COLOR = '#7c3aed' // violet — join
-
-// edgeColor returns the stroke color for an edge by its source handle, or
-// undefined to use the default edge color (agent next / branch arms).
-function edgeColor(sourceHandle: string | null | undefined): string | undefined {
-  if (sourceHandle === 'fan') return FAN_EDGE_COLOR
-  if (sourceHandle === 'join') return JOIN_EDGE_COLOR
-  if (sourceHandle === 'body') return '#db2777' // loop body — pink (matches loop accent)
-  if (sourceHandle === 'loop') return '#3b82f6' // loop exit — blue
-  return undefined
-}
-
-// Built-in React Flow edge path styles the user can switch between.
-export type EdgeStyle = 'default' | 'smoothstep' | 'step' | 'straight'
-
-interface Props {
-  agents: Agent[]
+export interface FlowCanvasProps {
   nodes: FlowRFNode[]
-  edges: Edge[]
-  edgeStyle: EdgeStyle
-  animated: boolean
-  onNodesChange: (c: NodeChange<FlowRFNode>[]) => void
-  onEdgesChange: (c: EdgeChange[]) => void
-  setEdges: (updater: (e: Edge[]) => Edge[]) => void
-  onSelect: (id: string | null) => void
-  // Fired on a genuine node click (not a drag) — used to open the node editor
-  // popup. React Flow suppresses onNodeClick when the pointer moved past the
-  // drag threshold, so dragging to reposition/connect never triggers it.
-  onNodeClick?: (id: string) => void
-  // Fired on a node double-click — used by the run viewer to descend into the
-  // child run a subflow/spawn node launched. Unlike onNodeClick this is NOT gated
-  // on the canvas being editable: the run inspector is read-only by design and is
-  // precisely where descending applies.
-  onNodeDoubleClick?: (id: string) => void
-  // Read-only preview (template gallery): disable dragging, connecting and
-  // selection so the graph can only be viewed, not edited.
+  edges: FlowRFEdge[]
   readOnly?: boolean
-  // Run-inspector mode: nodes stay draggable and selectable (so clicking one
-  // opens its inspector and the layout can be tidied), but connecting, palette
-  // drop and node-editing are all disabled — the graph structure is fixed.
-  runMode?: boolean
-  // Fired after a node drag settles with its new flow-space position, so the run
-  // inspector can persist the tidied layout back to the flow. Absent = no save.
-  onNodeDragStop?: (id: string, pos: { x: number; y: number }) => void
-  // Re-layout the graph (parent recomputes node positions). Hidden if absent.
-  onAutoLayout?: () => void
-  // Per-node toolbar actions (make-start / duplicate / delete). Null = none.
-  nodeActions?: NodeActions | null
-  // Palette drag-and-drop: called with the dropped node type + the flow-space
-  // position (already screen→flow converted). Absent = DnD disabled.
-  onDropNode?: (type: FlowNodeType, pos: { x: number; y: number }) => void
+  showMinimap?: boolean
+  onNodesChange: (nodes: FlowRFNode[]) => void
+  onConnect: (c: Connection) => void
+  onEdgesDelete: (ids: string[]) => void
+  onNodesDelete: (ids: string[]) => void
+  onSelect: (sel: { nodeId: string | null; edgeId: string | null }) => void
+  onAdd: (type: FlowNodeType) => void
+  onAutoLayout: () => void
 }
 
-// dataTransfer key for palette drag-and-drop of a new node.
-export const FLOW_NODE_DND_MIME = 'application/tionharness-flow-node'
-
-// CanvasInner holds the actual <ReactFlow>. It lives inside ReactFlowProvider so
-// it can use screenToFlowPosition to convert a drop point into graph space.
-function CanvasInner({
+// FlowCanvas is the editable node graph. Positions are controlled by the parent
+// (it owns the draft graph); the canvas reports moves, connections, deletions
+// and the selection. Edges are drawn with arm labels and loop-backs dashed.
+export function FlowCanvas({
   nodes,
   edges,
-  edgeStyle,
-  animated,
-  onNodesChange,
-  onEdgesChange,
-  setEdges,
-  onSelect,
-  onNodeClick,
-  onNodeDoubleClick,
   readOnly = false,
-  runMode = false,
-  onNodeDragStop,
+  showMinimap = true,
+  onNodesChange,
+  onConnect,
+  onEdgesDelete,
+  onNodesDelete,
+  onSelect,
+  onAdd,
   onAutoLayout,
-  onDropNode,
-}: Omit<Props, 'agents' | 'nodeActions'>) {
-  const { screenToFlowPosition } = useReactFlow()
-  // Interaction is gated by two independent locks. `readOnly` (template preview)
-  // freezes everything; `runMode` (run inspector) keeps drag + select but freezes
-  // the graph structure. `editable` is the full editor (neither lock).
-  const draggable = !readOnly
-  const selectable = !readOnly
-  const editable = !readOnly && !runMode
-  // Mini-map show/hide (toggled from the in-canvas toolbar). Defaults on for wide
-  // screens but OFF on narrow (< md) ones where it would crowd the canvas.
-  const [showMinimap, setShowMinimap] = useState(
-    () => typeof window === 'undefined' || window.innerWidth >= 768,
-  )
-
-  // Apply the chosen path style + animation + arrowhead to every edge for
-  // display. These are cosmetic flow-level presentation hints; labels are kept.
-  const styledEdges = useMemo(
-    () =>
-      edges.map((e) => {
-        const color = edgeColor(e.sourceHandle)
-        return {
-          ...e,
-          type: edgeStyle,
-          animated,
-          style: color ? { ...e.style, stroke: color } : e.style,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 18,
-            height: 18,
-            ...(color ? { color } : {}),
-          },
-        }
-      }),
-    [edges, edgeStyle, animated],
-  )
-  const onConnect = useCallback(
-    (conn: Connection) => {
-      setEdges((eds) => {
-        const single = conn.sourceHandle !== 'fan' // fan-out allows many targets
-        const pruned = single
-          ? eds.filter((e) => !(e.source === conn.source && e.sourceHandle === conn.sourceHandle))
-          : eds
-        const label =
-          conn.sourceHandle === 'join'
-            ? 'join'
-            : conn.sourceHandle?.startsWith('b')
-              ? undefined // branch arm label comes from its condition (set on save/inspector)
-              : undefined
-        return addEdge({ ...conn, label }, pruned)
+}: FlowCanvasProps) {
+  const { t } = useTranslation('flows')
+  const onSelectionChange = useCallback(
+    (p: OnSelectionChangeParams) => {
+      onSelect({
+        nodeId: p.nodes[0]?.id ?? null,
+        edgeId: p.nodes.length ? null : (p.edges[0]?.id ?? null),
       })
     },
-    [setEdges],
-  )
-
-  const onSelectionChange = useCallback(
-    ({ nodes: sel }: OnSelectionChangeParams) => onSelect(sel[0]?.id ?? null),
     [onSelect],
   )
-
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }, [])
-
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      const type = e.dataTransfer.getData(FLOW_NODE_DND_MIME) as FlowNodeType
-      if (!type || !onDropNode) return
-      const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      onDropNode(type, pos)
-    },
-    [screenToFlowPosition, onDropNode],
+  const defaultEdgeOptions = useMemo(
+    () => ({ type: 'flow', markerEnd: { type: MarkerType.ArrowClosed } }),
+    [],
   )
-
   return (
-    <ReactFlow
-      data-testid="flow-canvas-root"
-      nodes={nodes}
-      edges={styledEdges}
-      nodeTypes={nodeTypes}
-      defaultEdgeOptions={{
-        type: edgeStyle,
-        animated,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
-      }}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={editable ? onConnect : undefined}
-      onSelectionChange={onSelectionChange}
-      onNodeClick={editable && onNodeClick ? (_, n) => onNodeClick(n.id) : undefined}
-      onNodeDoubleClick={onNodeDoubleClick ? (_, n) => onNodeDoubleClick(n.id) : undefined}
-      onNodeDragStop={
-        draggable && onNodeDragStop ? (_, n) => onNodeDragStop(n.id, n.position) : undefined
-      }
-      onDrop={editable ? onDrop : undefined}
-      onDragOver={editable ? onDragOver : undefined}
-      // A few px of movement counts as a drag (not a click), so repositioning
-      // a node never opens the editor popup and a plain click always does.
-      nodeDragThreshold={4}
-      // Run inspector: dragging a node only repositions it — selection (which
-      // opens the node inspector) happens on a genuine click, not on drag start.
-      selectNodesOnDrag={!runMode}
-      nodesDraggable={draggable}
-      nodesConnectable={editable}
-      elementsSelectable={selectable}
-      fitView
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background />
-      <Controls />
-      <CanvasTools
-        onAutoLayout={editable ? onAutoLayout : undefined}
-        showMinimap={showMinimap}
-        onToggleMinimap={() => setShowMinimap((v) => !v)}
-      />
-      {showMinimap && (
-        <MiniMap
-          pannable
-          zoomable
-          bgColor="var(--color-bg)"
-          maskColor="color-mix(in srgb, var(--color-bg) 60%, transparent)"
-          nodeColor={(n) => chromeFor(n.type ?? 'agent').accent}
-        />
-      )}
-    </ReactFlow>
-  )
-}
-
-// FlowCanvas renders the interactive node graph. Connecting from a source
-// handle replaces any existing edge from the same handle, so an agent's `next`
-// and a branch arm stay single-target (parallel "fan" may have many).
-export function FlowCanvas({ agents, nodeActions = null, ...rest }: Props) {
-  return (
-    <AgentsContext.Provider value={agents}>
-      <NodeActionsContext.Provider value={nodeActions}>
-        <ReactFlowProvider>
-          <CanvasInner {...rest} />
-        </ReactFlowProvider>
-      </NodeActionsContext.Provider>
-    </AgentsContext.Provider>
+    <ReactFlowProvider>
+      <div className="relative h-full w-full" data-testid="flow-canvas">
+        <ArrowDefs />
+        <ReactFlow<FlowRFNode, FlowRFEdge>
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={defaultEdgeOptions}
+          onNodesChange={(changes) => {
+            // Positions and selection are the only node changes the parent needs;
+            // apply them onto the controlled list.
+            const next = nodes.map((n) => ({ ...n }))
+            let moved = false
+            for (const ch of changes) {
+              if (ch.type === 'position' && ch.position) {
+                const i = next.findIndex((n) => n.id === ch.id)
+                if (i >= 0) {
+                  next[i] = { ...next[i], position: ch.position }
+                  moved = true
+                }
+              }
+              if (ch.type === 'remove') {
+                moved = true
+              }
+            }
+            if (moved) onNodesChange(next)
+          }}
+          onEdgesChange={(changes) => {
+            const removed = changes.filter((c) => c.type === 'remove').map((c) => c.id)
+            if (removed.length) onEdgesDelete(removed)
+          }}
+          onNodesDelete={(deleted) => onNodesDelete(deleted.map((n) => n.id))}
+          onConnect={onConnect}
+          onSelectionChange={onSelectionChange}
+          nodesDraggable={!readOnly}
+          nodesConnectable={!readOnly}
+          elementsSelectable
+          deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          minZoom={0.2}
+          maxZoom={2}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background
+            gap={18}
+            size={1}
+            color="color-mix(in srgb, var(--color-text-dim) 35%, transparent)"
+          />
+          <Controls showInteractive={false} position="bottom-left" />
+          {showMinimap && (
+            <MiniMap
+              pannable
+              zoomable
+              position="bottom-right"
+              nodeColor={(n) =>
+                NODE_CHROME[((n.data as FlowNodeData).node?.type ?? 'llm') as FlowNodeType].accent
+              }
+              maskColor="color-mix(in srgb, var(--color-bg) 70%, transparent)"
+            />
+          )}
+          <CanvasTools
+            readOnly={readOnly}
+            onAdd={onAdd}
+            onAutoLayout={onAutoLayout}
+            showMinimap={showMinimap}
+          />
+          {readOnly && (
+            <Panel position="top-right">
+              <span className="rounded bg-[var(--color-surface)] px-2 py-1 text-[10px] text-[var(--color-text-dim)] shadow">
+                {t('canvas.readOnly')}
+              </span>
+            </Panel>
+          )}
+        </ReactFlow>
+      </div>
+    </ReactFlowProvider>
   )
 }

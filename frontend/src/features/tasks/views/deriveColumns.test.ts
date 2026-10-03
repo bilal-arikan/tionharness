@@ -8,7 +8,6 @@ function task(over: Partial<Task> & { id: string }): Task {
     description: '',
     prompt: '',
     ownerAgentId: '',
-    flowId: '',
     boardState: 'todo',
     dependencies: '[]',
     lastRunId: '',

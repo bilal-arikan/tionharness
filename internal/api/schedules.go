@@ -81,9 +81,6 @@ type createScheduleReq struct {
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
-	// FlowID, when set, makes this a flow-backed schedule (runs the flow with
-	// Prompt as input instead of delivering the prompt to AgentID).
-	FlowID string `json:"flowId"`
 	// SessionMode selects reuse (default) or spawn for an agent-backed schedule.
 	SessionMode string `json:"sessionMode"`
 	Enabled     bool   `json:"enabled"`
@@ -109,16 +106,10 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, invalidSessionModeMsg)
 		return
 	}
-	// A schedule targets EITHER a flow or a single agent. Flow-backed schedules
-	// take Prompt as the (optional) flow input; agent-backed ones require a prompt.
-	if req.FlowID != "" {
-		if _, err := wsp.DB.GetFlow(r.Context(), req.FlowID); err != nil {
-			writeError(w, http.StatusBadRequest, "unknown flow")
-			return
-		}
-	} else {
+	// A schedule targets a single agent and requires a prompt.
+	{
 		if req.AgentID == "" {
-			writeError(w, http.StatusBadRequest, "agentId or flowId is required")
+			writeError(w, http.StatusBadRequest, "agentId is required")
 			return
 		}
 		if req.Prompt == "" {
@@ -140,7 +131,6 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 		AgentID:     req.AgentID,
 		CronExpr:    req.CronExpr,
 		Prompt:      req.Prompt,
-		FlowID:      req.FlowID,
 		SessionMode: req.SessionMode,
 		Enabled:     req.Enabled,
 		ExpiresAt:   req.ExpiresAt,
@@ -151,7 +141,7 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
 		s.logger.Warn("scheduler reload failed", "error", err)
 	}
-	s.logger.Info("schedule created", "id", schedule.ID, "agent", req.AgentID, "flow", req.FlowID, "cron", req.CronExpr)
+	s.logger.Info("schedule created", "id", schedule.ID, "agent", req.AgentID, "cron", req.CronExpr)
 	writeJSON(w, http.StatusCreated, schedule)
 }
 
@@ -160,9 +150,6 @@ type updateScheduleReq struct {
 	AgentID  *string `json:"agentId"`
 	CronExpr *string `json:"cronExpr"`
 	Prompt   *string `json:"prompt"`
-	// FlowID, when set, makes this a flow-backed schedule (empty string clears it
-	// back to agent-backed).
-	FlowID *string `json:"flowId"`
 	// SessionMode selects reuse (default) or spawn for an agent-backed schedule.
 	SessionMode *string `json:"sessionMode"`
 	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
@@ -177,7 +164,7 @@ const invalidSessionModeMsg = "invalid sessionMode (want reuse or spawn)"
 // target row is a one-shot wake (delete is the only supported operation).
 const oneShotNotEditableMsg = "one-shot wake schedules cannot be edited (delete it instead)"
 
-// handleUpdateSchedule edits a schedule's agent/flow/cron/prompt and reloads cron.
+// handleUpdateSchedule edits a schedule's agent/cron/prompt and reloads cron.
 func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
@@ -209,15 +196,7 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		}
 		cur.CronExpr = expr
 	}
-	if req.FlowID != nil && strings.TrimSpace(*req.FlowID) != "" {
-		flowID := strings.TrimSpace(*req.FlowID)
-		if _, err := wsp.DB.GetFlow(r.Context(), flowID); err != nil {
-			writeError(w, http.StatusBadRequest, "unknown flow")
-			return
-		}
-		cur.FlowID = flowID
-		cur.AgentID = ""
-	} else if req.AgentID != nil && strings.TrimSpace(*req.AgentID) != "" {
+	if req.AgentID != nil && strings.TrimSpace(*req.AgentID) != "" {
 		agentID := strings.TrimSpace(*req.AgentID)
 		ag, err := wsp.DB.GetAgent(r.Context(), agentID)
 		if err != nil {
@@ -228,7 +207,6 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cur.AgentID = agentID
-		cur.FlowID = ""
 	}
 	if req.Prompt != nil {
 		cur.Prompt = *req.Prompt
@@ -244,7 +222,7 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresAt != nil {
 		cur.ExpiresAt = *req.ExpiresAt
 	}
-	if cur.FlowID == "" && strings.TrimSpace(cur.Prompt) == "" {
+	if strings.TrimSpace(cur.Prompt) == "" {
 		writeError(w, http.StatusBadRequest, "prompt is required")
 		return
 	}
@@ -340,7 +318,7 @@ func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
 
 // handleGenerateScheduleTitle asks the runtime's title model for a short name
 // and SUGGESTS it — it does not write. The source is built from the schedule's
-// own prompt, cron schedule and target (agent or flow).
+// own prompt, cron schedule and target agent.
 //
 // Suggest-only is deliberate: the button lives inside an edit modal, so writing
 // here would persist a name the user never confirmed (and could not undo by
@@ -358,11 +336,7 @@ func (s *Server) handleGenerateScheduleTitle(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	source := fmt.Sprintf("Schedule: cron=%s prompt=%s", sc.CronExpr, sc.Prompt)
-	if sc.FlowID != "" {
-		if fl, err := wsp.DB.GetFlow(r.Context(), sc.FlowID); err == nil {
-			source += fmt.Sprintf(" flow=%s", fl.Name)
-		}
-	} else if sc.AgentID != "" {
+	if sc.AgentID != "" {
 		if ag, err := wsp.DB.GetAgent(r.Context(), sc.AgentID); err == nil {
 			source += fmt.Sprintf(" agent=%s", ag.Name)
 		}

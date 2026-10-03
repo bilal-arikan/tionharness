@@ -29,7 +29,6 @@ import (
 const (
 	PhasePrefix     = "p:"
 	SessionPrefix   = "s:"
-	FlowRunPrefix   = "r:"
 	GatePrefix      = "g:"
 	AutomationPfx   = "a:"
 	OptimizerNodeID = "o:optimizer"
@@ -38,7 +37,6 @@ const (
 
 func PhaseNodeID(phaseID string) string     { return PhasePrefix + phaseID }
 func SessionNodeID(sessionID string) string { return SessionPrefix + sessionID }
-func FlowRunNodeID(runID string) string     { return FlowRunPrefix + runID }
 func GateNodeID(askID string) string        { return GatePrefix + askID }
 
 // NodeIndex returns the index of node id in t.Nodes, -1 when absent.
@@ -206,7 +204,7 @@ func DeriveStatus(t *db.Trajectory) {
 		}
 	}
 	for _, n := range t.Nodes {
-		if (n.Kind == db.TrajNodeSession || n.Kind == db.TrajNodeFlowRun) && n.State == db.TrajStateActive && n.Lane != 0 {
+		if n.Kind == db.TrajNodeSession && n.State == db.TrajStateActive && n.Lane != 0 {
 			t.Status = db.TrajStatusRunning
 			return
 		}
@@ -529,7 +527,7 @@ func Render(t *db.Trajectory) string {
 	var gates []db.TrajectoryNode
 	for _, n := range t.Nodes {
 		switch n.Kind {
-		case db.TrajNodeSession, db.TrajNodeFlowRun:
+		case db.TrajNodeSession:
 			if n.Lane == 0 {
 				continue // the root itself
 			}
@@ -546,11 +544,7 @@ func Render(t *db.Trajectory) string {
 		}
 		fmt.Fprintf(&b, "%s:\n", title)
 		for _, n := range list {
-			kind := "worker"
-			if n.Kind == db.TrajNodeFlowRun {
-				kind = "flow run"
-			}
-			fmt.Fprintf(&b, "- %s %s [%s]", kind, n.RefID, n.State)
+			fmt.Fprintf(&b, "- worker %s [%s]", n.RefID, n.State)
 			if n.Label != "" {
 				fmt.Fprintf(&b, " %s", n.Label)
 			}

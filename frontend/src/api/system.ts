@@ -43,7 +43,6 @@ let sharedES: LiveEventSource | null = null
 const eventSubs = new Set<EventCb>()
 const stepSubs = new Set<EventCb>()
 const flowNodeSubs = new Set<EventCb>()
-const flowNodeStepSubs = new Set<EventCb>()
 const logSubs = new Set<LogCb>()
 // Process-change subscribers. The `process` frame is payload-free by design, so
 // these callbacks take no argument: they are a "refetch the list" cue, not data.
@@ -79,6 +78,8 @@ function ensureConnection(): void {
     }
     stepSubs.forEach((cb) => cb(parsed))
   })
+  // One live flow-node frame (flow_node): fanned out to the flow bus by the
+  // app-level subscriber (useAppEvents).
   sharedES.addEventListener('flownode', (ev) => {
     let parsed: AppEvent
     try {
@@ -87,15 +88,6 @@ function ensureConnection(): void {
       return
     }
     flowNodeSubs.forEach((cb) => cb(parsed))
-  })
-  sharedES.addEventListener('flownodestep', (ev) => {
-    let parsed: AppEvent
-    try {
-      parsed = JSON.parse((ev as MessageEvent).data) as AppEvent
-    } catch {
-      return
-    }
-    flowNodeStepSubs.forEach((cb) => cb(parsed))
   })
   sharedES.addEventListener('log', (ev) => {
     let parsed: AppEvent
@@ -133,7 +125,6 @@ function closeIfIdle(): void {
     eventSubs.size === 0 &&
     stepSubs.size === 0 &&
     flowNodeSubs.size === 0 &&
-    flowNodeStepSubs.size === 0 &&
     logSubs.size === 0 &&
     processSubs.size === 0 &&
     reconnectSubs.size === 0 &&
@@ -162,17 +153,11 @@ function subscribeReconnect(cb: () => void): () => void {
   }
 }
 
-function subscribeEvents(
-  onEvent: EventCb,
-  onStep?: EventCb,
-  onFlowNode?: EventCb,
-  onFlowNodeStep?: EventCb,
-): () => void {
+function subscribeEvents(onEvent: EventCb, onStep?: EventCb, onFlowNode?: EventCb): () => void {
   ensureConnection()
   eventSubs.add(onEvent)
   if (onStep) stepSubs.add(onStep)
   if (onFlowNode) flowNodeSubs.add(onFlowNode)
-  if (onFlowNodeStep) flowNodeStepSubs.add(onFlowNodeStep)
   let unsubscribed = false
   return () => {
     if (unsubscribed) return
@@ -180,7 +165,6 @@ function subscribeEvents(
     eventSubs.delete(onEvent)
     if (onStep) stepSubs.delete(onStep)
     if (onFlowNode) flowNodeSubs.delete(onFlowNode)
-    if (onFlowNodeStep) flowNodeStepSubs.delete(onFlowNodeStep)
     closeIfIdle()
   }
 }

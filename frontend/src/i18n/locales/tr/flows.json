@@ -1,427 +1,238 @@
 {
-  "actions": {
-    "addBranch": "+ dal ekle",
-    "autoLayout": "▦ Oto diz",
-    "close": "Kapat",
-    "copy": "Kopyala",
-    "createFromTemplate": "+ Bu şablondan akış oluştur",
-    "delete": "Sil",
-    "duplicate": "Çoğalt",
-    "insertIntoField": "Alana ekle",
-    "makeStart": "Başlangıç yap",
-    "rerun": "Tekrar çalıştır",
-    "run": "▶ Çalıştır",
-    "running": "Çalışıyor…",
-    "save": "Kaydet",
-    "send": "Gönder",
-    "showMap": "🗺 harita",
-    "showSubRuns": "Alt koşuları göster"
-  },
-  "canvas": {
-    "autoLayoutTitle": "Düğümleri otomatik diz",
-    "hideMinimap": "Mini haritayı gizle",
-    "showMinimap": "Mini haritayı göster"
-  },
-  "edgeStyles": {
-    "default": "Eğri",
-    "smoothstep": "Yumuşak",
-    "step": "Basamak",
-    "straight": "Düz"
-  },
-  "editor": {
-    "accumulate": "Bağlamı biriktir (cache)",
-    "accumulateTitle": "Ardışık ajan node'ları büyüyen tek bir konuşmayı paylaşır → prompt-cache düğümler arası yeniden kullanılır",
-    "animation": "Animasyon",
-    "cable": "Kablo",
-    "collapsePalette": "Düğüm ekleme bölümünü daralt",
-    "expandPalette": "Düğüm ekleme bölümünü genişlet",
-    "hidePalette": "Sol paneli gizle",
-    "liveProgress": "Canlı ilerleme",
-    "node": "Düğüm",
-    "nodeAdd": "Düğüm ekle",
-    "runInputPlaceholder": "Girdi (akışa {{input}} olarak geçer)",
-    "showPalette": "Sol paneli göster",
-    "tag": "Etiket",
-    "tagPlaceholder": "Etiket…",
-    "view": "Görünüm"
-  },
-  "empty": {
-    "flow": "Soldan bir akış seçin veya yeni bir akış oluşturun.",
-    "run": "Soldan bir koşu seçin — akışın hangi aşamada olduğunu, node çıktılarını ve hataları salt-okunur görün.",
-    "template": "Soldan bir şablon seçin — yapısını önizleyin, sonra bu şablondan akış oluşturun."
-  },
-  "flow": {
-    "created": "Akış oluşturuldu",
-    "deleted": "Akış silindi",
-    "deletedName": "（silinmiş akış）",
-    "deleteConfirm": "\"{{name}}\" akışı silinsin mi?",
-    "deleteManyConfirm": "{{count}} akış silinsin mi?",
-    "deletedMany": "{{count}} akış silindi",
-    "namePrompt": "Akış adı:",
-    "saved": "Akış kaydedildi",
-    "templateNeedsAgent": "Şablondan akış oluşturmak için önce en az bir ajan oluşturun."
-  },
-  "handles": {
-    "body": "Gövde → her iterasyonda çalışan alt-zincir",
-    "branch": "Dal → {{label}}",
-    "exit": "Çıkış → döngü bitince çalışır",
-    "input": "Giriş",
-    "join": "Join → tüm dallar bitince çalışır",
-    "next": "Çıkış → sonraki node",
-    "parallel": "Paralel dallar (eşzamanlı çalışır)",
-    "resumeNext": "Çıkış → girdi gelince sonraki node",
-    "startNext": "Çıkış → ilk node"
+  "title": "Akışlar",
+  "tabs": {
+    "canvas": "Kanvas",
+    "runs": "Koşular",
+    "evolution": "Evrim",
+    "test": "Test"
   },
   "header": {
-    "flowIdTitle": "Akış ID (dosya adı)",
-    "flowNamePlaceholder": "Akış adı",
-    "flowPathCopy": "Akış yolunu kopyala",
-    "flows": "Akışlar",
-    "readOnlyPreview": "salt-okunur önizleme",
-    "rerunDeleted": "Akış silinmiş — tekrar çalıştırılamaz",
-    "rerunTitle": "Bu koşuyu aynı girdiyle tekrar çalıştır"
-  },
-  "inspector": {
-    "agent": "Ajan",
-    "agentPlaceholder": "— ajan seç —",
-    "branchHint": "Her dal bir seçeneği düz cümleyle tarif eder; karar modeli son çıktının hangisine uyduğunu seçer. Emin değilse ya da cevap veremezse varsayılan (boş) dala gider. Ayarlar → Karar Mercileri'nde açık olmalı.",
-    "branches": "Dallar (hedef için kenar çiz)",
-    "coordinatorAgent": "Koordinatör ajan",
-    "coordinatorDescription": "Ajan kendi koordinatör oturumunda çalışır ve kaç worker açacağına anlık karar verir. Düğüm, tüm workerlar bitip koordinatör susana kadar bloklar; son yanıtı çıktı olur. Zaman aşımında çalışan workerlar durdurulur ve akış hata verir.",
-    "coordinatorGoal": "Görev (koordinatöre verilen hedef)",
-    "coordinatorTurns": "En çok koordinatör turu",
-    "coordinatorTurnsHint": "0 = reçetenin kendi sınırı, yoksa workspace varsayılanı",
-    "delay": "Bekleme (saniye)",
-    "delayHint": "Bekledikten sonra sonraki node'a geçer (en çok 5 dk).",
-    "emptyLastPlaceholder": "boş = {{last}}",
-    "exactPlaceholder": "eşittir… (boş = varsayılan)",
-    "exitCondition": "Çıkış koşulu (eşleşince biter)",
-    "exitJudgePlaceholder": "koşulu düz cümleyle yaz (ör. İnceleme değişikliği onayladı)",
-    "exitLimitPlaceholder": "boş = yalnız iterasyon sınırı",
-    "freshContext": "Taze bağlam",
-    "freshContextHint": "(birikmiş konuşmayı görmez — yalnız “Bağlamı biriktir” açıkken etkili)",
-    "inputTemplate": "Girdi şablonu",
-    "inputTemplateEach": "Girdi şablonu (her çocuğa)",
-    "joinDescription": "Spawn edilen child run'ları bekler, çıktılarını birleştirip {{last}}'e koyar.",
-    "joinPartial": "Kısmi mod (başarısız/bekleyen/zaman aşımına uğrayan çocuğu düşür, join'i düşürme)",
-    "joinSpawn": "Beklenecek spawn node",
-    "joinSpawnAll": "tümü (tüm bekleyen spawn'lar)",
-    "loopDescription": "Gövdeyi (alttaki gövde tutamağı) yinele; bitince çıkış tutamağındaki node'a geç. Gövde node'ları {{iteration}} (0-tabanlı) kullanabilir.",
-    "loopBody": "gövde",
-    "loopExit": "çıkış",
-    "loopJudgeHint": "Karar modeli her turdan sonra çıkış koşulunun sağlanıp sağlanmadığına bakar. Cevap veremezse döngü iterasyon sınırına kadar sürer; sınır yoksa akış hata verir.",
-    "match": "Eşleşme",
-    "matchContains": "İçerir (substring)",
-    "matchEquals": "Eşittir (tam)",
-    "matchJudge": "Karar modeli (judge)",
-    "matchRegex": "Regex",
-    "maxIterations": "En çok iterasyon",
-    "maxIterationsHint": "0 = yalnız \"çıkış koşulu\"na göre biter (biri gerekli).",
-    "noOtherFlows": "başka akış yok",
-    "nodeTypeWhat": "{{type}} nedir?",
-    "parallelDescription": "Eşzamanlı ajan node'larını alttaki fan tutamağından, join hedefini sağdaki join tutamağından kenar çizerek bağla.",
-    "prompt": "Prompt",
-    "regexPlaceholder": "regex… (boş = varsayılan)",
-    "spawnDescription": "Akışları bloklamadan başlatır; sonuçları bir join toplar. Async çocuklar interaktif olmamalı (await-input'a düşen çocuk join'i başarısız yapar).",
-    "spawnFlows": "Async akışlar (birden çok seç)",
-    "subflow": "Alt-akış",
-    "subflowDescription": "Alt-akış await-input'a düşerse bu akış da askıya alınır; girdi verilince alt-akış devam eder (propagasyon).",
-    "subflowInputPlaceholder": "boş = {{last}} · alt-akışa geçilecek girdi",
-    "subflowPlaceholder": "— akış seç —",
-    "template": "Şablon (çıktı)",
-    "templatePlaceholder": "{{input}}, {{last}}, {{node.<id>}} — LLM çağırmadan çıktı üretir",
-    "timeout": "Zaman aşımı (saniye)",
-    "timeoutDefault": "0 = 30 dk varsayılan",
-    "timeoutUnlimited": "0 = süresiz",
-    "title": "Başlık",
-    "titlePlaceholder": "başlık",
-    "typeFixed": "(tür sabit)",
-    "untilContainsPlaceholder": "içeriyorsa… (boş = varsayılan)",
-    "untilJudgePlaceholder": "seçeneği tarif et… (boş = varsayılan)",
-    "workflow": "Koordinasyon türü (workflow)",
-    "workflowHelp": "Workflow nedir?"
-  },
-  "judge": {
-    "placeholder": "ör. Bu ne tür bir istek?",
-    "question": "Karar sorusu (isteğe bağlı)"
+    "unsaved": "kaydedilmedi",
+    "trivial": "varsayılan",
+    "save": "Kaydet",
+    "saveLayout": "Yerleşimi kaydet",
+    "discard": "Vazgeç",
+    "fixProblems": "Önce kanvasdaki sorunları gider"
   },
   "list": {
-    "clear": "temizle",
-    "clearTagFilter": "Etiket filtresini temizle",
-    "filterByTag": "Bu etikete göre filtrele",
-    "flowsMine": "Akışlarım",
-    "flowsLoading": "Akışlar yükleniyor…",
-    "flowsNone": "Henüz akış yok.",
-    "flowsNoMatch": "Eşleşen akış yok.",
-    "label": "Akışlar",
-    "newFlow": "Yeni akış",
-    "nodeCount_one": "{{count}} düğüm",
-    "nodeCount_other": "{{count}} düğüm",
-    "removeFilter": "Filtreyi kaldır",
-    "runs": "Koşular",
-    "runsNone": "Henüz koşu yok.",
-    "searchFlow": "Akış ara…",
-    "searchRun": "Koşu ara (akış adı)…",
-    "searchTemplate": "Şablon ara…",
-    "templates": "Şablonlar"
+    "title": "Ajan akışları",
+    "search": "Ajan veya akış ara…",
+    "empty": "Henüz ajan yok; önce bir ajan oluştur.",
+    "loading": "Yükleniyor…",
+    "noneSelected": "Soldan bir ajanın akışını seç.",
+    "meta": "v{{v}} · {{nodes}} düğüm · {{runs}} koşu",
+    "pending": "{{count}} bekleyen öneri"
   },
-  "nodeHelp": {
-    "agent": "Seçilen ajanı, şablonlanmış bir prompt ile çalıştırır ve yanıtını çıktı yapar. Prompt içinde {{input}}, {{last}}, {{node.<id>}} gibi değişkenler kullanılabilir. Tek LLM adımı üreten temel düğüm.",
-    "await-input": "Akışı kalıcı olarak duraklatır ve dışarıdan girdi bekler (insan ya da başka bir ajan besleyebilir). Girdi gelince kaldığı yerden devam eder; zaman aşımı süresi verilebilir. Sunucu yeniden başlasa bile beklemeye devam eder.",
-    "branch": "Son çıktıya bakarak akışı dallara yönlendirir. Eşleşme kipine göre (içerir / regex / tam eşleşme…) ilk uyan dal seçilir; hiçbiri uymazsa varsayılan dal çalışır. LLM çağrısı yapmaz.",
-    "coordinator": "Seçilen ajanı KOORDİNATÖR olarak çalıştırır: kaç worker açacağına ve onları nasıl görevlendireceğine çalışma anında kendisi karar verir — Paralel düğümün aksine genişlik tasarım anında sabit değildir. Tüm workerlar bitip koordinatör susana kadar bekler, son yanıtını bu düğümün çıktısı yapar.",
-    "delay": "Belirtilen süre kadar bekler, sonra bir sonraki düğüme geçer. LLM çağrısı yapmaz; hız sınırı, soğuma süresi veya zamanlama gerektiren adımlar için kullanılır.",
-    "end": "Opsiyonel bitiş düğümü. Akışı sonlandırır; istenirse bir şablonla nihai çıktıyı biçimlendirir veya bir JSON şemasıyla doğrular. Yoksa akış son düğümün çıktısıyla biter.",
-    "join": "Bariyer düğümü: bir Spawn düğümünün başlattığı alt-koşuların bitmesini bekler, çıktılarını toplar ve tek sonuç olarak devam eder.",
-    "loop": "İçindeki gövde zincirini, maksimum tekrar sayısına ulaşana ya da bitiş koşulu sağlanana kadar tekrarlar. Gövde içinde {{iteration}} değişkeni geçerli tur numarasını verir.",
-    "parallel": "Birden fazla ajan düğümünü aynı anda çalıştırır, hepsi bitince sonuçları toplayıp tek bir birleşik çıktı olarak devam düğümüne verir. Bağımsız işleri hızlandırmak için kullanılır.",
-    "spawn": "Seçilen akışları asenkron alt-koşu olarak başlatır ve BEKLEMEDEN devam eder. Sonuçlarını toplamak için ileride bir Join düğümü konur.",
-    "start": "Akışın zorunlu giriş noktası. Çalıştırma bu düğümden başlar ve verilen girdi ({{input}}) doğrudan bir sonraki düğüme geçer. Her akışta tam olarak bir tane bulunur.",
-    "subflow": "Başka bir akışı baştan sona çalıştırır, çıktısını alır ve bu akışta devam eder. Ortak parçaları tekrar tekrar çizmek yerine yeniden kullanmayı sağlar.",
-    "transform": "LLM çağırmadan, yazdığınız şablonu render edip çıktı olarak yayar. Önceki düğümlerin sonuçlarını ({{last}}, {{node.<id>}}) birleştirmek, yeniden biçimlendirmek veya sabit metin enjekte etmek için kullanılır."
-  },
-  "nodeTypes": {
-    "agent": "Ajan",
-    "await-input": "Girdi Bekle",
-    "branch": "Dallanma",
-    "coordinator": "Koordinatör",
-    "delay": "Bekle",
-    "end": "Bitiş",
-    "join": "Join (Bariyer)",
-    "loop": "Döngü",
-    "parallel": "Paralel",
-    "spawn": "Alt ajan başlat (asenkron)",
-    "start": "Başlangıç",
-    "subflow": "Alt-Akış",
-    "transform": "Birleştir"
-  },
-  "nodes": {
-    "agentMissing": "— ajan seçilmedi —",
-    "awaitInputIdle": "dış girdi bekler → {{last}}",
-    "awaitInputWaiting": "⏳ girdi bekleniyor…",
-    "branchEmpty": "dal yok",
-    "childRun": "alt koşu",
-    "childRunOpen": "Çift tıkla alt koşuya in",
-    "coordinatorFanout": "dinamik worker fan-out",
-    "defaultBranch": "varsayılan",
-    "delaySeconds": "{{value}} sn",
-    "delayWait": "{{value}} bekle",
-    "endDefault": "Bitiş",
-    "endHere": "akış burada biter",
-    "endSchema": "akış biter · çıktı şeması zorunlu",
-    "joinAll": "⛙ tüm spawn’ları bekle",
-    "joinOne": "⛙ {{spawn}} bekle",
-    "loopExit": " · çıkış: \"{{condition}}\"",
-    "loopRepeat": "{{cap}} yinele{{exit}}",
-    "parallelCount_one": "{{count}} eşzamanlı dal · join →",
-    "parallelCount_other": "{{count}} eşzamanlı dal · join →",
-    "spawnCount_one": "🚀 {{count}} akış (async)",
-    "spawnCount_other": "🚀 {{count}} akış (async)",
-    "spawnNone": "akış seçilmedi",
-    "startDefault": "Başlangıç",
-    "startHere": "akış buradan başlar",
-    "subflowNone": "↳ alt-akış seçilmedi",
-    "subflowRef": "↳ akış {{id}}",
-    "transformEmpty": "(boş şablon)"
-  },
-  "run": {
-    "allSteps": "Tüm adımlar",
-    "branchDecision": "Karar: {{note}}",
-    "branchEmpty": "boş",
-    "branchEvaluated": "Değerlendirilen değer{{field}} · eşleşme: {{mode}}",
-    "branchJsonField": " (JSON alanı: {{field}})",
-    "branchNone": "Tanımlı dal yok.",
-    "clipboardCopied": "Panoya kopyalandı",
-    "coordinatorNoRota": "Bu koordinatör düğümünün henüz rotası yok",
-    "coordinatorOpenRota": "Bu koordinatörün rotasını Rota ekranında aç",
-    "coordinatorRunning": "Koordinatör çalışıyor — workerlar bekleniyor…",
-    "coordinatorSteps": "Worker adımları koordinatörün kendi oturumunda; Oturumlar ekranından (“Akış Koordinatörü”) izlenebilir.",
+  "defaultTitle": {
+    "llm": "Yeni aşama",
+    "route": "Yönlendirme",
+    "transform": "Dönüşüm",
     "input": "Girdi",
-    "inputMissing": "Girdi kaydı yok (bu düğüm henüz tamamlanmadı veya eski bir koşu).",
-    "inputPlaceholder": "Akışa gönderilecek girdi…",
-    "noExchange": "Bu düğüm tipinde ({{type}}) mesaj alışverişi yok.",
-    "noOutput": "çıktı yok",
-    "parallelCount_one": "{{count}} eşzamanlı dal",
-    "parallelCount_other": "{{count}} eşzamanlı dal",
-    "parallelCritical": " — kritik yol",
-    "parallelNone": "Tanımlı paralel dal yok.",
-    "parallelTotal": "toplam {{duration}}",
-    "priorContext": "Önceki bağlam (biriken konuşma)",
-    "priorMessages_one": "{{count}} mesaj",
-    "priorMessages_other": "{{count}} mesaj",
-    "rota": "Rota",
-    "progressCompleted": "{{progress}} tamamlandı…",
-    "running": "çalışıyor…",
-    "status": "Durum:",
-    "stepCount_one": "{{count}} adım",
-    "stepCount_other": "{{count}} adım",
-    "stepsLoading": "Adımlar yükleniyor…",
-    "trace": "Adım izi",
-    "traceEmpty": "Adım izi yok.",
-    "traceHide": "Adım izini gizle",
-    "traceNoneCompleted": "Henüz adım tamamlanmadı…",
-    "traceNode": "Node görünümü",
-    "traceShow": "Adım izini göster",
-    "tree": "Koşu ağacı",
-    "waiting": "⏳ Girdi bekleniyor"
+    "output": "Çıktı",
+    "trigger": "Tetikleyici"
+  },
+  "types": {
+    "input": "girdi",
+    "llm": "model",
+    "route": "yönlendirme",
+    "transform": "dönüşüm",
+    "output": "çıktı",
+    "trigger": "tetikleyici"
+  },
+  "context": {
+    "thread": "sohbet bağlamı",
+    "fresh": "taze"
+  },
+  "tools": {
+    "inherit": "araçlar açık",
+    "none": "araçsız"
+  },
+  "mode": {
+    "contains": "içerir",
+    "equals": "eşittir",
+    "regex": "regex",
+    "json": "JSON alanı",
+    "judge": "yargıç",
+    "criteria": "ölçütler"
+  },
+  "route": {
+    "maxVisits": "en çok {{count}} tur",
+    "criteriaCount": "{{count}} ölçüt"
+  },
+  "node": {
+    "inputHint": "Turun girdisi buradan girer.",
+    "triggerUnset": "otomasyon seçilmedi"
+  },
+  "canvas": {
+    "addNode": "{{type}} düğümü ekle",
+    "autoLayout": "Otomatik diz",
+    "fit": "Sığdır",
+    "readOnly": "salt okunur"
+  },
+  "inspector": {
+    "empty": "Düzenlemek için kanvasta bir düğüm ya da kenar seç.",
+    "emptyHint": "Düğümleri üst/alt noktalarından sürükleyerek bağla. Yönlendirme düğümünün kenarları etiket taşır; etiketsiz kenar varsayılan koldur.",
+    "edge": "Kenar",
+    "when": "Kol etiketi",
+    "whenHint": "Yönlendirme bu etiketi son çıktıyla eşleştirir (mod'a göre). Boş bırakılan tek kenar varsayılan koldur.",
+    "whenDefault": "varsayılan (*)",
+    "linearEdge": "Doğrusal bir kenar; etiket taşımaz.",
+    "deleteEdge": "Kenarı sil",
+    "close": "Kapat",
+    "title": "Başlık",
+    "prompt": "Prompt",
+    "promptHint": "Şablon: {{input}}, {{last}}, {{node.<id>}}, {{visit}}. Boş = {{input}}.",
+    "context": "Bağlam",
+    "contextHint": "Sohbet bağlamı: oturum geçmişi + bu prompt yeni kullanıcı mesajı olarak gider. Taze: yalnız sistem promptu + bu prompt.",
+    "tools": "Araçlar",
+    "toolsHint": "Araçsız: düz tamamlama (eleştiri/sınıflandırma aşamaları için daha ucuz).",
+    "agent": "Ajan",
+    "agentHint": "Bu aşamayı başka bir ajan çalıştırabilir (örneğin bir eleştirmen).",
+    "ownerAgent": "Akışın sahibi",
+    "model": "Model (opsiyonel)",
+    "modelHint": "Yalnız bu aşama için model kimliği; boş = ajanın modeli.",
+    "outputSchema": "Çıktı şeması (JSON Schema)",
+    "outputSchemaHint": "Destekleyen sağlayıcılarda yapılandırılmış çıktı; JSON yönlendirmesiyle eşleş.",
+    "mode": "Eşleştirme",
+    "modeHint": "Son çıktı kol etiketleriyle nasıl karşılaştırılır. Yargıç: karar modeli (JEV) etiketi seçer (flow-judge mercii). Ölçütler: karar modeli her ölçütü ayrı ayrı sorar; hepsi sağlanırsa \"pass\", aksi halde \"fail\" kolu (flow-criteria mercii).",
+    "jsonField": "JSON alanı",
+    "question": "Yargıca soru",
+    "questionHint": "Karar modeline neye bakacağı söylenir.",
+    "maxVisits": "Tur sınırı",
+    "maxVisitsHint": "Bu yönlendirme bir turda en çok bu kadar kez etiketli bir kol seçer; sonra varsayılan kola geçer (döngü garantili biter).",
+    "arms": "Kollar",
+    "noArms": "Henüz kol yok; kanvasta bu düğümden kenar çek.",
+    "template": "Şablon",
+    "templateHint": "{{last}}, {{input}}, {{node.<id>}} kullanabilirsin.",
+    "note": "Not",
+    "noteHint": "Bu aşamanın neden var olduğu; ajanlar ve gözlemci okur.",
+    "deleteNode": "Düğümü sil",
+    "criteria": "Ölçütler",
+    "criteriaHint": "Her satır, son çıktı için bir evet/hayır ifadesi (ör. \"Yanıt Türkçe\", \"İki cümleyi geçmiyor\"). Karar modeli hepsini tek çağrıda sorar; hepsi sağlanırsa \"pass\" etiketli kol, aksi halde \"fail\" etiketli kol seçilir. Etiketsiz kol, model cevap veremezse yedektir.",
+    "criteriaPlaceholder": "Yanıt soruyu doğrudan cevaplıyor\nUydurma bilgi içermiyor",
+    "automation": "Otomasyon",
+    "automationHint": "Bu düğüm çalışınca seçili otomasyon, yük şablonunu {{result}} olarak alıp tetiklenir (otomasyonun kendi korumaları — açık/kapalı, bekleme, iterasyon sınırı — geçerlidir). Akışın son çıktısı değişmeden devam eder.",
+    "pickAutomation": "Otomasyon seç…",
+    "disabledSuffix": "(kapalı)",
+    "noAutomations": "Henüz otomasyon yok; Otomasyonlar ekranından bir kural oluştur.",
+    "payload": "Yük şablonu",
+    "payloadHint": "Otomasyonun prompt şablonunda {{result}} olarak görünür; {{input}}, {{last}}, {{node.<id>}} kullanabilirsin. Boş = {{last}}."
+  },
+  "runs": {
+    "empty": "Henüz koşu yok.",
+    "emptyHint": "{{name}} ile sohbet et; her tur bu akıştan geçer ve burada bir koşu olarak görünür.",
+    "pick": "Ayrıntı için bir koşu seç.",
+    "back": "Listeye dön",
+    "openSession": "Oturumu aç",
+    "delete": "Koşuyu sil",
+    "visit": "{{n}}. tur",
+    "stepInput": "Girdi (render edilmiş prompt)",
+    "stepOutput": "Çıktı",
+    "input": "Girdi",
+    "output": "Yanıt",
+    "error": "Hata",
+    "steps": "{{count}} adım",
+    "stepsShort": "{{count}} adım",
+    "noSteps": "Adım izi yok.",
+    "tokens": "{{n}} token",
+    "llmCalls": "{{count}} model çağrısı",
+    "grade": "{{n}}/5",
+    "gradeTitle": "Karar modelinin yanıt puanı (güven %{{pct}})",
+    "detail": "Ayrıntı"
   },
   "status": {
-    "failure": "✕ hata",
-    "running": "▶ devam ediyor",
-    "success": "✓ başarılı",
-    "waiting": "⏳ girdi bekleniyor"
+    "running": "çalışıyor",
+    "success": "başarılı",
+    "failure": "başarısız"
   },
-  "templates": {
-    "async-fanout": {
-      "name": "Asenkron dağıtım (Spawn/Join)",
-      "description": "İki analiz alt-akışını EŞZAMANLI (bloklamadan) başlatır, bir join bariyeriyle sonuçları toplar, sonra tek yanıtta birleştirir. Kısmi mod açık: bir dal başarısız olursa join yine de devam eder. Instantiate sırasında iki companion alt-akış otomatik oluşturulur ve spawn onlara bağlanır.",
-      "nodes": {
-        "spawn": "Analizleri Başlat",
-        "join": "Sonuçları Topla",
-        "synth": "Birleştir"
-      },
-      "companions": {
-        "0": {
-          "name": "Analiz — Olumlu Bakış",
-          "nodes": {
-            "t": "Olumlu"
-          }
-        },
-        "1": {
-          "name": "Analiz — Olumsuz Bakış",
-          "nodes": {
-            "t": "Olumsuz"
-          }
-        }
-      }
-    },
-    "branch-router": {
-      "name": "Duygu Yönlendirici",
-      "description": "Dallanma: önce duygu analizi, çıktıya göre pozitifse teşekkür, negatifse özür yanıtı.",
-      "nodes": {
-        "classify": "Sınıflandır",
-        "route": "Yönlendir",
-        "thanks": "Teşekkür Et",
-        "apologize": "Özür Dile"
-      }
-    },
-    "classify-act": {
-      "name": "Sınıflandır & Yönlendir",
-      "description": "Girdiyi kategoriye ayır (hata/özellik/soru), her kategoriyi kendi işleyicisine yönlendir. Koordinatör \"Classify-And-Act\" deseninin deterministik Flow karşılığı.",
-      "nodes": {
-        "classify": "Sınıflandır",
-        "route": "Yönlendir",
-        "handle-bug": "Hata İşle",
-        "handle-feature": "Özellik İşle",
-        "handle-question": "Soru Yanıtla"
-      }
-    },
-    "critique-loop": {
-      "name": "Eleştir-Düzelt",
-      "description": "Taslak → eleştir → düzelt. Bir ajan üretir, ikincisi kusurları bulur, üçüncüsü düzeltir.",
-      "nodes": {
-        "draft": "Taslak",
-        "critique": "Eleştir",
-        "revise": "Düzelt"
-      }
-    },
-    "default-starter": {
-      "name": "Yanıtla & Doğrula",
-      "description": "Her workspace’e otomatik eklenen varsayılan akış. Bir ajan isteği yanıtlar, ikincisi hataları/eksikleri bulup düzeltilmiş nihai sürümü üretir.",
-      "nodes": {
-        "answer": "Yanıtla",
-        "verify": "Doğrula"
-      }
-    },
-    "experts-synthesis": {
-      "name": "Çoklu Uzman + Sentez",
-      "description": "Üç uzman aynı soruyu farklı açılardan paralel yanıtlar, bir ajan görüşleri sentezler.",
-      "nodes": {
-        "panel": "Uzman Paneli",
-        "e1": "Teknik",
-        "e2": "Ticari",
-        "e3": "Kullanıcı",
-        "synth": "Sentez"
-      }
-    },
-    "gan-loop": {
-      "name": "Üretici↔Değerlendirici (GAN)",
-      "description": "Sözleşmeli üret→değerlendir→rafine döngüsü. Üreten ajan ile ayrı şüpheci değerlendirici; skora göre rafine et veya yön değiştir (pivot). UI/E2E için Playwright ile gerçek test. İki ayrı ajan ata.",
-      "nodes": {
-        "contract": "Üretici: Sözleşme",
-        "review-contract": "Değerlendirici: Sözleşmeyi İncele",
-        "generate": "Üretici: Üret",
-        "evaluate": "Değerlendirici: Değerlendir",
-        "decide": "Karar",
-        "pivot": "Üretici: Yön Değiştir",
-        "finalize": "Sonuçlandır"
-      }
-    },
-    "generate-filter": {
-      "name": "Üret & Süz",
-      "description": "Farklı açılardan çok sayıda aday üret (paralel), sonra tek ajan tekrarları eleyip rubric ile puanlayarak en güçlü birkaçını seçer. \"Generate-And-Filter\" deseninin Flow karşılığı.",
-      "nodes": {
-        "gen": "Üret",
-        "g1": "Aday A (güvenli)",
-        "g2": "Aday B (cesur)",
-        "g3": "Aday C (basit)",
-        "filter": "Süz & Sırala"
-      }
-    },
-    "pipeline": {
-      "name": "Sıralı Hat",
-      "description": "Araştır → taslak yaz → cilala. Tek bir konudan parlatılmış kısa metin üretir.",
-      "nodes": {
-        "research": "Araştır",
-        "draft": "Taslak Yaz",
-        "polish": "Cilala"
-      }
-    },
-    "planner-executor": {
-      "name": "Planla-Uygula",
-      "description": "Planlayıcı görevi adımlara böler, uygulayıcı uygular, özetleyici sonucu raporlar.",
-      "nodes": {
-        "plan": "Planla",
-        "execute": "Uygula",
-        "summarize": "Özetle"
-      }
-    },
-    "pros-cons": {
-      "name": "Artı-Eksi Analizi",
-      "description": "Paralel fan-out + join: iki ajan aynı anda lehte/aleyhte yazar, üçüncü dengeli sonuç verir.",
-      "nodes": {
-        "debate": "Tartışma",
-        "pros": "Lehte",
-        "cons": "Aleyhte",
-        "conclude": "Sonuç"
-      }
-    },
-    "tournament": {
-      "name": "Turnuva",
-      "description": "Dört aday paralel üretilir, iki yarı-final yargıcı çiftlerin kazananını seçer, final yargıcı şampiyonu belirler. \"Tournament\" deseninin deterministik Flow karşılığı.",
-      "nodes": {
-        "seed": "Adaylar",
-        "c1": "Aday 1",
-        "c2": "Aday 2",
-        "c3": "Aday 3",
-        "c4": "Aday 4",
-        "semis": "Yarı Final",
-        "semiA": "Yarı A (1 vs 2)",
-        "semiB": "Yarı B (3 vs 4)",
-        "final": "Final"
-      }
-    }
+  "evolution": {
+    "policy": "Gözlemci politikası",
+    "policyHint": "Gözlemci (flow-optimizer sistem ajanı) her N koşuda son koşulara bakar ve bir değişiklik önerir. Öner: sen onaylarsın. Otomatik: güven eşiğini geçen öneri kendiliğinden uygulanır. Her sürüm geri alınabilir.",
+    "everyRuns": "Her N koşuda",
+    "minConfidence": "Asgari güven",
+    "maxNodes": "Düğüm sınırı",
+    "allowPromptChanges": "Gözlemci ajanın promptunu da değiştirebilsin",
+    "savePolicy": "Politikayı kaydet",
+    "optimizeNow": "Şimdi gözlemle",
+    "optimizing": "Gözlemci bakıyor…",
+    "runsSince": "son bakıştan beri {{n}} koşu (eşik {{every}})",
+    "optimizeApplied": "Öneri üretildi ve uygulandı.",
+    "optimizeProposed": "Bir öneri dosyalandı; aşağıda inceleyebilirsin.",
+    "optimizeNothing": "Gözlemci değişiklik önermedi.",
+    "proposals": "Öneriler",
+    "proposalsHint": "Gözlemci ya da ajanın dosyaladığı değişiklikler. Uygula: baş sürüme yeni bir sürüm olarak işlenir.",
+    "noProposals": "Henüz öneri yok.",
+    "confidence": "%{{pct}} güven",
+    "promptChange": "+ ajan promptu değişikliği",
+    "appliedAs": "v{{v}} olarak uygulandı",
+    "apply": "Uygula",
+    "reject": "Reddet",
+    "versions": "Sürümler",
+    "versionsHint": "Her kayıt, ajan düzenlemesi ve gözlemci uygulaması yeni bir sürümdür. Geri dönmek de yeni bir sürüm açar; geçmiş kaybolmaz.",
+    "noReason": "(gerekçe yok)",
+    "revert": "Geri dön",
+    "revertTo": "v{{v}} sürümüne geri dön",
+    "promptVersions": "Prompt sürümleri",
+    "promptVersionsHint": "Ajanın soul/identity metni gözlemci ya da ajan tarafından değiştirildikçe burada sürümlenir.",
+    "noPromptVersions": "Prompt henüz evrilmedi.",
+    "show": "Göster",
+    "hide": "Gizle",
+    "restore": "Geri yükle",
+    "soul": "Soul",
+    "identity": "Identity",
+    "lastObserved": "Gözlemci en son {{when}} baktı.",
+    "confidenceBase": "%{{pct}} güven · v{{v}}",
+    "optimizeHeld": "Öneri dosyalandı; {{reason}}. Aşağıdan uygulayabilirsin.",
+    "avgGrade": "ortalama puan {{avg}}/5 ({{n}} koşu)"
   },
-  "vars": {
-    "date": "Geçerli tarih (2026-07-04)",
-    "datetime": "Tarih + saat",
-    "input": "Akışın girdisi (RunFlow input)",
-    "last": "En son çalışan node’un çıktısı",
-    "nodeOutput": "Belirli node çıktısı",
-    "nodeTitle": "Node’lar arası değişkenler (tıkla → ekle)",
-    "seedIntro": "Buraya yazdığın metin akışta {{input}} olur.",
-    "seedTitle": "Değişkenler (tıkla → ekle)",
-    "time": "Geçerli saat (23:43)",
-    "title": "Kullanılabilir değişkenler"
-  }
+  "policy": {
+    "off": "Kapalı",
+    "offHint": "Gözlemci hiç çalışmaz.",
+    "propose": "Öner",
+    "proposeHint": "Öneri dosyalar, sen uygularsın.",
+    "auto": "Otomatik",
+    "autoHint": "Güven eşiğini geçen öneriyi kendisi uygular."
+  },
+  "proposal": {
+    "pending": "bekliyor",
+    "applied": "uygulandı",
+    "rejected": "reddedildi",
+    "invalid": "geçersiz"
+  },
+  "author": {
+    "user": "kullanıcı",
+    "agent": "ajan",
+    "observer": "gözlemci",
+    "system": "sistem"
+  },
+  "test": {
+    "hint": "Girdi, {{name}} için yeni bir sohbet oturumunda tek tur olarak çalışır; aşamalar canlı yanar.",
+    "placeholder": "Test girdisi… (Ctrl/⌘+Enter)",
+    "run": "Çalıştır",
+    "running": "Çalışıyor…",
+    "stageRunning": "çalışıyor…",
+    "waiting": "Tur kuyruğa alındı, aşama bekleniyor…"
+  },
+  "save": {
+    "title": "v{{v}} olarak kaydet",
+    "hint": "Gerekçe sürüm geçmişine yazılır; gözlemci de okur.",
+    "placeholder": "Neden değişti? (örn. cevaplar doğrulanmadan gidiyordu, eleştiri döngüsü eklendi)",
+    "defaultReason": "kanvas düzenlemesi",
+    "cancel": "Vazgeç",
+    "confirm": "Kaydet",
+    "saving": "Kaydediliyor…"
+  },
+  "lint": {
+    "oneInput": "Tam bir girdi düğümü olmalı ({{count}} var)",
+    "oneOutput": "Tam bir çıktı düğümü olmalı ({{count}} var)",
+    "danglingEdge": "{{id}} kenarı var olmayan bir düğüme bağlı",
+    "oneOutgoing": "{{id}} düğümünün tam bir çıkış kenarı olmalı ({{count}} var)",
+    "routeNoArm": "{{id}} yönlendirmesinin kolu yok",
+    "outputNoOutgoing": "{{id}} çıktı düğümünden kenar çıkamaz",
+    "transformTemplate": "{{id}} dönüşümünün şablonu boş",
+    "triggerAutomation": "{{id}} tetikleyicisi için otomasyon seçilmemiş",
+    "criteriaEmpty": "{{id}} yönlendirmesinin ölçütü yok",
+    "criteriaArms": "{{id}} yönlendirmesinde pass ya da fail etiketli kol yok"
+  },
+  "version": "v{{v}}"
 }

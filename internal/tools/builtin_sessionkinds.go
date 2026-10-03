@@ -12,7 +12,6 @@ import (
 //	chat     — user-initiated conversation (also the zero-value default)
 //	spawned  — detached spawn (spawn tool / board automation)
 //	worker   — coordinator-spawned worker (spawn with a coordinator session)
-//	flow     — orchestration flow run transcript
 //	task     — kanban task run transcript
 //	schedule — cron/scheduler delivery transcript
 //
@@ -23,7 +22,6 @@ const (
 	sessionKindChat     = "chat"
 	sessionKindSpawned  = "spawned"
 	sessionKindWorker   = "worker"
-	sessionKindFlow     = "flow"
 	sessionKindTask     = "task"
 	sessionKindSchedule = "schedule"
 )
@@ -35,7 +33,6 @@ var archivableSessionKinds = []string{
 	sessionKindChat,
 	sessionKindSpawned,
 	sessionKindWorker,
-	sessionKindFlow,
 	sessionKindTask,
 	sessionKindSchedule,
 }
@@ -52,7 +49,7 @@ var defaultArchiveKinds = []string{sessionKindChat}
 //
 //	nil/empty → defaultArchiveKinds (chat only — backward compatible)
 //	["*"]     → every kind in archivableSessionKinds
-//	["flow"]  → exactly that kind
+//	["task"]  → exactly that kind
 //
 // An unrecognised kind is a hard error rather than a silently-dropped filter: a
 // typo like "spawn" (instead of "spawned") would otherwise match nothing and read

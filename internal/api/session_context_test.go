@@ -50,7 +50,7 @@ func TestComputeCLIOverheadCallFloorAndSingleKindEvents(t *testing.T) {
 		wantKind   string
 	}{
 		{name: "chat calls zero", event: db.DebugEvent{Kind: "chat", In: 90}, wantChat: 90},
-		{name: "worker calls negative", event: db.DebugEvent{Kind: "flow", In: 75, Calls: -2}, wantWorker: 75, wantKind: "flow"},
+		{name: "worker calls negative", event: db.DebugEvent{Kind: "task", In: 75, Calls: -2}, wantWorker: 75, wantKind: "task"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

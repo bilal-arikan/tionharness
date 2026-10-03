@@ -9,7 +9,7 @@ import (
 
 func TestBundleOf(t *testing.T) {
 	cases := map[string]string{
-		"create_flow":       GroupPrefix + CategoryAutomation,
+		"create_automation": GroupPrefix + CategoryAutomation,
 		"Read":              GroupPrefix + CategoryFiles,
 		"totally_unlisted":  GroupPrefix + CategoryOther,
 		"playwright__click": MCPBundlePrefix + "playwright",

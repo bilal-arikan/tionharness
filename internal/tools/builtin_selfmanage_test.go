@@ -277,48 +277,6 @@ func TestScheduleCreateAndDelete(t *testing.T) {
 	}
 }
 
-// TestFlowCreateValidatesGraph verifies create_flow rejects invalid graph JSON,
-// rejects structurally-invalid (but well-formed JSON) graphs via deep
-// validation, and stamps provenance on a valid graph.
-func TestFlowCreateValidatesGraph(t *testing.T) {
-	ctx := context.Background()
-	d := openTestDB(t)
-	const actor = "actor-1"
-	create := NewCreateFlowTool(d, actor)
-
-	if _, err := create.Call(ctx, json.RawMessage(`{"name":"Bad","graph":"{not json"}`)); err == nil {
-		t.Fatal("expected invalid graph JSON to be rejected")
-	}
-	// Well-formed JSON but no start node → deep validation (ParseGraph+Validate)
-	// must reject it at create time, not only at run time.
-	if _, err := create.Call(ctx, json.RawMessage(`{"name":"Empty","graph":"{\"nodes\":[]}"}`)); err == nil {
-		t.Fatal("expected structurally-invalid graph (no start node) to be rejected")
-	}
-	// The agent node's agentId must resolve to a real agent — "a1" does not exist,
-	// so this must be rejected at create time too (TSK254), not only once run.
-	if _, err := create.Call(ctx, json.RawMessage(`{"name":"BadAgent","graph":"{\"start\":\"start\",\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"next\":\"n1\"},{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"a1\"}]}"}`)); err == nil {
-		t.Fatal("expected an agentId that does not exist to be rejected")
-	}
-	ag, err := d.CreateAgent(ctx, db.Agent{Name: "worker"})
-	if err != nil {
-		t.Fatalf("create agent: %v", err)
-	}
-	validGraph := `{\"start\":\"start\",\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"next\":\"n1\"},{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"` + ag.ID + `\"}]}`
-	out, err := create.Call(ctx, json.RawMessage(`{"name":"Good","graph":"`+validGraph+`"}`))
-	if err != nil {
-		t.Fatalf("create_flow: %v", err)
-	}
-	var res struct{ ID string }
-	_ = json.Unmarshal([]byte(out), &res)
-	f, err := d.GetFlow(ctx, res.ID)
-	if err != nil {
-		t.Fatalf("get flow: %v", err)
-	}
-	if f.CreatedBy != actor {
-		t.Fatalf("CreatedBy = %q, want %q", f.CreatedBy, actor)
-	}
-}
-
 // TestDeleteArtifact verifies any artifact — user- or agent-created — can be deleted.
 func TestDeleteArtifact(t *testing.T) {
 	ctx := context.Background()

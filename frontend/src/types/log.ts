@@ -1,5 +1,4 @@
 // Captured log records and autonomous runtime events streamed over /api/events.
-import type { FlowNodeEvent } from './flow'
 
 // A captured log record (application + all workspaces). component/session/
 // agent/workspace are first-class source fields promoted by the backend from
@@ -32,16 +31,9 @@ export interface AppEvent {
   // `step` event name): the marshalled TurnStep of an in-progress turn. Raw here
   // to avoid a type cycle; the consumer parses it.
   step?: unknown
-  // Present only on type === 'flow_node' frames (delivered under the SSE
-  // `flownode` event name): one flow node's live lifecycle for the run in
-  // target.flowRunId. target.rootRunId carries the top of that run's tree
-  // (equal to flowRunId for a root run), so a viewer can follow a composed run
-  // and its subflow/spawn children through one subscription; target.parentRunId +
-  // target.parentNodeId name the run and the node in ITS graph that launched this
-  // run, so the parent's canvas can hang the child's progress off that node
-  // without fetching the tree first (both empty for a root run).
-  // Typed (no cycle: flow.ts holds no back-reference here).
-  node?: FlowNodeEvent
+  // Present only on type === 'flow_node' frames (SSE `flownode`): one node's
+  // lifecycle frame of a running flow (FlowNodeEvent). Raw for the same reason.
+  node?: unknown
   // Present only on type === 'log' frames (delivered under the SSE `log`
   // event name): one captured application log record for live tailing.
   log?: LogEntry

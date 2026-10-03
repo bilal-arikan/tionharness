@@ -203,10 +203,10 @@ func validateSessionMeta(s Session) error {
 }
 
 func validateSessionEnums(s Session) error {
-	if !oneOf(s.ExecutionType, ExecutionInteractive, ExecutionSubagent, ExecutionWorker, ExecutionFlow, ExecutionSchedule, ExecutionAutomation, ExecutionSystem) {
+	if !oneOf(s.ExecutionType, ExecutionInteractive, ExecutionSubagent, ExecutionWorker, ExecutionSchedule, ExecutionAutomation, ExecutionSystem) {
 		return fmt.Errorf("invalid executionType %q", s.ExecutionType)
 	}
-	if !oneOf(s.Category, CategoryChat, CategorySubagent, CategoryWorker, CategoryFlow, CategoryAutomation, CategorySystem) {
+	if !oneOf(s.Category, CategoryChat, CategorySubagent, CategoryWorker, CategoryAutomation, CategorySystem) {
 		return fmt.Errorf("invalid category %q", s.Category)
 	}
 	if !oneOf(s.ContextMode, ContextIsolated, ContextInherited) {
@@ -291,9 +291,6 @@ func normalizeSessionMeta(s Session) Session {
 		if s.Kind == "worker" {
 			s.ExecutionType = ExecutionWorker
 		}
-		if s.Kind == "flow" {
-			s.ExecutionType = ExecutionFlow
-		}
 		if s.Kind == "schedule" {
 			s.ExecutionType = ExecutionSchedule
 		}
@@ -302,9 +299,6 @@ func normalizeSessionMeta(s Session) Session {
 		s.Category = CategoryChat
 		if s.Kind == "worker" {
 			s.Category = CategoryWorker
-		}
-		if s.Kind == "flow" {
-			s.Category = CategoryFlow
 		}
 	}
 	if s.ContextMode == "" {
@@ -335,7 +329,7 @@ func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error
 
 // GetOrCreateSourceSession returns (creating if absent) the session that owns a
 // specific source entity's run history, keyed by (kind, sourceID) — e.g. one
-// "task" session per task or one "flow" session per flow. Each run appends a
+// "task" session per task. Each run appends a
 // turn, so the entity's whole execution history reads as a single transcript.
 func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agentID, title string) (Session, error) {
 	fresh := Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title}
@@ -352,31 +346,6 @@ func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agent
 		d.fireSessionHook(SessionChangeEvent{SessionID: created.ID, Op: SessionOpCreate, Session: created})
 	}
 	return created, err
-}
-
-// SetSessionOriginRun fills the flow run id into a flow-origin session's Origin.
-// The per-run transcript session is created BEFORE its FlowRun row exists (so the
-// executions feed shows the run the instant it starts), which is the one case
-// where the origin cannot be complete at creation; RunFlow calls this right after
-// CreateFlowRun, before the first node runs. A no-op when the id is already set.
-func (d *DB) SetSessionOriginRun(ctx context.Context, sessionID, runID string) error {
-	changed := false
-	updated, err := d.mutateSession(sessionID, func(s *Session) {
-		if s.Origin == nil {
-			o := deriveOrigin(*s)
-			o.At = s.CreatedAt
-			s.Origin = &o
-		}
-		if s.Origin.RunID == runID {
-			return
-		}
-		s.Origin.RunID = runID
-		changed = true
-	})
-	if err == nil && changed {
-		d.fireSessionHook(SessionChangeEvent{SessionID: sessionID, Op: SessionOpOrigin, Session: updated})
-	}
-	return err
 }
 
 // SetSessionSummary persists the rolling compaction summary for a session and

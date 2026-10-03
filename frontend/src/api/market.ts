@@ -24,7 +24,6 @@ export interface ConnectorSearchResult {
 // `include`) keeps the legacy "export everything" behaviour.
 export interface WorkspaceExportInclude {
   agentIds: string[] | null
-  flowIds: string[] | null
   skillSlugs: string[] | null
   scheduleIds: string[] | null
   /** Starter automation rules. Built-in seeded board defaults are excluded by the

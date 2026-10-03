@@ -19,7 +19,6 @@ const (
 	KindChat     CallKind = db.UsageKindChat
 	KindTask     CallKind = db.UsageKindTask
 	KindSchedule CallKind = db.UsageKindSchedule
-	KindFlow     CallKind = db.UsageKindFlow
 	KindDelegate CallKind = db.UsageKindDelegate
 	KindSpawn    CallKind = db.UsageKindSpawn
 	KindSubagent CallKind = db.UsageKindSubagent

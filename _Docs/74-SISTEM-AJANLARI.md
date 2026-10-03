@@ -23,6 +23,7 @@ Derlenmiş kayıt defteri altyapı rolleri ve altı yerleşik worker profili tan
 | `lesson-extractor` | Etkin | `lesson` | Başarısız ajan turlarından yeniden kullanılabilir dersler çıkarır (`internal/agent/systemagents.go:29-34`, `internal/agent/lessons_systemagent.go:5-7`). |
 | `insight` | **Devre dışı** | `insight-analyzer` | Oturum kanıtlarında tekrarlanan, eyleme dönük bulguları analiz eder (`internal/agent/systemagents.go:37-43`, `internal/agent/lessons_systemagent.go:9-10`). |
 | `insight-applier` | Etkin | `insight-applier` | İçgörü taramasının `workspace-opt` bulgularını workspace varlıklarına uygular (`internal/agent/systemagents.go`, `internal/prompts/defaults/insight-applier.md`). |
+| `flow-optimizer` | Etkin | `flow-optimizer` | Akış gözlemcisi (2026-10-04): bir ajanın son akış koşularına bakıp ana akışı ve promptları için ölçülü bir değişiklik önerir; yanıt STRICT JSON, kodda doğrulanıp sürüm olarak uygulanır (`internal/agent/flow_optimizer.go`, `93-EVRILEN-AKISLAR.md`). |
 | `stall-judge` | Etkin | `stall-judge` | Koordinatörün son mesajının gerçekte yapılmamış bir worker spawn'ını anlatıp anlatmadığını sınıflandırır; araçsız, tek satır JSON (`internal/agent/coordination_stall.go`, 2026-09-03). |
 
 ### Yardımcı çağrılar nerede koşar — `auxNativeRouting` (2026-09-03)

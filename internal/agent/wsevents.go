@@ -95,31 +95,33 @@ func (r *Runtime) OnTrajectoryChange(ev db.TrajectoryChangeEvent) {
 	r.observeTrajectoryTransitions(ev)
 }
 
-// FlowRunPayload is the Data shape of a ws:flow_run event.
+// FlowRunPayload is the Data shape of a ws:flow_run event: one agent turn's
+// pass through its evolving flow (start / finish).
 type FlowRunPayload struct {
-	RunID        string `json:"runId"`
-	FlowID       string `json:"flowId"`
-	ParentRunID  string `json:"parentRunId,omitempty"`
-	ParentNodeID string `json:"parentNodeId,omitempty"`
-	RootRunID    string `json:"rootRunId"`
-	SessionID    string `json:"sessionId,omitempty"`
-	Status       string `json:"status"` // db.FlowRunning | FlowWaiting | FlowSuccess | FlowFailure
-	Error        string `json:"error,omitempty"`
-	CreatedAt    int64  `json:"createdAt"`
-	UpdatedAt    int64  `json:"updatedAt"`
+	RunID      string `json:"runId"`
+	FlowID     string `json:"flowId"`
+	AgentID    string `json:"agentId"`
+	SessionID  string `json:"sessionId,omitempty"`
+	Version    int    `json:"version"`
+	Status     string `json:"status"` // db.FlowRunning | FlowSuccess | FlowFailure
+	Error      string `json:"error,omitempty"`
+	StepCount  int    `json:"stepCount"`
+	DurationMs int64  `json:"durationMs"`
+	Grade      int    `json:"grade,omitempty"` // 1..5 once the flow-grade authority judged it
+	CreatedAt  int64  `json:"createdAt"`
+	UpdatedAt  int64  `json:"updatedAt"`
 }
 
-// emitFlowRunEvent publishes a flow run's current status (start, waiting,
-// finish). Called right after the corresponding store write.
+// emitFlowRunEvent publishes a flow run's current status (start, finish, grade).
+// Called right after the corresponding store write.
 func (r *Runtime) emitFlowRunEvent(run db.FlowRun) {
 	r.emitWorkspaceEvent(events.TypeWSFlowRun,
-		map[string]string{"flowRunId": run.ID, "flowId": run.FlowID, "rootRunId": run.RootOf(), "status": run.Status},
+		map[string]string{"flowRunId": run.ID, "flowId": run.FlowID, "agentId": run.AgentID, "sessionId": run.SessionID, "status": run.Status},
 		FlowRunPayload{
-			RunID: run.ID, FlowID: run.FlowID, ParentRunID: run.ParentRunID, ParentNodeID: run.ParentNodeID,
-			RootRunID: run.RootOf(), SessionID: run.SessionID, Status: run.Status, Error: run.Error,
+			RunID: run.ID, FlowID: run.FlowID, AgentID: run.AgentID, SessionID: run.SessionID, Version: run.Version,
+			Status: run.Status, Error: run.Error, StepCount: run.StepCount, DurationMs: run.DurationMs, Grade: run.Grade,
 			CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
 		})
-	r.bindFlowRunToTrajectory(run)
 }
 
 // ScheduleArmedPayload is the Data shape of a ws:schedule_armed event: the
@@ -129,7 +131,6 @@ type ScheduleArmedPayload struct {
 	ScheduleID string `json:"scheduleId"`
 	Name       string `json:"name,omitempty"`
 	AgentID    string `json:"agentId,omitempty"`
-	FlowID     string `json:"flowId,omitempty"`
 	OneShot    bool   `json:"oneShot,omitempty"`
 	SessionID  string `json:"sessionId,omitempty"` // wake target for a one-shot
 	FireAt     int64  `json:"fireAt"`              // unix seconds
@@ -140,7 +141,7 @@ func (r *Runtime) emitScheduleArmed(sc db.Schedule, fireAt int64) {
 	r.emitWorkspaceEvent(events.TypeWSScheduleArmed,
 		map[string]string{"scheduleId": sc.ID},
 		ScheduleArmedPayload{
-			ScheduleID: sc.ID, Name: sc.Name, AgentID: sc.AgentID, FlowID: sc.FlowID,
+			ScheduleID: sc.ID, Name: sc.Name, AgentID: sc.AgentID,
 			OneShot: sc.OneShot, SessionID: sc.SessionID, FireAt: fireAt,
 		})
 }

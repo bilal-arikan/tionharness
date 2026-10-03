@@ -27,6 +27,7 @@ export type StepKind =
   | 'context_change'
   | 'cache_break'
   | 'compaction'
+  | 'flow_node'
 
 export interface TodoItem {
   content: string

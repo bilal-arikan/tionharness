@@ -17,7 +17,6 @@ func sampleTrajectory() db.Trajectory {
 		{ID: "s:COORD", Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved, RefKind: "session", RefID: "COORD", PhaseID: "p:plan", State: db.TrajStateDone},
 		{ID: "s:W1", Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved, RefKind: "session", RefID: "W1", PhaseID: "p:code", State: db.TrajStateActive, Label: "worker"},
 		{ID: "a:AUT1", Kind: db.TrajNodeAutomation, Origin: db.TrajOriginDeclared, RefKind: "automation", RefID: "AUT1", State: db.TrajStateGhost},
-		{ID: "r:RUN1", Kind: db.TrajNodeFlowRun, Origin: db.TrajOriginObserved, RefKind: "flowrun", RefID: "RUN1", State: db.TrajStateDone},
 	}
 	return db.Trajectory{
 		ID: "RTA1", RootSessionID: "COORD", TemplateRef: "plan-dev-test@1", Revision: 7,
@@ -49,19 +48,19 @@ func TestProjectTrajectoryLevels(t *testing.T) {
 	if !strings.Contains(card.Body, "✓ plan → ● code → ○ review") {
 		t.Errorf("card phases line wrong:\n%s", card.Body)
 	}
-	if !strings.Contains(card.Body, "2 oturum · 1 akış koşusu · 1 otomasyon · 0 kapı · 1 hayalet") {
+	if !strings.Contains(card.Body, "2 oturum · 1 otomasyon · 0 kapı · 1 hayalet") {
 		t.Errorf("card counts wrong:\n%s", card.Body)
 	}
-	if !strings.Contains(card.Body, "4 ilan · 3 gözlem · 1 kenar") {
+	if !strings.Contains(card.Body, "4 ilan · 2 gözlem · 1 kenar") {
 		t.Errorf("card origin line wrong:\n%s", card.Body)
 	}
 	if strings.Contains(card.Body, "kapı:verdict") {
 		t.Errorf("card must not list per-phase detail:\n%s", card.Body)
 	}
-	if len(card.Handles) != 4 {
-		t.Fatalf("card handles = %d, want 4 bound nodes", len(card.Handles))
+	if len(card.Handles) != 3 {
+		t.Fatalf("card handles = %d, want 3 bound nodes", len(card.Handles))
 	}
-	if card.Handles[1].Ref != (Ref{Kind: KindSession, ID: "W1"}) || card.Handles[3].Ref != (Ref{Kind: KindFlowRun, ID: "RUN1"}) {
+	if card.Handles[1].Ref != (Ref{Kind: KindSession, ID: "W1"}) || card.Handles[2].Ref != (Ref{Kind: KindAutomation, ID: "AUT1"}) {
 		t.Errorf("handle refs wrong: %+v", card.Handles)
 	}
 
@@ -86,7 +85,7 @@ func TestProjectTrajectoryElidesHandles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(v.Handles) != trajectoryTopN || v.Elided != 7 || v.ElidedUnit != "düğüm" {
+	if len(v.Handles) != trajectoryTopN || v.Elided != 6 || v.ElidedUnit != "düğüm" {
 		t.Errorf("handles=%d elided=%d unit=%q", len(v.Handles), v.Elided, v.ElidedUnit)
 	}
 }
@@ -141,7 +140,7 @@ func TestTrajectoryChildrenAndProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Ref{{Kind: KindSession, ID: "COORD"}, {Kind: KindSession, ID: "W1"}, {Kind: KindAutomation, ID: "AUT1"}, {Kind: KindFlowRun, ID: "RUN1"}}
+	want := []Ref{{Kind: KindSession, ID: "COORD"}, {Kind: KindSession, ID: "W1"}, {Kind: KindAutomation, ID: "AUT1"}}
 	if len(kids) != len(want) {
 		t.Fatalf("trajectory children = %+v", kids)
 	}

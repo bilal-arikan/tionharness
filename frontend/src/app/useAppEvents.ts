@@ -6,7 +6,8 @@ import { i18next } from '@/i18n'
 // pattern the inline onEventRef/onStepRef handlers used inside App.tsx.
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { api, getActiveWorkspace } from '@/api'
-import type { AppEvent, Message, TurnStep } from '@/types'
+import { publishFlowNode } from '@/shared/lib/flowNodeBus'
+import type { AppEvent, FlowNodeEvent, Message, TurnStep } from '@/types'
 import { emitToast } from '@/shared/lib/notifyBus'
 import { toast } from '@/shared/components/toastStore'
 import { speakLatestReply } from '@/shared/lib/tts'
@@ -14,8 +15,6 @@ import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
 import { viewForEventType } from './eventViews'
 import { bumpSignalsForEvent, bumpWorkspaceActivityForEvent } from './eventToRefreshSignals'
-import { publishFlowNode } from '@/shared/lib/flowNodeBus'
-import { publishFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
 import { publishWorkerChange, publishWorkerChangeAll } from '@/shared/lib/workerBus'
 import { routeFromEvent, buildRoute } from './url'
 import type { ClientPrefs } from './useAppearance'
@@ -345,32 +344,6 @@ function onStep(d: AppEventDeps, e: AppEvent) {
   d.chat.applyAutoStep(sid, e.step as TurnStep)
 }
 
-// Live flow-node frames (flow_node): fan each node lifecycle frame out to the
-// run viewer showing that run (via flowNodeBus, keyed by target.flowRunId) so
-// per-node progress renders live. target.rootRunId additionally routes the frame
-// to viewers following the whole run tree, so a composed run's subflow/spawn
-// children stream too. Ignore frames from other workspaces.
-function onFlowNode(_d: AppEventDeps, e: AppEvent) {
-  if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) return
-  const runId = e.target?.flowRunId
-  if (!runId || !e.node) return
-  publishFlowNode(runId, e.node, e.target?.rootRunId, {
-    parentRunId: e.target?.parentRunId,
-    parentNodeId: e.target?.parentNodeId,
-  })
-}
-
-// Live per-node step frames (flow_node_step): fan each tool/thinking step out to
-// the run viewer's node inspector (via flowNodeStepBus, keyed by target.flowRunId)
-// so a running agent node shows its steps live. Ignore other-workspace frames.
-function onFlowNodeStep(_d: AppEventDeps, e: AppEvent) {
-  if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) return
-  const runId = e.target?.flowRunId
-  const nodeId = e.target?.nodeId
-  if (!runId || !nodeId || !e.step) return
-  publishFlowNodeStep(runId, { nodeId, step: e.step as TurnStep })
-}
-
 // onReconnect resyncs the live views after the SSE feed reopens following a drop.
 // Everything published while it was down is lost (the backend bus has no replay),
 // so anything rendered purely from events is now stale with no way to notice:
@@ -406,8 +379,7 @@ export function useAppEvents(deps: AppEventDeps) {
       api.subscribeEvents(
         (e) => onEvent(depsRef.current, e),
         (e) => onStep(depsRef.current, e),
-        (e) => onFlowNode(depsRef.current, e),
-        (e) => onFlowNodeStep(depsRef.current, e),
+        (e) => onFlowNode(e),
       ),
     [],
   )
@@ -415,4 +387,19 @@ export function useAppEvents(deps: AppEventDeps) {
   // Resync after an SSE drop (see onReconnect). Separate subscription so it also
   // covers the module-level rebuild path (a CLOSED source recreated after backoff).
   useEffect(() => api.subscribeReconnect(() => onReconnect(depsRef.current)), [])
+}
+
+// Live flow-node frames (flow_node): fan each frame out to the flow bus keyed by
+// the flow id, so the Flows screen can light the node that is running.
+function onFlowNode(e: AppEvent) {
+  const flowId = e.target?.flowId
+  const runId = e.target?.flowRunId
+  if (!flowId || !runId || !e.node) return
+  publishFlowNode({
+    runId,
+    flowId,
+    agentId: e.target?.agentId ?? '',
+    sessionId: e.target?.sessionId,
+    event: e.node as FlowNodeEvent,
+  })
 }

@@ -1,13 +1,13 @@
 // useWorkspaceSignals bridges the workspace stream (ws:*, _Docs/77 R3) to the
 // app's toasts, so a fact that happens while the user is looking at any screen
 // still reaches them: an automation fired, a coordinator was halted by the
-// stall guard, a trajectory started or ended, a flow run failed.
+// stall guard, a trajectory started or ended.
 //
 // It rides the lane store (connectLanes is ref-counted, one SSE connection is
 // shared with the Rota screen and the chat header strip) and diffs its rings
 // instead of opening a second subscription. Per-type mutes from Settings apply
 // through the same NOTIFY_TYPES keys the global feed uses (automation,
-// coordination, flow) plus the frontend-only `rota` type.
+// coordination) plus the frontend-only `rota` type.
 import { useEffect } from 'react'
 import { toast } from '@/shared/components/toastStore'
 import { isTypeEnabled } from '@/shared/lib/notifyPrefs'

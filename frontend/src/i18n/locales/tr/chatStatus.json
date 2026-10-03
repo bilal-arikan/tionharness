@@ -70,7 +70,9 @@
     "approve": "Planı onayla",
     "reject": "Reddet"
   },
-  "recovery": { "fallback": "Kurtarma" },
+  "recovery": {
+    "fallback": "Kurtarma"
+  },
   "rewind": {
     "confirmTitle": "Bu mesaj ve sonrasını sil, sohbeti buraya geri sar",
     "confirm": "Geri sar",
@@ -203,5 +205,15 @@
   "stream": {
     "guidanceQueued": "Bu turda canlı yönlendirme kullanılamıyor. Mesajın kuyruğa alındı.",
     "guidanceRemainsQueued": "Bu turda canlı yönlendirme kullanılamıyor. Mesajın kuyrukta kalacak."
+  },
+  "flowNode": {
+    "stage": "Aşama",
+    "types": {
+      "input": "girdi",
+      "llm": "model",
+      "route": "yönlendirme",
+      "transform": "dönüşüm",
+      "output": "çıktı"
+    }
   }
 }

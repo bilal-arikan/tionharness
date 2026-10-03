@@ -42,7 +42,7 @@ describe('pickInitialSession', () => {
   it('ignores a draft on a non-writable (read-only) session', () => {
     const sessions = [
       session({ id: 'SES2', agentId: 'AGT2' }),
-      session({ id: 'SES1', kind: 'flow', agentId: 'AGT1' }),
+      session({ id: 'SES1', kind: 'task', agentId: 'AGT1' }),
     ]
     const drafted = new Set(['SES1'])
     expect(

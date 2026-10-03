@@ -70,7 +70,9 @@
     "approve": "Approve plan",
     "reject": "Reject"
   },
-  "recovery": { "fallback": "Recovery" },
+  "recovery": {
+    "fallback": "Recovery"
+  },
   "rewind": {
     "confirmTitle": "Delete this message and everything after it, then rewind the chat here",
     "confirm": "Rewind",
@@ -203,5 +205,15 @@
   "stream": {
     "guidanceQueued": "Live guidance is unavailable for this turn. Your message was queued.",
     "guidanceRemainsQueued": "Live guidance is unavailable for this turn. Your message remains queued."
+  },
+  "flowNode": {
+    "stage": "Stage",
+    "types": {
+      "input": "input",
+      "llm": "model",
+      "route": "route",
+      "transform": "transform",
+      "output": "output"
+    }
   }
 }

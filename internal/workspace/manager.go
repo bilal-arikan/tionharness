@@ -21,7 +21,6 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
-	flowpkg "github.com/bilal-arikan/tionharness/internal/flows"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
@@ -446,16 +445,10 @@ func (m *Manager) open(meta Meta) error {
 		"message_mb", storeStats.MessageBytes>>20,
 		"phases_ms", formatLoadPhases(storeStats.LoadPhaseMs))
 
-	// Seed the built-in default flows into this workspace's store. Idempotent and
-	// deletion-aware (a ledger keeps a user-removed default from coming back).
-	// Running it here backfills every existing workspace on the next startup.
-	if err := flowpkg.EnsureDefaultFlows(context.Background(), database, storeDir); err != nil {
-		m.logger.Warn("seed default flows failed", "workspace", meta.ID, "error", err)
-	}
-	// Upgrade existing flows to the required start-node model (adds a start node
-	// where missing). Idempotent; backfills every workspace on the next startup.
-	if err := flowpkg.MigrateFlowsStartEnd(context.Background(), database); err != nil {
-		m.logger.Warn("migrate flows to start-node model failed", "workspace", meta.ID, "error", err)
+	// A flow run only outlives its process when that process died mid-turn:
+	// close them out so the activity indicators and stats start clean.
+	if n := database.FailOrphanedFlowRuns(context.Background()); n > 0 {
+		m.logger.Warn("flow runs interrupted by restart", "workspace", meta.ID, "count", n)
 	}
 	// Seed the built-in automations (board-driven execution: card→in_progress spawns
 	// an agent, card→done archives; plus the insight-apply rule). Idempotent,
@@ -537,6 +530,9 @@ func (m *Manager) open(meta Meta) error {
 	// Rota (F2): phase / trajectory_end automations and recipe watchers fire on
 	// trajectory transitions, delivered off-path on the trajectory work queue.
 	rt.SetTrajectoryTransitionHook(autoEngine.OnTrajectoryTransition)
+	// Flows (_Docs/93): flow-kind automations fire when a flow run finished
+	// (and, when grading is on, was graded).
+	rt.AddFlowRunHook(autoEngine.OnFlowRunFinished)
 	// Every message append is session activity regardless of author (user, agent,
 	// worker, or system). Notify open clients so their session list picks up the
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.
@@ -557,10 +553,7 @@ func (m *Manager) open(meta Meta) error {
 		return fmt.Errorf("register activity hook: %w", err)
 	}
 
-	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
-	rt.ResumeRunningFlows(context.Background())
-	// Timeout sweeper: fail await-input runs that out-wait their node's TimeoutSec.
-	rt.StartWaitingFlowSweeper(context.Background())
+	rt.StartFlowRunSweeper(context.Background())
 	// Durable Ask timeout sweeper: close ask/permission cards nobody answered in
 	// time (no-op until a TimeoutSec is stamped — 0 = unlimited by default).
 	rt.StartWaitingAskSweeper(context.Background())

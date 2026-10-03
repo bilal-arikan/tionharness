@@ -13,25 +13,12 @@ func TestRuntimeSessionsReuseAndInvalidateProjection(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = d.Close() })
 	ctx := t.Context()
-	first, err := d.CreateFlowRun(ctx, FlowRun{FlowID: "FLW1"})
+	task, err := d.CreateTask(ctx, Task{Title: "t"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.FinishFlowRun(ctx, first.ID, FlowFailure, "", "failed"); err != nil {
-		t.Fatal(err)
-	}
-	latest, err := d.CreateFlowRun(ctx, FlowRun{FlowID: "FLW1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := d.FinishFlowRun(ctx, latest.ID, FlowSuccess, "", ""); err != nil {
-		t.Fatal(err)
-	}
-	linked, err := d.CreateSession(ctx, Session{Kind: "flow", SourceID: "FLW1", Origin: &SessionOrigin{Kind: OriginFlow, EntityID: "FLW1", RunID: first.ID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacy, err := d.CreateSession(ctx, Session{Kind: "flow", SourceID: "FLW1"})
+	setTaskLastRunForTest(d, task.ID, "failure")
+	linked, err := d.CreateSession(ctx, Session{Kind: "task", SourceID: task.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +31,8 @@ func TestRuntimeSessionsReuseAndInvalidateProjection(t *testing.T) {
 	for _, row := range rows {
 		byID[row.SessionID] = row
 	}
-	if len(rows) != 2 || byID[linked.ID].LastStatus != FlowFailure || byID[legacy.ID].LastStatus != FlowSuccess {
-		t.Fatalf("linked/legacy statuses = %+v", rows)
+	if len(rows) != 1 || byID[linked.ID].LastStatus != "failure" {
+		t.Fatalf("task status rows = %+v", rows)
 	}
 	snapshot := d.runtimeSessions.Load()
 	rows[0].LastStatus = "caller mutation"
@@ -64,7 +51,7 @@ func TestRuntimeSessionsReuseAndInvalidateProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows = d.RuntimeSessions()
-	if len(rows) != 3 || d.runtimeSessions.Load() == snapshot {
+	if len(rows) != 2 || d.runtimeSessions.Load() == snapshot {
 		t.Fatalf("lineage mutation not reflected: %+v", rows)
 	}
 	for _, row := range rows {
@@ -72,12 +59,10 @@ func TestRuntimeSessionsReuseAndInvalidateProjection(t *testing.T) {
 			t.Fatalf("lost lineage: %+v", row)
 		}
 	}
-	if err := d.FinishFlowRun(ctx, latest.ID, FlowFailure, "", "changed"); err != nil {
-		t.Fatal(err)
-	}
+	setTaskLastRunForTest(d, task.ID, "success")
 	for _, row := range d.RuntimeSessions() {
-		if row.SessionID == legacy.ID && row.LastStatus != FlowFailure {
-			t.Fatal("stale flow status")
+		if row.SessionID == linked.ID && row.LastStatus != "success" {
+			t.Fatal("stale task status")
 		}
 	}
 	if err := d.DeleteSession(ctx, linked.ID); err != nil {
@@ -90,22 +75,18 @@ func TestRuntimeSessionsReuseAndInvalidateProjection(t *testing.T) {
 	}
 }
 
-func TestRuntimeSessionsTaskAndMissingRunFallback(t *testing.T) {
-	// Seed a legacy snapshot directly so normalization and missing-link behavior
-	// remain covered independently of today's creation rules.
+func TestRuntimeSessionsTaskFallback(t *testing.T) {
+	// Seed a legacy snapshot directly so normalization behavior stays covered
+	// independently of today's creation rules.
 	d := &DB{sessions: map[string]Session{
 		"task": {ID: "task", Kind: "task", SourceID: "T1"},
-		"flow": {ID: "flow", Kind: "flow", SourceID: "F1", Origin: &SessionOrigin{Kind: OriginFlow, EntityID: "F1", RunID: "missing"}},
-	}, tasks: map[string]Task{"T1": {ID: "T1", LastRunStatus: "success"}}, flowRuns: map[string]FlowRun{
-		"RUN2":  {ID: "RUN2", FlowID: "F1", CreatedAt: 1, Status: FlowFailure},
-		"RUN10": {ID: "RUN10", FlowID: "F1", CreatedAt: 1, Status: FlowSuccess},
-	}}
+	}, tasks: map[string]Task{"T1": {ID: "T1", LastRunStatus: "success"}}}
 	for _, row := range d.RuntimeSessions() {
 		if row.LastStatus != "success" {
 			t.Fatalf("status = %+v", row)
 		}
 	}
-	if len(d.RuntimeSessions()) != 2 {
+	if len(d.RuntimeSessions()) != 1 {
 		t.Fatal("missing rows")
 	}
 }
@@ -127,4 +108,15 @@ func BenchmarkRuntimeSessionsWarm(b *testing.B) {
 			}
 		})
 	}
+}
+
+// setTaskLastRunForTest stamps a task's last run status directly (there is no
+// public setter: the board is passive, runs no longer write back to cards).
+func setTaskLastRunForTest(d *DB, id, status string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	t := d.tasks[id]
+	t.LastRunStatus = status
+	d.tasks[id] = t
+	d.markMutatedLocked()
 }

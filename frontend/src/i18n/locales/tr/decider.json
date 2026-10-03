@@ -266,6 +266,21 @@
       "label": "Rota judge kapıları",
       "description": "\"judge\" türündeki faz kapıları, fazın çıkış koşulunun sağlanıp sağlanmadığını kök oturumun son transkriptine bakarak sorar. Hiçbir model cevap veremezse kapı kapalı kalır.",
       "threshold": "Kapının açılması için çıkış koşulunun sağlanma olasılığının en düşük değeri."
+    },
+    "flow-criteria": {
+      "label": "Flow ölçüt kapıları",
+      "description": "Eşleşme modu \"ölçütler\" olan yönlendirme düğümleri, son çıktı için her ölçütü karar modeline ayrı bir evet/hayır sorusu olarak sorar; hepsi sağlanırsa pass, aksi halde fail kolu.",
+      "threshold": "Bir ölçütün sağlanmış sayılması için gereken en düşük olasılık."
+    },
+    "flow-grade": {
+      "label": "Akış koşusu puanlama",
+      "description": "Her başarılı akış koşusundan sonra yanıtın isteği ne kadar karşıladığını 1–5 arasında puanlar. Puan gözlemcinin kanıtına, koşu listesine ve akış otomasyonlarına (\"puan 2 ve altıysa…\") girer. Tur başına bir ucuz karar çağrısı.",
+      "threshold": "Puanın kaydedilmesi için gereken en düşük güven."
+    },
+    "flow-proposal-gate": {
+      "label": "Akış önerisi kapısı",
+      "description": "Otomatik politika bir gözlemci önerisini uygulamadan önce, son koşulara göre değişikliğin makul ve orantılı bir iyileştirme olup olmadığını sorar. Tutulan öneri bir insan için bekler.",
+      "threshold": "Önerinin kendiliğinden uygulanması için akışı iyileştirme olasılığının en düşük değeri."
     }
   },
   "threshold": "Eşik",

@@ -19,7 +19,6 @@ func TestSSEEventNameSkipsWorkspaceStream(t *testing.T) {
 		events.TypeChat:               {"notify", false},
 		events.TypeSessionStep:        {"step", false},
 		events.TypeFlowNode:           {"flownode", false},
-		"flow_node_step":              {"flownodestep", false},
 		events.TypeLog:                {"log", false},
 		events.TypeWSSessionLifecycle: {"", true},
 		events.TypeWSFlowRun:          {"", true},

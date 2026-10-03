@@ -10,7 +10,7 @@ import (
 )
 
 // selfManageBuiltins builds the self-management tool suite: the tools that let an
-// agent create/edit/delete agents, flows, schedules, tasks, hooks and MCP
+// agent create/edit/delete agents, schedules, tasks, hooks and MCP, evolve its own flow and prompts,
 // servers, manage artifacts, author skills, read/apply app settings, manage
 // workspaces, add memories and read logs. No provenance gate downstream — agents
 // may edit/delete any entity, user- or agent-created (CreatedBy is kept for
@@ -62,24 +62,13 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 			}
 			return tools.HandoffResult{NewSessionID: res.NewSessionID, AgentName: res.AgentName, ArtifactID: res.ArtifactID}, nil
 		}),
-		// Flows.
-		tools.NewCreateFlowTool(r.db, agent.ID),
-		tools.NewUpdateFlowTool(r.db, agent.ID),
-		tools.NewDeleteFlowTool(r.db, agent.ID),
-		tools.NewListFlowsTool(r.db, agent.ID),
-		tools.NewGetFlowTool(r.db, agent.ID),
-		// run_flow drives a flow to completion (autonomous, budget-gated) and
-		// records it in the executions feed, like run_task.
-		tools.NewRunFlowTool(r.db, agent.ID, func(ctx context.Context, flowID, input string) (db.FlowRun, error) {
-			run, _, err := r.RunFlowRecorded(ctx, flowID, input, true, nil)
-			return run, err
-		}),
-		// Discover flow runs (esp. ones waiting at an await-input node) and feed a
-		// waiting run — the peer/agent half of the await-input bridge.
-		tools.NewListFlowRunsTool(r.db, agent.ID),
-		tools.NewDeliverFlowInputTool(r.db, agent.ID, func(ctx context.Context, runID, input string) (db.FlowRun, error) {
-			return r.ResumeWaitingFlow(ctx, runID, input)
-		}),
+		// Evolving flow (_Docs/93): read / edit / revert the agent's main flow,
+		// read its runs, rewrite its own prompts. Validated by the runtime bridge.
+		tools.NewGetFlowTool(agentFlowBridge{rt: r, actor: agent.ID}),
+		tools.NewEditFlowTool(agentFlowBridge{rt: r, actor: agent.ID}),
+		tools.NewRevertFlowTool(agentFlowBridge{rt: r, actor: agent.ID}),
+		tools.NewListFlowRunsTool(agentFlowBridge{rt: r, actor: agent.ID}),
+		tools.NewUpdateMyPromptTool(agentFlowBridge{rt: r, actor: agent.ID}),
 		// Schedules (routines).
 		tools.NewCreateScheduleTool(r.db, agent.ID, r.reloadSchedules),
 		tools.NewUpdateScheduleTool(r.db, agent.ID, r.reloadSchedules),
@@ -92,8 +81,8 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewUpdateAutomationTool(r.db, agent.ID),
 		tools.NewDeleteAutomationTool(r.db, agent.ID),
 		tools.NewListAutomationsTool(r.db, agent.ID),
-		// Flow/schedule tags are edited via the `tags` field on update_flow /
-		// update_schedule; session tags via update_session. No separate tag tools.
+		// Schedule tags are edited via the `tags` field on update_schedule; session
+		// tags via update_session. No separate tag tools.
 		// Tasks (kanban board). Read/create/edit/move/delete on any task. The board
 		// is passive — no run tool.
 		tools.NewListTasksTool(r.db, agent.ID),

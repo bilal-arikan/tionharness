@@ -1,19 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
-import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
+import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Workflow, Zap } from 'lucide-react'
 import { api } from '@/api'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_AUTOMATIONS, SIGNAL_SCHEDULES } from '@/app/eventToRefreshSignals'
-import type {
-  Agent,
-  Automation,
-  AutomationTriggerKind,
-  BoardColumnDef,
-  Flow,
-  Schedule,
-} from '@/types'
+import type { Agent, Automation, AutomationTriggerKind, BoardColumnDef, Schedule } from '@/types'
 import { ArchiveViewToggle, PaneHeader, toast } from '@/shared/components'
 import { tokens } from '@/shared/lib/format'
 import { ArchivedAutomationsList } from './ArchivedAutomationsList'
@@ -54,8 +47,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   const automationsTick = useRefreshTrigger(SIGNAL_AUTOMATIONS)
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [automations, setAutomations] = useState<Automation[]>([])
-  // Workspace flows, for flow-backed schedules/automations (target = a flow).
-  const [flows, setFlows] = useState<Flow[]>([])
   // Workspace board columns, for the board-trigger source/target filters.
   const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
 
@@ -97,10 +88,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   }, [onError])
 
   useEffect(() => {
-    api
-      .listFlows()
-      .then(setFlows)
-      .catch((e) => onError((e as Error).message))
     api
       .getWorkspaceSettings()
       .then((s) => {
@@ -349,6 +336,14 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       addLabel: t('lanes.trajectoryEnd.add'),
       emptyLabel: t('lanes.trajectoryEnd.empty'),
     },
+    flow: {
+      title: t('lanes.flow.title'),
+      icon: Workflow,
+      accent: COLUMN_ACCENT.flow,
+      description: t('lanes.flow.description'),
+      addLabel: t('lanes.flow.add'),
+      emptyLabel: t('lanes.flow.empty'),
+    },
   }
 
   // Live lane stat: shown only for the token lane when it actually holds a
@@ -387,7 +382,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
             isBoardKind={kind === 'board'}
             isTokenKind={kind === 'token'}
             agents={agents}
-            flows={flows}
             columns={columns}
             onToggle={() => toggleAutomation(a)}
             onReset={() => resetAutomation(a)}
@@ -467,7 +461,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         />
       )}
 
-      {/* Seven lanes side by side, each with its own vertical card scroll. The
+      {/* Eight lanes side by side, each with its own vertical card scroll. The
           row scrolls HORIZONTALLY at every width: below `md` it is a snapping
           carousel (one near-full-width lane per screen); on md+ every lane keeps
           a readable minimum width (BoardColumn) and only grows when there is
@@ -499,7 +493,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
               ref={s.id === focusId ? focusRef : undefined}
               schedule={s}
               agents={agents}
-              flows={flows}
               highlighted={highlightId === s.id}
               running={runningId === s.id}
               onToggle={() => toggleSchedule(s)}
@@ -515,12 +508,12 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         {renderAutomationLane('token')}
         {renderAutomationLane('phase')}
         {renderAutomationLane('trajectory_end')}
+        {renderAutomationLane('flow')}
       </div>
 
       {editor?.lane === 'schedules' && (
         <ScheduleModal
           agents={agents}
-          flows={flows}
           editing={editor.editing}
           onClose={() => setEditor(null)}
           onSaved={(s, isNew) =>
@@ -536,7 +529,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         <AutomationModal
           kind={editor.lane}
           agents={agents}
-          flows={flows}
           columns={columns}
           editing={editor.editing}
           onClose={() => setEditor(null)}

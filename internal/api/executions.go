@@ -12,7 +12,7 @@ import (
 )
 
 // executionItem is one row of the unified executions feed: a session-backed
-// transcript produced by any path (chat, task, flow, schedule),
+// transcript produced by any path (chat, task, schedule),
 // enriched with the agent name, a live-running flag and a last-run status so the
 // feed renders every execution uniformly.
 type executionItem struct {
@@ -33,7 +33,7 @@ type executionItem struct {
 }
 
 // handleListExecutions returns the unified executions feed across all agents.
-// Optional ?kind= filters to a single category (chat|task|flow|schedule|...).
+// Optional ?kind= filters to a single category (chat|task|schedule|...).
 // Newest-updated first. Because every run path now funnels its output into a
 // Session, this single list surfaces them all.
 func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
@@ -67,24 +67,6 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		return n
 	}
 
-	// Flow status index: built lazily with a single store scan, and only when a
-	// flow-kind session is actually in the feed — a workspace with no flows pays
-	// nothing.
-	var flowStatus map[string]string
-	var runStatus map[string]string
-	for _, sess := range sessions {
-		if sess.Kind != "flow" || (kindFilter != "" && kindFilter != "flow") {
-			continue
-		}
-		runs, err := wsp.DB.ListFlowRuns(ctx, "")
-		if writeDBError(w, err, "") {
-			return
-		}
-		flowStatus = newestFlowRunStatus(runs)
-		runStatus = flowRunStatusByID(runs)
-		break
-	}
-
 	out := make([]executionItem, 0, len(sessions))
 	for _, sess := range sessions {
 		if kindFilter != "" && sess.Kind != kindFilter {
@@ -100,7 +82,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 			MessageCount:             sess.MessageCount,
 			Unread:                   sess.Unread,
 			Running:                  running[sess.ID],
-			LastStatus:               s.lastStatusFor(ctx, wsp, sess, flowStatus, runStatus),
+			LastStatus:               s.lastStatusFor(ctx, wsp, sess),
 			CoordinatorSessionID:     sess.CoordinatorSessionID,
 			RootCoordinatorSessionID: sess.RootCoordinator(),
 			CreatedAt:                sess.CreatedAt,
@@ -145,58 +127,18 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 }
 
 // lastStatusFor resolves a session's most recent run status where one exists
-// (task → its last run status; flow → its newest run's status). Empty for chat
-// and schedule kinds, which have no discrete pass/fail outcome.
-//
-// flowStatus is the prebuilt flowID → newest-run-status index (see
-// newestFlowRunStatus); a nil map simply yields no flow status. It is a parameter
-// rather than a lookup because this is called once per session on a poll that
-// runs every few seconds: resolving the flow status per session meant a full
-// flowRuns scan plus a sort EACH TIME, i.e. O(sessions × flowRuns).
-func (s *Server) lastStatusFor(ctx context.Context, wsp *workspace.Workspace, sess db.Session, flowStatus, runStatus map[string]string) string {
+// (task → its last run status). Empty for chat and schedule kinds, which have
+// no discrete pass/fail outcome.
+func (s *Server) lastStatusFor(ctx context.Context, wsp *workspace.Workspace, sess db.Session) string {
 	if sess.SourceID == "" {
 		return ""
 	}
-	switch sess.Kind {
-	case "task":
+	if sess.Kind == "task" {
 		if t, err := wsp.DB.GetTask(ctx, sess.SourceID); err == nil {
 			return t.LastRunStatus
 		}
-	case "flow":
-		// A flow session is ONE run's transcript: answer with that run's status
-		// (Origin.RunID, stamped at run creation since R1). Only a session that
-		// predates the link falls back to the flow's newest run — the old
-		// behaviour, which showed a newer run's chip on an older transcript.
-		if rid := sess.Lineage().RunID; rid != "" {
-			if st, ok := runStatus[rid]; ok {
-				return st
-			}
-		}
-		return flowStatus[sess.SourceID]
 	}
 	return ""
-}
-
-// flowRunStatusByID indexes runID → status in one pass.
-func flowRunStatusByID(runs []db.FlowRun) map[string]string {
-	out := make(map[string]string, len(runs))
-	for _, r := range runs {
-		out[r.ID] = r.Status
-	}
-	return out
-}
-
-// newestFlowRunStatus indexes flowID → the status of that flow's newest run, in
-// ONE scan of the store. runs must be ordered newest-first (what ListFlowRuns
-// returns), so the first entry seen for a flow wins.
-func newestFlowRunStatus(runs []db.FlowRun) map[string]string {
-	out := make(map[string]string, len(runs))
-	for _, r := range runs {
-		if _, seen := out[r.FlowID]; !seen {
-			out[r.FlowID] = r.Status
-		}
-	}
-	return out
 }
 
 // sessionAgentName is the feed's display name for a session's agent. A delegated

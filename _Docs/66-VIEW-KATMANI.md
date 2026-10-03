@@ -120,7 +120,7 @@ digest(n) = fold(digest(n-1), events[lastSeq..n])
 ```
 
 TionHarness bu mekanik için hazır: `session.jsonl` append-only ([08](08-DEPOLAMA.md)),
-`FlowRun` state'i restart-safe ([15](15-FLOW-CANVAS.md)), board mutasyonları `BoardHook`
+`FlowRun` state'i restart-safe ([arsiv/15](arsiv/15-FLOW-CANVAS.md), tarihsel), board mutasyonları `BoardHook`
 event'li ([46](46-ETIKET-OTOMASYON.md)). Yani **checkpoint + delta** doğal olarak var.
 
 - Cache anahtarı: `entityID + lastSeq/contentHash + level`
@@ -865,7 +865,7 @@ boş pano, coordination soyağacı, boş girdi reddi) ve `internal/api/views_tes
 
 ## İlgili dokümanlar
 
-[08](08-DEPOLAMA.md) depolama · [15](15-FLOW-CANVAS.md) flow motoru ·
+[08](08-DEPOLAMA.md) depolama · [93](93-EVRILEN-AKISLAR.md) evrilen akışlar ·
 [35](35-CONTEXT-RESET-HANDOFF.md) compaction/handoff ·
 [46](46-ETIKET-OTOMASYON.md) board olayları ·
 [47](47-KOORDINATOR-COKLU-AJAN.md) worker-state bloğu ·

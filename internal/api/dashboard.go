@@ -64,7 +64,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
-	runs, err := wsp.DB.ListFlowRuns(ctx, "")
+	runs, err := wsp.DB.ListFlowRuns(ctx, "", 0)
 	if writeDBError(w, err, "") {
 		return
 	}
@@ -258,7 +258,7 @@ func runsByStatus(runs []db.FlowRun) []namedCount {
 	}
 	// Fixed order so the chart's colours stay stable between refreshes.
 	out := []namedCount{}
-	for _, st := range []string{db.FlowSuccess, db.FlowRunning, db.FlowWaiting, db.FlowFailure} {
+	for _, st := range []string{db.FlowSuccess, db.FlowRunning, db.FlowFailure} {
 		if n := counts[st]; n > 0 {
 			out = append(out, namedCount{Name: st, Count: n})
 		}

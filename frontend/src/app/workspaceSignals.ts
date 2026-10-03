@@ -84,19 +84,5 @@ export function diffSignals(
       }
     }
   }
-  if (enabled('flow')) {
-    for (const [id, r] of next.flowRuns) {
-      const before = prev.flowRuns.get(id)
-      if (before && before.status !== 'failure' && r.status === 'failure') {
-        out.push({
-          level: 'error',
-          text: i18next.t('shell.flowFailed', {
-            id,
-            error: r.error || i18next.t('shell.unknownError'),
-          }),
-        })
-      }
-    }
-  }
   return out
 }

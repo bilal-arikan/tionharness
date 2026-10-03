@@ -59,8 +59,8 @@ func parseSessionIDs(raw string) map[string]bool {
 // Kept in sync with SESSION_CHIPS; a kind that maps to none of them falls to
 // chipOther so no session can become unfilterable.
 var sessionChipKeys = []string{
-	"chat", "task", "flow", "spawned", chipSubagent, "automation", "insight",
-	"flow-coordinator", "inbox", chipOther, "running", "awaiting-workers",
+	"chat", "task", "spawned", chipSubagent, "automation", "insight",
+	"inbox", chipOther, "running", "awaiting-workers",
 	chipWorker, chipArchived,
 }
 

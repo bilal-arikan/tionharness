@@ -1,11 +1,11 @@
 // Trajectory ("Rota") payloads, mirroring internal/db/models_trajectory.go.
 // A trajectory is the declared-plus-observed graph of one root session: the
-// phases it announced and the sessions / flow runs / automation fires that then
+// phases it announced and the sessions / automation fires that then
 // happened under them (_Docs/77 R4).
 
 export type TrajectoryStatus = 'planned' | 'running' | 'waiting' | 'done' | 'failed' | 'abandoned'
 
-type TrajectoryNodeKind = 'phase' | 'session' | 'automation' | 'flowrun' | 'gate' | 'optimizer'
+type TrajectoryNodeKind = 'phase' | 'session' | 'automation' | 'gate' | 'optimizer'
 
 type TrajectoryNodeOrigin = 'declared' | 'observed'
 
@@ -62,8 +62,6 @@ interface TrajectorySummary {
   priced: boolean
   sessions: number
   failedSessions: number
-  flowRuns: number
-  failedRuns: number
   phases: number
   phasesDone: number
   ghostPhases?: string[]

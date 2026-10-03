@@ -29,6 +29,7 @@ var systemAgentVisuals = map[string]struct{ Avatar, Color string }{
 	"insight":             {"🔮", "#5C6480"},
 	"insight-applier":     {"🛠️", "#8A6BC8"},
 	"recipe-optimizer":    {"✦", "#6B7FD8"},
+	"flow-optimizer":      {"🧬", "#5B8DEF"},
 	"stall-judge":         {"⚖️", "#7A8FA6"},
 
 	// Worker profiles — read-only.
@@ -114,6 +115,17 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Provider:       "claude-cli",
 			// Suggestion-only: it reads the evidence it is handed and answers with
 			// JSON; it never touches an entity, so it needs no tools.
+			AllowedTools: "[]",
+		},
+		{
+			SystemKey:      "flow-optimizer",
+			Name:           "Flow Observer",
+			Description:    "Watches an agent's recent flow runs and proposes measured changes to its main flow and prompts (_Docs/93).",
+			SystemPrompt:   prompts.Default("flow-optimizer"),
+			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
+			// Suggestion-only: it reads the evidence it is handed and answers with
+			// JSON; the runtime validates and applies, so it needs no tools.
 			AllowedTools: "[]",
 		},
 		{

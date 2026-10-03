@@ -23,7 +23,6 @@ const ENTITY_TYPES = [
   'agent',
   'hook',
   'automation',
-  'flow',
   'schedule',
   'mcp-server',
   'task',

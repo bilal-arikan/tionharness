@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,12 +11,11 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/market"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // Workspace templates seed a freshly created workspace with a curated set of
-// agents, an orchestration flow connecting them, and optional schedules — so a
+// agents and optional schedules/automations — so a
 // new workspace arrives ready for a specific kind of work (research, software
 // development, daily routine) instead of an empty roster.
 //
@@ -40,7 +38,6 @@ type templateListItem struct {
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 	AgentCount  int    `json:"agentCount"`
-	HasFlow     bool   `json:"hasFlow"`
 	// CoordinatorCount / AutomationCount describe how the team is WIRED, which the
 	// agent count alone cannot: "2 agents" reads the same for a chat pair and for a
 	// delegation chain. Both 0 for an ordinary template, so the picker only
@@ -61,7 +58,6 @@ func (s *Server) handleListWorkspaceTemplates(w http.ResponseWriter, _ *http.Req
 		if full, ok := s.market.Get(meta.ID); ok && full.Payload.Workspace != nil {
 			wp := full.Payload.Workspace
 			item.AgentCount = len(wp.Agents)
-			item.HasFlow = len(wp.Flows) > 0
 			item.AutomationCount = len(wp.Automations)
 			for _, a := range wp.Agents {
 				if a.CoordinatorMode {
@@ -231,15 +227,6 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 		ids[ta.Key] = created.ID
 	}
 
-	// 3) Flows (linear or non-linear), each wired to the seeded agents. The
-	// name → id map feeds flow-backed automations in step 5.
-	flowIDs := make(map[string]string, len(wp.Flows))
-	for _, tf := range wp.Flows {
-		if id := s.seedTemplateFlow(ctx, wsNew, tf, ids); id != "" {
-			flowIDs[tf.Name] = id
-		}
-	}
-
 	// 4) Starter schedules. Templates remain disabled by default unless they
 	// explicitly opt in, preserving the historical no-surprise behavior.
 	for _, ts := range wp.Schedules {
@@ -259,14 +246,14 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 	}
 
 	// 5) Starter automations, wired to the seeded team.
-	s.seedTemplateAutomations(ctx, wsNew, wp.Automations, ids, flowIDs)
+	s.seedTemplateAutomations(ctx, wsNew, wp.Automations, ids)
 
 	// 6) Editable config files: non-default runtime prompts + README.
 	s.seedTemplateConfigFiles(wsNew, wp)
 }
 
 // seedTemplateAutomations creates a template's starter automation rules, resolving
-// each rule's agent key / flow name against the team seeded above. A rule whose
+// each rule's agent key against the team seeded above. A rule whose
 // target does not resolve is SKIPPED, not seeded with an empty target: a board
 // rule with no agent fires and then fails on every card move, which is worse than
 // a rule that is simply absent. (This is also why the built-in board defaults —
@@ -275,9 +262,9 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 //
 // Rules are disabled by default. Templates may explicitly enable rules that are
 // required for their advertised runtime behavior.
-func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.Workspace, autos []market.WorkspaceTemplateAutomation, agentIDs, flowIDs map[string]string) {
+func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.Workspace, autos []market.WorkspaceTemplateAutomation, agentIDs map[string]string) {
 	for _, ta := range autos {
-		agentID, flowID := "", ""
+		agentID := ""
 		if ta.AgentKey != "" {
 			id, ok := agentIDs[ta.AgentKey]
 			if !ok {
@@ -287,19 +274,10 @@ func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.W
 			}
 			agentID = id
 		}
-		if ta.FlowName != "" {
-			id, ok := flowIDs[ta.FlowName]
-			if !ok {
-				s.logger.Warn("seed template automation skipped: unknown flow",
-					"workspace", wsNew.ID, "automation", ta.Name, "flow", ta.FlowName)
-				continue
-			}
-			flowID = id
-		}
 		// A spawn-action rule with neither target would fire into the void.
 		// Archive-action board rules legitimately have no target (no LLM call).
-		if agentID == "" && flowID == "" && ta.BoardAction != db.BoardActionArchive {
-			s.logger.Warn("seed template automation skipped: no agent or flow target",
+		if agentID == "" && ta.BoardAction != db.BoardActionArchive {
+			s.logger.Warn("seed template automation skipped: no agent target",
 				"workspace", wsNew.ID, "automation", ta.Name)
 			continue
 		}
@@ -320,7 +298,6 @@ func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.W
 			TokenScope:     ta.TokenScope,
 			TokenThreshold: ta.TokenThreshold,
 			TargetAgentID:  agentID,
-			FlowID:         flowID,
 			SessionMode:    ta.SessionMode,
 			PromptTemplate: ta.PromptTemplate,
 			SpawnTags:      ta.SpawnTags,
@@ -389,93 +366,6 @@ func (s *Server) seedTemplateSkills(wsNew *workspace.Workspace, skills []market.
 		}
 	}
 	wsNew.Runtime.Skills().Reload()
-}
-
-// seedTemplateFlow resolves a template flow's graph (linear steps OR a full
-// orchestration graph with branch/parallel/delay/transform), wiring agent keys
-// to real IDs, and persists it. A flow referencing a missing agent is skipped.
-// Returns the created flow's id ("" when the flow was skipped) so a flow-backed
-// starter automation can bind to it by name.
-func (s *Server) seedTemplateFlow(ctx context.Context, wsNew *workspace.Workspace, tf market.WorkspaceTemplateFlow, ids map[string]string) string {
-	graph, ok := resolveTemplateFlowGraph(tf, ids)
-	if !ok {
-		s.logger.Warn("seed flow skipped: unresolved/invalid", "workspace", wsNew.ID, "flow", tf.Name)
-		return ""
-	}
-	raw, err := json.Marshal(graph)
-	if err != nil {
-		s.logger.Warn("seed flow marshal failed", "workspace", wsNew.ID, "error", err)
-		return ""
-	}
-	created, err := wsNew.DB.CreateFlow(ctx, db.Flow{
-		Name:  tf.Name,
-		Graph: string(raw),
-	})
-	if err != nil {
-		s.logger.Warn("seed flow create failed", "workspace", wsNew.ID, "error", err)
-		return ""
-	}
-	return created.ID
-}
-
-// resolveTemplateFlowGraph builds the runnable orchestration graph for a template
-// flow, resolving agent keys to the real agent ids created for this workspace. A
-// flow with a Graph uses it directly (agent nodes' agentId "tmpl:<key>" are
-// substituted, so branch/parallel/delay/transform all work); otherwise the linear
-// Steps are assembled. Returns false when a referenced agent key is missing or the
-// resulting graph is empty/invalid. Pure (no side effects) so it is unit-testable.
-func resolveTemplateFlowGraph(tf market.WorkspaceTemplateFlow, ids map[string]string) (orchestration.Graph, bool) {
-	if g := strings.TrimSpace(tf.Graph); g != "" {
-		graph, err := orchestration.ParseGraph(g)
-		if err != nil {
-			return orchestration.Graph{}, false
-		}
-		for i := range graph.Nodes {
-			n := &graph.Nodes[i]
-			if n.Type == orchestration.NodeAgent && strings.HasPrefix(n.AgentID, market.TemplateAgentKeyPrefix) {
-				real, ok := ids[strings.TrimPrefix(n.AgentID, market.TemplateAgentKeyPrefix)]
-				if !ok {
-					return orchestration.Graph{}, false
-				}
-				n.AgentID = real
-			}
-		}
-		graph, _ = orchestration.MigrateAddStart(graph) // ensure the required start node
-		if graph.Validate() != nil {
-			return orchestration.Graph{}, false
-		}
-		return graph, true
-	}
-
-	// Linear steps → a sequential agent graph.
-	if len(tf.Steps) == 0 {
-		return orchestration.Graph{}, false
-	}
-	nodes := make([]orchestration.Node, 0, len(tf.Steps))
-	for i, st := range tf.Steps {
-		agentID, ok := ids[st.AgentKey]
-		if !ok {
-			return orchestration.Graph{}, false
-		}
-		next := ""
-		if i+1 < len(tf.Steps) {
-			next = tf.Steps[i+1].ID
-		}
-		nodes = append(nodes, orchestration.Node{
-			ID:      st.ID,
-			Type:    orchestration.NodeAgent,
-			Title:   st.Title,
-			AgentID: agentID,
-			Prompt:  st.Prompt,
-			Next:    next,
-		})
-	}
-	graph := orchestration.Graph{Start: tf.Steps[0].ID, Nodes: nodes}
-	graph, _ = orchestration.MigrateAddStart(graph) // ensure the required start node
-	if graph.Validate() != nil {
-		return orchestration.Graph{}, false
-	}
-	return graph, true
 }
 
 // defaultProviderModel resolves the provider/model for seeded agents. A

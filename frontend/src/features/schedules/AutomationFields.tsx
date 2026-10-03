@@ -2,18 +2,22 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Info } from 'lucide-react'
 import type {
+  Agent,
   TrajEndStatus,
   TrajEvent,
   AutomationTriggerKind,
   BoardAction,
   BoardColumnDef,
   BoardOp,
+  FlowRuleStatus,
   TokenScope,
 } from '@/types'
 import {
   BOARD_ACTIONS,
   BOARD_OPS,
   BOARD_PROMPT_VARS,
+  FLOW_PROMPT_VARS,
+  FLOW_STATUSES,
   TRAJ_END_STATUSES,
   TRAJ_EVENTS,
   TRAJ_PROMPT_VARS,
@@ -219,7 +223,9 @@ export function PromptVarsField({
         ? TOKEN_PROMPT_VARS
         : kind === 'phase' || kind === 'trajectory_end'
           ? TRAJ_PROMPT_VARS
-          : PROMPT_VARS
+          : kind === 'flow'
+            ? FLOW_PROMPT_VARS
+            : PROMPT_VARS
   return (
     <div className="relative">
       <div className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -359,6 +365,83 @@ export function TrajectoryTriggerFields({
           placeholder={t('fields.trajectory.anyRecipe')}
           className={`${inputCls} w-36 font-mono`}
         />
+      </label>
+    </div>
+  )
+}
+
+// FlowTriggerFields renders the filters of a flow-run trigger (_Docs/93): the
+// agent whose flow finished (empty = any), the run's outcome, and an optional
+// grade ceiling — "fire only when the decision model graded the reply at or
+// below N" (0 = ignore the grade; needs the flow-grade authority on).
+export function FlowTriggerFields({
+  agents,
+  agentId,
+  status,
+  maxGrade,
+  onChange,
+}: {
+  agents: Agent[]
+  agentId: string
+  status: FlowRuleStatus
+  maxGrade: number
+  onChange: (patch: { agentId?: string; status?: FlowRuleStatus; maxGrade?: number }) => void
+}) {
+  const { t } = useTranslation('schedules')
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label
+        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+        title={t('fields.flow.agentHint')}
+      >
+        {t('fields.flow.agent')}
+        <select
+          value={agentId}
+          onChange={(e) => onChange({ agentId: e.target.value })}
+          className={selCls}
+          data-testid="automation-flow-agent"
+        >
+          <option value="">{t('fields.flow.anyAgent')}</option>
+          {agents
+            .filter((a) => !a.system && !a.deleted)
+            .map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+        {t('fields.flow.status')}
+        <select
+          value={status}
+          onChange={(e) => onChange({ status: e.target.value as FlowRuleStatus })}
+          className={selCls}
+        >
+          {FLOW_STATUSES.map((o) => (
+            <option key={o.value || 'any'} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+        title={t('fields.flow.maxGradeHint')}
+      >
+        {t('fields.flow.maxGrade')}
+        <select
+          value={maxGrade}
+          onChange={(e) => onChange({ maxGrade: Number(e.target.value) || 0 })}
+          className={selCls}
+        >
+          <option value={0}>{t('fields.flow.ignoreGrade')}</option>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <option key={n} value={n}>
+              {t('fields.flow.gradeAtMost', { n })}
+            </option>
+          ))}
+        </select>
       </label>
     </div>
   )

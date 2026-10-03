@@ -88,7 +88,7 @@ func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 			return nil, err
 		}
 		return capHandles(hs, categoryTopN), nil
-	case KindFlowRun, KindSchedule,
+	case KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		// Leaves in the map: their breakdown is rendered inline by Project, so
 		// there is nothing structural to expand into.
@@ -221,15 +221,14 @@ func IsExpandable(ref Ref) bool {
 	}
 }
 
-// workspaceChildren is the root's fixed set of eleven category/entity nodes.
-// Static and always eleven — a category that happens to be empty still appears,
+// workspaceChildren is the root's fixed set of ten category/entity nodes.
+// Static and always ten — a category that happens to be empty still appears,
 // so the map's shape does not change with the workspace's contents. The first
 // four are the original buckets; artifacts/automations/skills/insights + logs
 // are the TSK66 extension; budget/tools round the existing set out.
 func workspaceChildren() []Handle {
 	return []Handle{
 		{Label: "Oturumlar", Ref: Ref{Kind: KindCategory, ID: CategorySessions}, Level: LevelCard},
-		{Label: "Akışlar", Ref: Ref{Kind: KindCategory, ID: CategoryFlows}, Level: LevelCard},
 		{Label: "Pano", Ref: Ref{Kind: KindBoard, ID: BoardRefID}, Level: LevelCard},
 		{Label: "Ajanlar", Ref: Ref{Kind: KindCategory, ID: CategoryAgents}, Level: LevelCard},
 		{Label: "Artifacts", Ref: Ref{Kind: KindCategory, ID: CategoryArtifacts}, Level: LevelCard},
@@ -282,24 +281,6 @@ func sessionHandleList(sessions []db.Session) []Handle {
 		hs = append(hs, Handle{
 			Label: "session:" + s.ID + " " + clip(orDash(s.Title), 40),
 			Ref:   Ref{Kind: KindSession, ID: s.ID},
-			Level: LevelCard,
-		})
-	}
-	return hs
-}
-
-// flowRunHandleList orders runs most-recent first and renders each as a
-// flow-run handle.
-func flowRunHandleList(runs []db.FlowRun) []Handle {
-	sorted := append([]db.FlowRun(nil), runs...)
-	slices.SortStableFunc(sorted, func(a, b db.FlowRun) int {
-		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
-	})
-	hs := make([]Handle, 0, len(sorted))
-	for _, r := range sorted {
-		hs = append(hs, Handle{
-			Label: "run:" + r.ID + " " + string(r.Status),
-			Ref:   Ref{Kind: KindFlowRun, ID: r.ID},
 			Level: LevelCard,
 		})
 	}
@@ -460,7 +441,7 @@ func sessionKindOf(s db.Session) string {
 // sessionKindOrder fixes the display order of the kind groups; unknown kinds
 // follow alphabetically.
 var sessionKindOrder = []string{
-	"chat", "task", "flow", "flow-coordinator", "schedule", "spawned", "subagent",
+	"chat", "task", "schedule", "spawned", "subagent",
 	"worker", "inbox", "other",
 }
 

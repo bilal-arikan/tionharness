@@ -1,521 +1,398 @@
-import type { Agent, BranchMatchMode, Flow, FlowNode } from '@/types'
-import { AgentPicker } from '@/shared/components/agents/AgentPicker'
-import { PromptEditor } from '@/shared/components'
-import { InfoPopover } from '@/shared/components/InfoPopover'
-import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
-import { workflowHelp } from '@/shared/components/coordinatorWorkflowText'
-import { Workflow } from 'lucide-react'
-import { NumberField } from '@/features/settings/primitives'
-import { chromeFor, nodeHeaderForeground } from './nodeStyles'
-import { FlowVarsButton } from './FlowVarsButton'
-import { JudgeFields } from './JudgeFields'
+import { Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type {
+  Agent,
+  Automation,
+  FlowEdge,
+  FlowGraph,
+  FlowNode,
+  FlowNodeType,
+  RouteMode,
+} from '@/types'
+import { PromptEditor } from '@/shared/components/PromptEditor'
+import { OptionPills } from '@/shared/components/OptionPills'
+import { InfoPopover } from '@/shared/components/InfoPopover'
+import { NODE_CHROME } from './nodeChrome'
+import { outgoing } from './flowGraph'
 
 interface Props {
-  node: FlowNode
+  graph: FlowGraph
+  nodeId: string | null
+  edgeId: string | null
   agents: Agent[]
-  isStart: boolean
-  // All nodes in the flow (for the {{node.<id>}} variable helper). Excludes nothing;
-  // the helper filters out the current node itself.
-  allNodes: FlowNode[]
-  // Other flows in the workspace, for the subflow/spawn flow pickers. The current
-  // flow is excluded by the caller to avoid trivial self-reference in the picker.
-  flows: Flow[]
-  onPatch: (patch: Partial<FlowNode>) => void
-  onDuplicate: () => void
-  onDelete: () => void
+  automations: Automation[]
+  ownerAgentId: string
+  readOnly: boolean
+  onChangeNode: (id: string, patch: Partial<FlowNode>) => void
+  onChangeEdge: (id: string, patch: Partial<FlowEdge>) => void
+  onDeleteNode: (id: string) => void
+  onDeleteEdge: (id: string) => void
+  onClose: () => void
 }
 
-const input = 'w-full rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none'
+const inputCls =
+  'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none'
 
-// NodeInspector edits the currently selected node. A node's TYPE is fixed once
-// created (it is chosen from the palette and never changes here) — the inspector
-// only edits its intrinsic fields (title, agent, prompt, branch conditions).
-// Routing (next/parallel/joinNext) is managed by drawing edges on the canvas.
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-dim)]">
+        {label}
+        {hint && <InfoPopover text={hint} fixed />}
+      </span>
+      {children}
+    </label>
+  )
+}
+
+// NodeInspector edits the selected node or edge. It is docked on wide
+// landscape screens and shown as a bottom sheet elsewhere (the parent decides;
+// this component only renders the fields).
 export function NodeInspector({
-  node,
+  graph,
+  nodeId,
+  edgeId,
   agents,
-  isStart,
-  allNodes,
-  flows,
-  onPatch,
-  onDuplicate,
-  onDelete,
+  automations,
+  ownerAgentId,
+  readOnly,
+  onChangeNode,
+  onChangeEdge,
+  onDeleteNode,
+  onDeleteEdge,
+  onClose,
 }: Props) {
   const { t } = useTranslation('flows')
-  const chrome = chromeFor(node.type)
-  // Spawn nodes in this flow, for the join node's "which spawn to await" picker.
-  const spawnNodes = allNodes.filter((n) => n.type === 'spawn')
-  // Other nodes, for the {{node.<id>}} variable helper (a node can't reference itself).
-  const nodeRefs = allNodes
-    .filter((n) => n.id !== node.id)
-    .map((n) => ({ id: n.id, title: n.title ?? '' }))
+  const node = nodeId ? graph.nodes.find((n) => n.id === nodeId) : undefined
+  const edge = edgeId ? graph.edges.find((e) => e.id === edgeId) : undefined
+
+  if (!node && !edge) {
+    return (
+      <div className="p-4 text-xs text-[var(--color-text-dim)]">
+        <p>{t('inspector.empty')}</p>
+        <p className="mt-2">{t('inspector.emptyHint')}</p>
+      </div>
+    )
+  }
+
+  if (edge && !node) {
+    const from = graph.nodes.find((n) => n.id === edge.from)
+    const isRoute = from?.type === 'route'
+    return (
+      <div className="space-y-3 p-4 text-xs" data-testid="flow-edge-inspector">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold">{t('inspector.edge')}</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 hover:bg-[var(--color-surface-2)]"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <p className="font-mono text-[11px] text-[var(--color-text-dim)]">
+          {edge.from} → {edge.to}
+        </p>
+        {isRoute ? (
+          <Field label={t('inspector.when')} hint={t('inspector.whenHint')}>
+            <input
+              className={inputCls}
+              value={edge.when ?? ''}
+              disabled={readOnly}
+              placeholder={t('inspector.whenDefault')}
+              onChange={(e) => onChangeEdge(edge.id, { when: e.target.value })}
+              data-testid="flow-edge-when"
+            />
+          </Field>
+        ) : (
+          <p className="text-[var(--color-text-dim)]">{t('inspector.linearEdge')}</p>
+        )}
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => onDeleteEdge(edge.id)}
+            className="flex items-center gap-1 rounded border border-[var(--color-danger)]/50 px-2 py-1 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+          >
+            <Trash2 size={12} /> {t('inspector.deleteEdge')}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const n = node!
+  const chrome = NODE_CHROME[n.type]
+  const Icon = chrome.Icon
+  const set = (patch: Partial<FlowNode>) => onChangeNode(n.id, patch)
+  const arms = n.type === 'route' ? outgoing(graph, n.id) : []
+  const protectedNode = n.type === 'input' || n.type === 'output'
   return (
-    <div className="space-y-3 text-sm">
-      <div className="flex items-center justify-between gap-2">
-        <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">
-          {node.id}
-          {isStart && ' ▶'}
-        </span>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={onDuplicate}
-            className="text-xs text-[var(--color-accent)]"
-            title={t('actions.duplicate')}
-          >
-            ⧉ {t('actions.duplicate')}
-          </button>
-          <button
-            onClick={onDelete}
-            className="text-xs text-[var(--color-danger)]"
-            title={t('actions.delete')}
-          >
-            ✕ {t('actions.delete')}
-          </button>
-        </div>
-      </div>
-
-      {/* Node type is fixed after creation — shown read-only with its monochrome
-          type glyph (no type <select>; the type is chosen once from the palette). */}
+    <div className="space-y-3 p-4 text-xs" data-testid="flow-node-inspector">
       <div className="flex items-center gap-2">
-        <span
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
-          style={{ background: chrome.accent, color: nodeHeaderForeground(chrome.accent) }}
+        <Icon size={15} style={{ color: chrome.accent }} />
+        <span className="font-semibold">{t(`types.${n.type}`)}</span>
+        <span className="font-mono text-[10px] text-[var(--color-text-dim)]">{n.id}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto rounded p-1 hover:bg-[var(--color-surface-2)]"
+          title={t('inspector.close')}
         >
-          <chrome.Icon size={14} />
-        </span>
-        <span className="text-sm font-medium">{chrome.label}</span>
-        <span className="text-[11px] text-[var(--color-text-dim)]">{t('inspector.typeFixed')}</span>
+          <X size={14} />
+        </button>
       </div>
-
-      <label className="block">
-        <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-          {t('inspector.title')}
-        </span>
+      <Field label={t('inspector.title')}>
         <input
-          value={node.title ?? ''}
-          onChange={(e) => onPatch({ title: e.target.value })}
-          placeholder={t('inspector.titlePlaceholder')}
-          className={input}
+          className={inputCls}
+          value={n.title ?? ''}
+          disabled={readOnly}
+          onChange={(e) => set({ title: e.target.value })}
+          data-testid="flow-node-title"
         />
-      </label>
-
-      {node.type === 'agent' && (
+      </Field>
+      {n.type === 'llm' && (
         <>
-          <div className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.agent')}
-            </span>
-            <AgentPicker
-              agents={agents}
-              value={node.agentId ?? ''}
-              onChange={(id) => onPatch({ agentId: id })}
-              placeholder={t('inspector.agentPlaceholder')}
-              clearable
-            />
-          </div>
-          <div className="block">
-            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>{t('inspector.prompt')}</span>
-              <FlowVarsButton
-                nodeRefs={nodeRefs}
-                onInsert={(t) => onPatch({ prompt: (node.prompt ?? '') + t })}
-              />
-            </div>
+          <Field label={t('inspector.prompt')} hint={t('inspector.promptHint')}>
             <PromptEditor
-              value={node.prompt ?? ''}
-              onChange={(v) => onPatch({ prompt: v })}
-              placeholder="{{input}}, {{last}}, {{node.<id>}}"
-              rows={10}
+              value={n.prompt ?? ''}
+              onChange={(v) => set({ prompt: v })}
               mono
-              textareaClassName="min-h-48 text-xs"
+              rows={5}
+              autoSizeMax={260}
+              disabled={readOnly}
+              placeholder="{{input}}"
             />
-          </div>
-          <label className="flex items-center gap-2 text-xs">
+          </Field>
+          <Field label={t('inspector.context')} hint={t('inspector.contextHint')}>
+            <OptionPills
+              value={n.context ?? 'thread'}
+              onChange={(v) => set({ context: v as 'thread' | 'fresh' })}
+              ariaLabel={t('inspector.context')}
+              options={[
+                { value: 'thread', label: t('context.thread') },
+                { value: 'fresh', label: t('context.fresh') },
+              ]}
+            />
+          </Field>
+          <Field label={t('inspector.tools')} hint={t('inspector.toolsHint')}>
+            <OptionPills
+              value={n.tools ?? 'inherit'}
+              onChange={(v) => set({ tools: v as 'inherit' | 'none' })}
+              ariaLabel={t('inspector.tools')}
+              options={[
+                { value: 'inherit', label: t('tools.inherit') },
+                { value: 'none', label: t('tools.none') },
+              ]}
+            />
+          </Field>
+          <Field label={t('inspector.agent')} hint={t('inspector.agentHint')}>
+            <select
+              className={inputCls}
+              value={n.agentId ?? ''}
+              disabled={readOnly}
+              onChange={(e) => set({ agentId: e.target.value || undefined })}
+            >
+              <option value="">{t('inspector.ownerAgent')}</option>
+              {agents
+                .filter((a) => !a.system && !a.deleted && a.id !== ownerAgentId)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          <Field label={t('inspector.model')} hint={t('inspector.modelHint')}>
             <input
-              type="checkbox"
-              checked={node.fresh ?? false}
-              onChange={(e) => onPatch({ fresh: e.target.checked })}
+              className={inputCls}
+              value={n.model ?? ''}
+              disabled={readOnly}
+              onChange={(e) => set({ model: e.target.value || undefined })}
             />
-            <span>
-              {t('inspector.freshContext')}{' '}
-              <span className="text-[var(--color-text-dim)]">
-                {t('inspector.freshContextHint')}
-              </span>
-            </span>
-          </label>
-        </>
-      )}
-
-      {node.type === 'coordinator' && (
-        <>
-          <div className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.coordinatorAgent')}
-            </span>
-            <AgentPicker
-              agents={agents}
-              value={node.agentId ?? ''}
-              onChange={(id) => onPatch({ agentId: id })}
-              placeholder={t('inspector.agentPlaceholder')}
-              clearable
-            />
-          </div>
-          <div className="block">
-            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>{t('inspector.coordinatorGoal')}</span>
-              <FlowVarsButton
-                nodeRefs={nodeRefs}
-                onInsert={(t) => onPatch({ prompt: (node.prompt ?? '') + t })}
-              />
-            </div>
-            <PromptEditor
-              value={node.prompt ?? ''}
-              onChange={(v) => onPatch({ prompt: v })}
-              placeholder="{{input}}, {{last}}, {{node.<id>}}"
-              rows={8}
-              mono
-              textareaClassName="min-h-32 text-xs"
-            />
-          </div>
-          {/* The same recipe list the session info panel offers, so a pattern
-              picked there is selectable here (shared component). */}
-          <div className="block">
-            <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-              <Workflow size={12} />
-              <span>{t('inspector.workflow')}</span>
-              <InfoPopover text={workflowHelp()} label={t('inspector.workflowHelp')} fixed />
-            </div>
-            <CoordinatorWorkflowPicker
-              value={node.workflow}
-              onChange={(slug) => onPatch({ workflow: slug })}
-              groupName={`node-wf-${node.id}`}
-            />
-          </div>
-          <NumberField
-            label={t('inspector.coordinatorTurns')}
-            hint={t('inspector.coordinatorTurnsHint')}
-            min={0}
-            step={1}
-            value={node.maxTurns ?? 0}
-            onChange={(v) => onPatch({ maxTurns: Math.round(v) })}
-          />
-          <NumberField
-            label={t('inspector.timeout')}
-            hint={t('inspector.timeoutDefault')}
-            min={0}
-            step={1}
-            value={node.timeoutSec ?? 0}
-            onChange={(v) => onPatch({ timeoutSec: Math.round(v) })}
-          />
-          <p className="text-[11px] text-[var(--color-text-dim)]">
-            {t('inspector.coordinatorDescription')}
-          </p>
-        </>
-      )}
-
-      {node.type === 'branch' && (
-        <div className="space-y-2">
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.match')}
-            </span>
-            <select
-              value={node.matchMode ?? 'contains'}
-              onChange={(e) => onPatch({ matchMode: e.target.value as BranchMatchMode })}
-              className={input}
-            >
-              <option value="contains">{t('inspector.matchContains')}</option>
-              <option value="equals">{t('inspector.matchEquals')}</option>
-              <option value="regex">{t('inspector.matchRegex')}</option>
-              <option value="judge">{t('inspector.matchJudge')}</option>
-            </select>
-          </label>
-          {node.matchMode === 'judge' && (
-            <JudgeFields
-              question={node.judgeQuestion ?? ''}
-              onQuestion={(judgeQuestion) => onPatch({ judgeQuestion })}
-              hint={t('inspector.branchHint')}
-            />
-          )}
-          <span className="block text-xs text-[var(--color-text-dim)]">
-            {t('inspector.branches')}
-          </span>
-          {(node.branches ?? []).map((b, bi) => (
-            <div key={bi} className="flex items-center gap-2">
-              <input
-                value={b.contains}
-                onChange={(e) => {
-                  const branches = [...(node.branches ?? [])]
-                  branches[bi] = { ...b, contains: e.target.value }
-                  onPatch({ branches })
-                }}
-                placeholder={
-                  (node.matchMode ?? 'contains') === 'equals'
-                    ? t('inspector.exactPlaceholder')
-                    : (node.matchMode ?? 'contains') === 'regex'
-                      ? t('inspector.regexPlaceholder')
-                      : node.matchMode === 'judge'
-                        ? t('inspector.untilJudgePlaceholder')
-                        : t('inspector.untilContainsPlaceholder')
-                }
-                className={input}
-              />
-              <button
-                onClick={() => {
-                  const branches = (node.branches ?? []).filter((_, i) => i !== bi)
-                  onPatch({ branches })
-                }}
-                className="text-xs text-[var(--color-danger)]"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={() =>
-              onPatch({ branches: [...(node.branches ?? []), { contains: '', next: '' }] })
-            }
-            className="text-xs text-[var(--color-accent)]"
-          >
-            {t('actions.addBranch')}
-          </button>
-        </div>
-      )}
-
-      {node.type === 'parallel' && (
-        <p className="text-xs text-[var(--color-text-dim)]">{t('inspector.parallelDescription')}</p>
-      )}
-
-      {node.type === 'subflow' && (
-        <div className="space-y-2">
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.subflow')}
-            </span>
-            <select
-              value={node.flowRef ?? ''}
-              onChange={(e) => onPatch({ flowRef: e.target.value })}
-              className={input}
-            >
-              <option value="">{t('inspector.subflowPlaceholder')}</option>
-              {flows.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.emoji ? `${f.emoji} ` : ''}
-                  {f.name} ({f.id})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="block">
-            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>{t('inspector.inputTemplate')}</span>
-              <FlowVarsButton
-                nodeRefs={nodeRefs}
-                onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
-              />
-            </div>
-            <PromptEditor
-              value={node.template ?? ''}
-              onChange={(v) => onPatch({ template: v })}
-              placeholder={t('inspector.subflowInputPlaceholder')}
+          </Field>
+          <Field label={t('inspector.outputSchema')} hint={t('inspector.outputSchemaHint')}>
+            <textarea
+              className={`${inputCls} font-mono`}
               rows={3}
-              mono
-              textareaClassName="min-h-12 text-xs"
+              value={n.outputSchema ?? ''}
+              disabled={readOnly}
+              onChange={(e) => set({ outputSchema: e.target.value || undefined })}
             />
-          </div>
-          <p className="text-[11px] text-[var(--color-text-dim)]">
-            {t('inspector.subflowDescription')}
-          </p>
-        </div>
+          </Field>
+        </>
       )}
-
-      {node.type === 'spawn' && (
-        <div className="space-y-2">
-          <div className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.spawnFlows')}
-            </span>
-            <div className="max-h-40 space-y-1 overflow-auto rounded bg-[var(--color-surface-2)] p-1.5">
-              {flows.length === 0 && (
-                <div className="text-[11px] text-[var(--color-text-dim)]">
-                  {t('inspector.noOtherFlows')}
-                </div>
-              )}
-              {flows.map((f) => {
-                const selected = (node.spawnFlows ?? []).includes(f.id)
-                return (
-                  <label
-                    key={f.id}
-                    className="flex cursor-pointer items-center gap-1.5 text-[11px]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={(e) => {
-                        const cur = node.spawnFlows ?? []
-                        onPatch({
-                          spawnFlows: e.target.checked
-                            ? [...cur, f.id]
-                            : cur.filter((x) => x !== f.id),
-                        })
-                      }}
-                    />
-                    <span className="truncate">
-                      {f.emoji ? `${f.emoji} ` : ''}
-                      {f.name}
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-          <div className="block">
-            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-              <span>{t('inspector.inputTemplateEach')}</span>
-              <FlowVarsButton
-                nodeRefs={nodeRefs}
-                onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
+      {n.type === 'route' && (
+        <>
+          <Field label={t('inspector.mode')} hint={t('inspector.modeHint')}>
+            <OptionPills
+              value={n.mode ?? 'contains'}
+              onChange={(v) => set({ mode: v as RouteMode })}
+              ariaLabel={t('inspector.mode')}
+              options={(
+                ['contains', 'equals', 'regex', 'json', 'judge', 'criteria'] as RouteMode[]
+              ).map((m) => ({
+                value: m,
+                label: t(`mode.${m}`),
+              }))}
+            />
+          </Field>
+          {n.mode === 'json' && (
+            <Field label={t('inspector.jsonField')}>
+              <input
+                className={inputCls}
+                value={n.jsonField ?? ''}
+                disabled={readOnly}
+                onChange={(e) => set({ jsonField: e.target.value })}
               />
-            </div>
-            <PromptEditor
-              value={node.template ?? ''}
-              onChange={(v) => onPatch({ template: v })}
-              placeholder={t('inspector.emptyLastPlaceholder')}
-              rows={2}
-              mono
-              textareaClassName="min-h-10 text-xs"
-            />
-          </div>
-          <p className="text-[11px] text-[var(--color-text-dim)]">
-            {t('inspector.spawnDescription')}
-          </p>
-        </div>
-      )}
-
-      {node.type === 'join' && (
-        <div className="space-y-2">
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.joinSpawn')}
-            </span>
-            <select
-              value={node.spawnRef ?? ''}
-              onChange={(e) => onPatch({ spawnRef: e.target.value })}
-              className={input}
-            >
-              <option value="">{t('inspector.joinSpawnAll')}</option>
-              {spawnNodes.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.title || n.id} ({n.id})
-                </option>
-              ))}
-            </select>
-          </label>
-          <NumberField
-            label={t('inspector.timeout')}
-            hint={t('inspector.timeoutUnlimited')}
-            min={0}
-            step={1}
-            value={node.joinTimeoutSec ?? 0}
-            onChange={(v) => onPatch({ joinTimeoutSec: Math.round(v) })}
-          />
-          <label className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-            <input
-              type="checkbox"
-              checked={!!node.joinPartial}
-              onChange={(e) => onPatch({ joinPartial: e.target.checked })}
-            />
-            {t('inspector.joinPartial')}
-          </label>
-          <span className="block text-[11px] text-[var(--color-text-dim)]">
-            {t('inspector.joinDescription')}
-          </span>
-        </div>
-      )}
-
-      {node.type === 'delay' && (
-        <NumberField
-          label={t('inspector.delay')}
-          hint={t('inspector.delayHint')}
-          min={0}
-          max={300}
-          step={0.5}
-          value={(node.delayMs ?? 0) / 1000}
-          onChange={(v) => onPatch({ delayMs: Math.round(v * 1000) })}
-        />
-      )}
-
-      {node.type === 'transform' && (
-        <div className="block">
-          <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
-            <span>{t('inspector.template')}</span>
-            <FlowVarsButton
-              nodeRefs={nodeRefs}
-              onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
-            />
-          </div>
-          <PromptEditor
-            value={node.template ?? ''}
-            onChange={(v) => onPatch({ template: v })}
-            placeholder={t('inspector.templatePlaceholder')}
-            rows={8}
-            mono
-            textareaClassName="min-h-32 text-xs"
-          />
-        </div>
-      )}
-
-      {node.type === 'loop' && (
-        <div className="space-y-2">
-          <p className="text-xs text-[var(--color-text-dim)]">{t('inspector.loopDescription')}</p>
-          <NumberField
-            label={t('inspector.maxIterations')}
-            hint={t('inspector.maxIterationsHint')}
-            min={0}
-            step={1}
-            value={node.maxIters ?? 0}
-            onChange={(v) => onPatch({ maxIters: Math.round(v) })}
-          />
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.exitCondition')}
-            </span>
-            <input
-              value={node.until ?? ''}
-              onChange={(e) => onPatch({ until: e.target.value })}
-              placeholder={
-                node.untilMode === 'judge'
-                  ? t('inspector.exitJudgePlaceholder')
-                  : t('inspector.exitLimitPlaceholder')
-              }
-              className={input}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              {t('inspector.match')}
-            </span>
-            <select
-              value={node.untilMode ?? 'contains'}
-              onChange={(e) => onPatch({ untilMode: e.target.value as BranchMatchMode })}
-              className={input}
-            >
-              <option value="contains">{t('inspector.matchContains')}</option>
-              <option value="equals">{t('inspector.matchEquals')}</option>
-              <option value="regex">{t('inspector.matchRegex')}</option>
-              <option value="judge">{t('inspector.matchJudge')}</option>
-            </select>
-          </label>
-          {node.untilMode === 'judge' && (
-            <JudgeFields
-              question={node.judgeQuestion ?? ''}
-              onQuestion={(judgeQuestion) => onPatch({ judgeQuestion })}
-              hint={t('inspector.loopJudgeHint')}
-            />
+            </Field>
           )}
-        </div>
+          {n.mode === 'judge' && (
+            <Field label={t('inspector.question')} hint={t('inspector.questionHint')}>
+              <input
+                className={inputCls}
+                value={n.question ?? ''}
+                disabled={readOnly}
+                onChange={(e) => set({ question: e.target.value })}
+              />
+            </Field>
+          )}
+          {n.mode === 'criteria' && (
+            <Field label={t('inspector.criteria')} hint={t('inspector.criteriaHint')}>
+              <textarea
+                className={inputCls}
+                rows={4}
+                value={(n.criteria ?? []).join('\n')}
+                disabled={readOnly}
+                placeholder={t('inspector.criteriaPlaceholder')}
+                onChange={(e) => set({ criteria: e.target.value.split('\n') })}
+                onBlur={(e) =>
+                  set({
+                    criteria: e.target.value
+                      .split('\n')
+                      .map((c) => c.trim())
+                      .filter(Boolean),
+                  })
+                }
+                data-testid="flow-node-criteria"
+              />
+            </Field>
+          )}
+          <Field label={t('inspector.maxVisits')} hint={t('inspector.maxVisitsHint')}>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              className={inputCls}
+              value={n.maxVisits ?? 3}
+              disabled={readOnly}
+              onChange={(e) => set({ maxVisits: Math.max(1, Number(e.target.value) || 1) })}
+            />
+          </Field>
+          <div className="space-y-1">
+            <span className="text-[11px] font-medium text-[var(--color-text-dim)]">
+              {t('inspector.arms')}
+            </span>
+            {arms.length === 0 && (
+              <p className="text-[var(--color-text-dim)]">{t('inspector.noArms')}</p>
+            )}
+            {arms.map((e) => (
+              <div key={e.id} className="flex items-center gap-1">
+                <input
+                  className={`${inputCls} font-mono`}
+                  value={e.when ?? ''}
+                  disabled={readOnly}
+                  placeholder={t('inspector.whenDefault')}
+                  onChange={(ev) => onChangeEdge(e.id, { when: ev.target.value })}
+                />
+                <span className="shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]">
+                  → {e.to}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {n.type === 'trigger' && (
+        <>
+          <Field label={t('inspector.automation')} hint={t('inspector.automationHint')}>
+            <select
+              className={inputCls}
+              value={n.automationId ?? ''}
+              disabled={readOnly}
+              onChange={(e) => set({ automationId: e.target.value || undefined })}
+              data-testid="flow-node-automation"
+            >
+              <option value="">{t('inspector.pickAutomation')}</option>
+              {automations
+                .filter((a) => !a.archived)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name || a.id}
+                    {a.enabled ? '' : ` ${t('inspector.disabledSuffix')}`}
+                  </option>
+                ))}
+            </select>
+            {automations.length === 0 && (
+              <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
+                {t('inspector.noAutomations')}
+              </p>
+            )}
+          </Field>
+          <Field label={t('inspector.payload')} hint={t('inspector.payloadHint')}>
+            <PromptEditor
+              value={n.template ?? ''}
+              onChange={(v) => set({ template: v })}
+              mono
+              rows={3}
+              autoSizeMax={200}
+              disabled={readOnly}
+              placeholder="{{last}}"
+            />
+          </Field>
+        </>
+      )}
+      {(n.type === 'transform' || n.type === 'output') && (
+        <Field label={t('inspector.template')} hint={t('inspector.templateHint')}>
+          <PromptEditor
+            value={n.template ?? ''}
+            onChange={(v) => set({ template: v })}
+            mono
+            rows={4}
+            autoSizeMax={220}
+            disabled={readOnly}
+            placeholder="{{last}}"
+          />
+        </Field>
+      )}
+      <Field label={t('inspector.note')} hint={t('inspector.noteHint')}>
+        <textarea
+          className={inputCls}
+          rows={2}
+          value={n.note ?? ''}
+          disabled={readOnly}
+          onChange={(e) => set({ note: e.target.value || undefined })}
+        />
+      </Field>
+      {!readOnly && !protectedNode && (
+        <button
+          type="button"
+          onClick={() => onDeleteNode(n.id)}
+          data-testid="flow-node-delete"
+          className="flex items-center gap-1 rounded border border-[var(--color-danger)]/50 px-2 py-1 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+        >
+          <Trash2 size={12} /> {t('inspector.deleteNode')}
+        </button>
       )}
     </div>
   )
 }
+
+export type { FlowNodeType }

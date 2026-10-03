@@ -1,9 +1,8 @@
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Paperclip, ArchiveRestore, RotateCcw } from 'lucide-react'
-import type { Agent, Flow, Task } from '@/types'
+import type { Agent, Task } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
-import { normalizeAvatar } from '@/shared/lib/avatar'
 import { taskCardShadowClass } from './taskCardAppearance'
 import { reviewGateBadge } from './reviewGate'
 
@@ -20,7 +19,6 @@ const PRIORITY_COLORS: Record<string, string> = {
 // ever runs a lookup during render.
 export interface TaskCardMeta {
   owner: Agent | undefined
-  flow: Flow | undefined
   depIds: string[]
   unmetDeps: string[]
   unmetColColor: string | null
@@ -83,14 +81,12 @@ function TaskCardImpl({
   onUnarchive,
 }: Props) {
   const { t: translate } = useTranslation('tasks')
-  const { owner, flow, depIds, unmetDeps, unmetColColor, image } = meta
+  const { owner, depIds, unmetDeps, unmetColColor, image } = meta
   // An optimistic card: created locally, still waiting for the server id/title.
   const pending = t.id.startsWith('temp-')
   const reviewGate = reviewGateBadge(t.reviewBounces)
   const hasAttributeBadges = Boolean(t.priority || (t.tags?.length ?? 0) > 0 || reviewGate)
-  const hasMetadata = Boolean(
-    owner || t.flowId || depIds.length > 0 || (t.artifactIds?.length ?? 0) > 0,
-  )
+  const hasMetadata = Boolean(owner || depIds.length > 0 || (t.artifactIds?.length ?? 0) > 0)
   const idClearanceClass = pending ? '' : 'pr-12'
 
   return (
@@ -276,11 +272,6 @@ function TaskCardImpl({
               title={translate('card.attachmentCount', { count: t.artifactIds!.length })}
             >
               <Paperclip size={10} /> {t.artifactIds!.length}
-            </span>
-          )}
-          {t.flowId && (
-            <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]">
-              {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? translate('card.flowFallback')}
             </span>
           )}
           {depIds.length > 0 &&

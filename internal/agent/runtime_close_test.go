@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // The workspace manager closes the DB the instant Runtime.CloseMCP returns, so a
@@ -65,106 +63,6 @@ func TestCloseMCP_RejectsLaterSpawns(t *testing.T) {
 	}
 	if !errors.Is(err, errSpawnQueueShutdown) {
 		t.Fatalf("error = %v, want %v", err, errSpawnQueueShutdown)
-	}
-	drainSpawns(t, rt)
-}
-
-// TestCloseMCP_WaitsForInFlightFlowDrive proves a flow run in flight holds the
-// shutdown open. driveFlow persists after every node (AppendFlowRunStateDelta,
-// FinishFlowRun), so if the barrier were removed those writes would land after
-// the workspace manager closed the DB.
-func TestCloseMCP_WaitsForInFlightFlowDrive(t *testing.T) {
-	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	ctx := context.Background()
-	a := newFlowAgent(t, rt, "worker")
-
-	g := orchestration.Graph{
-		Start: "w",
-		Nodes: []orchestration.Node{
-			{ID: "w", Type: orchestration.NodeAwaitInput, Next: "x"},
-			{ID: "x", Type: orchestration.NodeAgent, AgentID: a.ID, Prompt: "{{last}}", Next: ""},
-		},
-	}
-	flowID := createFlow(t, rt, g)
-	run, err := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flowID, Input: "hi"})
-	if err != nil {
-		t.Fatalf("create flow run: %v", err)
-	}
-	if err := rt.db.MarkFlowRunWaiting(ctx, run.ID, `{"current":"w","waitingAt":"w","outputs":{}}`); err != nil {
-		t.Fatalf("mark waiting: %v", err)
-	}
-
-	// Gate the drive so it is provably still in flight when CloseMCP starts, by
-	// standing in front of the run's terminal write.
-	release := make(chan struct{})
-	var finished atomic.Bool
-	if !rt.startBackgroundTurn(func() {
-		<-release
-		_ = rt.db.FinishFlowRun(ctx, run.ID, db.FlowSuccess, "done", "")
-		finished.Store(true)
-	}) {
-		t.Fatal("startBackgroundTurn refused on a live runtime")
-	}
-
-	go func() {
-		time.Sleep(150 * time.Millisecond)
-		close(release)
-	}()
-
-	rt.CloseMCP()
-	if !finished.Load() {
-		t.Fatal("CloseMCP returned while a flow drive was still writing to the store")
-	}
-	drainSpawns(t, rt)
-}
-
-// TestResumeWaitingFlow_AfterCloseReleasesClaim proves the rejection path undoes
-// the caller's bookkeeping: prepareResume CAS-claims the run (waiting→running),
-// so a refused drive must hand the claim back or the run is wedged in "running"
-// forever and never driven again.
-func TestResumeWaitingFlow_AfterCloseReleasesClaim(t *testing.T) {
-	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	ctx := context.Background()
-	a := newFlowAgent(t, rt, "worker")
-
-	g := orchestration.Graph{
-		Start: "w",
-		Nodes: []orchestration.Node{
-			{ID: "w", Type: orchestration.NodeAwaitInput, Next: "x"},
-			{ID: "x", Type: orchestration.NodeAgent, AgentID: a.ID, Prompt: "{{last}}", Next: ""},
-		},
-	}
-	flowID := createFlow(t, rt, g)
-	run, err := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flowID, Input: "hi"})
-	if err != nil {
-		t.Fatalf("create flow run: %v", err)
-	}
-	if err := rt.db.MarkFlowRunWaiting(ctx, run.ID, `{"current":"w","waitingAt":"w","outputs":{}}`); err != nil {
-		t.Fatalf("mark waiting: %v", err)
-	}
-
-	rt.CloseMCP()
-
-	got, err := rt.ResumeWaitingFlow(ctx, run.ID, "the answer")
-	if err == nil {
-		t.Fatal("ResumeWaitingFlow succeeded after CloseMCP")
-	}
-	if !errors.Is(err, errSpawnQueueShutdown) {
-		t.Fatalf("error = %v, want %v", err, errSpawnQueueShutdown)
-	}
-	if got.Status != db.FlowWaiting {
-		t.Fatalf("returned run status = %q, want %q", got.Status, db.FlowWaiting)
-	}
-	stored, err := rt.db.GetFlowRun(ctx, run.ID)
-	if err != nil {
-		t.Fatalf("get flow run: %v", err)
-	}
-	if stored.Status != db.FlowWaiting {
-		t.Fatalf("stored run status = %q, want %q — the resume claim was not released", stored.Status, db.FlowWaiting)
-	}
-	// The delivered input must survive the rollback, or the next resume loses it.
-	if !strings.Contains(stored.State, "the answer") {
-		t.Fatalf("stored state lost the delivered input: %s", stored.State)
 	}
 	drainSpawns(t, rt)
 }

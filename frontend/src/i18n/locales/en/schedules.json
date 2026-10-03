@@ -48,14 +48,16 @@
     "board": "Board",
     "token": "Token",
     "phase": "Trajectory phase",
-    "trajectory_end": "Trajectory end"
+    "trajectory_end": "Trajectory end",
+    "flow": "Flow run"
   },
   "automationKinds": {
     "tag": "tag automation",
     "board": "board automation",
     "token": "token automation",
     "phase": "phase automation",
-    "trajectory_end": "trajectory-end automation"
+    "trajectory_end": "trajectory-end automation",
+    "flow": "flow-run automation"
   },
   "fires": {
     "title": "Fire ledger: every attempt (fired / skipped with a reason / failed)",
@@ -134,6 +136,12 @@
       "description": "Runs when a trajectory finishes (done, failed, or abandoned) for summaries, lessons, and docs.",
       "add": "New trajectory-end automation",
       "empty": "No trajectory-end automations yet."
+    },
+    "flow": {
+      "title": "Flow-run automations",
+      "description": "Runs when an agent's flow run finishes (success, failure or a low grade) with the reply and run context; trigger nodes inside flows can also fire automations of any kind.",
+      "add": "New flow automation",
+      "empty": "No flow automations yet."
     }
   },
   "fields": {
@@ -168,6 +176,16 @@
       "anyPhase": "any phase",
       "recipeHint": "Only trajectories seeded from this recipe slug, without a version. Empty matches every trajectory.",
       "anyRecipe": "any recipe"
+    },
+    "flow": {
+      "agent": "Agent",
+      "agentHint": "Only this agent's flow runs. Empty matches every agent.",
+      "anyAgent": "any agent",
+      "status": "Outcome",
+      "maxGrade": "Grade",
+      "maxGradeHint": "Only runs the decision model (flow-grade authority) graded at or below this. With grading off nothing matches.",
+      "ignoreGrade": "ignore grade",
+      "gradeAtMost": "at most {{n}}/5"
     }
   },
   "form": {
@@ -257,7 +275,10 @@
     "tokenNoLoop": "Token-triggered — cannot loop itself (spawn tags are ignored).",
     "flowNoLoop": "Flow-based — cannot loop itself (spawn tags are ignored).",
     "spawnTags": "Spawn tags",
-    "spawnTagsPlaceholder": "leave empty to break the loop"
+    "spawnTagsPlaceholder": "leave empty to break the loop",
+    "flowTriggered": "Flow-run automation — runs when a flow run finishes",
+    "flowSummary": "{{agent}} · {{status}}",
+    "flowGrade": "grade ≤ {{n}}"
   },
   "automationModal": {
     "updated": "Automation updated",
@@ -447,7 +468,34 @@
         "date": "Current date",
         "time": "Current time",
         "datetime": "Current date and time"
+      },
+      "flow": {
+        "result": "The trigger node's payload, else the run's reply (the error text when it failed)",
+        "input": "The run's input (user message)",
+        "output": "The run's reply",
+        "error": "Error text (failed run)",
+        "status": "success / failure",
+        "grade": "The decision model's grade (1–5), empty when not graded",
+        "runId": "Run id (RUN…)",
+        "flowId": "Flow id (FLW…)",
+        "flowName": "Flow name",
+        "version": "Flow version the run used",
+        "agent": "Name of the agent that owns the flow",
+        "agentId": "Id of the agent that owns the flow",
+        "sessionId": "Session the run belonged to",
+        "nodeId": "Triggering node (flow-node fires only)",
+        "iteration": "One-based fire number",
+        "maxIterations": "Cap; zero means unlimited on legacy rows",
+        "automation": "Automation name",
+        "date": "Current date",
+        "time": "Current time",
+        "datetime": "Current date and time"
       }
+    },
+    "flowStatuses": {
+      "any": "any outcome",
+      "success": "success",
+      "failure": "failure"
     }
   }
 }

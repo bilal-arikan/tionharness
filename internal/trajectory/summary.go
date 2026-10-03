@@ -84,11 +84,8 @@ func Summarize(t db.Trajectory, cost SessionCostFn, nowSec int64) db.TrajectoryS
 				}
 				s.PerPhase[id] = st
 			}
-		case db.TrajNodeFlowRun:
-			s.FlowRuns++
-			if n.State == db.TrajStateFailed {
-				s.FailedRuns++
-			}
+		case "flowrun":
+			// Legacy orchestration-flow nodes (pre-2026-10) count as unannounced work.
 			if n.PhaseID == "" || !phaseIDs[n.PhaseID] {
 				s.Unannounced++
 			}

@@ -7,60 +7,8 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
-	"github.com/bilal-arikan/tionharness/internal/decider"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
-
-func TestFlowJudgeBranchMapsArms(t *testing.T) {
-	rt, tun := newTestRuntime(t, t.TempDir())
-	stub := newDecisionStub(t)
-	hub := wireDecider(t, tun, stub, nil) // flow-judge is on by default once enabled
-	f := flowRunner{rt: rt}
-	req := orchestration.JudgeRequest{Value: "Login page crashes on submit", Options: []string{"Bug report", "Feature request", "Question"}}
-
-	stub.set(func(s *decisionStub) { s.choice[flowArmKey] = "arm1" })
-	pick, conf, err := f.JudgeBranch(context.Background(), req)
-	if err != nil || pick != 0 || conf != 0.9 {
-		t.Fatalf("pick = %d conf = %v err = %v", pick, conf, err)
-	}
-	body := stub.bodies[len(stub.bodies)-1]
-	if !strings.Contains(body, `"arm2":"Feature request"`) || !strings.Contains(body, "Which option best describes") {
-		t.Errorf("request body = %s", body)
-	}
-	// An invented option is an invalid provider response; the engine uses its
-	// default arm and the failure stays visible in decision diagnostics.
-	stub.set(func(s *decisionStub) { s.choice[flowArmKey] = "arm9" })
-	if pick, _, err := f.JudgeBranch(context.Background(), req); !errors.Is(err, decider.ErrInvalidResponse) || pick != -1 {
-		t.Errorf("unknown option: pick = %d, err = %v", pick, err)
-	}
-	if recs := hub.Recent(1); len(recs) != 1 || recs[0].Error != "invalid_response" || recs[0].Outcome != "" {
-		t.Errorf("ledger = %+v", recs)
-	}
-	// Disabled decider: an error the engine turns into the default arm.
-	cfg := hub.Config()
-	cfg.Enabled = false
-	_, _ = hub.Update(cfg)
-	if _, _, err := f.JudgeBranch(context.Background(), req); !errors.Is(err, decider.ErrDisabled) {
-		t.Errorf("disabled decider err = %v", err)
-	}
-}
-
-func TestFlowJudgeCondition(t *testing.T) {
-	rt, tun := newTestRuntime(t, t.TempDir())
-	stub := newDecisionStub(t)
-	wireDecider(t, tun, stub, nil)
-	f := flowRunner{rt: rt}
-	stub.set(func(s *decisionStub) { s.noul[flowConditionKey] = 0.92 })
-	holds, p, err := f.JudgeCondition(context.Background(), orchestration.JudgeRequest{Value: "LGTM, ship it", Condition: "The reviewer approved the change"})
-	if err != nil || !holds || p != 0.92 {
-		t.Fatalf("holds = %v p = %v err = %v", holds, p, err)
-	}
-	stub.set(func(s *decisionStub) { s.noul[flowConditionKey] = 0.3 })
-	if holds, _, _ := f.JudgeCondition(context.Background(), orchestration.JudgeRequest{Value: "needs work", Condition: "approved"}); holds {
-		t.Error("condition held below the threshold")
-	}
-}
 
 func TestPhaseGateJudge(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())

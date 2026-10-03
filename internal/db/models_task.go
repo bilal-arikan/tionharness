@@ -79,7 +79,7 @@ func ValidPriority(p string) bool {
 //
 // The board does NOT execute tasks: there is no dispatcher and, since the Run
 // entity was removed, no execution record either. A card carries the intent —
-// Prompt, or FlowID for a flow-backed one — and running it happens wherever the
+// Prompt — and running it happens wherever the
 // user or an agent takes it.
 type Task struct {
 	ID           string `json:"id"`
@@ -87,7 +87,6 @@ type Task struct {
 	Description  string `json:"description"`
 	Prompt       string `json:"prompt"`
 	OwnerAgentID string `json:"ownerAgentId"`
-	FlowID       string `json:"flowId"` // when set, running the task executes this flow
 	BoardState   string `json:"boardState"`
 	Dependencies string `json:"dependencies"` // JSON array of task ids
 	// Rich card attributes (obsidian-pm compatible). All optional; older task
@@ -189,9 +188,8 @@ func (sc Schedule) EffectiveSessionMode() string {
 // Schedule fires on a cron expression and delivers a standalone prompt to its
 // agent. (Schedules are decoupled from the board: they do not run tasks.)
 //
-// Alternatively, when FlowID is set the schedule is "flow-backed": each fire runs
-// that orchestration flow (with Prompt as the flow input) instead of delivering
-// the prompt to a single agent. AgentID is then optional — the flow owns its own
+// Each fire delivers Prompt to AgentID (the agent's own evolving flow shapes the
+// turn). AgentID is required — the schedule owns its own
 // agents. Either path funnels through Scheduler.run, so cron ticks and manual
 // "run now" support both uniformly.
 type Schedule struct {
@@ -200,13 +198,10 @@ type Schedule struct {
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
-	// FlowID, when set, makes this a flow-backed schedule: firing runs that flow
-	// with Prompt as its input instead of delivering the prompt to AgentID.
-	FlowID string `json:"flowId,omitempty"`
 	// SessionMode selects, for an AGENT-backed schedule, whether each fire adds a
 	// turn to the agent's shared "schedule" thread (ScheduleSessionModeReuse) or
 	// opens a fresh session of its own (ScheduleSessionModeSpawn). Empty resolves to
-	// reuse via EffectiveSessionMode. Ignored for flow-backed schedules (a flow
+	// reuse via EffectiveSessionMode. (A flow
 	// always records into its own per-run transcript).
 	SessionMode        string `json:"sessionMode,omitempty"`
 	NextRunAt          int64  `json:"nextRunAt"`

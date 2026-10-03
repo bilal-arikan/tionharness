@@ -14,6 +14,15 @@
       "port": 8090
     },
     {
+      "name": "tionharness-mac",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "go build -buildvcs=false -o bin/tionharness ./cmd/tionharness && TIONHARNESS_ADDR=127.0.0.1:5173 TIONHARNESS_ENABLE_SHELL=1 exec bin/tionharness"
+      ],
+      "port": 5173
+    },
+    {
       "name": "frontend-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

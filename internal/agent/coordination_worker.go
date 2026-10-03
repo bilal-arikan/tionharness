@@ -781,11 +781,7 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 			continue // do not resurrect work the user has archived
 		}
 		isWorker := sess.IsWorker()
-		// A flow's coordinator node owns its coordinator session (kind
-		// "flow-coordinator"). Re-enqueueing a turn on it would race the flow
-		// runner, which resumes the owning run and re-executes the node against a
-		// FRESH coordinator session — so the orphan is left alone here.
-		isCoordinator := sess.IsCoordinator() && sess.Kind != SessionKindFlowCoordinator
+		isCoordinator := sess.IsCoordinator()
 		// A spawn_session child is a "chat" by kind (TSK1005), so the spawn test also
 		// reads the lineage: a spawn-origin chat still ran a detached background turn.
 		isSpawn := sess.Kind == "spawned" || sess.Kind == "worker" || sess.Lineage().Kind == db.OriginSpawn
@@ -811,17 +807,13 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 			r.recordInterruptedReply(ctx, sess, "⏹️ Worker turu süreç yeniden başlarken yarıda kaldı (kurtarıldı).")
 			reclaimed[sess.ID] = true
 			// Tell the coordinator so it stops waiting and can re-dispatch or conclude.
-			// Skipped in two cases, both because the target cannot act on it:
-			//   - the coordinator belongs to a flow's coordinator node, which is
-			//     abandoned on restart (the node re-runs with a fresh session);
-			//   - the coordinator is a mid-level node THIS sweep already reclaimed and
-			//     reported dead upward — notifying it would wake a zombie turn on a
-			//     branch its own coordinator has already written off.
+			// Skipped when the coordinator is a mid-level node THIS sweep already
+			// reclaimed and reported dead upward — notifying it would wake a zombie
+			// turn on a branch its own coordinator has already written off.
 			switch {
 			case reclaimed[sess.CoordinatorSessionID]:
 				r.logger.Info("recover: skipping notify, coordinator was reclaimed too",
 					"session", sess.ID, "coordinator", sess.CoordinatorSessionID)
-			case r.isFlowCoordinatorSession(ctx, sess.CoordinatorSessionID):
 			default:
 				note := formatTaskNotification(sess.ID, sess.AgentID, r.agentName(sess.AgentID), sess.Model, "killed",
 					"Worker turu süreç yeniden başlatılırken (crash/restart) yarıda kaldı; sonuç üretilemedi. Gerekirse yeniden görevlendir.", 0, 0)

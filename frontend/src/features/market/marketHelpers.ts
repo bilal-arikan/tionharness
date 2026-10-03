@@ -1,24 +1,5 @@
-import {
-  Sparkles,
-  Users,
-  Plug,
-  GitBranch,
-  Boxes,
-  Wrench,
-  Bot,
-  Zap,
-  Timer,
-  Webhook,
-  Play,
-  Square,
-  Repeat,
-  MessageCircleQuestion,
-  Workflow,
-  Rocket,
-  Merge,
-  type LucideIcon,
-} from 'lucide-react'
-import type { Pack, PackKind, WorkspaceTemplateFlow } from '@/types'
+import { Sparkles, Users, Plug, Boxes, Wrench, Webhook, type LucideIcon } from 'lucide-react'
+import type { Pack, PackKind } from '@/types'
 import { i18next } from '@/i18n'
 
 // updateAvailable reports whether a pack's catalog version is newer than the
@@ -59,7 +40,6 @@ export const KIND_NAV: { key: PackKind; icon: LucideIcon }[] = [
   { key: 'skill', icon: Sparkles },
   { key: 'agent', icon: Users },
   { key: 'provider', icon: Plug },
-  { key: 'flow', icon: GitBranch },
   { key: 'mcp', icon: Wrench },
   { key: 'hook', icon: Webhook },
 ]
@@ -89,39 +69,11 @@ export function fmtPrice(n: number): string {
   return '$' + (n < 1 ? n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') : String(n))
 }
 
-// NODE_ICON maps an orchestration node type to a monochrome lucide glyph for the
-// flow-chain preview (replaces colored emojis). Covers every engine node type;
-// an unknown type falls back to a bullet in the preview.
-export const NODE_ICON: Record<string, LucideIcon> = {
-  start: Play,
-  end: Square,
-  agent: Bot,
-  branch: GitBranch,
-  parallel: Zap,
-  delay: Timer,
-  transform: Wrench,
-  loop: Repeat,
-  'await-input': MessageCircleQuestion,
-  subflow: Workflow,
-  spawn: Rocket,
-  join: Merge,
-}
-
 // SOURCE_LABEL labels which tier/source a pack came from.
 export function sourceLabel(source: string): string {
   const icons: Record<string, string> = { bundled: '📦', global: '💾', remote: '🌐' }
   const translated = i18next.t(`source.${source}`, { ns: 'market', defaultValue: source })
   return icons[source] ? `${icons[source]} ${translated}` : translated
-}
-
-// flowSummary returns a flow's node list for the preview, from either its full
-// graph JSON or its linear steps.
-export function flowSummary(
-  flow: WorkspaceTemplateFlow,
-): { id: string; type: string; title?: string }[] {
-  if (flow.graph) return flowNodeSummary(flow.graph)
-  if (flow.steps) return flow.steps.map((s) => ({ id: s.id, type: 'agent', title: s.title }))
-  return []
 }
 
 // skillMeta parses a skill's SKILL.md frontmatter for its name/description.
@@ -134,26 +86,14 @@ export function skillMeta(body: string): { name?: string; description?: string }
   return { name, description }
 }
 
-// flowNodeSummary safely parses a flow graph JSON string into a node list for
-// the preview. Returns [] on any parse error.
-export function flowNodeSummary(graph: string): { id: string; type: string; title?: string }[] {
-  try {
-    const g = JSON.parse(graph) as { nodes?: { id: string; type: string; title?: string }[] }
-    return g.nodes ?? []
-  } catch {
-    return []
-  }
-}
-
 // existingKeys holds, per kind, the identifiers of entities already present in
 // the workspace, so the market can mark a pack as already installed and block a
-// duplicate. Keys: skill→slug, agent→lowercased name, flow→lowercased name,
+// duplicate. Keys: skill→slug, agent→lowercased name,
 // provider→id, workspace→lowercased name, mcp→lowercased name. hook has no
 // identity the installer dedups on, so it is never marked installed.
 export interface ExistingKeys {
   skills: Set<string>
   agents: Set<string>
-  flows: Set<string>
   providers: Set<string>
   workspaces: Set<string>
   mcp: Set<string>
@@ -162,7 +102,6 @@ export interface ExistingKeys {
 export const emptyExisting = (): ExistingKeys => ({
   skills: new Set(),
   agents: new Set(),
-  flows: new Set(),
   providers: new Set(),
   workspaces: new Set(),
   mcp: new Set(),
@@ -182,8 +121,6 @@ export function packTargetKey(pack: Pack): { set: keyof ExistingKeys; key: strin
       return { set: 'providers', key: pack.id.replace(/^provider\./, '') }
     case 'agent':
       return { set: 'agents', key: pack.name.trim().toLowerCase() }
-    case 'flow':
-      return { set: 'flows', key: pack.name.trim().toLowerCase() }
     case 'workspace':
       return { set: 'workspaces', key: pack.name.trim().toLowerCase() }
     case 'mcp':

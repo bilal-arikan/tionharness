@@ -100,6 +100,12 @@ var specs = []Spec{
 		OwnedBySystemKey: "recipe-optimizer",
 	},
 	{
+		Key:              "flow-optimizer",
+		Label:            "Akış gözlemcisi promptu",
+		Hint:             "Evrilen akışlar (_Docs/93): bir ajanın ana akışını son koşularına bakarak değiştirmeyi öneren gözlemci sistem ajanının promptu. Yanıt STRICT JSON (noChange/reason/confidence/ops/prompt) kalmalı; op sözlüğü koddaki flow.Op ile aynıdır.",
+		OwnedBySystemKey: "flow-optimizer",
+	},
+	{
 		Key:              "stall-judge",
 		Label:            "Koordinatör stall yargıcı promptu",
 		Hint:             "Koordinatörün son mesajının gerçekte yapılmamış bir worker spawn'ını anlatıp anlatmadığını sınıflandıran ucuz yargıcın sistem promptu. Yanıt STRICT JSON ({\"stalled\": true|false}) kalmalı.",

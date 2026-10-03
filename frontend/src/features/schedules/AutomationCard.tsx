@@ -1,21 +1,20 @@
 import {
   RotateCcw,
   Pencil,
-  Workflow,
   LayoutGrid,
   Zap,
   Archive,
   MoveRight,
   Waypoints,
   Flag,
+  Workflow,
   Pin,
   PinOff,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
+import type { Agent, Automation, BoardColumnDef } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
-import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CardAction } from './pickers'
 import { COLUMN_ACCENT, boardOpLabel } from './automationMeta'
 import { fmtTime, isPast } from './timeUtils'
@@ -27,7 +26,6 @@ interface Props {
   isBoardKind: boolean
   isTokenKind: boolean
   agents: Agent[]
-  flows: Flow[]
   columns: BoardColumnDef[]
   onToggle: () => void
   onReset: () => void
@@ -48,7 +46,6 @@ export function AutomationCard({
   isBoardKind,
   isTokenKind,
   agents,
-  flows,
   columns,
   onToggle,
   onReset,
@@ -58,8 +55,6 @@ export function AutomationCard({
   onSpawnTags,
 }: Props) {
   const { t } = useTranslation('schedules')
-  const flow = flows.find((f) => f.id === a.flowId)
-  const flowIcon = normalizeAvatar(flow?.emoji)
   const owner = agents.find((x) => x.id === a.targetAgentId)
   const colLabel = (key?: string) =>
     key ? (columns.find((c) => c.key === key)?.label ?? key) : '—'
@@ -68,10 +63,10 @@ export function AutomationCard({
   const opLabel = boardOpLabel(a.boardOp)
   const isTargetlessRule = isBoardKind && (a.boardAction === 'archive' || a.boardAction === 'move')
   // Effective session mode (agent-backed only): explicit value wins, else the
-  // per-kind default (token → continue). Flow-backed rules ignore it.
+  // per-kind default (token → continue).
   const kind = a.triggerKind ?? 'tag'
   const effectiveMode = a.sessionMode ?? (kind === 'token' ? 'continue' : 'spawn')
-  const showContinue = !a.flowId && !isTargetlessRule && effectiveMode === 'continue'
+  const showContinue = !isTargetlessRule && effectiveMode === 'continue'
 
   return (
     <div
@@ -113,17 +108,6 @@ export function AutomationCard({
               title={t('automationCard.targetlessBoardAction')}
             >
               {a.boardAction === 'archive' ? <Archive size={15} /> : <MoveRight size={15} />}
-            </span>
-          ) : a.flowId ? (
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-              title={t('automationCard.flowBased')}
-            >
-              {flowIcon ? (
-                <span className="text-base leading-none">{flowIcon}</span>
-              ) : (
-                <Workflow size={15} />
-              )}
             </span>
           ) : owner ? (
             <AgentAvatar agent={owner} size={28} />
@@ -198,6 +182,26 @@ export function AutomationCard({
                   </span>
                 )}
               </span>
+            ) : kind === 'flow' ? (
+              <span
+                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
+                title={t('automationCard.flowTriggered')}
+              >
+                <Workflow size={11} />
+                {t('automationCard.flowSummary', {
+                  agent: a.flowAgentId
+                    ? (agents.find((x) => x.id === a.flowAgentId)?.name ?? a.flowAgentId)
+                    : t('common.wildcard'),
+                  status: a.flowStatus
+                    ? t(`meta.flowStatuses.${a.flowStatus}`)
+                    : t('meta.flowStatuses.any'),
+                })}
+                {(a.flowMaxGrade ?? 0) > 0 && (
+                  <span className="opacity-80">
+                    {t('automationCard.flowGrade', { n: a.flowMaxGrade })}
+                  </span>
+                )}
+              </span>
             ) : kind === 'trajectory_end' ? (
               <span
                 className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
@@ -259,11 +263,7 @@ export function AutomationCard({
             </div>
           )}
           <div className="truncate text-xs text-[var(--color-text-dim)]">
-            {t('common.targetArrow', {
-              target: a.flowId
-                ? `${flowIcon ?? '🔀'} ${flow?.name ?? a.flowId}`
-                : (owner?.name ?? t('common.none')),
-            })}
+            {t('common.targetArrow', { target: owner?.name ?? t('common.none') })}
           </div>
           <div
             className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]"
@@ -333,10 +333,6 @@ export function AutomationCard({
       ) : isTokenKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
           {t('automationCard.tokenNoLoop')}
-        </div>
-      ) : a.flowId ? (
-        <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-          {t('automationCard.flowNoLoop')}
         </div>
       ) : (
         <div className="mt-1">

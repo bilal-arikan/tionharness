@@ -9,7 +9,7 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 cd "$(dirname "$0")/.."
 status=0
-for pkg in climcp trajectory mcp/repair flows decider; do
+for pkg in climcp trajectory mcp/repair flow decider; do
   if ! dependencies=$(go list -deps "./internal/$pkg"); then
     echo "depcheck: cannot inspect dependencies for internal/$pkg" >&2
     status=1

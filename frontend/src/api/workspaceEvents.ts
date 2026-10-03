@@ -6,7 +6,7 @@
 // The stream itself is the per-workspace twin of sessionStream
 // (GET /api/workspace/stream, _Docs/77 R3). One ordered, replayable log of
 // structured lifecycle facts for the active workspace: sessions created /
-// changed state / deleted, flow runs started / waiting / finished, schedules
+// changed state / deleted, schedules
 // armed for a future fire, automation fires, trajectory revisions. A live
 // workspace view keeps an incremental picture from it and gap-fills after a
 // reconnect instead of re-fetching everything.
@@ -22,7 +22,6 @@ import type { SessionOrigin } from '@/types/session'
 export const WorkspaceStreamKind = {
   SessionLifecycle: 'session_lifecycle',
   Trajectory: 'trajectory',
-  FlowRun: 'flow_run',
   ScheduleArmed: 'schedule_armed',
   AutomationFire: 'automation_fire',
   Spawn: 'spawn',
@@ -111,24 +110,10 @@ export interface TrajectoryData {
   updatedAt?: number
 }
 
-export interface FlowRunData {
-  runId: string
-  flowId: string
-  parentRunId?: string
-  parentNodeId?: string
-  rootRunId: string
-  sessionId?: string
-  status: 'running' | 'waiting' | 'success' | 'failure'
-  error?: string
-  createdAt: number
-  updatedAt: number
-}
-
 export interface ScheduleArmedData {
   scheduleId: string
   name?: string
   agentId?: string
-  flowId?: string
   oneShot?: boolean
   sessionId?: string
   fireAt: number

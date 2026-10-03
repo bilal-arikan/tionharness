@@ -33,13 +33,8 @@ func dashboardTroubleFixture(t *testing.T) *db.DB {
 	if _, err := database.CreateTask(ctx, db.Task{Title: "biten", BoardState: db.BoardDone}); err != nil {
 		t.Fatalf("create done task: %v", err)
 	}
-	if _, err := database.CreateFlow(ctx, db.Flow{Name: "f", Graph: `{"start":"s","nodes":[{"id":"s","type":"start"}]}`}); err != nil {
-		t.Fatalf("create flow: %v", err)
-	}
 	// A failed flow run — danger action AND the denominator of the success rate.
-	if _, err := database.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1", Status: db.FlowFailure, Error: "boom"}); err != nil {
-		t.Fatalf("create run: %v", err)
-	}
+	seedFlowRun(t, database, db.FlowFailure, "boom")
 	// A session waiting on a human answer — warn action.
 	if _, err := database.CreateSessionAsk(ctx, db.SessionAsk{SessionID: "SES1"}); err != nil {
 		t.Fatalf("create ask: %v", err)

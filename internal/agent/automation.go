@@ -74,8 +74,8 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 		return
 	}
 	for _, a := range autos {
-		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerToken {
-			continue // board/token automations react to their own events, not turns
+		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerToken || a.TriggerKind == db.TriggerFlow {
+			continue // board/token/flow automations react to their own events, not turns
 		}
 		if a.TriggerTag == "" || !containsTag(sess.Tags, a.TriggerTag) {
 			continue
@@ -200,36 +200,24 @@ func crossedMultiple(prev, now, interval int64) bool {
 }
 
 // fireToken evaluates a token automation's shared guardrails and, if they pass,
-// runs its target flow or spawns its target agent with the token context in the
+// spawns its target agent with the token context in the
 // prompt. sessionID is the crossing session for session scope (empty for
 // workspace scope); total is the cumulative token count that crossed the boundary.
 // dispatchFire runs an automation's rendered prompt against its target, choosing
 // the session strategy from EffectiveSessionMode. Three routes, checked in order:
-//   - flow-backed → LaunchRun runs the flow (its own transcript; session mode n/a);
 //   - continue    → reuse the persistent per-automation thread (deliverAutomationTurn,
 //     history-aware). It bypasses LaunchRun's launch brake, so the workspace
 //     autonomy pause is honored here instead; SpawnOptions are ignored (no fresh
 //     session to tag/parent);
 //   - spawn        → LaunchRun spawns a FRESH session with the caller's SpawnOptions.
 //
-// Returns the fired session id and a driver label ("flow"|"session"). Shared by
+// Returns the fired session id and a driver label ("session"). Shared by
 // all four fire paths so the mode choice lives in one place.
 func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, prompt string, trigger RunTrigger, spawn SpawnOptions) (sessionID, driver string, err error) {
 	// Lineage: whichever driver runs, the session it produces was started by THIS
 	// automation, tripped (for a session-scoped trigger) by the session the caller
-	// put in ParentSessionID. The flow driver threads it through LaunchRun into
-	// the run's transcript session; the session driver stamps it on the spawn.
+	// put in ParentSessionID; the session driver stamps it on the spawn.
 	origin := &db.SessionOrigin{Kind: db.OriginAutomation, EntityID: a.ID, TriggerSessionID: spawn.ParentSessionID}
-	if a.FlowID != "" {
-		res, ferr := e.rt.LaunchRun(ctx, RunSpec{
-			Trigger:    trigger,
-			Input:      prompt,
-			Autonomous: true,
-			FlowID:     a.FlowID,
-			Origin:     origin,
-		})
-		return res.SessionID, "flow", ferr
-	}
 	if spawn.Origin == nil {
 		spawn.Origin = origin
 	}
@@ -301,9 +289,6 @@ func (e *AutomationEngine) fireToken(ctx context.Context, a db.Automation, sessi
 	}
 	scope := a.EffectiveTokenScope()
 	suffix := " (token·" + scope + ")"
-	if driver == "flow" {
-		suffix = " (token·" + scope + "·akış)"
-	}
 	e.logger.Info("automation: fired (token)",
 		"automation", a.ID, "scope", scope, "total", total, "threshold", a.TokenThreshold,
 		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
@@ -362,7 +347,7 @@ func boardMatches(a db.Automation, ev db.BoardChangeEvent) bool {
 }
 
 // fireBoard evaluates a board automation's guardrails and, if they pass, runs its
-// target flow or spawns its target agent with the card context in the prompt.
+// spawns its target agent with the card context in the prompt.
 // Unlike tag automations there is no originating session and no self-tagging loop
 // (the spawned session carries no trigger tag); the guardrails still bound how
 // often card changes may fire it.
@@ -443,8 +428,8 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 
 	// SpawnTags default to none for board automations (an empty/nil slice) so a
 	// board fire does not tag its spawned session — board rules match on card
-	// changes, not tags, so there is no self-loop to seed. (Ignored on the flow and
-	// continue drivers.)
+	// changes, not tags, so there is no self-loop to seed. (Ignored on the
+	// continue driver.)
 	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationBoard, SpawnOptions{
 		Title:     "🗂 " + automationLabel(a),
 		CreatedBy: "automation:" + a.ID,
@@ -455,9 +440,6 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 		return
 	}
 	suffix := " (pano)"
-	if driver == "flow" {
-		suffix = " (pano·akış)"
-	}
 	e.logger.Info("automation: fired (board)",
 		"automation", a.ID, "op", ev.Op, "task", ev.TaskID,
 		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
@@ -593,7 +575,6 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 
 	// Spawn tags: default to the trigger tag so the new session re-fires this
 	// automation (the loop). A non-nil empty slice breaks the loop intentionally.
-	// (Ignored on the flow driver — flow sessions carry no trigger tag.)
 	spawnTags := a.SpawnTags
 	if spawnTags == nil {
 		spawnTags = []string{a.TriggerTag}
@@ -630,10 +611,7 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 	}
 
 	suffix := ""
-	if driver == "flow" {
-		suffix = " (akış)"
-	}
-	e.logger.Info("automation: fired"+suffix,
+	e.logger.Info("automation: fired",
 		"automation", a.ID, "tag", a.TriggerTag, "from", sess.ID,
 		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
 	e.notifyFired(ctx, a, firedSessionID, "🔁", suffix, prompt)
@@ -773,6 +751,15 @@ func automationTrigger(a db.Automation) string {
 			st = "*"
 		}
 		return "trajectory_end:" + st
+	case db.TriggerFlow:
+		ag, st := a.FlowAgentID, a.FlowStatus
+		if ag == "" {
+			ag = "*"
+		}
+		if st == "" {
+			st = "*"
+		}
+		return "flow:" + ag + ":" + st
 	}
 	return "tag:" + a.TriggerTag
 }

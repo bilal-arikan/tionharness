@@ -368,16 +368,8 @@ export default function App() {
     chatRef.current = chat
   })
 
-  // Open session, resolved once for the ChatView props below. A flow run log
-  // (kind 'flow') gets a shortcut to its flow's run history (B#4): a flow
-  // session's sourceId IS its flow id, and openFlowRun opens the Flows screen on
-  // that flow's runs. Undefined for every other kind, so the link surfaces only
-  // where it resolves.
+  // Open session, resolved once for the ChatView props below.
   const activeSession = ctl.sessions.find((s) => s.id === ctl.activeSessionId)
-  const openRunHistory =
-    activeSession?.kind === 'flow' && activeSession.sourceId
-      ? () => links.openFlowRun(activeSession.sourceId as string)
-      : undefined
 
   // handleRewind rewinds the conversation to a message (via the "/rewind" dialog
   // or a user bubble's ⟲ hover action): truncate to that checkpoint, then drop the
@@ -733,7 +725,6 @@ export default function App() {
               onCoordinationChanged={ctl.refreshSessions}
               onOpenSkill={openSkill}
               onError={setError}
-              onOpenRunHistory={openRunHistory}
               onSelectSession={ctl.selectSession}
               defaultAgentId={ctl.defaultAgentId}
               defaultAgentDeleted={ctl.defaultAgentDeleted}
@@ -798,7 +789,6 @@ export default function App() {
                   setView('chat')
                   ctl.selectSession(sid)
                 }}
-                onOpenFlowRun={links.openFlowRun}
                 trajectoryId={links.rotaTrajectory}
                 onTrajectory={links.setRotaTrajectory}
               />
@@ -843,9 +833,12 @@ export default function App() {
               <FlowsPanel
                 agents={ctl.agents}
                 onError={setError}
-                openFlowId={links.flowTarget}
                 tab={links.flowsTab}
                 onTabChange={links.setFlowsTab}
+                onOpenSession={(sid) => {
+                  setView('chat')
+                  ctl.selectSession(sid)
+                }}
               />
             </Suspense>
           )}

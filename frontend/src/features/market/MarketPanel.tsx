@@ -89,16 +89,14 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
       Promise.all([
         api.listSkills(),
         api.listAgents(),
-        api.listFlows(),
         api.listProviders(),
         api.listWorkspaces(),
         api.listMCPServers(),
       ])
-        .then(([skills, agents, flows, providers, workspaces, mcp]) =>
+        .then(([skills, agents, providers, workspaces, mcp]) =>
           setExisting({
             skills: new Set(skills.map((s) => s.slug)),
             agents: new Set(agents.map((a) => a.name.trim().toLowerCase())),
-            flows: new Set(flows.map((f) => f.name.trim().toLowerCase())),
             providers: new Set(providers.map((p) => p.id)),
             workspaces: new Set(workspaces.map((wsp) => wsp.name.trim().toLowerCase())),
             mcp: new Set(mcp.map((m) => m.name.trim().toLowerCase())),

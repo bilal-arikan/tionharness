@@ -15,11 +15,6 @@ describe('originLabel', () => {
     expect(l?.title).toContain('SES9')
   })
 
-  it('renders flow run and node ids', () => {
-    const l = originLabel({ kind: 'flow', entityId: 'FLW1', runId: 'RUN7', nodeId: 'n2', at: 1 })
-    expect(l?.text).toBe('Akış FLW1 · koşu RUN7 · düğüm n2')
-  })
-
   it('points a worker at its coordinator', () => {
     const l = originLabel({
       kind: 'coordinator',

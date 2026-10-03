@@ -5,12 +5,7 @@
 // `revision`, so consumers can key memoisation on one number.
 import type { SessionOrigin } from '@/types/session'
 import type { LivenessCapacity } from '@/types/liveness'
-import type {
-  AutomationFireData,
-  FlowRunData,
-  ScheduleArmedData,
-  TrajectoryData,
-} from '@/api/workspaceEvents'
+import type { AutomationFireData, ScheduleArmedData, TrajectoryData } from '@/api/workspaceEvents'
 
 // A session as the lanes know it: the header facts the stream carries, plus
 // the last liveness signal. `rootSessionId` is '' for a root (its own lane).
@@ -69,7 +64,6 @@ export interface LaneState {
   stale: boolean
   sessions: ReadonlyMap<string, LaneSession>
   trajectories: ReadonlyMap<string, TrajectoryData>
-  flowRuns: ReadonlyMap<string, FlowRunData>
   armed: ReadonlyMap<string, ScheduleArmedData>
   fires: readonly LaneFire[]
   activity: readonly LaneActivity[]
@@ -87,7 +81,6 @@ export function emptyLanes(): LaneState {
     stale: false,
     sessions: new Map(),
     trajectories: new Map(),
-    flowRuns: new Map(),
     armed: new Map(),
     fires: [],
     activity: [],

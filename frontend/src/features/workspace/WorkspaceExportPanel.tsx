@@ -1,5 +1,5 @@
 // Dedicated "Dışa Aktar" (export-as-template) sub-panel for a workspace. The user
-// picks exactly which agents, flows, workspace-tier skills, schedules and
+// picks exactly which agents, workspace-tier skills, schedules and
 // automations get captured (each item-by-item), plus the file categories (workspace instructions,
 // non-default runtime prompts + README, board columns) and pack metadata
 // (name/description/version). Secrets and session history are never included
@@ -8,7 +8,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Boxes,
-  GitBranch,
   Clock,
   Sparkles,
   Zap,
@@ -22,8 +21,6 @@ import type { WorkspaceExportInclude, WorkspaceExportMeta } from '@/api/market'
 import type {
   Agent,
   Automation,
-  Flow,
-  FlowGraph,
   Skill,
   Schedule,
   WorkspaceConfig,
@@ -68,7 +65,6 @@ function selectionToIds(picked: Set<string>, all: PickEntry[]): string[] | null 
 export function WorkspaceExportPanel({ ws, onError }: Props) {
   const { t } = useTranslation('workspace')
   const [agents, setAgents] = useState<Agent[]>([])
-  const [flows, setFlows] = useState<Flow[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [automations, setAutomations] = useState<Automation[]>([])
@@ -83,7 +79,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
 
   // Per-item selection sets (default all-selected once loaded).
   const [pickedAgents, setPickedAgents] = useState<Set<string>>(new Set())
-  const [pickedFlows, setPickedFlows] = useState<Set<string>>(new Set())
   const [pickedSkills, setPickedSkills] = useState<Set<string>>(new Set())
   const [pickedSchedules, setPickedSchedules] = useState<Set<string>>(new Set())
   const [pickedAutomations, setPickedAutomations] = useState<Set<string>>(new Set())
@@ -100,16 +95,14 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
   useEffect(() => {
     Promise.all([
       api.listAgents(),
-      api.listFlows(),
       api.listSkills(),
       api.listSchedules(),
       api.listAutomations(),
       api.getWorkspaceConfig(),
     ])
-      .then(([ag, fl, sk, sc, au, cfg]) => {
+      .then(([ag, sk, sc, au, cfg]) => {
         const wsSkills = sk.filter((s) => s.source === 'workspace') // global/bundled are shared, not exportable
         setAgents(ag)
-        setFlows(fl)
         setSkills(wsSkills)
         setSchedules(sc)
         // Built-in seeded board rules are provisioned per workspace at open time,
@@ -118,7 +111,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         setAutomations(ownAutos)
         setConfig(cfg)
         setPickedAgents(new Set(ag.map((a) => a.id)))
-        setPickedFlows(new Set(fl.map((f) => f.id)))
         setPickedSkills(new Set(wsSkills.map((s) => s.slug)))
         setPickedSchedules(new Set(sc.map((s) => s.id)))
         setPickedAutomations(new Set(ownAutos.map((a) => a.id)))
@@ -155,10 +147,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     () => agents.map((a) => ({ id: a.id, label: a.name, emoji: a.avatar || '🤖' })),
     [agents],
   )
-  const flowEntries: PickEntry[] = useMemo(
-    () => flows.map((f) => ({ id: f.id, label: f.name || f.id, sub: f.id })),
-    [flows],
-  )
   const skillEntries: PickEntry[] = useMemo(
     () => skills.map((s) => ({ id: s.slug, label: s.name || s.slug, sub: s.slug })),
     [skills],
@@ -168,11 +156,9 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       automations.map((a) => ({
         id: a.id,
         label: a.name || a.id,
-        sub: a.flowId
-          ? `${t('export.flow')} · ${flows.find((f) => f.id === a.flowId)?.name ?? a.flowId}`
-          : agentName(a.targetAgentId),
+        sub: agentName(a.targetAgentId),
       })),
-    [automations, agentName, flows, t],
+    [automations, agentName],
   )
   const scheduleEntries: PickEntry[] = useMemo(
     () =>
@@ -184,42 +170,10 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     [schedules, agentName, t],
   )
 
-  // Agent ids each flow's graph references (agent-type nodes only).
-  const flowAgentRefs = useMemo(
-    () =>
-      flows.map((f) => {
-        let ids: string[] = []
-        try {
-          const g = JSON.parse(f.graph) as FlowGraph
-          ids = (g.nodes ?? [])
-            .filter((n) => n.type === 'agent' && n.agentId)
-            .map((n) => n.agentId as string)
-        } catch {
-          // Malformed graph JSON — leave refs empty rather than failing the panel.
-        }
-        return { flow: f, agentIds: Array.from(new Set(ids)) }
-      }),
-    [flows],
-  )
-
-  // Dependency warnings: only for SELECTED flows/schedules whose agent is excluded.
-  // A selected flow keeps a dangling agent reference; a selected schedule bound to
-  // an excluded agent is dropped by the backend (orphan).
+  // Dependency warnings: only for SELECTED schedules/automations whose agent is
+  // excluded — such a rule is dropped by the backend (orphan).
   const depWarnings = useMemo(() => {
     const out: { key: string; label: string; detail: string }[] = []
-    for (const { flow, agentIds } of flowAgentRefs) {
-      if (!pickedFlows.has(flow.id)) continue
-      const missing = agentIds.filter((id) => !pickedAgents.has(id))
-      if (missing.length > 0) {
-        out.push({
-          key: `flow:${flow.id}`,
-          label: t('export.warnings.flowLabel', { name: flow.name || flow.id }),
-          detail: t('export.warnings.excludedAgents', {
-            agents: missing.map(agentName).join(', '),
-          }),
-        })
-      }
-    }
     for (const sc of schedules) {
       if (!pickedSchedules.has(sc.id)) continue
       if (!pickedAgents.has(sc.agentId)) {
@@ -240,30 +194,14 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
           label: t('export.warnings.automationLabel', { name: au.name || au.id }),
           detail: t('export.warnings.excludedAgent', { agent: agentName(au.targetAgentId) }),
         })
-      } else if (au.flowId && !pickedFlows.has(au.flowId)) {
-        out.push({
-          key: `auto:${au.id}`,
-          label: t('export.warnings.automationLabel', { name: au.name || au.id }),
-          detail: t('export.warnings.excludedFlow'),
-        })
       }
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    flowAgentRefs,
-    pickedFlows,
-    pickedSchedules,
-    pickedAutomations,
-    pickedAgents,
-    schedules,
-    automations,
-    agents,
-    t,
-  ])
+  }, [pickedSchedules, pickedAutomations, pickedAgents, schedules, automations, agents, t])
 
   // Live preview: the exact contents the current selection would produce. Schedules
-  // and automations only survive when bound to a selected agent/flow (orphans
+  // and automations only survive when bound to a selected agent (orphans
   // dropped), mirroring backend.
   const preview = useMemo(() => {
     const schedEffective = schedules.filter(
@@ -271,9 +209,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     ).length
     const autoEffective = automations.filter(
       (au) =>
-        pickedAutomations.has(au.id) &&
-        (!au.targetAgentId || pickedAgents.has(au.targetAgentId)) &&
-        (!au.flowId || pickedFlows.has(au.flowId)),
+        pickedAutomations.has(au.id) && (!au.targetAgentId || pickedAgents.has(au.targetAgentId)),
     ).length
     const resolvedName = name.trim() || ws.name
     const slug = slugify(resolvedName) || ws.id.toLowerCase()
@@ -288,12 +224,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
           label: t('export.preview.items.agent'),
           count: pickedAgents.size,
           on: pickedAgents.size > 0,
-        },
-        {
-          icon: GitBranch,
-          label: t('export.preview.items.flow'),
-          count: pickedFlows.size,
-          on: pickedFlows.size > 0,
         },
         {
           icon: Clock,
@@ -339,7 +269,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     automations,
     pickedAutomations,
     pickedAgents,
-    pickedFlows,
     pickedSkills,
     cats,
     name,
@@ -359,7 +288,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
     try {
       const include: WorkspaceExportInclude = {
         agentIds: selectionToIds(pickedAgents, agentEntries),
-        flowIds: selectionToIds(pickedFlows, flowEntries),
         skillSlugs: selectionToIds(pickedSkills, skillEntries),
         scheduleIds: selectionToIds(pickedSchedules, scheduleEntries),
         automationIds: selectionToIds(pickedAutomations, automationEntries),
@@ -428,7 +356,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         </Field>
       </div>
 
-      {/* Item selections — agents / flows / skills / schedules */}
+      {/* Item selections — agents / skills / schedules */}
       <div className="mt-2 space-y-4 border-t border-[var(--color-border)] pt-3">
         <ExportPickList
           title={t('export.sections.agents.title')}
@@ -437,15 +365,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
           picked={pickedAgents}
           setPicked={setPickedAgents}
           emptyHint={t('export.sections.agents.empty')}
-        />
-        <ExportPickList
-          title={t('export.sections.flows.title')}
-          icon={GitBranch}
-          entries={flowEntries}
-          picked={pickedFlows}
-          setPicked={setPickedFlows}
-          emptyHint={t('export.sections.flows.empty')}
-          note={t('export.sections.flows.note')}
         />
         <ExportPickList
           title={t('export.sections.skills.title')}
@@ -541,7 +460,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         </div>
       </div>
 
-      {/* Dependency warnings — excluded agents that selected flows/schedules rely on */}
+      {/* Dependency warnings — excluded agents that selected schedules/automations rely on */}
       {depWarnings.length > 0 && (
         <div className="mt-2 space-y-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#f59e0b)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#f59e0b)_8%,transparent)] px-3 py-2.5">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-warning,#f59e0b)]">

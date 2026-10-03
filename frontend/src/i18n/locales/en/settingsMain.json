@@ -24,7 +24,11 @@
     "commit": "Commit",
     "buildDate": "Build date",
     "goVersion": "Go version",
-    "links": { "website": "Website", "docs": "Documentation", "github": "GitHub" },
+    "links": {
+      "website": "Website",
+      "docs": "Documentation",
+      "github": "GitHub"
+    },
     "updateNote": "When a new version is available, the app shows a notification banner at the top, but does not install the update. Download and installation are manual.",
     "storage": {
       "prefix": "Application settings are stored in",
@@ -36,13 +40,23 @@
   "agentRoster": {
     "searchLabel": "Search agents",
     "searchPlaceholder": "Search name, model or workspace…",
-    "kinds": { "all": "All", "custom": "Custom", "services": "Services", "workers": "Workers" },
+    "kinds": {
+      "all": "All",
+      "custom": "Custom",
+      "services": "Services",
+      "workers": "Workers"
+    },
     "workspaceFilter": "Filter by workspace",
     "allWorkspaces": "All workspaces",
     "unassigned": "Unassigned",
     "workspaceCount_one": "{{count}} workspace",
     "workspaceCount_other": "{{count}} workspaces",
-    "badges": { "builtIn": "Built-in", "role": "Role", "custom": "Custom", "disabled": "Disabled" },
+    "badges": {
+      "builtIn": "Built-in",
+      "role": "Role",
+      "custom": "Custom",
+      "disabled": "Disabled"
+    },
     "inherits": "Inherits from {{name}}",
     "empty": "No agents match these filters."
   },
@@ -145,7 +159,10 @@
       "label": "Continue unfinished autonomous work",
       "hint": "Resume unfinished autonomous turns automatically. Manually stopped or guard-limited runs are excluded."
     },
-    "maxTurns": { "label": "Maximum continuation turns", "hint": "0 uses the built-in default." }
+    "maxTurns": {
+      "label": "Maximum continuation turns",
+      "hint": "0 uses the built-in default."
+    }
   },
   "background": {
     "description": "Productive work has no total duration cap. Idle windows detect stalled runs.",
@@ -159,7 +176,7 @@
     },
     "flowRetention": {
       "label": "Completed flow runs to retain",
-      "hint": "Completed run trees kept per flow. 0 means unlimited; older runs are removed periodically."
+      "hint": "Finished flow runs (one per turn) kept per agent; 0 = unlimited. Older ones are pruned every 10 minutes."
     },
     "perTurn": {
       "label": "Background sessions per turn",
@@ -427,7 +444,10 @@
     "addSource": "Add your own source",
     "namePlaceholder": "name (letters, numbers, _ -)",
     "gitSourcePlaceholder": "owner/repo or URL",
-    "sourceTypes": { "local": "Local", "git": "Git" },
+    "sourceTypes": {
+      "local": "Local",
+      "git": "Git"
+    },
     "discoveredTitle": "Codex plugins on this machine",
     "scanning": "Scanning…",
     "scan": "Scan",
@@ -496,7 +516,10 @@
       "label": "Maximum context tokens — FLOOR",
       "hint": "The lower bound for the budget: it can only raise the budget, never lower it. To shrink the window, lower the Budget ceiling instead."
     },
-    "recent": { "label": "Recent messages kept", "hint": "Always sent verbatim." },
+    "recent": {
+      "label": "Recent messages kept",
+      "hint": "Always sent verbatim."
+    },
     "ceil": {
       "label": "Budget ceiling (tokens) — UPPER LIMIT",
       "hint": "The upper bound for the budget and the setting to change when shrinking the context window. Lowering it clips the effective budget; raising it keeps more raw history at the cost of recall precision."

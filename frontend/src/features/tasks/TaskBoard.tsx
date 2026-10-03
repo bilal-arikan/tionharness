@@ -10,7 +10,6 @@ import type {
   Artifact,
   Task,
   TaskPatch,
-  Flow,
   BoardColumnDef,
   BoardFilter,
   BoardViewDef,
@@ -73,7 +72,6 @@ const BOARD_SEARCH_SETTLE_MS = 150
 export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) {
   const { t } = useTranslation('tasks')
   const [tasks, setTasks] = useState<Task[]>([])
-  const [flows, setFlows] = useState<Flow[]>([])
   const [columns, setColumns] = useState<BoardColumnDef[]>(fallbackBoardColumns)
   const visibleColumns = useMemo(() => localizeBoardColumns(columns), [columns])
   // User-created saved views, pulled from workspace settings alongside columns.
@@ -192,14 +190,6 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
       .catch(() => {
         // non-fatal: keep defaults
       })
-
-  useEffect(() => {
-    api
-      .listFlows()
-      .then(setFlows)
-      .catch((e) => onError(e.message))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Cross-window live sync: App.tsx's central SSE handler bumps the 'board'
   // refresh signal on every task CRUD / board column change in the active
@@ -412,15 +402,14 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
   // Everything a card shows that is DERIVED rather than on the task itself, keyed
   // by task id and computed once per data change.
   //
-  // It used to be inline in the render loop: each card ran agents.find +
-  // flows.find, then a tasks.find PER DEPENDENCY. That is O(cards × deps) linear
+  // It used to be inline in the render loop: each card ran agents.find, then a
+  // tasks.find PER DEPENDENCY. That is O(cards × deps) linear
   // scans, redone on every board render — and the board re-renders on drag-over,
   // file-drop hover and selection ticks, none of which can change any of it. On a
   // large board with dependencies that is what makes dragging feel heavy.
   const cardMeta = useMemo(() => {
     const taskById = new Map(tasks.map((t) => [t.id, t]))
     const agentById = new Map(agents.map((a) => [a.id, a]))
-    const flowById = new Map(flows.map((f) => [f.id, f]))
     // Dependency chips colour by the STATUS column of the blocker, whatever the
     // current grouping axis is — so this reads `columns`, not derivedColumns.
     const colorByState = new Map(visibleColumns.map((c) => [c.key, c.color ?? null]))
@@ -440,7 +429,6 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
       const imgURL = img ? fileURL(img.sourcePath) : null
       m.set(t.id, {
         owner: agentById.get(t.ownerAgentId),
-        flow: t.flowId ? flowById.get(t.flowId) : undefined,
         depIds,
         unmetDeps,
         unmetColColor: firstUnmet ? (colorByState.get(firstUnmet.boardState) ?? null) : null,
@@ -448,7 +436,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
       })
     }
     return m
-  }, [tasks, agents, flows, visibleColumns, images])
+  }, [tasks, agents, visibleColumns, images])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk move/assign/delete.
   // The ordered id list mirrors the on-screen render order (column by column,
@@ -878,7 +866,6 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
           mode={modal.mode}
           task={modalTask ?? undefined}
           agents={agents}
-          flows={flows}
           columns={visibleColumns}
           tasks={tasks}
           defaultBoardState={visibleColumns[0]?.key}

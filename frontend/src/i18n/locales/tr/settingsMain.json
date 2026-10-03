@@ -175,8 +175,8 @@
       "hint": "Kapasite bekleyebilen en fazla oturum (1–128)."
     },
     "flowRetention": {
-      "label": "Saklanacak tamamlanmış flow çalışmaları",
-      "hint": "Flow başına tutulan tamamlanmış çalışma ağaçları. 0 sınırsızdır; eskiler düzenli olarak kaldırılır."
+      "label": "Saklanacak biten akış koşusu",
+      "hint": "Ajan başına saklanan biten akış koşusu (tur kaydı) sayısı; 0 = sınırsız. Eskiler 10 dakikada bir silinir."
     },
     "perTurn": {
       "label": "Tur başına arka plan oturumu",

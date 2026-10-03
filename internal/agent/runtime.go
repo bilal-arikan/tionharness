@@ -121,6 +121,10 @@ type Runtime struct {
 	// threshold crossing. The workspace manager wires the AutomationEngine here.
 	// Guarded by the same mutex.
 	usageHooks []func(context.Context, UsageRecorded)
+	// flowRunHooks fire (detached) after a flow run finished and was graded
+	// (see FireFlowRunFinished); the automation engine's flow-kind rules
+	// subscribe. Guarded by the same mutex.
+	flowRunHooks []func(context.Context, FlowRunFinished)
 
 	// turns is the per-session TURN ADMISSION queue (internal/turnqueue): the single
 	// FIFO every turn-entry path — a queued user message, a coordinator auto-turn, a
@@ -1417,6 +1421,35 @@ func (r *Runtime) FireUsageRecorded(u UsageRecorded) {
 			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
 			defer cancel()
 			fn(ctx, u)
+		}()
+	}
+}
+
+// AddFlowRunHook appends a flow-run observer (see FireFlowRunFinished).
+func (r *Runtime) AddFlowRunHook(fn func(context.Context, FlowRunFinished)) {
+	if fn == nil {
+		return
+	}
+	r.turnHooksMu.Lock()
+	defer r.turnHooksMu.Unlock()
+	r.flowRunHooks = append(r.flowRunHooks, fn)
+}
+
+// FireFlowRunFinished dispatches a finished (and, when enabled, graded) flow
+// run to every wired flow-run hook, each on its own DETACHED goroutine so a
+// hook never blocks the turn's wrap-up. No-op when no hook is wired.
+func (r *Runtime) FireFlowRunFinished(ev FlowRunFinished) {
+	r.turnHooksMu.RLock()
+	hooks := r.flowRunHooks
+	r.turnHooksMu.RUnlock()
+	if len(hooks) == 0 {
+		return
+	}
+	for _, fn := range hooks {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+			defer cancel()
+			fn(ctx, ev)
 		}()
 	}
 }

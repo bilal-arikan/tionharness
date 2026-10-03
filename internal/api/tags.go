@@ -5,7 +5,7 @@ import (
 )
 
 // tagsReq is the body for every "set tags" endpoint: the full replacement tag
-// set for a session, flow or schedule.
+// set for a session or schedule.
 type tagsReq struct {
 	Tags []string `json:"tags"`
 }
@@ -29,23 +29,6 @@ func (s *Server) handleSetSessionTags(w http.ResponseWriter, r *http.Request) {
 	}
 	// Refresh open session list + detail panel live (same event agent mutations use).
 	emitSessionChange(wsp, id, "tags")
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "tags": req.Tags})
-}
-
-// handleSetFlowTags replaces a flow's tags (organizational only).
-func (s *Server) handleSetFlowTags(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	req, ok := bindJSON[tagsReq](w, r)
-	if !ok {
-		return
-	}
-	ctx := r.Context()
-	if _, err := ws(r).DB.GetFlow(ctx, id); writeDBError(w, err, "flow not found") {
-		return
-	}
-	if err := ws(r).DB.SetFlowTags(ctx, id, req.Tags); writeDBError(w, err, "") {
-		return
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "tags": req.Tags})
 }
 

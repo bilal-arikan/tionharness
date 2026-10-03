@@ -75,8 +75,8 @@ func ProjectWorkspace(in WorkspaceInput, level Level) (View, error) {
 	if len(in.Tasks) > 0 {
 		l.add("pano: %s", boardHistogram(boardColumns(in.Tasks)))
 	}
-	l.add("koşular: %d çalışıyor · %d bekliyor · %d başarısız (son 24s: %d)",
-		st.RunsRunning, st.RunsWaiting, st.RunsFailed, st.RunsRecent)
+	l.add("koşular: %d çalışıyor · %d başarısız (son 24s: %d)",
+		st.RunsRunning, st.RunsFailed, st.RunsRecent)
 
 	sigs := workspaceSignals(in, st, now)
 	for _, s := range sigs {
@@ -112,7 +112,6 @@ type WorkspaceCounts struct {
 	TasksOpen        int `json:"tasksOpen"`
 	Runs             int `json:"runs"`
 	RunsRunning      int `json:"runsRunning"`
-	RunsWaiting      int `json:"runsWaiting"`
 	RunsFailed       int `json:"runsFailed"`
 }
 
@@ -139,7 +138,6 @@ func countsFrom(in WorkspaceInput, st wsStats) WorkspaceCounts {
 		TasksOpen:        st.OpenCards,
 		Runs:             len(in.FlowRuns),
 		RunsRunning:      st.RunsRunning,
-		RunsWaiting:      st.RunsWaiting,
 		RunsFailed:       st.RunsFailed,
 	}
 }
@@ -155,7 +153,6 @@ type wsStats struct {
 	StuckSessions    []db.Session
 	CoordinatorRuns  int
 	RunsRunning      int
-	RunsWaiting      int
 	RunsFailed       int
 	RunsRecent       int
 	FailedRuns       []db.FlowRun
@@ -190,8 +187,6 @@ func workspaceStats(in WorkspaceInput, now time.Time) wsStats {
 		switch r.Status {
 		case db.FlowRunning:
 			st.RunsRunning++
-		case db.FlowWaiting:
-			st.RunsWaiting++
 		case db.FlowFailure:
 			st.RunsFailed++
 			st.FailedRuns = append(st.FailedRuns, r)
@@ -258,9 +253,6 @@ func workspaceSignals(in WorkspaceInput, st wsStats, now time.Time) []string {
 		out = append(out, fmt.Sprintf("⚠ %d kart >%dg çalışan sütunda hareketsiz: %s",
 			n, boardStaleDays, namesOf(st.StaleCards, wsSignalNames)))
 	}
-	if st.RunsWaiting > 0 {
-		out = append(out, fmt.Sprintf("⏸ %d akış koşusu girdi bekliyor (await-input)", st.RunsWaiting))
-	}
 	if st.CoordinatorRuns > 0 {
 		out = append(out, fmt.Sprintf("⇵ %d koordinatör oturumu", st.CoordinatorRuns))
 	}
@@ -290,13 +282,6 @@ func workspaceHandles(st wsStats) []Handle {
 		hs = append(hs, Handle{
 			Label: "pano detayı",
 			Ref:   Ref{Kind: KindBoard, ID: BoardRefID},
-			Level: LevelCard,
-		})
-	}
-	if len(st.FailedRuns) > 0 {
-		hs = append(hs, Handle{
-			Label: "başarısız koşu: " + st.FailedRuns[0].ID,
-			Ref:   Ref{Kind: KindFlowRun, ID: st.FailedRuns[0].ID},
 			Level: LevelCard,
 		})
 	}

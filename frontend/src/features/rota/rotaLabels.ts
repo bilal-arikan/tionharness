@@ -20,8 +20,6 @@ export function laneOriginGlyph(s: LaneSession): string {
     case 'coordinator':
     case 'subagent':
       return '↳'
-    case 'flow':
-      return '⇶'
     case 'schedule':
       return '⏰'
     case 'automation':

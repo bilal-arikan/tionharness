@@ -100,18 +100,6 @@ function fixture() {
   )
   s = applyLaneEvent(
     s,
-    ev(3, 'flow_run', {
-      runId: 'RUN1',
-      flowId: 'FL1',
-      rootRunId: 'RUN1',
-      sessionId: 'ROOT',
-      status: 'running',
-      createdAt: NOW - 60,
-      updatedAt: NOW - 30,
-    }),
-  )
-  s = applyLaneEvent(
-    s,
     ev(4, 'schedule_armed', { scheduleId: 'SCH1', name: 'nightly', fireAt: NOW + 120 }),
   )
   s = applyLaneEvent(s, ev(5, 'schedule_armed', { scheduleId: 'SCH2', fireAt: NOW + 99_999 }))
@@ -145,12 +133,11 @@ describe('layoutRota', () => {
     expect(byId['edge:W2>FORK']).toMatchObject({ kind: 'forked_from', at: NOW - 400 })
   })
 
-  it('bars: live sessions and runs extend to now, finished ones stop at updatedAt', () => {
+  it('bars: live sessions extend to now, finished ones stop at updatedAt', () => {
     const l = layoutRota(fixture(), { now: NOW })
     const bar = (id: string) => l.bars.find((b) => b.id === id)!
     expect(bar('bar:W2')).toMatchObject({ live: true, end: NOW, state: 'running' })
     expect(bar('bar:W1')).toMatchObject({ live: false, end: NOW - 300, state: 'completed' })
-    expect(bar('run:RUN1')).toMatchObject({ rowId: 'ROOT', kind: 'flowrun', live: true, end: NOW })
   })
 
   it('marks fires on the trigger lane, drops unknown lanes, adds stall marks', () => {

@@ -117,9 +117,11 @@ type automationReq struct {
 	TrajRecipe       string   `json:"trajRecipe"`
 	TrajEvent        string   `json:"trajEvent"`
 	TrajStatus       string   `json:"trajStatus"`
+	FlowAgentID      string   `json:"flowAgentId"`
+	FlowStatus       string   `json:"flowStatus"`
+	FlowMaxGrade     *int     `json:"flowMaxGrade"`
 	SessionMode      string   `json:"sessionMode"`
 	TargetAgentID    string   `json:"targetAgentId"`
-	FlowID           string   `json:"flowId"`
 	PromptTemplate   string   `json:"promptTemplate"`
 	SpawnTags        []string `json:"spawnTags"`
 	Enabled          *bool    `json:"enabled"`
@@ -150,7 +152,6 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	req.TokenScope = strings.TrimSpace(req.TokenScope)
 	req.SessionMode = strings.TrimSpace(req.SessionMode)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
-	req.FlowID = strings.TrimSpace(req.FlowID)
 	// Pointer→value extraction for the interval fields, and the one check the shape
 	// validator cannot express: "you omitted a required interval" (an absent field
 	// reads as 0, which db.ValidateAutomationShape would otherwise report as a range
@@ -167,19 +168,13 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	ctx := r.Context()
 	// A board automation whose action is "archive" performs bookkeeping with no
-	// LLM call, so it needs no target. Every other automation targets EITHER a flow
-	// or a single agent.
+	// LLM call, so it needs no target. Every other automation targets an agent.
 	targetlessAction := req.TriggerKind == db.TriggerBoard && (req.BoardAction == db.BoardActionArchive || req.BoardAction == db.BoardActionMove)
 	if targetlessAction {
-		// no target required; ignore any flow/agent sent
-	} else if req.FlowID != "" {
-		if _, err := ws(r).DB.GetFlow(ctx, req.FlowID); err != nil {
-			writeError(w, http.StatusBadRequest, "target flow not found")
-			return
-		}
+		// no target required; ignore any agent sent
 	} else {
 		if req.TargetAgentID == "" {
-			writeError(w, http.StatusBadRequest, "targetAgentId or flowId is required")
+			writeError(w, http.StatusBadRequest, "targetAgentId is required")
 			return
 		}
 		ag, err := ws(r).DB.GetAgent(ctx, req.TargetAgentID)
@@ -221,6 +216,10 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	if req.BoardExclusive != nil {
 		boardExclusive = *req.BoardExclusive
 	}
+	flowMaxGrade := 0
+	if req.FlowMaxGrade != nil {
+		flowMaxGrade = *req.FlowMaxGrade
+	}
 	auto := db.Automation{
 		Name:             strings.TrimSpace(req.Name),
 		TriggerKind:      req.TriggerKind,
@@ -238,9 +237,11 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		TrajRecipe:       strings.TrimSpace(req.TrajRecipe),
 		TrajEvent:        strings.TrimSpace(req.TrajEvent),
 		TrajStatus:       strings.TrimSpace(req.TrajStatus),
+		FlowAgentID:      strings.TrimSpace(req.FlowAgentID),
+		FlowStatus:       strings.TrimSpace(req.FlowStatus),
+		FlowMaxGrade:     flowMaxGrade,
 		SessionMode:      req.SessionMode,
 		TargetAgentID:    req.TargetAgentID,
-		FlowID:           req.FlowID,
 		PromptTemplate:   req.PromptTemplate,
 		SpawnTags:        req.SpawnTags,
 		Enabled:          enabled,
@@ -303,6 +304,13 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 			cur.TrajEvent = strings.TrimSpace(req.TrajEvent)
 			cur.TrajStatus = strings.TrimSpace(req.TrajStatus)
 		}
+		if k == db.TriggerFlow {
+			cur.FlowAgentID = strings.TrimSpace(req.FlowAgentID)
+			cur.FlowStatus = strings.TrimSpace(req.FlowStatus)
+			if req.FlowMaxGrade != nil {
+				cur.FlowMaxGrade = *req.FlowMaxGrade
+			}
+		}
 	}
 	// Interval fields are pointers: absent in a partial patch means "leave as
 	// stored"; ValidateAutomationShape validates whatever the merge ends up with.
@@ -310,16 +318,8 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		cur.TokenThreshold = *req.TokenThreshold
 	}
 	// Targeting: apply only when the request specifies a target, so partial
-	// updates (e.g. spawnTags-only) don't wipe it. Setting a flow switches the
-	// automation to flow-backed and clears the agent, and vice versa.
-	if f := strings.TrimSpace(req.FlowID); f != "" {
-		if _, err := ws(r).DB.GetFlow(ctx, f); err != nil {
-			writeError(w, http.StatusBadRequest, "target flow not found")
-			return
-		}
-		cur.FlowID = f
-		cur.TargetAgentID = ""
-	} else if a := strings.TrimSpace(req.TargetAgentID); a != "" {
+	// updates (e.g. spawnTags-only) don't wipe it.
+	if a := strings.TrimSpace(req.TargetAgentID); a != "" {
 		ag, err := ws(r).DB.GetAgent(ctx, a)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "target agent not found")
@@ -329,7 +329,6 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		cur.TargetAgentID = a
-		cur.FlowID = ""
 	}
 	if req.PromptTemplate != "" {
 		cur.PromptTemplate = req.PromptTemplate
@@ -447,11 +446,6 @@ func (s *Server) handleGenerateAutomationTitle(w http.ResponseWriter, r *http.Re
 	if auto.TargetAgentID != "" {
 		if ag, err := wsp.DB.GetAgent(r.Context(), auto.TargetAgentID); err == nil {
 			source += fmt.Sprintf(" agent=%s", ag.Name)
-		}
-	}
-	if auto.FlowID != "" {
-		if fl, err := wsp.DB.GetFlow(r.Context(), auto.FlowID); err == nil {
-			source += fmt.Sprintf(" flow=%s", fl.Name)
 		}
 	}
 	if auto.PromptTemplate != "" {

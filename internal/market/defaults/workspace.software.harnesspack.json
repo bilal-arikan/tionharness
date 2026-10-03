@@ -56,41 +56,6 @@
           "permissionMode": "read-only"
         }
       ],
-      "flows": [
-        {
-          "name": "Search → Plan → Execute → Verify",
-          "steps": [
-            {
-              "id": "search",
-              "title": "Search",
-              "agentKey": "search",
-              "prompt": "Task:\n{{input}}\n\nExplore the relevant code and context. Produce a concise findings report."
-            },
-            {
-              "id": "plan",
-              "title": "Plan",
-              "agentKey": "plan",
-              "prompt": "Task:\n{{input}}\n\nFindings:\n{{last}}\n\nProduce a concrete step-by-step implementation plan."
-            },
-            {
-              "id": "execute",
-              "title": "Execute",
-              "agentKey": "execute",
-              "prompt": "Task:\n{{input}}\n\nFindings:\n{{node.search}}\n\nImplement the following plan with clean, atomic changes.\n\nPlan:\n{{last}}"
-            },
-            {
-              "id": "verify",
-              "title": "Verify",
-              "agentKey": "verify",
-              "prompt": "Verify the implementation below against the original task. Run/inspect tests and report remaining issues.\n\nTask:\n{{input}}\n\nImplementation:\n{{last}}"
-            }
-          ]
-        },
-        {
-          "name": "Verify → (FIX→Execute | SHIP)",
-          "graph": "{\"start\": \"verify\", \"nodes\": [{\"id\": \"verify\", \"type\": \"agent\", \"title\": \"Verify\", \"agentId\": \"tmpl:verify\", \"prompt\": \"Review the change for the task:\\n{{input}}\\n\\nEnd your reply with exactly \\\"VERDICT: SHIP\\\" or \\\"VERDICT: FIX\\\".\", \"next\": \"route\"}, {\"id\": \"route\", \"type\": \"branch\", \"title\": \"Karar\", \"matchMode\": \"contains\", \"branches\": [{\"contains\": \"FIX\", \"next\": \"fix\"}, {\"contains\": \"\", \"next\": \"\"}]}, {\"id\": \"fix\", \"type\": \"agent\", \"title\": \"Fix\", \"agentId\": \"tmpl:execute\", \"prompt\": \"Address the issues raised below with minimal, atomic changes.\\n\\n{{last}}\"}]}"
-        }
-      ],
       "skills": [
         {
           "slug": "sw-conventions",

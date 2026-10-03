@@ -144,7 +144,7 @@ func TestListSessionsChipCountsRespectNonChipScope(t *testing.T) {
 	for _, s := range []db.Session{
 		{Title: "active chat", State: "active"},
 		{Title: "archived chat", State: "archived"},
-		{Title: "active flow", Kind: "flow", State: "active"},
+		{Title: "active automation", Kind: "automation", Category: db.CategoryAutomation, State: "active"},
 	} {
 		if _, err := wsp.DB.CreateSession(ctx, s); err != nil {
 			t.Fatalf("create session: %v", err)
@@ -155,8 +155,8 @@ func TestListSessionsChipCountsRespectNonChipScope(t *testing.T) {
 	if got := page.ChipCounts["chat"]; got != 1 {
 		t.Fatalf("chipCounts[chat] = %d, want 1 in active state scope", got)
 	}
-	if got := page.ChipCounts["flow"]; got != 1 {
-		t.Fatalf("chipCounts[flow] = %d, want 1 in active state scope", got)
+	if got := page.ChipCounts["automation"]; got != 1 {
+		t.Fatalf("chipCounts[automation] = %d, want 1 in active state scope", got)
 	}
 	if got := page.ChipCounts["archived"]; got != 0 {
 		t.Fatalf("chipCounts[archived] = %d, want 0 outside active state scope", got)

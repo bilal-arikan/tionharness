@@ -1,6 +1,6 @@
 ---
 name: "TionHarness Guide"
-description: "Overview of how TionHarness works — agents, sessions, tasks, flows, schedules, skills and tools — and how the pieces fit together."
+description: "Overview of how TionHarness works — agents, sessions, tasks, evolving flows, schedules, skills and tools — and how the pieces fit together."
 when_to_use: "When you need to understand TionHarness itself, or to orient before using one of its subsystems"
 icon: "🗺️"
 color: "#6366f1"
@@ -22,19 +22,20 @@ workspaces never leaks content between them.
   be deleted; disabling one activates its built-in fallback, and restore-default
   replaces its editable profile fields with the compiled definition.
 - **Sessions** — conversation threads. Every execution path funnels into a
-  session, so chats, task runs, flow runs and scheduled deliveries are all
-  viewable as one streamable transcript. `Kind` tags the origin (chat / task /
-  flow / schedule).
+  session, so chats, task runs and scheduled deliveries are all viewable as one
+  streamable transcript. `Kind` tags the origin (chat / task / schedule).
 - **Tasks** — a kanban board. It is passive: there is no dispatcher and no run
   tool, moving a card never executes anything on its own. Default columns are
   `pbi`/`todo`/`in_progress`/`review`/`done`/`failed` (`db.DefaultBoardColumns()`;
-  a workspace may add custom column keys). A card carries intent (a `Prompt` or a
-  `FlowID`); a done card can be archived (reversible, hides it from the active
+  a workspace may add custom column keys). A card carries intent (a `Prompt`); a
+  done card can be archived (reversible, hides it from the active
   board and `get_view board` without deleting it). Read board state with
   `get_view board` (or `list_tasks`) rather than assuming execution history — the
   legacy `LastRun*` fields are read-only and no longer set by anything.
-- **Flows** — multi-step / multi-agent orchestration graphs (see the
-  `tionharness-flows` skill for details).
+- **Flows** — every agent has one evolving main flow (input → stages → output)
+  that each of its turns runs through; it is versioned and can be edited by the
+  user, by the agent (`edit_flow`) and by the Flow Observer. See the
+  `tionharness-flows` skill.
 - **Schedules (routines)** — cron-driven prompts delivered to an agent.
 - **Skills** — reusable instruction sets (like this one). Their summaries are
   advertised in the prompt; load a full body on demand with `use_skill`. Some
@@ -118,7 +119,7 @@ and claude-cli agents). They are always available — no `activate_tools` needed
   leaves the active list, never deleted). Track multi-step work with `todo_write`.
   Non-blocking.
 
-On autonomous (scheduler/spawn/flow) turns there is no live user: the blocking
+On autonomous (scheduler/spawn) turns there is no live user: the blocking
 tools (`ask_user`/`request_confirmation`) are withdrawn, while `notify`/
 `focus_view` stay available as no-ops when no window is open.
 
@@ -126,21 +127,22 @@ tools (`ask_user`/`request_confirmation`) are withdrawn, while `notify`/
 
 - **Run work now** → start a chat session with the right agent.
 - **Track work** → create a task on the board.
-- **Automate multi-step / multi-agent work** → build a flow. Load the
-  `tionharness-flows` skill first.
+- **Make your own turns multi-stage** (plan, draft, critique, retry) → evolve your
+  flow with `edit_flow`. Load the `tionharness-flows` skill first.
+- **Automate multi-agent work** → coordinator mode + workers, or an Automation.
 - **Repeat on a schedule** → create a schedule (routine).
 
 - **Tune the app** → read or change application-wide settings live with the
   `get_settings` / `update_settings` tools. Load the `tionharness-settings` skill for
   the full field reference.
-- **Manage TionHarness itself** → create/edit agents, flows, schedules, tasks, hooks,
+- **Manage TionHarness itself** → create/edit agents, schedules, tasks, hooks,
   MCP servers and skills, spawn parallel workers, store secrets, or manage
   artifacts/logs with the self-management tools. They are loaded on demand
   — `activate_tools` pulls the one you need. Load the `tionharness-self-management`
   skill for the catalog and the activation workflow.
 
 When a subsystem needs deeper instructions, load the matching skill rather than
-guessing — start with `tionharness-flows` for orchestration, `tionharness-self-management`
+guessing — start with `tionharness-flows` for your flow, `tionharness-self-management`
 for operating TionHarness, or `tionharness-settings` for configuration.
 
 ## Before you build: discover first
@@ -163,5 +165,5 @@ So, before building or concluding absence:
 3. **Prefer extending over rewriting.** If something close already exists, build
    on it (extend, wire in, refactor) instead of starting a parallel version.
 
-This applies to code, configuration, agents, flows, skills — anything
+This applies to code, configuration, agents, skills — anything
 you might otherwise create from scratch.

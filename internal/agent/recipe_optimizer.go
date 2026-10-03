@@ -475,8 +475,8 @@ func optimizerUserPrompt(sk skills.Skill, body string, stats []RecipeStats, rece
 	b.WriteString("\n# Last runs\n")
 	for _, e := range recent {
 		s := e.Summary
-		fmt.Fprintf(&b, "- %s (%s, %s): %s, %d tokens, %d workers (%d failed), %d runs (%d failed), %d unannounced, gates %d (%s)",
-			e.ID, e.TemplateRef, e.Status, optDur(time.Duration(s.DurationSec)*time.Second), s.Tokens, s.Sessions, s.FailedSess, s.FlowRuns, s.FailedRuns, s.Unannounced, s.Gates, optDur(time.Duration(s.GateWaitSec)*time.Second))
+		fmt.Fprintf(&b, "- %s (%s, %s): %s, %d tokens, %d workers (%d failed), %d unannounced, gates %d (%s)",
+			e.ID, e.TemplateRef, e.Status, optDur(time.Duration(s.DurationSec)*time.Second), s.Tokens, s.Sessions, s.FailedSess, s.Unannounced, s.Gates, optDur(time.Duration(s.GateWaitSec)*time.Second))
 		if len(s.GhostPhases) > 0 {
 			fmt.Fprintf(&b, "; unreached phases %s", strings.Join(s.GhostPhases, ","))
 		}

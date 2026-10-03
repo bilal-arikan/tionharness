@@ -126,10 +126,9 @@ func validateCommonShape(a Automation) error {
 	if !ValidSessionMode(a.SessionMode) {
 		return fmt.Errorf("%w: invalid sessionMode %q (spawn|continue)", ErrAutomationShape, a.SessionMode)
 	}
-	// Every automation that reaches here spawns a session or runs a flow, so it
-	// needs exactly one runnable target.
-	if a.FlowID == "" && a.TargetAgentID == "" {
-		return fmt.Errorf("%w: targetAgentId or flowId is required", ErrAutomationShape)
+	// Every automation that reaches here spawns a session, so it needs a target.
+	if a.TargetAgentID == "" {
+		return fmt.Errorf("%w: targetAgentId is required", ErrAutomationShape)
 	}
 	return nil
 }

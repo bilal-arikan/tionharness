@@ -7,7 +7,7 @@
 > optimizer) özelliği **başlamadan önce** altyapıda kapatılan boşlukları ve
 > refactor'ları sıralar; Rota'nın kendisi `78-ROTA-EKRANI.md`'de.
 >
-> **Önkoşul okuma:** `47-KOORDINATOR-COKLU-AJAN.md`, `15-FLOW-CANVAS.md`,
+> **Önkoşul okuma:** `47-KOORDINATOR-COKLU-AJAN.md`, `arsiv/15-FLOW-CANVAS.md` (tarihsel),
 > `46-ETIKET-OTOMASYON.md`, `58-QUEUE-SENKRON.md`, `66-VIEW-KATMANI.md`,
 > `68-OZET-HARITASI.md`, `08-DEPOLAMA.md`.
 

@@ -266,6 +266,21 @@
       "label": "Rota judge gates",
       "description": "Phase gates of kind \"judge\" ask whether the phase's exit condition holds, judged against the root session's recent transcript. If no model can answer, the gate stays shut.",
       "threshold": "Minimum probability that the exit condition holds before the gate opens."
+    },
+    "flow-criteria": {
+      "label": "Flow criteria gates",
+      "description": "Route nodes in the \"criteria\" match mode ask the decision model one yes/no question per criterion about the last output; every criterion met takes the pass arm, otherwise the fail arm.",
+      "threshold": "Minimum probability for a criterion to count as met."
+    },
+    "flow-grade": {
+      "label": "Flow run grading",
+      "description": "After every successful flow run, grades how well the reply satisfied the request (1–5). The grade feeds the observer's evidence, the runs list and flow-kind automations (\"when graded 2 or below…\"). One cheap decision call per turn.",
+      "threshold": "Minimum confidence before a grade is recorded."
+    },
+    "flow-proposal-gate": {
+      "label": "Flow proposal gate",
+      "description": "Before the auto policy applies an observer proposal, asks whether the change is a plausible, proportionate improvement given the recent runs. A held proposal stays pending for a human.",
+      "threshold": "Minimum probability that the proposal improves the flow before it is auto-applied."
     }
   },
   "threshold": "Threshold",

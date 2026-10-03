@@ -22,6 +22,7 @@ import {
   TriangleAlert,
   Waves,
   Webhook,
+  Workflow,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
@@ -166,6 +167,12 @@ export const STEP_KINDS: StepKindInfo[] = [
   stepKind({
     kind: 'subagent',
     Icon: Bot,
+    persisted: true,
+    status: 'active',
+  }),
+  stepKind({
+    kind: 'flow_node',
+    Icon: Workflow,
     persisted: true,
     status: 'active',
   }),

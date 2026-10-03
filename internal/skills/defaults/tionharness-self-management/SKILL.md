@@ -1,7 +1,7 @@
 ---
 name: "TionHarness Self-Management"
-description: "The self-management tool suite an agent uses to run TionHarness itself — create/edit agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces, delegate work to subagents, manage artifacts/secrets/logs and app settings — plus how to activate these load-on-demand tools with activate_tools when a task needs them."
-when_to_use: "When you need to create or change TionHarness entities (agents, flows, schedules, tasks, hooks, MCP servers, skills, workspaces), delegate a sub-task to an isolated worker, store a secret, manage artifacts, read logs, or change app settings — and the matching tool is not active yet"
+description: "The self-management tool suite an agent uses to run TionHarness itself — create/edit agents, schedules, tasks, hooks, MCP servers, skills, workspaces, evolve your own flow and prompts, delegate work to subagents, manage artifacts/secrets/logs and app settings — plus how to activate these load-on-demand tools with activate_tools when a task needs them."
+when_to_use: "When you need to create or change TionHarness entities (agents, schedules, tasks, hooks, MCP servers, skills, workspaces), evolve your own flow, delegate a sub-task to an isolated worker, store a secret, manage artifacts, read logs, or change app settings — and the matching tool is not active yet"
 icon: "🛠️"
 color: "#10b981"
 access: shared
@@ -99,9 +99,11 @@ fields with the compiled defaults.
 > `run_subagent` covers delegation (isolated task → result) and `send_message`
 > covers peer messaging (addressed DM → recipient's inbox).
 
-**Flows** — `list_flows`, `get_flow`, `create_flow`, `update_flow`, `delete_flow`,
-`run_flow` (drive a flow to completion, recorded in the Activity feed). Load the
-`tionharness-flows` skill for the graph schema before authoring one.
+**Flows (evolving)** — every agent has one main flow its turns run through.
+`get_flow` (read it, `versions:true` for history), `edit_flow` (apply ops, new
+version), `revert_flow`, `list_flow_runs` (one run per turn, with node traces),
+`update_my_prompt` (rewrite your own soul/identity, versioned). Load the
+`tionharness-flows` skill for the node types and the op vocabulary first.
 
 **Schedules (routines)** — `list_schedules`, `create_schedule`, `update_schedule`,
 `delete_schedule`, `run_schedule`. Cron-driven prompts delivered to an agent.
@@ -142,7 +144,7 @@ list individually.
 
 **Workspaces** — `list_workspaces`, `create_workspace`, `rename_workspace`,
 `delete_workspace`. Manage the fully-isolated workspaces (each its own
-agents/sessions/flows/secrets) the switcher hops between. List/create/rename any;
+agents/sessions/secrets) the switcher hops between. List/create/rename any;
 **delete only workspaces you created** — never a user-made one, never the one
 you're running in, never the last remaining one. A new workspace uses the bundled
 blank template: it starts with a read-only trigger/observer **CEO**, an execution
@@ -180,7 +182,7 @@ args) — so you can reuse the large CC skill ecosystem without rewriting.
 **Artifacts** — `list_artifacts`, `read_artifact` (get content by id — do NOT guess
 the file path), `delete_artifact` (delete only agent-created).
 `create_artifact` / `update_artifact` are always available — on chat AND on
-autonomous (scheduler/spawn/flow) turns (a session-bound sink is installed for
+autonomous (scheduler/spawn) turns (a session-bound sink is installed for
 every turn that has a session). For text use
 `kind=markdown|code|html|text|svg|mermaid` with `content`. For an image/PDF/binary
 FILE you produced on disk (e.g. a screenshot) use `kind=image|video|audio|file` with
@@ -210,7 +212,7 @@ instead of working around it.
 
 **Views (projections)** — `get_view` (`{kind, id, level?, lens?, sub?}`) collapses a
 large piece of state into a context-cheap compact DSL instead of re-listing it. Four
-kinds: `flowrun` (a run tree, optional `sub` for one node), `session`, `board` (the
+kinds: `session`, `board` (the
 kanban ledger — `id:"board"`, optional `lens` e.g. `stale`), `workspace`
 (`id:"workspace"`). `level` = `tiny|card|full`. Prefer it over repeated
 `list_tasks`/`list_sessions` when you only need the shape — a coordinator watching the
@@ -231,7 +233,7 @@ and your OWN background shells are stopped with `shell_manage`.
 
 **Secrets & sessions** — `secret` (one tool, `action: list|get|set|delete`) reads
 the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions
-of EVERY kind — chat + spawn/worker/flow/task/schedule; optional `kind`/`state` filters; a context
+of EVERY kind — chat + spawn/worker/task/schedule; optional `kind`/`state` filters; a context
 block of recent chats is also pushed automatically), `conversation_search` (full-text search across
 the workspace's message history — deeper than list_sessions). These are
 load-on-demand: `activate_tools` first. (`WebFetch` is NOT here — it is an EAGER

@@ -294,54 +294,6 @@ func TestTrajectoryAskGate(t *testing.T) {
 	}
 }
 
-// TestTrajectoryFlowRunBinding: a flow run whose transcript was triggered from
-// a tree member becomes a flowrun node under the trigger, following the run's
-// status; a run with no trigger in any trajectory is ignored.
-func TestTrajectoryFlowRunBinding(t *testing.T) {
-	rt, base := newTrajectoryRuntime(t)
-	ctx := context.Background()
-	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: base.ID, Kind: "chat", CoordinatorMode: true, CoordinatorWorkflow: "plan-dev-test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	flow, err := rt.db.CreateFlow(ctx, db.Flow{Name: "F"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transcript, _ := rt.db.CreateSession(ctx, db.Session{AgentID: base.ID, Kind: "flow", SourceID: flow.ID, Title: "F run",
-		Origin: &db.SessionOrigin{Kind: db.OriginFlow, EntityID: flow.ID, TriggerSessionID: sess.ID}})
-	run, err := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flow.ID, SessionID: transcript.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rt.bindFlowRunToTrajectory(run)
-	tr, _ := rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	n := trajectory.NodePtr(&tr, "r:"+run.ID)
-	if n == nil || n.Kind != db.TrajNodeFlowRun || n.State != db.TrajStateActive || n.RefID != run.ID || n.Lane == 0 {
-		t.Fatalf("flowrun node = %+v", n)
-	}
-	run.Status, run.Error = db.FlowFailure, "boom"
-	rt.bindFlowRunToTrajectory(run)
-	tr, _ = rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	if n := trajectory.NodePtr(&tr, "r:"+run.ID); n.State != db.TrajStateFailed || n.Reason != "boom" {
-		t.Fatalf("flowrun node after failure = %+v", n)
-	}
-	if got := len(tr.Nodes); got != len(trajectory.Phases(&tr))+1+2+1 { // phases + root + watcher/optimizer + run
-		t.Fatalf("re-emitting the run must not duplicate the node: %d nodes", got)
-	}
-	// Transcript sessions of a triggered flow are represented by the run, not a
-	// second session node.
-	if trajectory.NodePtr(&tr, "s:"+transcript.ID) != nil {
-		t.Fatal("flow transcript session must not be bound as a session node")
-	}
-	orphan, _ := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flow.ID})
-	rt.bindFlowRunToTrajectory(orphan)
-	tr2, _ := rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	if tr2.Revision != tr.Revision {
-		t.Fatal("an unrelated run must not touch the trajectory")
-	}
-}
-
 // TestTrajectoryForkedSessionBinding: a new root session an automation fired
 // from a tree member hangs off that member with a fired edge.
 func TestTrajectoryForkedSessionBinding(t *testing.T) {

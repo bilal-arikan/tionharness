@@ -18,13 +18,13 @@ export const features: Feature[] = [
   },
   {
     icon: 'flow',
-    title: 'Visual flows',
-    body: 'A restart-safe graph engine with agent, branch, parallel, loop, subflow and await-input nodes, plus a React Flow builder.',
+    title: 'Evolving flows',
+    body: 'Every agent has one main flow its turns run through. Insert a critic loop or a planning stage on the canvas, let the agent edit it with tools, or let the observer propose changes from real runs.',
   },
   {
     icon: 'board',
     title: 'Board-driven execution',
-    body: 'A kanban card moving into a column is a trigger: rules spawn agents, run flows or archive cards without an LLM in the loop.',
+    body: 'A kanban card moving into a column is a trigger: rules spawn agents or archive cards without an LLM in the loop.',
   },
   {
     icon: 'workspace',
@@ -44,7 +44,7 @@ export const features: Feature[] = [
   {
     icon: 'gear',
     title: 'Self-management',
-    body: 'Agents create their own schedules, automations, flows, skills and secrets through tools -- the app is its own API surface.',
+    body: 'Agents create their own schedules, automations, skills and secrets and evolve their own flow and prompts through tools -- the app is its own API surface.',
   },
   {
     icon: 'search',

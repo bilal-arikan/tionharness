@@ -4,7 +4,7 @@ import { req } from './client'
 // local folder tree), then bulk-install the selected artifacts (skills/agents/
 // commands/MCP/hooks) through the same install authority the market uses. (SK-IMP3)
 
-export type IngestKind = 'skill' | 'agent' | 'flow' | 'provider' | 'workspace' | 'mcp' | 'hook'
+export type IngestKind = 'skill' | 'agent' | 'provider' | 'workspace' | 'mcp' | 'hook'
 
 // Discovered is one artifact found in a source, with preview metadata + a unique
 // selection key.

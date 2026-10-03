@@ -10,7 +10,7 @@ import (
 )
 
 // TestGraphWalksWholeTreeOnceAndTerminatesCycles pins the whole-map contract:
-// root + eleven buckets + every member, agent -> session edges, coordinator
+// root + ten buckets + every member, agent -> session edges, coordinator
 // cycles and self-loops do not recurse, and a session reached through two
 // parents appears once with both edges.
 func TestGraphWalksWholeTreeOnceAndTerminatesCycles(t *testing.T) {
@@ -153,11 +153,11 @@ func TestGraphSurvivesMissingOptionalSources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("graph without sources: %v", err)
 	}
-	if len(g.Nodes) != 12 { // root + 11 buckets
-		t.Fatalf("nodes=%d, want 12: %+v", len(g.Nodes), g.Nodes)
+	if len(g.Nodes) != 11 { // root + 10 buckets
+		t.Fatalf("nodes=%d, want 11: %+v", len(g.Nodes), g.Nodes)
 	}
-	if len(g.Edges) != 11 {
-		t.Fatalf("edges=%d, want 11", len(g.Edges))
+	if len(g.Edges) != 10 {
+		t.Fatalf("edges=%d, want 10", len(g.Edges))
 	}
 }
 

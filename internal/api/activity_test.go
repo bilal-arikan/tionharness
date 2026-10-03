@@ -54,14 +54,11 @@ func TestWorkspaceRunningSources(t *testing.T) {
 
 	t.Run("running flow run", func(t *testing.T) {
 		s, wsp := newWorkspaceServer(t)
-		run, err := wsp.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1"})
-		if err != nil {
-			t.Fatalf("CreateFlowRun: %v", err)
-		}
+		run := seedFlowRun(t, wsp.DB, "", "")
 		if !s.workspaceRunning(wsp) {
 			t.Fatal("running flow run did not light the workspace")
 		}
-		if err := wsp.DB.FinishFlowRun(ctx, run.ID, db.FlowSuccess, "", ""); err != nil {
+		if _, err := wsp.DB.FinishFlowRun(ctx, run.ID, db.FlowSuccess, "", "", nil, 0, 0, db.FlowRunUsage{}); err != nil {
 			t.Fatalf("FinishFlowRun: %v", err)
 		}
 		if s.workspaceRunning(wsp) {
@@ -70,48 +67,17 @@ func TestWorkspaceRunningSources(t *testing.T) {
 	})
 }
 
-// TestWorkspaceRunningWaitingFlowRunIsNotRunning is the regression guard for the
-// distinction the counter has to preserve: a run suspended at an await-input node
-// is NOT running. It sleeps until input (boot never revives it), so pulsing the
-// switcher for it would mark a workspace busy indefinitely.
-func TestWorkspaceRunningWaitingFlowRunIsNotRunning(t *testing.T) {
-	ctx := context.Background()
-	s, wsp := newWorkspaceServer(t)
-
-	run, err := wsp.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1"})
-	if err != nil {
-		t.Fatalf("CreateFlowRun: %v", err)
-	}
-	if err := wsp.DB.MarkFlowRunWaiting(ctx, run.ID, "{}"); err != nil {
-		t.Fatalf("MarkFlowRunWaiting: %v", err)
-	}
-	if s.workspaceRunning(wsp) {
-		t.Fatal("a waiting flow run must not count as running")
-	}
-
-	// Resuming it flips the flag back on — the counter tracks both directions.
-	if _, err := wsp.DB.ClaimWaitingFlowRun(ctx, run.ID); err != nil {
-		t.Fatalf("ClaimWaitingFlowRun: %v", err)
-	}
-	if !s.workspaceRunning(wsp) {
-		t.Fatal("a resumed flow run must count as running")
-	}
-}
-
 // TestHandleActivityFlowFlag: the per-view endpoint must still light Akışlar and
 // the unified Aktivite view for a running flow run, now that the flag comes from
 // the counter rather than a scan.
 func TestHandleActivityFlowFlag(t *testing.T) {
-	ctx := context.Background()
 	s, wsp := newWorkspaceServer(t)
 
 	if st := getActivity(t, s, wsp); st.Flow || st.Executions {
 		t.Fatalf("idle workspace reported flow=%v executions=%v", st.Flow, st.Executions)
 	}
 
-	if _, err := wsp.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1"}); err != nil {
-		t.Fatalf("CreateFlowRun: %v", err)
-	}
+	seedFlowRun(t, wsp.DB, "", "")
 	st := getActivity(t, s, wsp)
 	if !st.Flow || !st.Executions {
 		t.Fatalf("running flow run: flow=%v executions=%v, want both true", st.Flow, st.Executions)
@@ -122,15 +88,12 @@ func TestHandleActivityFlowFlag(t *testing.T) {
 // a row per workspace with the correct per-workspace flag — the cross-workspace
 // isolation that made this endpoint scan every store in the first place.
 func TestHandleWorkspacesActivityReportsEveryWorkspace(t *testing.T) {
-	ctx := context.Background()
 	s, busy := newWorkspaceServer(t)
 	idle, err := s.workspaces.Create("idle", "", "test")
 	if err != nil {
 		t.Fatalf("create second workspace: %v", err)
 	}
-	if _, err := busy.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1"}); err != nil {
-		t.Fatalf("CreateFlowRun: %v", err)
-	}
+	seedFlowRun(t, busy.DB, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/activity", nil)
 	rec := httptest.NewRecorder()

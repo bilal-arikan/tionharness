@@ -82,14 +82,6 @@ func (r *Runtime) Liveness(ctx context.Context) liveness.Snapshot {
 				b.Add(liveness.Entry{SessionID: a.SessionID, State: liveness.WaitingAsk, Reason: "ask:" + a.ID, Since: a.CreatedAt})
 			}
 		}
-		if runs, err := r.db.ListWaitingFlowRuns(ctx); err == nil {
-			for _, run := range runs {
-				if run.SessionID == "" {
-					continue
-				}
-				b.Add(liveness.Entry{SessionID: run.SessionID, State: liveness.WaitingInput, Reason: "flow:" + run.ID, Since: run.UpdatedAt})
-			}
-		}
 	}
 
 	cap := liveness.Capacity{

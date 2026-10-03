@@ -3,393 +3,398 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
-	"slices"
+	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
-	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/flow"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
+	"github.com/google/uuid"
 )
 
+// Evolving flows (_Docs/93): one main flow per agent, versioned, with runs,
+// proposals and prompt versions. The canvas saves whole graphs; agents and the
+// observer apply ops; both go through the runtime so every path validates the
+// same way.
+
+func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/flows", s.handleListFlows)
+	mux.HandleFunc("GET /api/flows/{id}", s.handleGetFlow)
+	mux.HandleFunc("PUT /api/flows/{id}", s.handleSaveFlow)
+	mux.HandleFunc("PUT /api/flows/{id}/meta", s.handleUpdateFlowMeta)
+	mux.HandleFunc("POST /api/flows/{id}/validate", s.handleValidateFlow)
+	mux.HandleFunc("GET /api/flows/{id}/versions", s.handleListFlowVersions)
+	mux.HandleFunc("GET /api/flows/{id}/versions/{n}", s.handleGetFlowVersion)
+	mux.HandleFunc("POST /api/flows/{id}/revert", s.handleRevertFlow)
+	mux.HandleFunc("GET /api/flows/{id}/runs", s.handleListFlowRuns)
+	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
+	mux.HandleFunc("DELETE /api/flow-runs/{id}", s.handleDeleteFlowRun)
+	mux.HandleFunc("POST /api/flows/{id}/optimize", s.handleOptimizeFlow)
+	mux.HandleFunc("GET /api/flows/{id}/proposals", s.handleListFlowProposals)
+	mux.HandleFunc("POST /api/flow-proposals/{id}/apply", s.handleApplyFlowProposal)
+	mux.HandleFunc("POST /api/flow-proposals/{id}/reject", s.handleRejectFlowProposal)
+	mux.HandleFunc("POST /api/flows/{id}/test", s.handleTestFlow)
+	mux.HandleFunc("GET /api/agents/{id}/flow", s.handleAgentFlow)
+	mux.HandleFunc("GET /api/agents/{id}/prompt-versions", s.handleListPromptVersions)
+	mux.HandleFunc("POST /api/agents/{id}/prompt-versions/{n}/restore", s.handleRestorePromptVersion)
+}
+
+// flowListItem is one row of the flows screen: the flow plus what the list
+// needs without a second fetch.
+type flowListItem struct {
+	db.Flow
+	AgentName        string `json:"agentName"`
+	AgentAvatar      string `json:"agentAvatar,omitempty"`
+	AgentColor       string `json:"agentColor,omitempty"`
+	AgentArchived    bool   `json:"agentArchived,omitempty"`
+	Shape            string `json:"shape"`
+	Trivial          bool   `json:"trivial"`
+	NodeCount        int    `json:"nodeCount"`
+	PendingProposals int    `json:"pendingProposals"`
+}
+
+func (s *Server) flowItem(ctx context.Context, wsp *workspace.Workspace, f db.Flow, pending map[string]int) flowListItem {
+	item := flowListItem{Flow: f, PendingProposals: pending[f.ID]}
+	if a, err := wsp.DB.GetAgent(ctx, f.AgentID); err == nil {
+		item.AgentName, item.AgentAvatar, item.AgentColor, item.AgentArchived = a.Name, a.Avatar, a.Color, a.Archived
+	}
+	if g, err := flow.Parse(f.Graph); err == nil {
+		item.Shape, item.Trivial, item.NodeCount = g.Summary(), g.IsTrivial(), len(g.Nodes)
+	}
+	return item
+}
+
+func (s *Server) pendingProposalCounts(ctx context.Context, wsp *workspace.Workspace) map[string]int {
+	out := map[string]int{}
+	props, _ := wsp.DB.ListFlowProposals(ctx, "")
+	for _, p := range props {
+		if p.Status == db.ProposalPending {
+			out[p.FlowID]++
+		}
+	}
+	return out
+}
+
+// handleListFlows lists one flow per live, non-system agent, creating the
+// default flow for agents that have none yet.
 func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
-	flows, err := ws(r).DB.ListFlows(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	ctx := r.Context()
+	wsp := ws(r)
+	agents, err := wsp.DB.ListAgents(ctx)
+	if writeDBError(w, err, "") {
 		return
 	}
-	if flows == nil {
-		flows = []db.Flow{}
-	}
-	q := r.URL.Query()
-	limit, offset, field, asc, listing, err := listQueryParams(q)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	wantTags := tools.SplitTags(q.Get("tags"))
-	matches := make([]db.Flow, 0, len(flows))
-	for _, f := range flows {
-		if len(wantTags) > 0 && !tools.HasAllTags(f.Tags, wantTags) {
+	for _, a := range agents {
+		if a.System || a.Deleted {
 			continue
 		}
-		matches = append(matches, f)
-	}
-	if !listing {
-		writeJSON(w, http.StatusOK, matches)
-		return
-	}
-	if field != "" {
-		less, err := tools.SortByField(field, asc,
-			func(f db.Flow) int64 { return f.UpdatedAt },
-			func(f db.Flow) int64 { return f.CreatedAt },
-			func(f db.Flow) string { return f.Name },
-			func(f db.Flow) string { return f.ID })
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		slices.SortStableFunc(matches, less)
-	}
-	page, total := tools.SlicePage(matches, offset, limit)
-	pageJSONResponse(w, page, total, offset, limit)
-}
-
-type flowReq struct {
-	Name  string               `json:"name"`
-	Graph *orchestration.Graph `json:"graph"`
-	Emoji string               `json:"emoji"` // optional cosmetic glyph (create only; edited via /emoji)
-}
-
-// marshalGraph validates and serialises a graph, defaulting to an empty object.
-func marshalGraph(g *orchestration.Graph) (string, error) {
-	if g == nil {
-		return "{}", nil
-	}
-	// Validate only when there is something to validate (allow draft saves with
-	// no start node yet).
-	if g.Start != "" {
-		if err := g.Validate(); err != nil {
-			return "", err
+		if _, err := wsp.DB.EnsureAgentFlow(ctx, a.ID); err != nil {
+			s.logger.Warn("ensure agent flow failed", "agent", a.ID, "error", err)
 		}
 	}
-	data, err := json.Marshal(g)
-	if err != nil {
-		return "", err
+	flows, err := wsp.DB.ListFlows(ctx)
+	if writeDBError(w, err, "") {
+		return
 	}
-	return string(data), nil
+	pending := s.pendingProposalCounts(ctx, wsp)
+	out := make([]flowListItem, 0, len(flows))
+	for _, f := range flows {
+		if a, err := wsp.DB.GetAgent(ctx, f.AgentID); err != nil || a.System {
+			continue
+		}
+		out = append(out, s.flowItem(ctx, wsp, f, pending))
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
-// validateFlowGraphAgents runs the semantic (agent-existence + provider-ready)
-// check on top of marshalGraph's structural check, so a graph referencing a
-// missing or unrunnable agent is rejected at save time instead of only
-// surfacing when the flow is run. Mirrors marshalGraph's draft-save allowance:
-// a nil graph or one with no start node yet is not checked. rt is nil in the
-// (rare) case a workspace's runtime has not finished booting; skip rather than
-// panic — RunFlow re-checks preconditions right before executing anyway.
-func validateFlowGraphAgents(ctx context.Context, rt *agent.Runtime, g *orchestration.Graph) error {
-	if rt == nil || g == nil || g.Start == "" {
-		return nil
-	}
-	return rt.ValidateFlowGraph(ctx, *g)
-}
-
-func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
-	req, ok := bindJSON[flowReq](w, r)
-	if !ok {
-		return
-	}
-	if strings.TrimSpace(req.Name) == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-	graph, err := marshalGraph(req.Graph)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
-		return
-	}
-	if err := validateFlowGraphAgents(r.Context(), ws(r).Runtime, req.Graph); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
-		return
-	}
-	flow, err := ws(r).DB.CreateFlow(r.Context(), db.Flow{
-		Name:  req.Name,
-		Graph: graph,
-		Emoji: strings.TrimSpace(req.Emoji),
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, flow)
-}
-
-func (s *Server) handleUpdateFlow(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var req struct {
-		Name  *string              `json:"name"`
-		Graph *orchestration.Graph `json:"graph"`
-	}
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	cur, err := ws(r).DB.GetFlow(r.Context(), id)
+func (s *Server) handleGetFlow(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	wsp := ws(r)
+	f, err := wsp.DB.GetFlow(ctx, r.PathValue("id"))
 	if writeDBError(w, err, "flow not found") {
 		return
 	}
-	if req.Name != nil {
-		cur.Name = *req.Name
-	}
-	if req.Graph != nil {
-		graph, err := marshalGraph(req.Graph)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
-			return
-		}
-		if err := validateFlowGraphAgents(r.Context(), ws(r).Runtime, req.Graph); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
-			return
-		}
-		cur.Graph = graph
-	}
-	if err := ws(r).DB.UpdateFlow(r.Context(), cur); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	writeJSON(w, http.StatusOK, s.flowItem(ctx, wsp, f, s.pendingProposalCounts(ctx, wsp)))
+}
+
+func (s *Server) handleAgentFlow(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	wsp := ws(r)
+	f, err := wsp.DB.EnsureAgentFlow(ctx, r.PathValue("id"))
+	if writeDBError(w, err, "agent not found") {
 		return
 	}
-	flow, _ := ws(r).DB.GetFlow(r.Context(), id)
-	writeJSON(w, http.StatusOK, flow)
+	writeJSON(w, http.StatusOK, s.flowItem(ctx, wsp, f, s.pendingProposalCounts(ctx, wsp)))
 }
 
-type flowEmojiReq struct {
-	Emoji string `json:"emoji"`
+type saveFlowReq struct {
+	Graph  json.RawMessage `json:"graph"`
+	Reason string          `json:"reason"`
 }
 
-// handleSetFlowEmoji replaces a flow's cosmetic emoji only (independent of the
-// name/graph save), so changing the glyph never round-trips the whole graph.
-func (s *Server) handleSetFlowEmoji(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	req, ok := bindJSON[flowEmojiReq](w, r)
+// handleSaveFlow commits the canvas graph as a new version (author: user).
+func (s *Server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[saveFlowReq](w, r)
 	if !ok {
 		return
 	}
 	ctx := r.Context()
-	if _, err := ws(r).DB.GetFlow(ctx, id); writeDBError(w, err, "flow not found") {
-		return
-	}
-	if err := ws(r).DB.SetFlowEmoji(ctx, id, strings.TrimSpace(req.Emoji)); writeDBError(w, err, "") {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "emoji": strings.TrimSpace(req.Emoji)})
-}
-
-// handleFlowPath returns the absolute path of a flow's on-disk JSON file.
-func (s *Server) handleFlowPath(w http.ResponseWriter, r *http.Request) {
-	path, err := ws(r).DB.FlowPath(r.PathValue("id"))
-	if writeDBError(w, err, "flow not found") {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"path": path})
-}
-
-func (s *Server) handleDeleteFlow(w http.ResponseWriter, r *http.Request) {
-	if err := ws(r).DB.DeleteFlow(r.Context(), r.PathValue("id")); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"result": "deleted"})
-}
-
-type runFlowReq struct {
-	Input string `json:"input"`
-}
-
-// handleRunFlow executes a flow synchronously and returns the finished run
-// (with its trace). Manual runs are user-initiated, so not budget-gated. The run
-// is also recorded into the flow's transcript session so it shows up in the
-// unified executions feed and the streamable transcript viewer.
-func (s *Server) handleRunFlow(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var req runFlowReq
-	_ = decodeJSON(r, &req)
-
-	// Detach from the request lifecycle: a client disconnect must not cancel
-	// in-flight flow nodes ("context canceled"). The flow finishes and persists
-	// regardless. Mirrors the chat turn's context.WithoutCancel durability.
-	runCtx := context.WithoutCancel(r.Context())
-	run, sessionID, err := ws(r).Runtime.RunFlowRecorded(runCtx, id, req.Input, false, nil)
+	wsp := ws(r)
+	g, err := flow.Parse(string(req.Graph))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"run":       run,
-		"sessionId": sessionID,
-	})
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		reason = "canvas edit"
+	}
+	v, err := wsp.Runtime.SaveFlowGraph(ctx, r.PathValue("id"), g, db.FlowAuthor{Kind: db.FlowAuthorUser}, reason)
+	if err != nil {
+		if err.Error() == "no change" {
+			f, _ := wsp.DB.GetFlow(ctx, r.PathValue("id"))
+			writeJSON(w, http.StatusOK, map[string]any{"flow": s.flowItem(ctx, wsp, f, nil), "changed": false})
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	f, _ := wsp.DB.GetFlow(ctx, r.PathValue("id"))
+	publishEntityChange(wsp, "flow", "Akış kaydedildi: "+f.Name, "v"+strconv.Itoa(v.Version), map[string]string{"view": "flows", "flowId": f.ID})
+	writeJSON(w, http.StatusOK, map[string]any{"flow": s.flowItem(ctx, wsp, f, nil), "version": v, "changed": true})
 }
 
-// handleRunFlowStream is the SSE variant of handleRunFlow: it streams each node's
-// start/finish live, records the run into the flow's transcript session, and ends
-// with the session id. Events:
-//
-//	node    → orchestration.NodeEvent   (per node start/done)
-//	reply   → { run, sessionId }        (terminal, success)
-//	error   → { error }                 (terminal, setup failure)
-func (s *Server) handleRunFlowStream(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	wsp := ws(r)
-	ctx := r.Context()
+type flowMetaReq struct {
+	Name   *string        `json:"name"`
+	Note   *string        `json:"note"`
+	Policy *db.FlowPolicy `json:"policy"`
+}
 
-	var req runFlowReq
-	_ = decodeJSON(r, &req)
-
-	flusher, ok := w.(http.Flusher)
+func (s *Server) handleUpdateFlowMeta(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[flowMetaReq](w, r)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "streaming unsupported")
 		return
 	}
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "keep-alive")
-	h.Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-
-	var mu sync.Mutex
-	sse := func(event string, data any) {
-		mu.Lock()
-		defer mu.Unlock()
-		b, _ := json.Marshal(data)
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
-		flusher.Flush()
-	}
-
-	obs := func(ev orchestration.NodeEvent) { sse("node", ev) }
-	// Detach flow execution from the request: a client disconnect mid-run (the SSE
-	// connection dropping, navigation, the "Tekrar çalıştır" caller going away)
-	// must not cancel in-flight nodes with "context canceled". SSE writes to a gone
-	// client simply no-op; the run still completes and persists.
-	runCtx := context.WithoutCancel(ctx)
-	run, sessionID, err := wsp.Runtime.RunFlowRecorded(runCtx, id, req.Input, false, obs)
-	if err != nil {
-		sse("error", map[string]any{"error": err.Error()})
+	ctx := r.Context()
+	wsp := ws(r)
+	f, err := wsp.DB.UpdateFlowMeta(ctx, r.PathValue("id"), req.Name, req.Note, req.Policy)
+	if writeDBError(w, err, "flow not found") {
 		return
 	}
-	sse("reply", map[string]any{"run": run, "sessionId": sessionID})
+	writeJSON(w, http.StatusOK, s.flowItem(ctx, wsp, f, s.pendingProposalCounts(ctx, wsp)))
 }
 
-// handleListFlowRuns lists flow runs (GET /api/flow-runs), optionally narrowed to
-// one flow with ?flowId=. With ?rootOnly=true the subflow/spawn children of a
-// composed flow are left out, so one click on a composed flow contributes one row
-// instead of a burst of near-identical ones; the children stay reachable through
-// /api/flow-runs/{id}/tree. The filter is opt-in so existing callers that expect
-// every run keep working unchanged.
-func (s *Server) handleListFlowRuns(w http.ResponseWriter, r *http.Request) {
-	flowID := r.URL.Query().Get("flowId")
-	list := ws(r).DB.ListFlowRuns
-	if r.URL.Query().Get("rootOnly") == "true" {
-		list = ws(r).DB.ListRootFlowRuns
-	}
-	runs, err := list(r.Context(), flowID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+// handleValidateFlow dry-runs a graph through the same validation a save uses.
+func (s *Server) handleValidateFlow(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[saveFlowReq](w, r)
+	if !ok {
 		return
 	}
-	if runs == nil {
-		runs = []db.FlowRun{}
+	g, err := flow.Parse(string(req.Graph))
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
 	}
-	writeJSON(w, http.StatusOK, runs)
+	if err := g.Validate(); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error(), "shape": g.Summary()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "shape": g.Summary(), "trivial": g.IsTrivial(), "nodeCount": len(g.Nodes)})
+}
+
+func (s *Server) handleListFlowVersions(w http.ResponseWriter, r *http.Request) {
+	vs, err := ws(r).DB.ListFlowVersions(r.Context(), r.PathValue("id"))
+	if writeDBError(w, err, "") {
+		return
+	}
+	if vs == nil {
+		vs = []db.FlowVersion{}
+	}
+	writeJSON(w, http.StatusOK, vs)
+}
+
+func (s *Server) handleGetFlowVersion(w http.ResponseWriter, r *http.Request) {
+	n, err := strconv.Atoi(r.PathValue("n"))
+	if err != nil || n <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid version")
+		return
+	}
+	v, err := ws(r).DB.GetFlowVersion(r.Context(), r.PathValue("id"), n)
+	if writeDBError(w, err, "version not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+type revertFlowReq struct {
+	Version int    `json:"version"`
+	Reason  string `json:"reason"`
+}
+
+func (s *Server) handleRevertFlow(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[revertFlowReq](w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	wsp := ws(r)
+	v, err := wsp.Runtime.RevertFlow(ctx, r.PathValue("id"), req.Version, db.FlowAuthor{Kind: db.FlowAuthorUser}, req.Reason)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	f, _ := wsp.DB.GetFlow(ctx, r.PathValue("id"))
+	publishEntityChange(wsp, "flow", "Akış geri alındı: "+f.Name, "v"+strconv.Itoa(v.Version), map[string]string{"view": "flows", "flowId": f.ID})
+	writeJSON(w, http.StatusOK, map[string]any{"flow": s.flowItem(ctx, wsp, f, nil), "version": v})
+}
+
+func (s *Server) handleListFlowRuns(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 {
+		limit = 50
+	}
+	runs, err := ws(r).DB.ListFlowRuns(r.Context(), r.PathValue("id"), limit)
+	if writeDBError(w, err, "") {
+		return
+	}
+	// The list omits the step traces (fetched per run) to keep the feed light.
+	out := make([]db.FlowRun, 0, len(runs))
+	for _, run := range runs {
+		run.Steps = nil
+		out = append(out, run)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleGetFlowRun(w http.ResponseWriter, r *http.Request) {
 	run, err := ws(r).DB.GetFlowRun(r.Context(), r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "flow run not found")
+	if writeDBError(w, err, "run not found") {
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
 }
 
-// handleDeleteFlowRun removes a finished run and its whole tree (subflow/spawn
-// descendants, state deltas, per-node step sidecars). 404 for an unknown id,
-// 409 while any member of the tree is still running or waiting (_Docs/77 R8).
 func (s *Server) handleDeleteFlowRun(w http.ResponseWriter, r *http.Request) {
+	if err := ws(r).DB.DeleteFlowRun(r.Context(), r.PathValue("id")); writeDBError(w, err, "run not found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"result": "deleted"})
+}
+
+func (s *Server) handleOptimizeFlow(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
-	deleted, err := wsp.Runtime.DeleteFlowRun(r.Context(), r.PathValue("id"))
-	switch {
-	case errors.Is(err, db.ErrNotFound):
-		writeError(w, http.StatusNotFound, "flow run not found")
-		return
-	case errors.Is(err, db.ErrConflict):
-		writeError(w, http.StatusConflict, "flow run tree is still running or waiting; stop or resume it first")
-		return
-	case err != nil:
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if _, err := wsp.DB.GetFlow(r.Context(), r.PathValue("id")); writeDBError(w, err, "flow not found") {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
+	res, err := wsp.Runtime.OptimizeFlow(r.Context(), r.PathValue("id"), "manual")
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
-// handleFlowRunTree returns every run in one composed flow's tree — the root run
-// plus every subflow/spawn descendant at any depth — breadth-first, so a parent
-// always precedes its children (GET /api/flow-runs/{id}/tree).
-//
-// The id may be ANY member of the tree, not only its root. The UI has whatever
-// run the user clicked selected, which is routinely a child, and "show me this
-// run's tree" must not depend on which member was picked; one read normalises the
-// id via RootOf(). This endpoint is also the resync path after a dropped SSE
-// connection, where the client knows a run id but not necessarily the root.
-func (s *Server) handleFlowRunTree(w http.ResponseWriter, r *http.Request) {
-	run, err := ws(r).DB.GetFlowRun(r.Context(), r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "flow run not found")
+func (s *Server) handleListFlowProposals(w http.ResponseWriter, r *http.Request) {
+	props, err := ws(r).DB.ListFlowProposals(r.Context(), r.PathValue("id"))
+	if writeDBError(w, err, "") {
 		return
 	}
-	runs, err := ws(r).DB.ListFlowRunTree(r.Context(), run.RootOf())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	if props == nil {
+		props = []db.FlowProposal{}
 	}
-	if runs == nil {
-		runs = []db.FlowRun{}
-	}
-	writeJSON(w, http.StatusOK, runs)
+	writeJSON(w, http.StatusOK, props)
 }
 
-// handleFlowRunNodeSteps returns one node's captured tool/thinking steps for a
-// run (GET /api/flow-runs/{id}/nodes/{nodeId}/steps), read from the per-node
-// sidecar. A node with no steps (or a run from before step capture) yields [] —
-// the run inspector then just shows the input/output bubbles.
-func (s *Server) handleFlowRunNodeSteps(w http.ResponseWriter, r *http.Request) {
-	steps, err := ws(r).Runtime.ReadFlowNodeSteps(r.PathValue("id"), r.PathValue("nodeId"))
+func (s *Server) handleApplyFlowProposal(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	p, err := wsp.Runtime.ApplyFlowProposal(r.Context(), r.PathValue("id"), db.FlowAuthor{Kind: db.FlowAuthorUser})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if steps == nil {
-		steps = []agent.TurnStep{}
-	}
-	writeJSON(w, http.StatusOK, steps)
+	publishEntityChange(wsp, "flow", "Akış önerisi uygulandı", p.Reason, map[string]string{"view": "flows", "flowId": p.FlowID})
+	writeJSON(w, http.StatusOK, p)
 }
 
-// handleResumeFlowRun delivers input to a run suspended at an await-input node and
-// resumes it (POST /api/flow-runs/{id}/input). Only a "waiting" run accepts input;
-// the waiting→running CAS makes concurrent input from multiple windows safe (the
-// losers get 409). The engine then continues past the await with the input as {{last}}.
-func (s *Server) handleResumeFlowRun(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var req runFlowReq // reuses {input}
-	_ = decodeJSON(r, &req)
-	runCtx := context.WithoutCancel(r.Context())
-	run, err := ws(r).Runtime.ResumeWaitingFlow(runCtx, id, req.Input)
+func (s *Server) handleRejectFlowProposal(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	p, err := wsp.Runtime.RejectFlowProposal(r.Context(), r.PathValue("id"))
 	if err != nil {
-		// Not-waiting / already-resumed / missing → conflict (idempotent for clients).
-		writeError(w, http.StatusConflict, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"run": run})
+	publishEntityChange(wsp, "flow", "Akış önerisi reddedildi", p.Reason, map[string]string{"view": "flows", "flowId": p.FlowID})
+	writeJSON(w, http.StatusOK, p)
+}
+
+type testFlowReq struct {
+	Input string `json:"input"`
+}
+
+// handleTestFlow runs the flow once on a test input: it opens a chat session
+// for the flow's agent, tagged flow-test, and queues the input as its first
+// turn. The run streams over the normal session/flow events.
+func (s *Server) handleTestFlow(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[testFlowReq](w, r)
+	if !ok {
+		return
+	}
+	if strings.TrimSpace(req.Input) == "" {
+		writeError(w, http.StatusBadRequest, "input is required")
+		return
+	}
+	ctx := r.Context()
+	wsp := ws(r)
+	f, err := wsp.DB.GetFlow(ctx, r.PathValue("id"))
+	if writeDBError(w, err, "flow not found") {
+		return
+	}
+	a, err := wsp.DB.GetAgent(ctx, f.AgentID)
+	if writeDBError(w, err, "agent not found") {
+		return
+	}
+	if writeDBError(w, a.RunnableErr(), "") {
+		return
+	}
+	title := "🧪 Akış testi: " + strings.TrimSpace(f.Name)
+	session, err := wsp.DB.CreateSession(ctx, db.Session{
+		AgentID:    a.ID,
+		Title:      title,
+		Tags:       []string{"flow-test"},
+		WorkingDir: strings.TrimSpace(wsp.Settings().DefaultWorkingDir),
+	})
+	if writeDBError(w, err, "") {
+		return
+	}
+	clientMsgID := uuid.NewString()
+	s.enqueueMessage(wsp.ID, chatReq{SessionID: session.ID, Message: req.Input, ClientMsgID: clientMsgID}, clientMsgID)
+	writeJSON(w, http.StatusOK, map[string]any{"sessionId": session.ID, "flowId": f.ID, "agentId": a.ID})
+}
+
+func (s *Server) handleListPromptVersions(w http.ResponseWriter, r *http.Request) {
+	vs, err := ws(r).DB.ListAgentPromptVersions(r.Context(), r.PathValue("id"))
+	if writeDBError(w, err, "") {
+		return
+	}
+	if vs == nil {
+		vs = []db.AgentPromptVersion{}
+	}
+	writeJSON(w, http.StatusOK, vs)
+}
+
+func (s *Server) handleRestorePromptVersion(w http.ResponseWriter, r *http.Request) {
+	n, err := strconv.Atoi(r.PathValue("n"))
+	if err != nil || n <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid version")
+		return
+	}
+	wsp := ws(r)
+	if err := wsp.Runtime.RestoreAgentPromptVersion(r.Context(), r.PathValue("id"), n, db.FlowAuthor{Kind: db.FlowAuthorUser}); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	emitSessionChange(wsp, "", "agent")
+	publishEntityChange(wsp, "agent", "Ajan promptu geri yüklendi", "v"+strconv.Itoa(n), map[string]string{"view": "agents", "agentId": r.PathValue("id")})
+	writeJSON(w, http.StatusOK, map[string]any{"restored": n})
 }

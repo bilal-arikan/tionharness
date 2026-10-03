@@ -40,8 +40,6 @@ func TestDeriveOrigin(t *testing.T) {
 			Session{Kind: "spawned", ExecutionType: ExecutionSubagent, ParentSessionID: "SES7"},
 			SessionOrigin{Kind: OriginSubagent, TriggerSessionID: "SES7", RootSessionID: "SES7"},
 		},
-		{"flow transcript", Session{Kind: "flow", SourceID: "FLW3"}, SessionOrigin{Kind: OriginFlow, EntityID: "FLW3"}},
-		{"flow coordinator node", Session{Kind: "flow-coordinator", SourceID: "RUN9"}, SessionOrigin{Kind: OriginFlow, RunID: "RUN9"}},
 		{"insight scan", Session{Kind: "insight", SourceID: "scan-1"}, SessionOrigin{Kind: OriginInsight, RunID: "scan-1"}},
 		{"schedule thread", Session{Kind: "schedule"}, SessionOrigin{Kind: OriginSchedule}},
 		{"schedule spawn", Session{Kind: "schedule-run"}, SessionOrigin{Kind: OriginSchedule}},
@@ -178,37 +176,5 @@ func TestLegacyHeaderOriginBackfilledOnLoad(t *testing.T) {
 	after, _ := os.ReadFile(headerPath)
 	if string(after) != string(legacy) {
 		t.Fatal("boot must not rewrite a legacy header just to add the origin")
-	}
-}
-
-// TestSetSessionOriginRun: the flow transcript session is created before its run
-// row, so the run id lands on the origin afterwards — once, idempotently.
-func TestSetSessionOriginRun(t *testing.T) {
-	ctx := context.Background()
-	d, err := Open(filepath.Join(t.TempDir(), "store"))
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	defer d.Close()
-	ag, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
-	sess, _ := d.CreateSession(ctx, Session{AgentID: ag.ID, Kind: "flow", SourceID: "FLW1"})
-
-	var ops []string
-	d.SetSessionHook(func(ev SessionChangeEvent) { ops = append(ops, ev.Op) })
-	if err := d.SetSessionOriginRun(ctx, sess.ID, "RUN1"); err != nil {
-		t.Fatalf("set origin run: %v", err)
-	}
-	if err := d.SetSessionOriginRun(ctx, sess.ID, "RUN1"); err != nil {
-		t.Fatalf("set origin run (repeat): %v", err)
-	}
-	got, _ := d.GetSession(ctx, sess.ID)
-	if got.Origin.Kind != OriginFlow || got.Origin.EntityID != "FLW1" || got.Origin.RunID != "RUN1" {
-		t.Fatalf("origin = %+v, want flow/FLW1/RUN1", got.Origin)
-	}
-	if len(ops) != 1 || ops[0] != SessionOpOrigin {
-		t.Fatalf("hook ops = %v, want exactly one %q (repeat is a no-op)", ops, SessionOpOrigin)
-	}
-	if err := d.SetSessionOriginRun(ctx, "SES-nope", "RUN1"); err != ErrNotFound {
-		t.Fatalf("unknown session: err = %v, want ErrNotFound", err)
 	}
 }

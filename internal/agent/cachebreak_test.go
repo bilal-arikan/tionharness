@@ -60,7 +60,7 @@ func TestAttributeCacheBreak(t *testing.T) {
 // isConversationKind tracks only main session turns; auxiliary one-shot calls must
 // be excluded so their throwaway prompts never register as cache breaks.
 func TestIsConversationKind(t *testing.T) {
-	for _, k := range []CallKind{KindChat, KindTask, KindSchedule, KindFlow, KindSpawn} {
+	for _, k := range []CallKind{KindChat, KindTask, KindSchedule, KindSpawn} {
 		if !isConversationKind(k) {
 			t.Errorf("%q should be a conversation kind", k)
 		}

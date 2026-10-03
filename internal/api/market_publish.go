@@ -13,7 +13,6 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/market"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
@@ -104,14 +103,14 @@ func (s *Server) handlePublishMarket(w http.ResponseWriter, r *http.Request) {
 
 // buildWorkspaceTemplatePayload captures a live workspace's current state into a
 // portable WorkspacePayload — the inverse of seedWorkspaceTeam: workspace-tier
-// skills, the agent team (with stable local keys), flows (agent ids rewritten to
-// "tmpl:<key>"), schedules and automations (wired by key/name), and identity/
+// skills, the agent team (with stable local keys), schedules and automations
+// (wired by key), and identity/
 // instructions/board layout. Secrets, sessions, artifacts and other runtime data
 // are never included.
 //
 // inc selects which parts to capture. A nil pointer means "everything" (backward
 // compatible with callers that don't select). When present, its id/slug slices
-// filter agents/flows/skills/schedules/automations independently (nil slice = all,
+// filter agents/skills/schedules/automations independently (nil slice = all,
 // present slice = exactly its members) and its boolean flags gate the file
 // categories.
 func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspace.Workspace, inc *publishInclude) (market.WorkspacePayload, error) {
@@ -123,11 +122,10 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	// Selection predicates. everything=true means no filtering (nil slice / whole
 	// export); otherwise only ids present in the set pass.
 	var (
-		agentSet, flowSet, skillSet, schedSet, autoSet     map[string]bool
-		allAgents, allFlows, allSkills, allSched, allAutos bool
+		agentSet, skillSet, schedSet, autoSet    map[string]bool
+		allAgents, allSkills, allSched, allAutos bool
 	)
 	agentSet, allAgents = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.AgentIDs }))
-	flowSet, allFlows = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.FlowIDs }))
 	skillSet, allSkills = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.SkillSlugs }))
 	schedSet, allSched = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.ScheduleIDs }))
 	autoSet, allAutos = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.AutomationIDs }))
@@ -197,38 +195,6 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 		})
 	}
 
-	// Flows → rewrite agent node ids to "tmpl:<key>" so the graph is portable.
-	flows, ferr := wsp.DB.ListFlows(ctx)
-	if ferr != nil {
-		return wp, ferr
-	}
-	flowIDToName := make(map[string]string, len(flows))
-	for _, f := range flows {
-		if !allFlows && !flowSet[f.ID] {
-			continue // not selected for this export
-		}
-		graph, perr := orchestration.ParseGraph(f.Graph)
-		if perr != nil {
-			continue // skip an unparseable flow rather than failing the whole export
-		}
-		for i := range graph.Nodes {
-			n := &graph.Nodes[i]
-			if n.Type == orchestration.NodeAgent && n.AgentID != "" {
-				if key, ok := idToKey[n.AgentID]; ok {
-					n.AgentID = market.TemplateAgentKeyPrefix + key
-				}
-			}
-		}
-		raw, merr := json.Marshal(graph)
-		if merr != nil {
-			continue
-		}
-		wp.Flows = append(wp.Flows, market.WorkspaceTemplateFlow{
-			Name: f.Name, Graph: string(raw),
-		})
-		flowIDToName[f.ID] = f.Name
-	}
-
 	// Schedules → reference the agent by key (skip orphans).
 	scheds, serr := wsp.DB.ListSchedules(ctx)
 	if serr != nil {
@@ -250,7 +216,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 		})
 	}
 
-	// Automations → reference the agent by key / the flow by name (skip orphans).
+	// Automations → reference the agent by key (skip orphans).
 	// The built-in seeded board defaults are excluded: every workspace provisions
 	// its own copy at open time (EnsureDefaultAutomations), so exporting them
 	// would either duplicate the rule on install or resurrect one the installing
@@ -274,15 +240,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			}
 			agentKey = key
 		}
-		flowName := ""
-		if a.FlowID != "" {
-			name, ok := flowIDToName[a.FlowID]
-			if !ok {
-				continue // flow not in the export → drop the orphan
-			}
-			flowName = name
-		}
-		if agentKey == "" && flowName == "" && a.BoardAction != db.BoardActionArchive {
+		if agentKey == "" && a.BoardAction != db.BoardActionArchive {
 			continue // nothing to run
 		}
 		wp.Automations = append(wp.Automations, market.WorkspaceTemplateAutomation{
@@ -298,7 +256,6 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			TokenScope:     a.TokenScope,
 			TokenThreshold: a.TokenThreshold,
 			AgentKey:       agentKey,
-			FlowName:       flowName,
 			SessionMode:    a.SessionMode,
 			PromptTemplate: a.PromptTemplate,
 			SpawnTags:      a.SpawnTags,

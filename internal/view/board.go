@@ -136,10 +136,6 @@ func projectCard(in BoardInput, v View, now time.Time) (View, error) {
 	if body := firstNonBlank(card.Description, card.Prompt); body != "" {
 		l.add("özet: %s", clip(body, 160))
 	}
-	// A flow-backed card is not run by prompting its owner — running it executes
-	// this flow. That changes what the reader does with the card, so it belongs on
-	// the drill-down even though the board roll-up has no room for it.
-	l.addIf(card.FlowID != "", "akış: flow:%s", card.FlowID)
 	if deps, ok := decodeDependencies(card.Dependencies); !ok {
 		// An unreadable dependency list is the opposite fact from "no dependencies":
 		// the card may well be blocked. Say the list could not be read.

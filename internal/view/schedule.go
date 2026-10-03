@@ -80,8 +80,6 @@ func ProjectSchedule(in ScheduleInput, level Level) (View, error) {
 	// A one-shot wake re-delivers into the ORIGINATING session — which session that
 	// is, is the whole point of the wake — so it is named ahead of the agent.
 	switch {
-	case sc.FlowID != "":
-		l.add("hedef: flow:%s", sc.FlowID)
 	case sc.OneShot && sc.SessionID != "":
 		l.add("hedef: session:%s", sc.SessionID)
 	case sc.AgentID != "":
@@ -97,7 +95,7 @@ func ProjectSchedule(in ScheduleInput, level Level) (View, error) {
 	// a fresh session decides what the delivered prompt may assume about its
 	// context. It is long-tail detail and only meaningful for an agent-backed
 	// recurring schedule (a flow always records into its own per-run transcript).
-	if level == LevelFull && !sc.OneShot && sc.FlowID == "" && sc.AgentID != "" {
+	if level == LevelFull && !sc.OneShot && sc.AgentID != "" {
 		l.add("oturum modu: %s", sc.EffectiveSessionMode())
 	}
 

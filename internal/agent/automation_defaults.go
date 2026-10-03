@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
-	flowpkg "github.com/bilal-arikan/tionharness/internal/flows"
 )
 
 // defaultAutomation describes a built-in automation shipped into every workspace
@@ -137,7 +136,7 @@ type seededAutomationsLedger struct {
 
 // EnsureDefaultAutomations provisions the built-in automations into a
 // workspace's store, idempotently and respecting user deletion — the same
-// contract as EnsureDefaultFlows:
+// contract as the shipped default skills:
 //
 //   - If an automation with the same Seed key already exists, it is left untouched.
 //   - Else if the deletion ledger records the key, the rule was seeded before and
@@ -168,7 +167,7 @@ func EnsureDefaultAutomations(ctx context.Context, database *db.DB, storeDir str
 		}
 	}
 
-	agentID := flowpkg.FirstAgentID(ctx, database)
+	agentID := firstAgentID(ctx, database)
 
 	changed := false
 	for _, dba := range defaultAutomations {
@@ -226,4 +225,14 @@ func saveSeededAutomationsLedger(storeDir string, l seededAutomationsLedger) err
 		return err
 	}
 	return os.WriteFile(filepath.Join(storeDir, seededAutomationsLedgerName), data, 0o644)
+}
+
+// firstAgentID returns the workspace's first agent id ("" when there is none
+// yet) — the default target a seeded rule gets until the user picks one.
+func firstAgentID(ctx context.Context, database *db.DB) string {
+	agents, err := database.ListAgents(ctx)
+	if err != nil || len(agents) == 0 {
+		return ""
+	}
+	return agents[0].ID
 }

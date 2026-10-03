@@ -82,10 +82,22 @@
         "label": "Approval / question",
         "hint": "An agent is waiting for your answer to an approval, permission request, or question."
       },
-      "schedule": { "label": "Schedules", "hint": "A scheduled prompt ran or failed." },
-      "flow": { "label": "Flows", "hint": "A flow run finished or failed." },
-      "spawned": { "label": "Spawn", "hint": "A spawned session finished or failed." },
-      "worker": { "label": "Worker", "hint": "A coordinator worker changed state." },
+      "schedule": {
+        "label": "Schedules",
+        "hint": "A scheduled prompt ran or failed."
+      },
+      "flow": {
+        "label": "Flows",
+        "hint": "An agent's flow evolved, the observer filed a proposal, or the canvas was saved."
+      },
+      "spawned": {
+        "label": "Spawn",
+        "hint": "A spawned session finished or failed."
+      },
+      "worker": {
+        "label": "Worker",
+        "hint": "A coordinator worker changed state."
+      },
       "coordination": {
         "label": "Coordination",
         "hint": "Coordination warnings such as a coordinator turn limit."
@@ -98,7 +110,10 @@
         "label": "Automations",
         "hint": "A label or board automation was triggered."
       },
-      "artifact": { "label": "Artifacts", "hint": "An artifact was created or updated." },
+      "artifact": {
+        "label": "Artifacts",
+        "hint": "An artifact was created or updated."
+      },
       "board": {
         "label": "Tasks (board)",
         "hint": "A Kanban task was created, moved, updated, or deleted."
@@ -258,7 +273,10 @@
         "label": "Automatic",
         "hint": "Use Whisper on the server when available; otherwise use browser recognition."
       },
-      "browser": { "label": "Browser", "hint": "Web Speech API (Chromium; live interim results)." },
+      "browser": {
+        "label": "Browser",
+        "hint": "Web Speech API (Chromium; live interim results)."
+      },
       "server": {
         "label": "Server (Whisper)",
         "hint": "Upload the recording for whisper.cpp to transcribe offline, including in WebView2."
@@ -287,7 +305,10 @@
         "label": "Automatic",
         "hint": "Use Piper on the server when available; otherwise use a browser voice."
       },
-      "browser": { "label": "Browser", "hint": "Use this device's speechSynthesis voices." },
+      "browser": {
+        "label": "Browser",
+        "hint": "Use this device's speechSynthesis voices."
+      },
       "server": {
         "label": "Server (Piper)",
         "hint": "Generate speech on the server with the same voice on every device, including phones."
@@ -429,7 +450,12 @@
   "workspace": {
     "introPrefix": "These settings apply only to",
     "introSuffix": ". Every agent has an explicit provider and model; new agents inherit the setup of the first existing agent.",
-    "stats": { "agents": "Agents", "sessions": "Sessions", "tasks": "Tasks", "created": "Created" },
+    "stats": {
+      "agents": "Agents",
+      "sessions": "Sessions",
+      "tasks": "Tasks",
+      "created": "Created"
+    },
     "name": "Workspace name",
     "icon": "Icon (emoji)",
     "responseStyle": "Response style",

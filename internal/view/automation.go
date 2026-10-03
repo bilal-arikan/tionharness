@@ -124,9 +124,6 @@ func automationTarget(a db.Automation) string {
 			return "kartı taşı (hedef sütun tanımsız)"
 		}
 	}
-	if a.FlowID != "" {
-		return "flow:" + a.FlowID
-	}
 	if a.TargetAgentID != "" {
 		return "agent:" + a.TargetAgentID
 	}

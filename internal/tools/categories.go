@@ -47,7 +47,6 @@ var builtinCategory = map[string]string{
 	"create_agent": CategoryAgents, "update_agent": CategoryAgents,
 	"delete_agent": CategoryAgents, "list_agents": CategoryAgents,
 	"run_subagent":    CategoryAgents,
-	"run_adhoc_flow":  CategoryAgents,
 	"spawn_session":   CategoryAgents,
 	"handoff_session": CategoryAgents, "send_message": CategoryAgents,
 	"list_sessions": CategoryAgents, "update_session": CategoryAgents,
@@ -65,11 +64,10 @@ var builtinCategory = map[string]string{
 	"update_user_preferences": CategoryConfig,
 
 	// Automation: flows, schedules, tasks, hooks
-	"create_flow": CategoryAutomation, "update_flow": CategoryAutomation,
-	"delete_flow": CategoryAutomation, "list_flows": CategoryAutomation,
-	"get_flow": CategoryAutomation, "run_flow": CategoryAutomation,
-	"list_flow_runs": CategoryAutomation, "deliver_flow_input": CategoryAutomation,
-	"run_schedule": CategoryAutomation, "create_schedule": CategoryAutomation,
+	"get_flow": CategoryAutomation, "edit_flow": CategoryAutomation,
+	"revert_flow": CategoryAutomation, "list_flow_runs": CategoryAutomation,
+	"update_my_prompt": CategoryAutomation,
+	"run_schedule":     CategoryAutomation, "create_schedule": CategoryAutomation,
 	"update_schedule": CategoryAutomation, "delete_schedule": CategoryAutomation,
 	"list_schedules": CategoryAutomation, "schedule_wake": CategoryAutomation,
 	"list_tasks": CategoryAutomation, "get_task": CategoryAutomation, "create_task": CategoryAutomation,

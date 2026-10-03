@@ -1,169 +1,239 @@
-// Orchestration flows: graph definition, persisted run state and run history (Phase 7).
+// Evolving per-agent flows (_Docs/93): one main flow per agent, versioned,
+// with one run per turn, observer proposals and prompt versions. Mirrors
+// internal/flow (graph) and internal/db/models_flow.go (store rows).
 
-export type FlowNodeType =
-  | 'agent'
-  | 'branch'
-  | 'parallel'
-  | 'delay'
-  | 'transform'
-  | 'loop'
-  | 'await-input'
-  | 'subflow'
-  | 'start'
-  | 'end'
-  | 'spawn'
-  | 'join'
-  | 'coordinator'
-
-export type BranchMatchMode = 'contains' | 'equals' | 'regex' | 'judge'
-
-interface FlowBranch {
-  contains: string // case-insensitive substring; "" = default
-  next: string
-}
+export type FlowNodeType = 'input' | 'llm' | 'route' | 'transform' | 'trigger' | 'output'
+export type FlowContextMode = 'thread' | 'fresh'
+export type FlowToolsMode = 'inherit' | 'none'
+export type RouteMode = 'contains' | 'equals' | 'regex' | 'json' | 'judge' | 'criteria'
+export type FlowPolicyMode = 'off' | 'propose' | 'auto'
+export type FlowRunStatus = 'running' | 'success' | 'failure'
+export type FlowProposalStatus = 'pending' | 'applied' | 'rejected' | 'invalid'
+export type FlowAuthorKind = 'user' | 'agent' | 'observer' | 'system'
 
 export interface FlowNode {
   id: string
   type: FlowNodeType
   title?: string
-  agentId?: string
-  prompt?: string
-  next?: string
-  branches?: FlowBranch[] // branch routing arms ("" contains = default)
-  matchMode?: BranchMatchMode // branch: how arm values match (default: contains)
-  jsonField?: string // branch: match on this top-level JSON field of the value (structured routing)
-  judgeQuestion?: string // judge mode (branch/loop): what the decision model is asked to look at
-  parallel?: string[]
-  joinNext?: string
-  delayMs?: number // delay node: ms to wait
-  template?: string // transform node: rendered output template
-  fresh?: boolean // agent node: opt out of the accumulated thread (accumulate mode)
-  // loop node
-  body?: string // entry node id of the loop body
-  loopNext?: string // node after the loop exits
-  maxIters?: number // hard iteration cap (0 = rely on until)
-  until?: string // exit when {{last}} matches
-  untilMode?: BranchMatchMode // how until matches (default: contains)
-  // await-input node: 0/absent = wait forever; else fail the run after N seconds.
-  // coordinator node: how long to wait for the coordinator to settle (0 = default).
-  timeoutSec?: number
-  // coordinator node — cap on the coordinator's auto-turn (notify-loop) budget
-  // for this node only (0/absent = the recipe's own cap, else the workspace default).
-  maxTurns?: number
-  // coordinator node — saved coordination recipe slug (a skill with kind
-  // 'coordinator-workflow'; the same list the session info panel offers).
-  // ''/absent = free coordination.
-  workflow?: string
-  // subflow node
-  flowRef?: string // id of the child flow to run
-  // spawn node — launch these flows as async child runs (non-blocking)
-  spawnFlows?: string[]
-  // join node — which spawn node's children to await ("" = all outstanding)
-  spawnRef?: string
-  joinTimeoutSec?: number // 0/absent = wait forever
-  joinPartial?: boolean // drop failed/suspended/timed-out children instead of failing the join
-  // end node — optional output contract
-  outputSchema?: string // JSON Schema the final output must satisfy (else the run fails)
-  // Cosmetic canvas layout (persisted; ignored by the engine).
+  note?: string
   x?: number
   y?: number
+  // llm
+  agentId?: string
+  prompt?: string
+  context?: FlowContextMode
+  tools?: FlowToolsMode
+  outputSchema?: string
+  model?: string
+  // route
+  mode?: RouteMode
+  jsonField?: string
+  question?: string
+  criteria?: string[] // criteria mode: yes/no statements the last output must satisfy
+  maxVisits?: number
+  // trigger
+  automationId?: string
+  // transform / output / trigger (payload)
+  template?: string
+}
+
+export interface FlowEdge {
+  id: string
+  from: string
+  to: string
+  when?: string
 }
 
 export interface FlowGraph {
-  start: string
+  version: number
   nodes: FlowNode[]
-  // Accumulate mode: sequential agent nodes share a growing conversation thread
-  // so the provider's prompt cache reuses the stable prefix across nodes.
-  accumulate?: boolean
-  // Cosmetic canvas presentation (persisted; ignored by the engine).
-  edgeStyle?: string // default | smoothstep | step | straight
-  animated?: boolean
+  edges: FlowEdge[]
+  maxSteps?: number
+}
+
+export interface FlowAuthor {
+  kind: FlowAuthorKind
+  id?: string
+}
+
+export interface FlowPolicy {
+  mode: FlowPolicyMode
+  everyRuns: number
+  minConfidence: number
+  maxNodes: number
+  allowPromptChanges: boolean
+}
+
+export interface FlowStats {
+  runs: number
+  success: number
+  failure: number
+  lastRunAt?: number
+  lastRunId?: string
+  totalMs: number
+  totalTokens: number
+  runsAtOptimize: number
+  lastOptimizeAt?: number
+  // Decision-model grades (1..5) folded in by the flow-grade authority.
+  graded?: number
+  gradeSum?: number
 }
 
 export interface Flow {
   id: string
+  agentId: string
   name: string
-  emoji?: string // optional cosmetic glyph shown wherever the flow is listed/picked
-  graph: string // JSON FlowGraph
-  tags?: string[] // free-form organizational labels (editable by user + agents)
+  graph: string // JSON FlowGraph (head version)
+  version: number
+  policy: FlowPolicy
+  stats: FlowStats
+  note?: string
   createdAt: number
   updatedAt: number
+  // List enrichment (GET /api/flows)
+  agentName: string
+  agentAvatar?: string
+  agentColor?: string
+  agentArchived?: boolean
+  shape: string
+  trivial: boolean
+  nodeCount: number
+  pendingProposals: number
 }
 
-// One accumulated-thread message (mirrors orchestration.Msg). In accumulate mode
-// each agent node's prior context is FlowState.thread sliced to the node's
-// threadLen.
-export interface FlowMsg {
-  role: string // "user" | "assistant"
-  text: string
+export interface FlowVersion {
+  flowId: string
+  version: number
+  parent?: number
+  graph: string
+  author: FlowAuthor
+  reason?: string
+  proposalId?: string
+  diff?: string
+  createdAt: number
 }
 
-export interface FlowTraceEntry {
+export interface FlowRunStep {
+  index: number
   nodeId: string
-  type: string
-  title: string
-  output: string
-  // Rendered prompt actually sent to an agent node (after {{...}} substitution),
-  // or the evaluated value for a branch node. Absent for other non-agent nodes.
+  type: FlowNodeType | string
+  title?: string
+  visit: number
   input?: string
-  // Accumulate mode: how many thread messages this agent node saw as prior
-  // context before its own turn (FlowState.thread[:threadLen]). Absent/0 otherwise.
-  threadLen?: number
-  // Unix-ms execution bounds, populated for parallel children so the run
-  // inspector can draw a concurrency timeline. Absent for sequential nodes.
-  startMs?: number
-  endMs?: number
-  at: number
+  output?: string
+  edge?: string
+  detail?: string // criteria verdicts / what a trigger launched
+  startedAt: number // unix ms
+  endedAt: number
+  durationMs: number
+  error?: string
 }
 
-export interface FlowState {
-  current: string
-  last: string
-  outputs: Record<string, string>
-  steps: number
-  trace: FlowTraceEntry[]
-  // Accumulated conversation for accumulate-mode runs (grows per agent node). A
-  // node's prior context is thread[:entry.threadLen]. Empty on stateless runs.
-  thread?: FlowMsg[]
-  // Set to the await-input node id while the run is durably suspended for input.
-  waitingAt?: string
-}
-
-// FlowNodeEvent is one node's live lifecycle frame, broadcast over the SSE
-// `flownode` channel (backend orchestration.NodeEvent) while a run executes so
-// the run viewer shows per-node start/done/error + output the moment it happens,
-// ahead of the periodic run-state poll.
-export interface FlowNodeEvent {
-  phase: 'start' | 'done' | 'error' | 'waiting' | 'progress'
-  nodeId: string
-  type: string
-  title: string
-  index: number // 1-based execution order
-  output?: string // on "done"
-  error?: string // on "error"
+export interface FlowRunUsage {
+  inputTokens: number
+  outputTokens: number
+  llmCalls: number
 }
 
 export interface FlowRun {
   id: string
   flowId: string
-  // Per-run transcript session this run produced (Session.kind "flow"). Empty on
-  // runs recorded before the link existed.
+  agentId: string
   sessionId?: string
-  // Run lineage (subflow / spawn / the run_flow tool). All three are omitted by
-  // the backend on a root run, so absent means "this run is a root" — see
-  // flowRunRootOf, which is the only place that encoding should be decoded.
-  // parentRunId is the run that launched this one, parentNodeId the node in that
-  // run's graph which did it (what a parent's canvas hangs a child's progress
-  // off), and rootRunId the top of the tree — the key both /api/flow-runs/{id}/tree
-  // and subscribeFlowTree are addressed by.
-  parentRunId?: string
-  parentNodeId?: string
-  rootRunId?: string
-  status: 'running' | 'success' | 'failure' | 'waiting'
+  messageId?: string
+  version: number
+  trigger?: string
+  status: FlowRunStatus
   input: string
-  state: string // JSON FlowState
-  output: string
-  error: string
+  output?: string
+  error?: string
+  steps?: FlowRunStep[] | null
+  stepCount: number
+  durationMs: number
+  usage: FlowRunUsage
+  feedback?: number
+  // Decision-model grade of the reply (1..5) and the confidence behind it.
+  grade?: number
+  gradeConfidence?: number
   createdAt: number
   updatedAt: number
+}
+
+export interface FlowPromptChange {
+  soul?: string | null
+  identity?: string | null
+}
+
+export interface FlowProposal {
+  id: string
+  flowId: string
+  agentId: string
+  baseVersion: number
+  author: FlowAuthor
+  trigger?: string
+  ops?: unknown[] | null
+  prompt?: FlowPromptChange | null
+  reason: string
+  expected?: string
+  confidence: number
+  evidence?: string
+  status: FlowProposalStatus
+  appliedVersion?: number
+  error?: string
+  createdAt: number
+  resolvedAt?: number
+}
+
+export interface AgentPromptVersion {
+  agentId: string
+  version: number
+  soul: string
+  identity: string
+  author: FlowAuthor
+  reason?: string
+  proposalId?: string
+  createdAt: number
+}
+
+// One live node frame (SSE `flownode`, backend flow.Event).
+export interface FlowNodeEvent {
+  phase: 'start' | 'done' | 'error'
+  nodeId: string
+  type: string
+  title: string
+  index: number
+  visit: number
+  output?: string
+  edge?: string
+  detail?: string
+  error?: string
+  durationMs?: number
+}
+
+export interface FlowNodeFrame {
+  runId: string
+  flowId: string
+  agentId: string
+  sessionId?: string
+  event: FlowNodeEvent
+}
+
+export interface FlowOptimizeResult {
+  flowId: string
+  trigger: string
+  ran: boolean
+  skipped?: string
+  proposal?: FlowProposal | null
+  applied: boolean
+  // Why the proposal gate kept a confident proposal pending.
+  held?: string
+  sessionId?: string
+}
+
+export interface FlowValidation {
+  ok: boolean
+  error?: string
+  shape?: string
+  trivial?: boolean
+  nodeCount?: number
 }

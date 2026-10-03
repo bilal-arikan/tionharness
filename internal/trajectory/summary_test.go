@@ -17,7 +17,6 @@ func summaryFixture() db.Trajectory {
 			{ID: "s:W1", Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved, RefID: "W1", PhaseID: "p:plan", Lane: 1, State: db.TrajStateDone, EndMs: 1100_000},
 			{ID: "s:W2", Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved, RefID: "W2", PhaseID: "p:code", Lane: 2, State: db.TrajStateFailed, EndMs: 1300_000},
 			{ID: "s:W3", Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved, RefID: "W3", Lane: 3, State: db.TrajStateDone, EndMs: 1400_000},
-			{ID: "r:RUN1", Kind: db.TrajNodeFlowRun, Origin: db.TrajOriginObserved, RefID: "RUN1", PhaseID: "p:code", Lane: 4, State: db.TrajStateFailed},
 			{ID: "a:docs@code", Kind: db.TrajNodeAutomation, Origin: db.TrajOriginDeclared, RefID: "docs", PhaseID: "p:code", State: db.TrajStateDone},
 			{ID: "a:update-docs", Kind: db.TrajNodeAutomation, Origin: db.TrajOriginDeclared, RefID: "update-docs", State: db.TrajStateGhost},
 			{ID: "a:AUT9@plan", Kind: db.TrajNodeAutomation, Origin: db.TrajOriginObserved, RefID: "AUT9", PhaseID: "p:plan", State: db.TrajStateDone},
@@ -44,7 +43,7 @@ func TestSummarizeTrajectory(t *testing.T) {
 	if s.Tokens != 1000+100+500+100 || s.Priced {
 		t.Fatalf("tokens/priced = %d/%v", s.Tokens, s.Priced)
 	}
-	if s.Sessions != 3 || s.FailedSess != 1 || s.FlowRuns != 1 || s.FailedRuns != 1 {
+	if s.Sessions != 3 || s.FailedSess != 1 {
 		t.Fatalf("counts = %+v", s)
 	}
 	if s.Phases != 3 || s.PhasesDone != 2 || len(s.GhostPhases) != 1 || s.GhostPhases[0] != "ship" {

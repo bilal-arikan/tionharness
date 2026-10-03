@@ -48,14 +48,16 @@
     "board": "Pano",
     "token": "Token",
     "phase": "Rota fazı",
-    "trajectory_end": "Rota sonu"
+    "trajectory_end": "Rota sonu",
+    "flow": "Akış koşusu"
   },
   "automationKinds": {
     "tag": "etiket otomasyonu",
     "board": "pano otomasyonu",
     "token": "token otomasyonu",
     "phase": "faz otomasyonu",
-    "trajectory_end": "rota sonu otomasyonu"
+    "trajectory_end": "rota sonu otomasyonu",
+    "flow": "akış koşusu otomasyonu"
   },
   "fires": {
     "title": "Ateşleme defteri: her deneme (ateşlendi / atlandı + sebep / başarısız)",
@@ -134,6 +136,12 @@
       "description": "Bir rota tamamlandığında, başarısız olduğunda veya terk edildiğinde özet, ders ve dokümanlar için çalışır.",
       "add": "Yeni rota sonu otomasyonu",
       "empty": "Henüz rota sonu otomasyonu yok."
+    },
+    "flow": {
+      "title": "Akış koşusu otomasyonları",
+      "description": "Bir ajanın akış koşusu bitince (başarı, hata ya da düşük puan) yanıt ve koşu bağlamıyla çalışır; akışlardaki tetikleyici düğümler de her türden otomasyonu ateşleyebilir.",
+      "add": "Yeni akış otomasyonu",
+      "empty": "Henüz akış otomasyonu yok."
     }
   },
   "fields": {
@@ -168,6 +176,16 @@
       "anyPhase": "her faz",
       "recipeHint": "Yalnız bu reçete slug'ından tohumlanan rotalar, sürümsüz. Boşsa her rota eşleşir.",
       "anyRecipe": "her reçete"
+    },
+    "flow": {
+      "agent": "Ajan",
+      "agentHint": "Yalnız bu ajanın akış koşuları. Boşsa her ajan eşleşir.",
+      "anyAgent": "her ajan",
+      "status": "Sonuç",
+      "maxGrade": "Puan",
+      "maxGradeHint": "Yalnız karar modelinin (flow-grade mercii) bu puan ve altında değerlendirdiği koşular. Puanlama kapalıysa hiçbir koşu eşleşmez.",
+      "ignoreGrade": "puana bakma",
+      "gradeAtMost": "en çok {{n}}/5"
     }
   },
   "form": {
@@ -257,7 +275,10 @@
     "tokenNoLoop": "Token tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).",
     "flowNoLoop": "Akış tabanlı — kendini döngülemez (spawn etiketleri yok sayılır).",
     "spawnTags": "Spawn etiketleri",
-    "spawnTagsPlaceholder": "döngüyü kırmak için boş bırak"
+    "spawnTagsPlaceholder": "döngüyü kırmak için boş bırak",
+    "flowTriggered": "Akış koşusu otomasyonu — bir akış koşusu bitince çalışır",
+    "flowSummary": "{{agent}} · {{status}}",
+    "flowGrade": "puan ≤ {{n}}"
   },
   "automationModal": {
     "updated": "Otomasyon güncellendi",
@@ -447,7 +468,34 @@
         "date": "Geçerli tarih",
         "time": "Geçerli saat",
         "datetime": "Geçerli tarih ve saat"
+      },
+      "flow": {
+        "result": "Tetikleyici düğümün yükü, yoksa koşunun yanıtı (başarısızsa hata metni)",
+        "input": "Koşunun girdisi (kullanıcı mesajı)",
+        "output": "Koşunun yanıtı",
+        "error": "Hata metni (başarısız koşuda)",
+        "status": "success / failure",
+        "grade": "Karar modelinin puanı (1–5), puanlanmadıysa boş",
+        "runId": "Koşu kimliği (RUN…)",
+        "flowId": "Akış kimliği (FLW…)",
+        "flowName": "Akışın adı",
+        "version": "Koşunun kullandığı akış sürümü",
+        "agent": "Akışın sahibi ajanın adı",
+        "agentId": "Akışın sahibi ajanın kimliği",
+        "sessionId": "Koşunun geçtiği oturum",
+        "nodeId": "Tetikleyen düğüm (yalnız akış düğümünden)",
+        "iteration": "Bir tabanlı ateşleme sıra numarası",
+        "maxIterations": "Üst sınır; eski kayıtlarda sıfır sınırsızdır",
+        "automation": "Otomasyonun adı",
+        "date": "Geçerli tarih",
+        "time": "Geçerli saat",
+        "datetime": "Geçerli tarih ve saat"
       }
+    },
+    "flowStatuses": {
+      "any": "her sonuç",
+      "success": "başarılı",
+      "failure": "başarısız"
     }
   }
 }

@@ -8,7 +8,7 @@
 // children, which are single-agent linear transcripts explicitly meant for a
 // human to take over and keep talking to.
 //
-// Task / flow transcripts are aggregate run logs produced by the orchestrator:
+// Task transcripts are aggregate run logs produced by the orchestrator:
 // they still appear in the (unified) sessions sidebar and are fully readable —
 // transcript, context preview, debug panel, session info — but the composer is
 // hidden for them, since a new user turn has no run to attach to. The same holds

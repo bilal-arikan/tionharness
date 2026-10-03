@@ -14,7 +14,6 @@ export interface Task {
   description: string
   prompt: string
   ownerAgentId: string
-  flowId: string
   boardState: BoardState
   dependencies: string
   // Rich card attributes (optional; absent on older tasks).
@@ -47,7 +46,6 @@ export type TaskPatch = Partial<
     | 'title'
     | 'description'
     | 'ownerAgentId'
-    | 'flowId'
     | 'boardState'
     | 'dependencies'
     | 'priority'
@@ -65,14 +63,11 @@ export interface Schedule {
   // Optional human-readable name (shown in the board card and modal).
   name?: string
   agentId: string
-  // When set, the schedule runs this flow (with prompt as input) instead of
-  // delivering the prompt to agentId.
-  flowId?: string
   cronExpr: string
   prompt: string
   // How an agent-backed schedule uses sessions: 'reuse' (default, '' is treated
   // the same) appends every fire to the agent's one long-lived schedule thread;
-  // 'spawn' opens a fresh session per fire. Ignored for flow-backed schedules.
+  // 'spawn' opens a fresh session per fire.
   sessionMode?: ScheduleSessionMode
   nextRunAt: number
   lastRunAt: number
@@ -104,7 +99,9 @@ export interface Schedule {
 // (a kanban card change), 'token' (cumulative token spend crossing a threshold),
 // or the Rota kinds 'phase' / 'trajectory_end'. '' from older files is treated
 // as 'tag'. (The 'counter' kind was retired 2026-09-05.)
-export type AutomationTriggerKind = 'tag' | 'board' | 'token' | 'phase' | 'trajectory_end'
+export type AutomationTriggerKind = 'tag' | 'board' | 'token' | 'phase' | 'trajectory_end' | 'flow'
+// Flow-trigger outcome filter ('' = any finished run).
+export type FlowRuleStatus = '' | 'success' | 'failure'
 // Phase transition a phase automation watches (Rota F2).
 export type TrajEvent = 'exit' | 'enter'
 // Terminal status filter of a trajectory_end automation ('' = any).
@@ -119,7 +116,7 @@ export type TokenScope = 'session' | 'workspace'
 // '' resolves per kind (tag/board → spawn, token → continue).
 export type SessionMode = 'spawn' | 'continue'
 // What a board automation does when it fires: 'spawn' (default, '' is treated the
-// same) runs the target agent/flow — the board drives execution; 'archive'
+// same) runs the target agent — the board drives execution; 'archive'
 // archives the card with no LLM call (the 'done → archive' cleanup).
 export type BoardAction = 'spawn' | 'archive' | 'move'
 
@@ -134,7 +131,7 @@ export interface AutomationFireRecord {
   triggerKind?: string
   triggerSessionId?: string
   sessionId?: string
-  driver?: 'session' | 'flow'
+  driver?: 'session'
   error?: string
   iteration?: number
 }
@@ -173,12 +170,16 @@ export interface Automation {
   trajRecipe?: string
   trajEvent?: TrajEvent
   trajStatus?: TrajEndStatus
+  // Flow-trigger fields (triggerKind 'flow'): fires when a flow run finishes.
+  // flowAgentId narrows to one agent's flow ('' = any); flowStatus to one
+  // outcome; flowMaxGrade (1..5) to runs the decision model graded at or
+  // below it (0 = ignore the grade).
+  flowAgentId?: string
+  flowStatus?: FlowRuleStatus
+  flowMaxGrade?: number
   // Session strategy for an agent-backed automation (default resolves per kind).
   sessionMode?: SessionMode
   targetAgentId: string
-  // When set, the automation runs this flow (with the rendered prompt as input)
-  // instead of spawning a session for targetAgentId. Per-trigger (no self-loop).
-  flowId?: string
   promptTemplate: string // placeholders: {{result}} {{title}} {{tag}} {{sessionId}}
   spawnTags?: string[] // tags applied to the spawned session (default: [triggerTag])
   enabled: boolean

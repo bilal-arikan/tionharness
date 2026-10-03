@@ -12,7 +12,7 @@ export interface ExplorerFilter {
   // Ref strings of the root's children (e.g. 'category:sessions') to hide.
   hiddenBuckets: string[]
   liveOnly: boolean
-  kinds: string[] // session kinds: chat | task | flow | worker | …
+  kinds: string[] // session kinds: chat | task | worker | …
   agentIds: string[]
   tags: string[]
 }
@@ -23,8 +23,6 @@ export const EXPLORER_FILTER_KEY = 'tionharness.explorerFilter'
 const SESSION_KIND_KEYS: Record<string, string> = {
   chat: 'chat',
   task: 'task',
-  flow: 'flow',
-  'flow-coordinator': 'flowCoordinator',
   schedule: 'schedule',
   spawned: 'spawned',
   worker: 'worker',

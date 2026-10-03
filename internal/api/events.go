@@ -90,11 +90,6 @@ func sseEventName(typ string) (name string, skip bool) {
 		return "step", false
 	case "flow_node":
 		return "flownode", false
-	case "flow_node_step":
-		// One agent node's live tool/thinking step (mid-execution), so the run
-		// viewer's node inspector renders steps as they happen — the flow
-		// counterpart of "step" (session_step). Keyed by flowRunId+nodeId.
-		return "flownodestep", false
 	case "log":
 		return "log", false
 	case "process":

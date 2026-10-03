@@ -26,7 +26,7 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [explorerNode, setExplorerNode] = useState<string | null>(
     INITIAL_ROUTE.view === 'explorer' ? INITIAL_ROUTE.id : null,
   )
-  // Active Flows sub-tab (deep-link aware): #/w/{ws}/flows/{tab} (flows|templates|runs).
+  // Active Flows sub-tab (deep-link aware): #/w/{ws}/flows/{tab}.
   const [flowsTab, setFlowsTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'flows' ? INITIAL_ROUTE.id : null,
   )
@@ -57,17 +57,6 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [artifactTarget, setArtifactTarget] = useState<string | null>(
     INITIAL_ROUTE.view === 'artifacts' ? INITIAL_ROUTE.id : null,
   )
-  // Flow deep-link target: set when a flow transcript links to its flow, opening
-  // the Flows screen on that flow's run history.
-  const [flowTarget, setFlowTarget] = useState<string | null>(null)
-  const openFlowRun = useCallback(
-    (flowId: string) => {
-      setFlowTarget(flowId)
-      setView('flows')
-    },
-    [setView],
-  )
-
   // Clicking an artifact card/chip anywhere: preview it in a
   // modal overlay — no navigation to the Artifacts screen. The modal offers a
   // shortcut to open the full screen for editing.
@@ -115,8 +104,6 @@ export function useDeepLinks(setView: (v: View) => void) {
     openTrajectory,
     artifactTarget,
     setArtifactTarget,
-    flowTarget,
-    openFlowRun,
     previewArtifactId,
     setPreviewArtifactId,
     openArtifact,

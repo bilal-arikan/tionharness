@@ -18,7 +18,6 @@ const (
 	UsageKindChat     = "chat"
 	UsageKindTask     = "task"
 	UsageKindSchedule = "schedule"
-	UsageKindFlow     = "flow"
 	UsageKindDelegate = "delegate"
 	UsageKindSpawn    = "spawned"
 	UsageKindSubagent = "subagent"

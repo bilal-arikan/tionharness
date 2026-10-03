@@ -12,7 +12,7 @@ export interface OriginLabel {
   title: string
   // Session the chip can jump to (the trigger), if any.
   sessionId?: string
-  // Entity the origin names (automation / schedule / flow id), if any.
+  // Entity the origin names (automation / schedule id), if any.
   entityId?: string
 }
 
@@ -45,25 +45,6 @@ export function originLabel(o?: SessionOrigin | null): OriginLabel | null {
         }),
         entityId: o.entityId,
       }
-    case 'flow': {
-      const bits = [
-        o.runId ? sharedText('sessionOrigin.flow.run', { id: o.runId }) : '',
-        o.nodeId ? sharedText('sessionOrigin.flow.node', { id: o.nodeId }) : '',
-      ].filter(Boolean)
-      return {
-        text: sharedText('sessionOrigin.flow.text', {
-          id: o.entityId || '',
-          details: bits.length ? ` · ${bits.join(' · ')}` : '',
-        }).replace('  ', ' '),
-        title: sharedText('sessionOrigin.flow.title', {
-          entity: o.entityId ? ` (${o.entityId})` : '',
-          details: bits.length ? ` · ${bits.join(', ')}` : '',
-          via,
-        }),
-        sessionId: trigger,
-        entityId: o.entityId,
-      }
-    }
     case 'coordinator':
       return {
         text: sharedText('sessionOrigin.coordinator.text', { id: trigger || '' }).replace(

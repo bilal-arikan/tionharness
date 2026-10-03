@@ -48,8 +48,6 @@ type TrajectorySummary struct {
 	Priced      bool    `json:"priced"` // false when some model had no price
 	Sessions    int     `json:"sessions"`
 	FailedSess  int     `json:"failedSessions"`
-	FlowRuns    int     `json:"flowRuns"`
-	FailedRuns  int     `json:"failedRuns"`
 	Phases      int     `json:"phases"`
 	PhasesDone  int     `json:"phasesDone"`
 	// GhostPhases: declared phases that never became active.
@@ -88,7 +86,6 @@ const (
 	TrajNodePhase      = "phase"      // a declared step (plan, code, review…)
 	TrajNodeSession    = "session"    // a session bound under a phase (root, worker, spawn)
 	TrajNodeAutomation = "automation" // an automation watcher: ghost until it fires
-	TrajNodeFlowRun    = "flowrun"    // a flow run launched from inside the trajectory
 	TrajNodeGate       = "gate"       // a human approval / verdict / schema check
 	TrajNodeOptimizer  = "optimizer"  // the trajectory_end optimizer pass
 )
@@ -187,7 +184,7 @@ func (t Trajectory) IndexEntry() TrajectoryIndexEntry {
 
 var (
 	trajStatuses    = []string{TrajStatusPlanned, TrajStatusRunning, TrajStatusWaiting, TrajStatusDone, TrajStatusFailed, TrajStatusAbandoned}
-	trajNodeKinds   = []string{TrajNodePhase, TrajNodeSession, TrajNodeAutomation, TrajNodeFlowRun, TrajNodeGate, TrajNodeOptimizer}
+	trajNodeKinds   = []string{TrajNodePhase, TrajNodeSession, TrajNodeAutomation, TrajNodeGate, TrajNodeOptimizer}
 	trajOrigins     = []string{TrajOriginDeclared, TrajOriginObserved}
 	trajNodeStates  = []string{TrajStatePending, TrajStateActive, TrajStateDone, TrajStateFailed, TrajStateSkipped, TrajStateGhost}
 	trajEdgeKinds   = []string{TrajEdgeNext, TrajEdgeSpawned, TrajEdgeReported, TrajEdgeFired, TrajEdgeFeeds, TrajEdgeBlockedBy, TrajEdgeForkedFrom}

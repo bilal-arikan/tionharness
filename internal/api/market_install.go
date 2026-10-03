@@ -11,7 +11,6 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/ingest"
 	"github.com/bilal-arikan/tionharness/internal/market"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
@@ -84,8 +83,7 @@ func (s *Server) installSourceRefPack(w http.ResponseWriter, r *http.Request, ws
 // endpoint AND the generic ingest import endpoint — so importing a foreign repo and
 // installing a native pack land in exactly the same place, per entity kind. Each
 // kind writes to its own store: skill → workspace skills dir (+catalog reload);
-// agent → db.CreateAgent (provenance cleared, unknown skills dropped); flow →
-// db.CreateFlow (empty agent slots auto-assigned); provider → ProviderStore
+// agent → db.CreateAgent (provenance cleared, unknown skills dropped); provider → ProviderStore
 // (providers.json, via upsertProviderInstance's shared validation path);
 // mcp/workspace/memory likewise.
 func (s *Server) installPackInto(r *http.Request, wsp *workspace.Workspace, pack market.Pack, req installRequest) (market.InstallResult, error) {
@@ -99,8 +97,6 @@ func (s *Server) installPackInto(r *http.Request, wsp *workspace.Workspace, pack
 		return res, nil
 	case market.KindAgent:
 		return s.installAgentPack(r, wsp, pack)
-	case market.KindFlow:
-		return s.installFlowPack(r, wsp, pack)
 	case market.KindProvider:
 		return s.installProviderPack(wsp, pack, req.APIKey)
 	case market.KindMCP:
@@ -209,7 +205,7 @@ func (s *Server) installWorkspacePack(pack market.Pack) (market.InstallResult, e
 		publishEntityChange(updated, "board", "Boards sütunları güncellendi", "",
 			map[string]string{"view": "board", "op": "columns_changed"})
 	}
-	// Seed the starter team (agents + flow + disabled schedules) when the template
+	// Seed the starter team (agents + disabled schedules) when the template
 	// carries one, so a market-installed workspace arrives as ready as one created
 	// from the create-workspace picker.
 	s.seedWorkspaceTeam(context.Background(), created, *wp)
@@ -311,53 +307,6 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 	}, nil
 }
 
-// installFlowPack creates a flow from a pack payload. The graph is agent-agnostic
-// (empty agentId slots); to make it runnable immediately, empty slots are filled
-// with the workspace's first agent (mirrors the template-instantiation rule that
-// the engine rejects empty agentIds). The user can reassign in the canvas.
-func (s *Server) installFlowPack(r *http.Request, wsp *workspace.Workspace, pack market.Pack) (market.InstallResult, error) {
-	fp := pack.Payload.Flow
-	if fp == nil || fp.Graph == "" {
-		return market.InstallResult{}, httpErr{http.StatusBadRequest, "flow pack is missing its graph"}
-	}
-	wantName := fp.Name
-	if wantName == "" {
-		wantName = pack.Name
-	}
-	// Skip if a flow with the same name already exists (don't create duplicates).
-	if existing, _ := wsp.DB.ListFlows(r.Context()); nameExists(wantName, flowNames(existing)) {
-		return market.InstallResult{}, httpErr{http.StatusConflict, "\"" + wantName + "\" adlı akış zaten kurulu"}
-	}
-	graph := fp.Graph
-	if g, err := orchestration.ParseGraph(fp.Graph); err == nil {
-		if agents, _ := wsp.DB.ListAgents(r.Context()); len(agents) > 0 {
-			first := agents[0].ID
-			for i := range g.Nodes {
-				if g.Nodes[i].Type == orchestration.NodeAgent && g.Nodes[i].AgentID == "" {
-					g.Nodes[i].AgentID = first
-				}
-			}
-			if data, mErr := json.Marshal(g); mErr == nil {
-				graph = string(data)
-			}
-		}
-	}
-	name := fp.Name
-	if name == "" {
-		name = pack.Name
-	}
-	created, err := wsp.DB.CreateFlow(r.Context(), db.Flow{
-		Name: name, Graph: graph,
-	})
-	if err != nil {
-		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}
-	}
-	return market.InstallResult{
-		Kind: market.KindFlow, Ref: created.ID,
-		Message: "Flow \"" + created.Name + "\" installed",
-	}, nil
-}
-
 // installProviderPack registers a custom provider from a pack payload and pushes
 // it live. The API key (never carried in a pack) is supplied by the user here;
 // an empty key still installs (AllowMissingRequiredSecrets — the user can add
@@ -443,13 +392,6 @@ func agentNames(in []db.Agent) []string {
 	out := make([]string, len(in))
 	for i, a := range in {
 		out[i] = a.Name
-	}
-	return out
-}
-func flowNames(in []db.Flow) []string {
-	out := make([]string, len(in))
-	for i, f := range in {
-		out[i] = f.Name
 	}
 	return out
 }

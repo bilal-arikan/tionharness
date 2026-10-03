@@ -99,7 +99,7 @@ func (c *structuralCache) allAgents(ctx context.Context) ([]db.Agent, error) {
 }
 
 func (c *structuralCache) allFlowRuns(ctx context.Context) ([]db.FlowRun, error) {
-	return c.runs.get(func() ([]db.FlowRun, error) { return c.p.store.ListFlowRuns(ctx, "") })
+	return c.runs.get(func() ([]db.FlowRun, error) { return c.p.store.ListFlowRuns(ctx, "", 0) })
 }
 
 func (c *structuralCache) allArtifacts(ctx context.Context) ([]db.Artifact, error) {
@@ -169,7 +169,7 @@ func (c *structuralCache) children(ctx context.Context, ref Ref) ([]Handle, erro
 			return nil, err
 		}
 		return budgetChildren(in), nil
-	case KindFlowRun, KindSchedule,
+	case KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		return nil, nil
 	default:
@@ -187,12 +187,6 @@ func (c *structuralCache) categoryMembers(ctx context.Context, id string) ([]Han
 			return nil, fmt.Errorf("view: category sessions: %w", err)
 		}
 		return sessionKindGroupHandles(liveSessions(sessions)), nil
-	case CategoryFlows:
-		runs, err := c.allFlowRuns(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("view: category flows: %w", err)
-		}
-		return flowRunHandleList(runs), nil
 	case CategoryAgents:
 		agents, err := c.allAgents(ctx)
 		if err != nil {

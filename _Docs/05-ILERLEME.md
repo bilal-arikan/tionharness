@@ -1,6 +1,6 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-10-03):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
+> **Özet (2026-10-04):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
 
 Önceki kayıtlar:
 
@@ -8,6 +8,70 @@
 - [Ağustos 2026](arsiv/05-ILERLEME-2026-08.md)
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
+
+## JEV karar mekanizmaları ve akış ↔ otomasyon bağlantısı (2026-10-04)
+
+- `internal/flow`: `route.mode = criteria` (`criteria[]`, `pass`/`fail` kolları, adım
+  `detail`) ve `trigger` düğümü (`automationId` + yük şablonu; geçiş düğümü). Motor
+  `Runner`'a `Check` ve `Trigger` eklendi; `Event`/`Step` `detail` taşır.
+- Üç yeni karar mercii (`decide_authorities.go`): `flow-criteria` (ölçüt başına noul, tek
+  çağrı), `flow-grade` (her başarılı koşuyu 1..5 puanlar; `FlowRun.Grade`, `FlowStats.
+  Graded/GradeSum`; varsayılan kapalı), `flow-proposal-gate` (auto politikada öneri
+  uygulanmadan önce "iyileştirir mi" kapısı; varsayılan gölge; tutulan öneri `pending`
+  kalır, `FlowOptimizeResult.Held`). Gözlemci kanıtına puanlar ve ölçüt ayrıntıları girdi;
+  pencere sağlıklıysa (`flowRunsHealthy`) gözlemci çağrısı atlanır.
+- Koşu sonrası arka plan kuyruğu `afterFlowRun`: puanla → `FireFlowRunFinished`
+  (`AddFlowRunHook`) → gözlemci. Otomasyon motoruna `flow` tetik türü (`automation_flow.
+  go`: `flowAgentId` / `flowStatus` / `flowMaxGrade` filtreleri, kendi açtığı oturumu
+  yeniden ateşlememe) ve `trigger` düğümünden ateşleme (`fireFromFlowNode`); `RunTrigger`
+  `automation:flow` ve `flow:node`. REST ve arayüz (Otomasyonlar ekranında sekizinci
+  şerit, akış kuralı alanları; Akışlar inceleyicisinde ölçüt listesi ve otomasyon seçici;
+  koşu listesinde puan rozeti; karar mercileri çevirileri) güncellendi.
+- Testler: `flow_test.go` (ölçüt kapısı, tetikleyici), `flowturn_decider_test.go` (karar
+  stub'ıyla beş senaryo), `automation_core_test.go` (`flow` şekli),
+  `automationPayload.test.ts`. `scripts/depcheck.sh` paket listesi `flows` → `flow`.
+  Beyin fırtınası ve uygulanmayan fikirler [93 §8](93-EVRILEN-AKISLAR.md).
+- Düzeltmeler: `thread` düğümü, son mesajı bir eş ajanın yanıtı olan (çok ajanlı oturum)
+  isteğe `{{input}}` promptunu yeniden eklemiyor (e2e `TestMultiAgent_SequentialReplies
+  ShareHistory`; yeni `TestFlowTurnKeepsPeerReplyTail`). Akış kaldırmasından kalan
+  `internal/tools` testleri (workspace 10 kova, `create_automation` demeti, görev `flowId`
+  doğrulaması) güncellendi. Evrim sekmesi dar genişlikte taşmıyor.
+- Canlı doğrulama (Flow Lab, OpenRouter gpt-4o-mini + Jev): ölçüt kapısı 1. turda
+  "en fazla iki cümle" ölçütünü düşürdü → düzeltme düğümü → 2. turda pass; tetikleyici
+  düğüm özet otomasyonunu ateşledi; koşu 2/5 puan aldı ve akış-türü kural eleştirmen
+  oturumunu açtı; gözlemci puanı ve kapı ayrıntısını okuyup ölçütü kaldırmayı önerdi,
+  öneri kapısı (JEV, %80) onayladı ve v3 kendiliğinden uygulandı.
+
+## Evrilen akışlar: orkestrasyon akışları kaldırıldı, ajan-başına ana akış geldi (2026-10-04)
+
+- Eski flow sistemi (`internal/orchestration`, `internal/flows`, `internal/agent/flow*.go`,
+  adhoc flow, flow-backed schedule/automation/task, market flow paketi, `flow` /
+  `flow-coordinator` oturum türleri, Rota ve görünüm katmanındaki flow koşusu düğümleri,
+  eski `features/flows` ekranı) tamamen kaldırıldı. Dokümanlar `arsiv/15` ve `arsiv/62`'ye
+  taşındı; tasarım ve sözleşme [93-EVRILEN-AKISLAR.md](93-EVRILEN-AKISLAR.md).
+- Yeni `internal/flow` yaprak motoru: `input` / `llm` / `route` / `transform` / `output`
+  düğümleri, açık kenarlar (döngü ve geri besleme serbest), `maxSteps` + route `maxVisits`
+  ile kodda zorlanan sonlanma, `{{input}}`/`{{last}}`/`{{node.<id>}}` şablonları, `flow.Op`
+  yama sözlüğü, `Diff` ve `Summary`.
+- Her ajan için tek ana akış (`EnsureAgentFlow`, varsayılan `girdi → yanıt → çıktı` düz
+  turla aynı); `completeTracedInner` her turu akıştan geçirir, `llm` düğümleri
+  `executeTurn` ile sohbet turunun tüm yeteneklerini korur. Tur başına `FlowRun` kaydı,
+  `flow_node` SSE çerçevesi ve transkripte `flow_node` adım kartı; önemsiz akışta kart yok.
+- Sürümleme (`agent-flow-versions/`), yalnız yerleşim değişikliğinde sürüm açılmaması,
+  büyüme bütçesi, geri dönüş; ajan araçları `get_flow` / `edit_flow` / `revert_flow` /
+  `list_flow_runs` / `update_my_prompt`; prompt sürümleri (`agent-prompt-versions/`).
+- `flow-optimizer` sistem ajanı (Flow Observer): `off` / `propose` / `auto` politikası,
+  her N koşuda kanıt toplayıp STRICT JSON öneri üretir; op'lar kodda doğrulanır, öneri
+  `FlowProposal` olarak dosyalanır, `auto` + güven eşiğinde kendiliğinden uygulanır.
+- REST `/api/flows*`, `/api/flow-runs/{id}`, `/api/flow-proposals/{id}/apply|reject`,
+  `/api/flows/{id}/test`, `/api/agents/{id}/prompt-versions*`. Akışlar ekranı yeniden
+  yazıldı: React Flow kanvas + inceleyici, Koşular / Evrim / Test sekmeleri, dar / kare /
+  dikey ekranda çekmece liste + alt sayfa inceleyici + yığılmış koşu ayrıntısı.
+- Bu makinede ortam kaynaklı, değişiklikten bağımsız test hataları: `TestDeleteMarksAnd
+  ClearsRemovalOnTheProductionPath` (workspace), `TestCreateDerivedArtifactFailureRemoves
+  Staging`, `TestCodexHomeDirMatchesAgentResolution`, `TestDashboardCommitActivity*`
+  (git/Xcode lisansı), `TestIsEphemeralWorkdir` (Windows yolu) — HEAD'de de kırmızı;
+  vitest Türkçe locale ile yeşil (`LC_ALL=tr_TR.UTF-8`).
 
 ## Doküman ve tarihçe düzeni (2026-10-03)
 

@@ -10,7 +10,7 @@ func TestIsAuxiliaryKind(t *testing.T) {
 			t.Errorf("%s must be auxiliary", k)
 		}
 	}
-	for _, k := range []CallKind{KindChat, KindTask, KindSchedule, KindFlow, KindSpawn, KindSubagent, KindDelegate} {
+	for _, k := range []CallKind{KindChat, KindTask, KindSchedule, KindSpawn, KindSubagent, KindDelegate} {
 		if isAuxiliaryKind(k) {
 			t.Errorf("%s must NOT be auxiliary", k)
 		}

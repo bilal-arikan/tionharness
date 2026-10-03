@@ -213,9 +213,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// Guard 2 — per-turn budget (shared counter across the whole turn's tree).
 	// Fast-fail check; the precise spend (atomic add-then-check) happens below so
 	// parallel fan-out never overspends the cap.
-	// An ad-hoc flow run widens the cap for its rounds (delegationCeiling); the
-	// counter below stays the turn's shared one either way.
-	maxCalls := delegationCeiling(ctx, r.tun.DelegationMaxCalls())
+	maxCalls := r.tun.DelegationMaxCalls()
 	if cur.calls != nil && atomic.LoadInt32(cur.calls) >= int32(maxCalls) {
 		return tools.RunAgentResult{}, fmt.Errorf("subagent budget (%d per turn) exhausted; do the rest yourself", maxCalls)
 	}

@@ -18,9 +18,10 @@ const baseInput: AutomationPayloadInput = {
   trajRecipe: '',
   trajEvent: 'exit',
   trajStatus: '',
-  targetMode: 'agent',
+  flowAgentId: '',
+  flowStatus: '',
+  flowMaxGrade: 0,
   targetAgentId: 'stale-agent',
-  flowId: 'stale-flow',
   sessionMode: 'continue',
   promptTemplate: '   ',
   maxIterations: '4',
@@ -43,12 +44,33 @@ describe('buildAutomationPayload', () => {
       boardAction: 'move',
       boardMoveToState: 'done',
       targetAgentId: '',
-      flowId: '',
       promptTemplate: '',
       maxIterations: 4,
       cooldownSec: 12,
       expiresAt: 0,
     })
     expect(payload).not.toHaveProperty('sessionMode')
+  })
+
+  it('builds a flow-run trigger with its agent, outcome and grade filters', () => {
+    const body = buildAutomationPayload({
+      ...baseInput,
+      kind: 'flow',
+      flowAgentId: ' AGT7 ',
+      flowStatus: 'failure',
+      flowMaxGrade: 2,
+      promptTemplate: 'Review {{result}}',
+    })
+    expect(body).toMatchObject({
+      triggerKind: 'flow',
+      flowAgentId: 'AGT7',
+      flowStatus: 'failure',
+      flowMaxGrade: 2,
+      targetAgentId: 'stale-agent',
+      sessionMode: 'continue',
+      promptTemplate: 'Review {{result}}',
+    })
+    expect(body).not.toHaveProperty('triggerTag')
+    expect(body).not.toHaveProperty('tokenThreshold')
   })
 })

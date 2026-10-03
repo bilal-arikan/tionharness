@@ -23,7 +23,6 @@ const (
 	KindSkill     = "skill"
 	KindAgent     = "agent"
 	KindProvider  = "provider"
-	KindFlow      = "flow"
 	KindWorkspace = "workspace"
 	KindMCP       = "mcp"
 	// KindHook is a lifecycle/tool hook imported from a foreign plugin (Claude
@@ -112,7 +111,6 @@ type Payload struct {
 	Skill     *SkillPayload     `json:"skill,omitempty"`
 	Agent     *AgentPayload     `json:"agent,omitempty"`
 	Provider  *ProviderPayload  `json:"provider,omitempty"`
-	Flow      *FlowPayload      `json:"flow,omitempty"`
 	Workspace *WorkspacePayload `json:"workspace,omitempty"`
 	MCP       *MCPPayload       `json:"mcp,omitempty"`
 	Hook      *HookPayload      `json:"hook,omitempty"`
@@ -190,13 +188,6 @@ type ProviderPayload struct {
 	PromptCache string `json:"promptCache,omitempty"`
 }
 
-// FlowPayload is an agent-agnostic flow draft. Graph node agentId slots are
-// blanked at publish time and re-assigned by the user after install.
-type FlowPayload struct {
-	Name  string `json:"name"`
-	Graph string `json:"graph"` // orchestration.Graph JSON
-}
-
 // BoardColumn mirrors db.BoardColumnDef without importing the db package, so the
 // market envelope stays dependency-free. Used by a workspace template's optional
 // kanban layout. The API layer maps it to db.BoardColumnDef.
@@ -205,11 +196,6 @@ type BoardColumn struct {
 	Label string `json:"label"`
 	Color string `json:"color,omitempty"`
 }
-
-// TemplateAgentKeyPrefix marks an agent reference inside a template flow graph:
-// an agent node's agentId is set to "tmpl:<key>" and substituted for the real
-// agent id at seed time (the graph itself stays agent-agnostic and portable).
-const TemplateAgentKeyPrefix = "tmpl:"
 
 // WorkspaceTemplateAgent is one seed agent in a workspace template — the full
 // agent config (mirrors AgentPayload) so a template can ship a richly-configured
@@ -258,25 +244,6 @@ type WorkspaceTemplateSkill struct {
 	Files map[string][]byte `json:"files,omitempty"`
 }
 
-// WorkspaceTemplateStep is one node of a LINEAR seed flow. AgentKey points at a
-// WorkspaceTemplateAgent.Key; Prompt is an orchestration template ({{input}}, {{last}}).
-type WorkspaceTemplateStep struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	AgentKey string `json:"agentKey"`
-	Prompt   string `json:"prompt"`
-}
-
-// WorkspaceTemplateFlow is one seed flow. It is either linear (Steps) or a full
-// orchestration graph (Graph) supporting branch/parallel/delay/transform. When
-// Graph is set it takes precedence; agent nodes reference agents by
-// "tmpl:<key>" in their agentId (substituted at seed time).
-type WorkspaceTemplateFlow struct {
-	Name  string                  `json:"name"`
-	Steps []WorkspaceTemplateStep `json:"steps,omitempty"`
-	Graph string                  `json:"graph,omitempty"` // orchestration.Graph JSON; agentId = "tmpl:<key>"
-}
-
 // WorkspaceTemplateSchedule is a starter cron schedule. It is disabled by
 // default; a template may explicitly enable schedules intended to run at once.
 type WorkspaceTemplateSchedule struct {
@@ -318,10 +285,9 @@ type WorkspaceTemplateAutomation struct {
 	TokenScope     string `json:"tokenScope,omitempty"`
 	TokenThreshold int    `json:"tokenThreshold,omitempty"`
 
-	// Target: an agent (by template key) or a flow (by name). A flow-backed rule
+	// Target: an agent (by template key). A rule
 	// leaves AgentKey empty. An archive-action board rule needs neither.
 	AgentKey string `json:"agentKey,omitempty"`
-	FlowName string `json:"flowName,omitempty"`
 
 	SessionMode    string   `json:"sessionMode,omitempty"` // "spawn" | "continue"
 	PromptTemplate string   `json:"promptTemplate,omitempty"`
@@ -357,7 +323,6 @@ type WorkspacePayload struct {
 	// already exist.
 	Skills      []WorkspaceTemplateSkill      `json:"skills,omitempty"`
 	Agents      []WorkspaceTemplateAgent      `json:"agents,omitempty"`
-	Flows       []WorkspaceTemplateFlow       `json:"flows,omitempty"`
 	Schedules   []WorkspaceTemplateSchedule   `json:"schedules,omitempty"`
 	Automations []WorkspaceTemplateAutomation `json:"automations,omitempty"`
 }

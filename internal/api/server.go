@@ -792,47 +792,6 @@ func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/hooks/{id}", s.handleDeleteHook)
 }
 
-// registerFlowRoutes registers orchestration flows + runs (Phase 7).
-func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/flows", s.handleListFlows)
-	mux.HandleFunc("POST /api/flows", s.handleCreateFlow)
-	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
-	mux.HandleFunc("PUT /api/flows/{id}/tags", s.handleSetFlowTags)
-	mux.HandleFunc("PUT /api/flows/{id}/emoji", s.handleSetFlowEmoji)
-	mux.HandleFunc("DELETE /api/flows/{id}", s.handleDeleteFlow)
-	// Locate the flow on disk (copy-path action).
-	mux.HandleFunc("GET /api/flows/{id}/path", s.handleFlowPath)
-	mux.HandleFunc("POST /api/flows/{id}/run", s.handleRunFlow)
-	mux.HandleFunc("POST /api/flows/{id}/run-stream", s.handleRunFlowStream)
-	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
-	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
-	// Remove a finished run tree (409 while live) — _Docs/77 R8.
-	mux.HandleFunc("DELETE /api/flow-runs/{id}", s.handleDeleteFlowRun)
-	mux.HandleFunc("GET /api/flow-runs/{id}/nodes/{nodeId}/steps", s.handleFlowRunNodeSteps)
-	// The whole tree a composed run belongs to (root + subflow/spawn descendants).
-	mux.HandleFunc("GET /api/flow-runs/{id}/tree", s.handleFlowRunTree)
-	// Deliver input to a run suspended at an await-input node (durable resume).
-	mux.HandleFunc("POST /api/flow-runs/{id}/input", s.handleResumeFlowRun)
-
-	// Projection layer: the compact, context-cheap summary of a large entity —
-	// the same bytes the agent gets and the Bağlam panel shows (_Docs/66).
-	// Whole-workspace structural map for the Explorer network (_Docs/68). Registered
-	// before the {kind}/{id} pattern only for readability; "graph" is a literal
-	// segment and never collides with a two-segment ref.
-	mux.HandleFunc("GET /api/views/graph", s.handleGetViewGraph)
-	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
-	// Explorer map drill-down: the structural child handles of a node (_Docs/68).
-	mux.HandleFunc("GET /api/views/{kind}/{id}/children", s.handleGetViewChildren)
-	// Explorer focus graph: complete direct parents + children, without a
-	// backend presentation cap. The UI owns visual overflow (_Docs/68).
-	mux.HandleFunc("GET /api/views/{kind}/{id}/neighborhood", s.handleGetViewNeighborhood)
-
-	// Workspace overview: counters + chart series + the workspace projection,
-	// in one call (_Docs/66).
-	mux.HandleFunc("GET /api/dashboard", s.handleDashboard)
-	mux.HandleFunc("GET /api/dashboard/commit-activity", s.handleDashboardCommitActivity)
-}
-
 // registerExecutionRoutes registers the unified executions feed — every run
 // across chat/task/flow/schedule funnels into a Session, so this is the single
 // list that surfaces them all with their kind and live status.

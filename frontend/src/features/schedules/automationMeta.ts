@@ -3,6 +3,7 @@ import type {
   BoardAction,
   BoardColumnDef,
   BoardOp,
+  FlowRuleStatus,
   TokenScope,
   TrajEndStatus,
   TrajEvent,
@@ -80,6 +81,57 @@ export const TRAJ_PROMPT_VARS: { name: string; desc: string }[] = [
     },
   })),
 ]
+
+// Flow-trigger outcome filter options (_Docs/93).
+export const FLOW_STATUSES: { value: FlowRuleStatus; label: string }[] = [
+  {
+    value: '',
+    get label() {
+      return tr('meta.flowStatuses.any')
+    },
+  },
+  {
+    value: 'success',
+    get label() {
+      return tr('meta.flowStatuses.success')
+    },
+  },
+  {
+    value: 'failure',
+    get label() {
+      return tr('meta.flowStatuses.failure')
+    },
+  },
+]
+
+// Flow-trigger prompt placeholders (kept in sync with agent/automation_flow.go flowVars).
+export const FLOW_PROMPT_VARS: { name: string; desc: string }[] = [
+  'result',
+  'input',
+  'output',
+  'error',
+  'status',
+  'grade',
+  'runId',
+  'flowId',
+  'flowName',
+  'version',
+  'agent',
+  'agentId',
+  'sessionId',
+  'nodeId',
+  'iteration',
+  'maxIterations',
+  'automation',
+  'date',
+  'time',
+  'datetime',
+].map((name) => ({
+  name: `{{${name}}}`,
+  get desc() {
+    return tr(`meta.promptVars.flow.${name}`)
+  },
+}))
 
 // Fallback columns used until workspace board columns load (mirrors TaskBoard).
 export const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -285,6 +337,10 @@ export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
   trajectory_end:
     'Rota {{trajectoryId}} ({{recipe}}) {{status}} ile bitti. Fazlar: {{phases}}. Kök oturum ' +
     '{{rootSessionId}}. Koşuyu özetle, dersleri çıkar ve dokümanları/panoyu güncelle.',
+  flow:
+    '{{agent}} ajanının akış koşusu {{runId}} {{status}} ile bitti (puan {{grade}}/5, v{{version}}). ' +
+    'Girdi: {{input}}\n\nYanıt: {{result}}\n\nYanıtı değerlendir; eksikse düzelt ve gerekiyorsa ' +
+    'ajanın akışına/promptuna bir iyileştirme öner.',
 }
 
 // Prefill body for the "stuck session repairer" template (self-healing, _Docs/56):
@@ -318,6 +374,7 @@ export const COLUMN_ACCENT = {
   token: '#f59e0b',
   phase: '#a855f7',
   trajectory_end: '#ec4899',
+  flow: '#14b8a6',
 } as const
 
 // MAX_ITERATIONS_HARD_CAP is the ceiling the automation form allows.

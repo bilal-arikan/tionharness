@@ -185,15 +185,3 @@ func TestDeleteTaskAny(t *testing.T) {
 		t.Fatal("expected error deleting a non-existent task")
 	}
 }
-
-// TestUpdateTaskFlowValidation verifies update_task rejects an unknown flow id.
-func TestUpdateTaskFlowValidation(t *testing.T) {
-	ctx := context.Background()
-	d := openTestDB(t)
-	tk, _ := d.CreateTask(ctx, db.Task{Title: "T", Prompt: "p"})
-
-	upd := NewUpdateTaskTool(d, "actor-1")
-	if _, err := upd.Call(ctx, json.RawMessage(`{"id":"`+tk.ID+`","flowId":"nonexistent"}`)); err == nil {
-		t.Fatal("expected unknown flowId to be rejected")
-	}
-}

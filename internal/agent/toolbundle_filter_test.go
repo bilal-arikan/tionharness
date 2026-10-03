@@ -31,7 +31,7 @@ func TestBundleIndexHonoursAgentToolFilter(t *testing.T) {
 	if strings.Contains(res.Content, "- get_flow ") || strings.Contains(res.Content, "- get_flow\n") {
 		t.Fatalf("blocked tool listed in its bundle:\n%s", res.Content)
 	}
-	if !strings.Contains(res.Content, "- list_flows") {
+	if !strings.Contains(res.Content, "- list_flow_runs") {
 		t.Fatalf("unblocked sibling missing from the bundle listing:\n%s", res.Content)
 	}
 }

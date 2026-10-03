@@ -29,7 +29,6 @@ const task: Task = {
   description: '',
   prompt: '',
   ownerAgentId: '',
-  flowId: '',
   boardState: 'todo',
   dependencies: '',
   lastRunId: '',
@@ -41,7 +40,6 @@ const task: Task = {
 
 const meta: TaskCardMeta = {
   owner: undefined,
-  flow: undefined,
   depIds: [],
   unmetDeps: [],
   unmetColColor: null,

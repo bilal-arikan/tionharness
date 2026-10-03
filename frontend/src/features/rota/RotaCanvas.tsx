@@ -14,10 +14,10 @@ import { formatSegments } from './rotaSegments'
 import { ROTA_FUTURE_W, ROTA_LABEL_W, ROTA_PAD_R, rotaPastWidth } from './rotaActivityGap'
 import { formatDateTime } from '@/shared/lib/intl'
 
-// What the side panel can project from either canvas: a session / flow run
-// bar, a whole trajectory (phase header click), an automation ghost.
+// What the side panel can project from either canvas: a session bar, a whole
+// trajectory (phase header click), an automation ghost.
 export interface RotaSelection {
-  kind: 'session' | 'flowrun' | 'trajectory' | 'automation'
+  kind: 'session' | 'trajectory' | 'automation'
   id: string
 }
 
@@ -27,7 +27,6 @@ interface Props {
   selected: RotaSelection | null
   onSelect: (sel: RotaSelection | null) => void
   onOpenSession?: (sessionId: string) => void
-  onOpenFlowRun?: (flowId: string) => void
   // Zoom into a lane's trajectory (the ◈ glyph).
   onOpenTrajectory?: (trajectoryId: string) => void
   // Collapse stretches of the past window where no lane did anything.
@@ -100,7 +99,6 @@ export function RotaCanvas({
   selected,
   onSelect,
   onOpenSession,
-  onOpenFlowRun,
   onOpenTrajectory,
   collapseGaps = true,
   normalizeBars = true,
@@ -281,28 +279,24 @@ export function RotaCanvas({
       {bars.map((b) => {
         const cy = rowY.get(b.rowId)
         if (cy === undefined) return null
-        const run = b.kind === 'flowrun'
-        const h = run ? 5 : 11
-        const y = run ? cy + 5 : cy - h / 2
+        const h = 11
+        const y = cy - h / 2
         // Both ends come off the same axis, so a bar starts and ends exactly
         // where its timestamps say — the log axis bends the axis, not the bar.
         const x1 = x(b.start)
         const x2 = Math.max(x1 + MIN_BAR_PX, x(b.end))
-        const sel = isSel(run ? 'flowrun' : 'session', run ? b.run!.runId : b.rowId)
+        const sel = isSel('session', b.rowId)
         return (
           <g
             key={b.id}
             className="cursor-pointer"
             onClick={(ev) => {
               ev.stopPropagation()
-              onSelect(
-                run ? { kind: 'flowrun', id: b.run!.runId } : { kind: 'session', id: b.rowId },
-              )
+              onSelect({ kind: 'session', id: b.rowId })
             }}
             onDoubleClick={(ev) => {
               ev.stopPropagation()
-              if (run) onOpenFlowRun?.(b.run!.flowId)
-              else onOpenSession?.(b.rowId)
+              onOpenSession?.(b.rowId)
             }}
           >
             <title>{`${b.label} · ${t(`state.${b.state}`, { defaultValue: b.state })} · ${fmtClock(b.start)} → ${b.live ? t('canvas.now') : fmtClock(b.end)}${
@@ -339,9 +333,9 @@ export function RotaCanvas({
                       y={y}
                       width={sw}
                       height={h}
-                      rx={run ? 2 : 4}
+                      rx={4}
                       fill={barFill(b)}
-                      opacity={run ? 0.7 : 0.9}
+                      opacity={0.9}
                       stroke={sel ? 'var(--color-text)' : 'none'}
                       strokeWidth={sel ? 1.5 : 0}
                     />
@@ -354,9 +348,9 @@ export function RotaCanvas({
                 y={y}
                 width={x2 - x1}
                 height={h}
-                rx={run ? 2 : 4}
+                rx={4}
                 fill={barFill(b)}
-                opacity={run ? 0.7 : 0.9}
+                opacity={0.9}
                 stroke={sel ? 'var(--color-text)' : 'none'}
                 strokeWidth={sel ? 1.5 : 0}
               />
@@ -386,7 +380,7 @@ export function RotaCanvas({
                 </rect>
               )
             })}
-            {b.live && !run && (
+            {b.live && (
               <circle cx={x2 - 3} cy={cy} r={3} fill="#fff" opacity={0.9}>
                 <animate
                   attributeName="opacity"

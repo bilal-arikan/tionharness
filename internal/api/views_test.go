@@ -13,41 +13,15 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 )
 
-// viewFixture stores a flow plus one run of it that has executed two nodes and is
-// now sitting on a third.
+// viewFixture opens a store with one agent, its default flow and one run of it.
 func viewFixture(t *testing.T) (*db.DB, db.FlowRun) {
 	t.Helper()
-	ctx := context.Background()
 	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { database.Close() })
-
-	graph := `{"start":"s","nodes":[
-		{"id":"s","type":"start","next":"a"},
-		{"id":"a","type":"agent","title":"collect","agentId":"AG1","next":"b"},
-		{"id":"b","type":"agent","title":"synth","agentId":"AG1"}]}`
-	flow, err := database.CreateFlow(ctx, db.Flow{Name: "research-pipeline", Graph: graph})
-	if err != nil {
-		t.Fatalf("create flow: %v", err)
-	}
-
-	state := `{"current":"b","last":"ok","outputs":{"a":"ok"},"trace":[
-		{"nodeId":"s","type":"start","title":"s","at":1000},
-		{"nodeId":"a","type":"agent","title":"collect","output":"ok","at":32000}]}`
-	run, err := database.CreateFlowRun(ctx, db.FlowRun{FlowID: flow.ID, Status: db.FlowRunning, State: state})
-	if err != nil {
-		t.Fatalf("create run: %v", err)
-	}
-	if err := database.SetFlowRunState(ctx, run.ID, state); err != nil {
-		t.Fatalf("save state: %v", err)
-	}
-	run, err = database.GetFlowRun(ctx, run.ID)
-	if err != nil {
-		t.Fatalf("reload run: %v", err)
-	}
-	return database, run
+	return database, seedFlowRun(t, database, "", "")
 }
 
 func decodeView(t *testing.T, body []byte) map[string]any {
@@ -57,39 +31,6 @@ func decodeView(t *testing.T, body []byte) map[string]any {
 		t.Fatalf("decode %q: %v", string(body), err)
 	}
 	return out
-}
-
-// TestGetViewProjectsFlowRun pins the end-to-end contract of the projection
-// endpoint: the response carries the rendered text (what an agent receives and
-// what the panel shows), a freshness stamp, a source revision and a cost
-// estimate.
-func TestGetViewProjectsFlowRun(t *testing.T) {
-	database, run := viewFixture(t)
-
-	rec := serveFlowRuns((&Server{}).handleGetView, database,
-		"/api/views/flowrun/"+run.ID+"?level=card",
-		map[string]string{"kind": "flowrun", "id": run.ID})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
-	}
-
-	got := decodeView(t, rec.Body.Bytes())
-	text, _ := got["text"].(string)
-	if !strings.Contains(text, "research-pipeline") {
-		t.Errorf("flow name missing from projection:\n%s", text)
-	}
-	if !strings.Contains(text, "agent:collect✓") {
-		t.Errorf("executed node missing:\n%s", text)
-	}
-	if !strings.Contains(text, "⚡RUNNING") {
-		t.Errorf("current node missing:\n%s", text)
-	}
-	if got["source"] == "" || got["source"] == nil {
-		t.Error("source revision not reported")
-	}
-	if n, _ := got["tokens"].(float64); n <= 0 {
-		t.Errorf("token estimate not reported: %v", got["tokens"])
-	}
 }
 
 // TestGetViewProjectsBoard covers the board kind end to end: the store's tasks
@@ -180,7 +121,7 @@ func TestGetViewProjectsSession(t *testing.T) {
 }
 
 // TestGetViewChildrenWalksTheMap covers the Explorer drill-down endpoint end to
-// end: the workspace root returns its eleven structural children, and expanding the
+// end: the workspace root returns its ten structural children, and expanding the
 // board returns one column node per column that exists.
 func TestGetViewChildrenWalksTheMap(t *testing.T) {
 	ctx := context.Background()
@@ -205,8 +146,8 @@ func TestGetViewChildrenWalksTheMap(t *testing.T) {
 	}
 	got := decodeView(t, rec.Body.Bytes())
 	children, _ := got["children"].([]any)
-	if len(children) != 11 {
-		t.Fatalf("workspace children = %d, want 11:\n%s", len(children), rec.Body.String())
+	if len(children) != 10 {
+		t.Fatalf("workspace children = %d, want 10:\n%s", len(children), rec.Body.String())
 	}
 
 	rec = serveFlowRuns((&Server{}).handleGetViewChildren, database,
@@ -389,20 +330,7 @@ func TestGetViewRejectsUnknownKind(t *testing.T) {
 	}
 }
 
-// TestGetViewMissingRunIs404 keeps a deleted/mistyped run distinguishable from a
-// run that simply has not started.
-func TestGetViewMissingRunIs404(t *testing.T) {
-	database, _ := viewFixture(t)
-
-	rec := serveFlowRuns((&Server{}).handleGetView, database,
-		"/api/views/flowrun/RUNnope",
-		map[string]string{"kind": "flowrun", "id": "RUNnope"})
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status %d (want 404): %s", rec.Code, rec.Body.String())
-	}
-}
-
-// TestGetViewGraphContract pins the whole-map endpoint: root + eleven buckets +
+// TestGetViewGraphContract pins the whole-map endpoint: root + ten buckets +
 // members, nested ref objects, edges from the sessions bucket and the owning
 // agent to the same session, and never a null array.
 func TestGetViewGraphContract(t *testing.T) {

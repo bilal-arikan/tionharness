@@ -26,7 +26,7 @@
 > registry'lerde yaşar; workspace'te market klasörü yok. Mevcut başlangıç
 > paketleri (52 adet; 2026-06-25'te **GAN üçlüsü** eklendi — `flow.gan-generator-evaluator`
 > + `agent.skeptical-evaluator` + `mcp.playwright`, generator↔evaluator döngüsü için, bkz.
-> `_Docs/15-FLOW-CANVAS.md`) global dizinde duruyor; yeni kurulumlarda market boş başlar
+> `_Docs/arsiv/15-FLOW-CANVAS.md` (tarihsel)) global dizinde duruyor; yeni kurulumlarda market boş başlar
 > ve global dizine elle paket konarak ya da uzak registry eklenerek doldurulur.
 >
 > **Provider preset kataloğu (2026-06-25):** 21 yeni provider pack'i global dizine

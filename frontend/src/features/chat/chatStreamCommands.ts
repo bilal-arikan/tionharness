@@ -13,7 +13,7 @@ export interface CommandContext {
   setError: (msg: string | null) => void
 }
 
-// Run a "/" command that posts an assistant message: summary (board/flows/
+// Run a "/" command that posts an assistant message: summary (board/
 // tools) or conversation compaction. The command + its result are now
 // event-sourced on the session hub: the backend persists the "/kind" message and
 // publishes user_message/agent_start/step/reply BEFORE + DURING the (often slow)
@@ -101,9 +101,7 @@ export interface ChatCommandDeps {
 }
 
 // Slash commands available in the chat composer ("/" menu): built-in session
-// commands only. Running a flow from the composer was removed — flows run from the
-// Flows panel (per-flow entries no longer pollute the "/" menu); "/flows" still
-// SUMMARIZES the flow list.
+// commands only.
 export function buildChatCommands({
   summarize,
   handoff,
@@ -151,12 +149,6 @@ export function buildChatCommands({
       icon: '🗂',
       description: i18next.t('commands.board', { ns: 'chat' }),
       run: () => summarize('board'),
-    },
-    {
-      name: 'flows',
-      icon: '🔀',
-      description: i18next.t('commands.flows', { ns: 'chat' }),
-      run: () => summarize('flows'),
     },
   ]
 }

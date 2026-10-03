@@ -10,7 +10,7 @@ import (
 )
 
 // registerMarketRoutes registers the in-app marketplace: a file-based registry
-// of shareable packs (skill/agent/provider/flow) that can be browsed, installed
+// of shareable packs (skill/agent/provider/workspace/mcp/hook) that can be browsed, installed
 // into the workspace, and published from existing entities. MVP wires the skill
 // kind end-to-end; other kinds list but install/publish lands in later slices.
 func (s *Server) registerMarketRoutes(mux *http.ServeMux) {
@@ -183,7 +183,7 @@ type installRequest struct {
 // publishRequest packages an existing workspace entity into the local registry.
 type publishRequest struct {
 	Kind     string `json:"kind"`
-	SourceID string `json:"sourceId"` // skill slug / agent id / flow id / provider id
+	SourceID string `json:"sourceId"` // skill slug / agent id / provider id
 	// Pack-level metadata for a workspace-template export. Each is optional; empty
 	// values fall back to a derived default (name → workspace name, description →
 	// a generated line, version → "1.0.0"). Ignored by non-workspace kinds.
@@ -198,19 +198,18 @@ type publishRequest struct {
 // publishInclude selects which parts of a live workspace get captured into a
 // template pack. It only applies to the workspace kind.
 //
-// The id/slug slices (AgentIDs, FlowIDs, SkillSlugs, ScheduleIDs) use tri-state
+// The id/slug slices (AgentIDs, SkillSlugs, ScheduleIDs) use tri-state
 // semantics: a nil slice (JSON field omitted) means "every item"; a present slice
 // — INCLUDING an empty one — restricts to exactly its members (empty = none). So
-// the caller can select a subset of agents, flows, workspace-tier skills and
+// the caller can select a subset of agents, workspace-tier skills and
 // schedules independently. A template still needs at least one agent (rejected
 // upstream otherwise). The boolean flags gate the file categories verbatim.
 type publishInclude struct {
 	AgentIDs    []string `json:"agentIds"`    // nil = all agents
-	FlowIDs     []string `json:"flowIds"`     // nil = all flows, [] = none
 	SkillSlugs  []string `json:"skillSlugs"`  // nil = all workspace skills, [] = none
 	ScheduleIDs []string `json:"scheduleIds"` // nil = all schedules, [] = none
 	// AutomationIDs selects starter automation rules. nil = all, [] = none. Rules
-	// whose target agent/flow is not itself exported are dropped as orphans, the
+	// whose target agent is not itself exported are dropped as orphans, the
 	// same way schedules are.
 	AutomationIDs []string `json:"automationIds"`
 	Instructions  bool     `json:"instructions"`

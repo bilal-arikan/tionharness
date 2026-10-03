@@ -3,7 +3,7 @@ import { refToString } from '@/types'
 
 // Radial seed layout for the Explorer network. vis-network's force field does
 // the real work; this only hands it a sensible starting picture — root in the
-// middle, the eleven buckets on a ring, every subtree fanned out inside its
+// middle, the ten buckets on a ring, every subtree fanned out inside its
 // bucket's angular sector — so the first frames do not untangle a random cloud
 // and the persisted layout (once the user has one) is what the seeds yield to.
 

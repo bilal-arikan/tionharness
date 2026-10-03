@@ -16,7 +16,7 @@ import (
 // Task (kanban board) self-management tools let an agent read the board and
 // create, edit, move and delete tasks in its workspace — so an agent can track
 // and update work as a passive status board (e.g. moving a task it finished to
-// "done"). The board never executes tasks; flows, schedules and agent sessions
+// "done"). The board never executes tasks; schedules and agent sessions
 // do the work and reflect status here. Agents act on the user's board, so
 // read/create/edit/move/delete are all allowed on ANY task (including
 // user-created ones). Task.CreatedBy is still stamped for provenance/display,
@@ -53,7 +53,7 @@ func (ListTasksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_tasks",
 		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, " +
-			"flowId, dependencies, priority, tags, artifactIds, last run status, and whether each was created by an agent). " +
+			"dependencies, priority, tags, artifactIds, last run status, and whether each was created by an agent). " +
 			"artifactIds are workspace artifacts attached to the card (e.g. a plan) — read one with read_artifact. " +
 			"You can edit, move and delete ANY task. Built-in board columns are: pbi, todo, in_progress, review, " +
 			"done, failed — this workspace may also define custom columns; check existing tasks' boardState values " +
@@ -147,7 +147,6 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 		Title          string   `json:"title"`
 		BoardState     string   `json:"boardState"`
 		OwnerAgentID   string   `json:"ownerAgentId,omitempty"`
-		FlowID         string   `json:"flowId,omitempty"`
 		Dependencies   string   `json:"dependencies"`
 		Priority       string   `json:"priority,omitempty"`
 		Tags           []string `json:"tags,omitempty"`
@@ -162,7 +161,6 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 			Title:          tk.Title,
 			BoardState:     tk.BoardState,
 			OwnerAgentID:   tk.OwnerAgentID,
-			FlowID:         tk.FlowID,
 			Dependencies:   tk.Dependencies,
 			Priority:       tk.Priority,
 			Tags:           tk.Tags,
@@ -239,15 +237,14 @@ func NewCreateTaskTool(database *db.DB, actorID string, titleFor ...TaskTitleFun
 func (CreateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_task",
-		Description: "Create a task on the kanban board. Provide at least one of title, description, prompt (the instruction run by the owner agent), or flowId. When title is omitted, an immediate content excerpt is stored and the same background AI titler used by the REST API replaces it when available. Optionally set ownerAgentId, boardState (default todo), dependencies, priority, tags and artifactIds. The task is tagged as created by you. Returns the new task id.",
+		Description: "Create a task on the kanban board. Provide at least one of title, description or prompt (the instruction run by the owner agent). When title is omitted, an immediate content excerpt is stored and the same background AI titler used by the REST API replaces it when available. Optionally set ownerAgentId, boardState (default todo), dependencies, priority, tags and artifactIds. The task is tagged as created by you. Returns the new task id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"title":{"type":"string","description":"Short title (auto-generated from prompt when omitted)"},
-				"prompt":{"type":"string","description":"Instruction delivered to the owner agent (or used as flow input)"},
+				"prompt":{"type":"string","description":"Instruction delivered to the owner agent"},
 				"description":{"type":"string"},
-				"ownerAgentId":{"type":"string","description":"Agent that runs the task (see list_agents); not required for flow-backed tasks"},
-				"flowId":{"type":"string","description":"When set, running the task executes this flow (see list_flows)"},
+				"ownerAgentId":{"type":"string","description":"Agent that runs the task (see list_agents)"},
 				"boardState":{"type":"string","description":"Initial column key (default todo). Built-in: pbi, todo, in_progress, review, done, failed — but a workspace may define custom columns (see list_tasks description or the board UI); any lowercase letters/digits/underscores key is accepted."},
 				"dependencies":{"type":"string","description":"JSON array of task IDs that must complete before this task, e.g. [\"id1\",\"id2\"]"},
 				"priority":{"type":"string","enum":["critical","high","medium","low"],"description":"Task priority (optional)"},
@@ -266,7 +263,6 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Prompt       string   `json:"prompt"`
 		Description  string   `json:"description"`
 		OwnerAgentID string   `json:"ownerAgentId"`
-		FlowID       string   `json:"flowId"`
 		BoardState   string   `json:"boardState"`
 		Dependencies string   `json:"dependencies"`
 		Priority     string   `json:"priority"`
@@ -279,8 +275,8 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	in.Title = strings.TrimSpace(in.Title)
 	in.Prompt = strings.TrimSpace(in.Prompt)
 	in.Description = strings.TrimSpace(in.Description)
-	if in.Title == "" && in.Description == "" && in.Prompt == "" && in.FlowID == "" {
-		return "", fmt.Errorf("provide at least one of: title, description, prompt, flowId")
+	if in.Title == "" && in.Description == "" && in.Prompt == "" {
+		return "", fmt.Errorf("provide at least one of: title, description, prompt")
 	}
 	if in.BoardState != "" && !db.IsValidBoardKey(in.BoardState) {
 		return "", enumErr("boardState", in.BoardState, "pbi", "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
@@ -297,11 +293,6 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 			return "", err
 		}
 	}
-	if in.FlowID != "" {
-		if _, err := t.d.db.GetFlow(ctx, in.FlowID); err != nil {
-			return "", fmt.Errorf("no flow with id %q (use list_flows)", in.FlowID)
-		}
-	}
 	titleSource := in.Description
 	if titleSource == "" {
 		titleSource = in.Prompt
@@ -316,7 +307,6 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Prompt:       in.Prompt,
 		Description:  in.Description,
 		OwnerAgentID: in.OwnerAgentID,
-		FlowID:       in.FlowID,
 		BoardState:   in.BoardState,
 		Dependencies: in.Dependencies,
 		Priority:     in.Priority,
@@ -365,7 +355,7 @@ func NewUpdateTaskTool(database *db.DB, actorID string) UpdateTaskTool {
 func (UpdateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_task",
-		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, flowId, boardState, dependencies, priority, tags, artifactIds). Use artifactIds to attach workspace artifacts to the card (e.g. link a plan artifact so a later stage reads it by id instead of matching on title). To change only the column, prefer move_task. Allowed on any task.",
+		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, boardState, dependencies, priority, tags, artifactIds). Use artifactIds to attach workspace artifacts to the card (e.g. link a plan artifact so a later stage reads it by id instead of matching on title). To change only the column, prefer move_task. Allowed on any task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -374,7 +364,6 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 				"prompt":{"type":"string"},
 				"description":{"type":"string"},
 				"ownerAgentId":{"type":"string"},
-				"flowId":{"type":"string","description":"Set to empty string to unlink the flow"},
 				"boardState":{"type":"string","description":"Column key. Built-in: pbi, todo, in_progress, review, done, failed — plus any workspace custom column key."},
 				"dependencies":{"type":"string","description":"JSON array of task IDs this task depends on, e.g. [\"id1\",\"id2\"]. Pass [] to clear."},
 				"priority":{"type":"string","enum":["critical","high","medium","low",""],"description":"Priority ('' clears it)"},
@@ -389,8 +378,6 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 			json.RawMessage(`{"id":"tsk_77","boardState":"in_progress"}`),
 			// Set dependencies: a JSON ARRAY STRING of task ids ([] clears).
 			json.RawMessage(`{"id":"tsk_77","dependencies":"[\"tsk_12\",\"tsk_34\"]"}`),
-			// Unlink the flow by passing an empty string.
-			json.RawMessage(`{"id":"tsk_77","flowId":""}`),
 		},
 	}
 }
@@ -402,7 +389,6 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Prompt       *string   `json:"prompt"`
 		Description  *string   `json:"description"`
 		OwnerAgentID *string   `json:"ownerAgentId"`
-		FlowID       *string   `json:"flowId"`
 		BoardState   *string   `json:"boardState"`
 		Dependencies *string   `json:"dependencies"`
 		Priority     *string   `json:"priority"`
@@ -423,7 +409,6 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	oldBoard := cur.BoardState
 	oldTitle := cur.Title
 	oldOwner := cur.OwnerAgentID
-	oldFlowID := cur.FlowID
 	oldPriority := cur.Priority
 	oldTags := append([]string(nil), cur.Tags...)
 	if in.Title != nil {
@@ -451,14 +436,6 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		}
 		cur.OwnerAgentID = *in.OwnerAgentID
 	}
-	if in.FlowID != nil {
-		if *in.FlowID != "" {
-			if _, err := t.d.db.GetFlow(ctx, *in.FlowID); err != nil {
-				return "", fmt.Errorf("no flow with id %q", *in.FlowID)
-			}
-		}
-		cur.FlowID = *in.FlowID
-	}
 	if in.BoardState != nil {
 		if !db.IsValidBoardKey(*in.BoardState) {
 			return "", enumErr("boardState", *in.BoardState, "pbi", "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
@@ -485,7 +462,7 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if cur.BoardState != oldBoard {
 		notifyBoardChanged(t.d.db, BoardChange{Title: "Görev taşındı: " + cur.Title, Body: cur.BoardState, TaskID: cur.ID, Op: "move"})
-	} else if cur.Title != oldTitle || cur.OwnerAgentID != oldOwner || cur.FlowID != oldFlowID || cur.Priority != oldPriority || !sameStrings(cur.Tags, oldTags) {
+	} else if cur.Title != oldTitle || cur.OwnerAgentID != oldOwner || cur.Priority != oldPriority || !sameStrings(cur.Tags, oldTags) {
 		notifyBoardChanged(t.d.db, BoardChange{Title: "Görev güncellendi: " + cur.Title, Body: cur.BoardState, TaskID: cur.ID, Op: "update"})
 	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "updated"})

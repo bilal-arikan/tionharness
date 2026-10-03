@@ -58,7 +58,9 @@ type DB struct {
 	schedules         map[string]Schedule
 	mcp               map[string]MCPServer
 	flows             map[string]Flow
+	flowByAgent       map[string]string // agent id → flow id (one main flow per agent)
 	flowRuns          map[string]FlowRun
+	flowProposals     map[string]FlowProposal
 	sessionAsks       map[string]SessionAsk // durable ask suspend/resume (MVP)
 	// agentMessages holds the delivery receipts for agent→agent / coordinator→
 	// worker messages, including the parked bodies of held ones.
@@ -241,7 +243,9 @@ func Open(path string) (*DB, error) {
 		schedules:          map[string]Schedule{},
 		mcp:                map[string]MCPServer{},
 		flows:              map[string]Flow{},
+		flowByAgent:        map[string]string{},
 		flowRuns:           map[string]FlowRun{},
+		flowProposals:      map[string]FlowProposal{},
 		sessionAsks:        map[string]SessionAsk{},
 		agentMessages:      map[string]AgentMessage{},
 		automations:        map[string]Automation{},
@@ -304,23 +308,28 @@ func (d *DB) dir(parts ...string) string {
 func (d *DB) Root() string { return d.root }
 
 const (
-	dirAgents             = "agents"
-	dirSessions           = "sessions"
-	dirTasks              = "tasks"
-	dirSchedules          = "schedules"
-	dirMCP                = "mcp-servers"
-	dirFlows              = "flows"
-	dirFlowRuns           = "flow-runs"
-	dirFlowRunStateDeltas = "flow-run-state-deltas"
-	dirSessionAsks        = "session-asks"
-	dirAgentMsgs          = "agent-messages"
-	dirAutomations        = "automations"
-	dirArtifacts          = "artifacts"
-	dirRender             = "render" // per-session render_template output (transient, swept)
-	dirHooks              = "hooks"
-	dirUsage              = "usage"
-	dirSessionUsage       = "session-usage"
-	dirTrajectories       = "trajectories" // index.json only; the graphs are session sidecars
+	dirAgents    = "agents"
+	dirSessions  = "sessions"
+	dirTasks     = "tasks"
+	dirSchedules = "schedules"
+	dirMCP       = "mcp-servers"
+	// Evolving per-agent flows (_Docs/93). New directory names on purpose: the
+	// pre-2026-10 orchestration "flows/" + "flow-runs/" trees use an unrelated
+	// schema and are left untouched on disk.
+	dirAgentFlows          = "agent-flows"
+	dirAgentFlowRuns       = "agent-flow-runs"
+	dirAgentFlowVersions   = "agent-flow-versions"
+	dirAgentFlowProposals  = "agent-flow-proposals"
+	dirAgentPromptVersions = "agent-prompt-versions"
+	dirSessionAsks         = "session-asks"
+	dirAgentMsgs           = "agent-messages"
+	dirAutomations         = "automations"
+	dirArtifacts           = "artifacts"
+	dirRender              = "render" // per-session render_template output (transient, swept)
+	dirHooks               = "hooks"
+	dirUsage               = "usage"
+	dirSessionUsage        = "session-usage"
+	dirTrajectories        = "trajectories" // index.json only; the graphs are session sidecars
 )
 
 // countersFile stores the per-entity id sequence at the workspace store root.
@@ -332,21 +341,22 @@ const countersFile = "counters.json"
 // numbers are pure digits, so an id is trivially parseable and can never
 // collide with a UUID.
 const (
-	idAgent      = "AGT"
-	idSession    = "SES"
-	idTask       = "TSK"
-	idFlow       = "FLW"
-	idFlowRun    = "RUN"
-	idSessionAsk = "SAK"
-	idAgentMsg   = "AMS"
-	idArtifact   = "ART"
-	idKnowledge  = "MEM"
-	idMCP        = "MCP"
-	idHook       = "HOK"
-	idGoal       = "GOL"
-	idSchedule   = "SCH"
-	idAutomation = "AUT"
-	idTrajectory = "RTA" // "Rota"
+	idAgent        = "AGT"
+	idSession      = "SES"
+	idTask         = "TSK"
+	idFlow         = "FLW"
+	idFlowRun      = "RUN"
+	idFlowProposal = "FPR"
+	idSessionAsk   = "SAK"
+	idAgentMsg     = "AMS"
+	idArtifact     = "ART"
+	idKnowledge    = "MEM"
+	idMCP          = "MCP"
+	idHook         = "HOK"
+	idGoal         = "GOL"
+	idSchedule     = "SCH"
+	idAutomation   = "AUT"
+	idTrajectory   = "RTA" // "Rota"
 )
 
 // loadCounters reads the persisted id sequence. A missing file is fine (fresh
@@ -561,30 +571,28 @@ func (d *DB) load() error {
 		d.markMutatedLocked()
 	}
 
-	flows, err := loadJSONDir[Flow](d.dir(dirFlows))
+	flows, err := loadJSONDir[Flow](d.dir(dirAgentFlows))
 	if err != nil {
 		return err
 	}
 	for _, f := range flows {
+		if f.AgentID == "" {
+			continue
+		}
+		f.Policy = f.Policy.Normalized()
 		d.flows[f.ID] = f
+		d.flowByAgent[f.AgentID] = f.ID
 		d.markMutatedLocked()
 	}
 
-	flowRuns, err := loadJSONDir[FlowRun](d.dir(dirFlowRuns))
+	flowRuns, err := loadJSONDir[FlowRun](d.dir(dirAgentFlowRuns))
 	if err != nil {
 		return err
 	}
 	// Seed the O(1) running counter from disk. Store (not Add) so load() stays
 	// idempotent — a test that opens the same store twice must not double-count.
-	// Waiting runs are deliberately NOT counted (they sleep until input),
-	// mirroring ListRunningFlowRuns.
 	var runningFlowRuns int64
 	for _, r := range flowRuns {
-		materialized, err := d.materializeFlowRunState(r.ID, r.State)
-		if err != nil {
-			return err
-		}
-		r.State = materialized
 		d.flowRuns[r.ID] = r
 		d.markMutatedLocked()
 		if r.Status == FlowRunning {
@@ -592,6 +600,15 @@ func (d *DB) load() error {
 		}
 	}
 	d.runningFlowRuns.Store(runningFlowRuns)
+
+	proposals, err := loadJSONDir[FlowProposal](d.dir(dirAgentFlowProposals))
+	if err != nil {
+		return err
+	}
+	for _, p := range proposals {
+		d.flowProposals[p.ID] = p
+		d.markMutatedLocked()
+	}
 
 	sessionAsks, err := loadJSONDir[SessionAsk](d.dir(dirSessionAsks))
 	if err != nil {

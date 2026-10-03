@@ -1806,7 +1806,7 @@ mevcut node tipleriyle, döngünün (cycle) bilinçli kullanımıyla kuruldu.
 - **Test:** `engine_test.go` — `TestValidate_AllowsCyclicGraph`, `TestRun_GANLoop_RefinesThenShips`
   (2× REFINE → SHIP → finalize), `TestRun_GANLoop_StepCapBackstop` (hiç ship etmeyen →
   `step cap` hatası). `go build`/`vet`/`test ./internal/orchestration` ✅; `tsc -b`/`vite build` ✅.
-- Detay: [`15-FLOW-CANVAS.md`](15-FLOW-CANVAS.md) §Generator↔Evaluator döngü şablonu;
+- Detay: [`arsiv/15-FLOW-CANVAS.md`](arsiv/15-FLOW-CANVAS.md) §Generator↔Evaluator döngü şablonu;
   kullanım kılavuzu: `tionharness-gan-loop` skill.
 
 ## Yapılandırılmış subagent görev sözleşmesi ✅ (2026-06-25)

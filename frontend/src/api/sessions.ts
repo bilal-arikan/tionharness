@@ -239,7 +239,7 @@ export const sessionApi = {
   getCoordinatorAncestors: (sessionId: string) =>
     req<{ ancestors: CoordinatorAncestor[] }>(`/api/sessions/${sessionId}/coordinator-ancestors`),
   // On-demand summary/listing posted as an assistant message in the session.
-  // kind: 'board' | 'flows' | 'tools'. Returns the new message.
+  // kind: 'board' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>
     req<{ userMessage: Message; replyMessage: Message }>(`/api/sessions/${sessionId}/summary`, {
       method: 'POST',

@@ -281,7 +281,6 @@ const (
 	ExecutionInteractive = "interactive"
 	ExecutionSubagent    = "subagent"
 	ExecutionWorker      = "worker"
-	ExecutionFlow        = "flow"
 	ExecutionSchedule    = "schedule"
 	ExecutionAutomation  = "automation"
 	ExecutionSystem      = "system"
@@ -289,7 +288,6 @@ const (
 	CategoryChat       = "chat"
 	CategorySubagent   = "subagent"
 	CategoryWorker     = "worker"
-	CategoryFlow       = "flow"
 	CategoryAutomation = "automation"
 	CategorySystem     = "system"
 

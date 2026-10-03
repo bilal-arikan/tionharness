@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LayoutGrid, Repeat, Sparkles, X, Zap } from 'lucide-react'
+import { LayoutGrid, Repeat, Sparkles, Workflow, X, Zap } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -9,7 +9,7 @@ import type {
   BoardAction,
   BoardColumnDef,
   BoardOp,
-  Flow,
+  FlowRuleStatus,
   SessionMode,
   TokenScope,
   TrajEndStatus,
@@ -28,6 +28,7 @@ import {
 } from './automationMeta'
 import {
   BoardTriggerFields,
+  FlowTriggerFields,
   TrajectoryTriggerFields,
   PromptVarsField,
   TokenTriggerFields,
@@ -35,14 +36,13 @@ import {
 import { FieldError } from './FieldError'
 import { useFieldErrors } from './useFieldErrors'
 import { FormModal } from './FormModal'
-import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
+import { Field, inputCls } from './pickers'
 import { localInputToUnix, unixToLocalInput } from './timeUtils'
 import { buildAutomationPayload } from './automationPayload'
 
 interface Props {
   kind: AutomationTriggerKind
   agents: Agent[]
-  flows: Flow[]
   columns: BoardColumnDef[]
   /** null = create a new automation; otherwise edit this one. */
   editing: Automation | null
@@ -58,7 +58,6 @@ interface Props {
 export function AutomationModal({
   kind,
   agents,
-  flows,
   columns,
   editing,
   onClose,
@@ -70,6 +69,7 @@ export function AutomationModal({
   const isBoardKind = kind === 'board'
   const isTokenKind = kind === 'token'
   const isTrajKind = kind === 'phase' || kind === 'trajectory_end'
+  const isFlowKind = kind === 'flow'
 
   const [name, setName] = useState(editing?.name ?? '')
   const [triggerTag, setTriggerTag] = useState(editing?.triggerTag ?? '')
@@ -88,9 +88,10 @@ export function AutomationModal({
   const [trajRecipe, setTrajRecipe] = useState(editing?.trajRecipe ?? '')
   const [trajEvent, setTrajEvent] = useState<TrajEvent>(editing?.trajEvent ?? 'exit')
   const [trajStatus, setTrajStatus] = useState<TrajEndStatus>(editing?.trajStatus ?? '')
-  const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
+  const [flowAgentId, setFlowAgentId] = useState(editing?.flowAgentId ?? '')
+  const [flowStatus, setFlowStatus] = useState<FlowRuleStatus>(editing?.flowStatus ?? '')
+  const [flowMaxGrade, setFlowMaxGrade] = useState(editing?.flowMaxGrade ?? 0)
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
-  const [flowId, setFlowId] = useState(editing?.flowId ?? '')
   // Session strategy: default matches the backend's per-kind default so a new rule
   // starts where the user expects (token continues a thread; others spawn).
   const [sessionMode, setSessionMode] = useState<SessionMode>(
@@ -110,7 +111,7 @@ export function AutomationModal({
   const [generatingTitle, setGeneratingTitle] = useState(false)
 
   const isTargetlessAction = isBoardKind && (boardAction === 'archive' || boardAction === 'move')
-  const missingTarget = !isTargetlessAction && (targetMode === 'flow' ? !flowId : !targetAgentId)
+  const missingTarget = !isTargetlessAction && !targetAgentId
   // Required-field errors, mirroring db.ValidateAutomationShape. Record order is
   // the blocking priority; useFieldErrors gates each behind a submit attempt.
   const { markAttempted, firstError, errorFor } = useFieldErrors({
@@ -123,11 +124,7 @@ export function AutomationModal({
       isBoardKind && boardAction === 'move' && !boardMoveToState
         ? t('validation.moveTargetRequired')
         : '',
-    target: missingTarget
-      ? targetMode === 'flow'
-        ? t('validation.targetFlowRequired')
-        : t('validation.targetAgentRequired')
-      : '',
+    target: missingTarget ? t('validation.targetAgentRequired') : '',
   })
 
   const applyStuckTemplate = () => {
@@ -174,9 +171,10 @@ export function AutomationModal({
       trajRecipe,
       trajEvent,
       trajStatus,
-      targetMode,
+      flowAgentId,
+      flowStatus,
+      flowMaxGrade,
       targetAgentId,
-      flowId,
       sessionMode,
       promptTemplate,
       maxIterations,
@@ -209,9 +207,15 @@ export function AutomationModal({
       title={t(editing ? 'automationModal.editTitle' : 'automationModal.newTitle', {
         kind: kindLabel,
       })}
-      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : Repeat}
+      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : isFlowKind ? Workflow : Repeat}
       accent={
-        isBoardKind ? COLUMN_ACCENT.board : isTokenKind ? COLUMN_ACCENT.token : COLUMN_ACCENT.tag
+        isBoardKind
+          ? COLUMN_ACCENT.board
+          : isTokenKind
+            ? COLUMN_ACCENT.token
+            : isFlowKind
+              ? COLUMN_ACCENT.flow
+              : COLUMN_ACCENT.tag
       }
       submitLabel={editing ? t('common.save') : t('automationModal.add')}
       onSubmit={submit}
@@ -284,6 +288,18 @@ export function AutomationModal({
               if (p.threshold !== undefined) setTokenThreshold(p.threshold)
             }}
           />
+        ) : isFlowKind ? (
+          <FlowTriggerFields
+            agents={agents}
+            agentId={flowAgentId}
+            status={flowStatus}
+            maxGrade={flowMaxGrade}
+            onChange={(p) => {
+              if (p.agentId !== undefined) setFlowAgentId(p.agentId)
+              if (p.status !== undefined) setFlowStatus(p.status)
+              if (p.maxGrade !== undefined) setFlowMaxGrade(p.maxGrade)
+            }}
+          />
         ) : isTrajKind ? (
           <TrajectoryTriggerFields
             kind={kind}
@@ -337,46 +353,39 @@ export function AutomationModal({
         <>
           <Field label={t('fields.target')} hint={t('automationModal.targetHint')}>
             <div className="flex flex-wrap items-center gap-2">
-              <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
-              {targetMode === 'flow' ? (
-                <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />
-              ) : (
-                <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
-              )}
+              <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
             </div>
             <FieldError message={errorFor('target')} />
           </Field>
 
-          {targetMode === 'agent' && (
-            <Field label={t('fields.session')} hint={t('automationModal.sessionHint')}>
-              <div className="inline-flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
-                {(
-                  [
-                    ['spawn', t('automationModal.sessionSpawn')],
-                    ['continue', t('automationModal.sessionContinue')],
-                  ] as [SessionMode, string][]
-                ).map(([m, label]) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setSessionMode(m)}
-                    className={`px-2.5 py-1 transition ${
-                      sessionMode === m
-                        ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
-                        : 'bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {sessionMode === 'continue' && (
-                <p className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-                  {t('automationModal.continueDescription')}
-                </p>
-              )}
-            </Field>
-          )}
+          <Field label={t('fields.session')} hint={t('automationModal.sessionHint')}>
+            <div className="inline-flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
+              {(
+                [
+                  ['spawn', t('automationModal.sessionSpawn')],
+                  ['continue', t('automationModal.sessionContinue')],
+                ] as [SessionMode, string][]
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSessionMode(m)}
+                  className={`px-2.5 py-1 transition ${
+                    sessionMode === m
+                      ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                      : 'bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {sessionMode === 'continue' && (
+              <p className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
+                {t('automationModal.continueDescription')}
+              </p>
+            )}
+          </Field>
 
           <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />
         </>

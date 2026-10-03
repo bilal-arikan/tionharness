@@ -440,8 +440,7 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	}
 
 	// Common pre-dispatch guard: the workspace autonomy pause must stop a fire
-	// before any session, message, or flow run is created. deliverFlow is also
-	// gated deeper (LaunchRun/launchGate), but deliverPrompt manages its own
+	// before any session or message is created. deliverPrompt manages its own
 	// session directly and has no such gate — without this check a paused
 	// prompt-backed schedule would still open/reuse its session and record the
 	// prompt as a new message before eventually failing inside the tool loop.
@@ -460,19 +459,10 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	// or the process dies mid-flight — the previous code only logged on success.
 	s.logger.Info("schedule fire: begin",
 		"schedule", scheduleID, "trigger", trigger,
-		"agent", sc.AgentID, "flow", sc.FlowID, "cron", sc.CronExpr)
+		"agent", sc.AgentID, "cron", sc.CronExpr)
 
-	// Flow-backed schedules run their orchestration flow; prompt-backed ones
-	// deliver a standalone prompt to the agent. RunFlowRecorded emits its own
-	// desktop notification, so only the prompt path calls emitPromptDelivery.
-	var sessionID string
-	var fireErr error
-	if sc.FlowID != "" {
-		sessionID, fireErr = s.deliverFlow(ctx, sc)
-	} else {
-		sessionID, fireErr = s.deliverPrompt(ctx, sc)
-		s.emitPromptDelivery(sc, sessionID, fireErr)
-	}
+	sessionID, fireErr := s.deliverPrompt(ctx, sc)
+	s.emitPromptDelivery(sc, sessionID, fireErr)
 
 	status := "success"
 	errText := ""
@@ -546,30 +536,6 @@ func notifyLine(s string, max int) string {
 		return strings.TrimSpace(string(r[:max])) + "…"
 	}
 	return s
-}
-
-// deliverFlow runs a flow-backed schedule: it executes sc.FlowID (with sc.Prompt
-// as the flow input) through RunFlowRecorded, which records the run as a turn in
-// the flow's transcript session and raises its own desktop notification. It
-// returns the flow session id (for delivery bookkeeping) and any run error. A
-// flow that finishes with FlowFailure is surfaced as an error so the schedule's
-// lastDeliveryStatus reflects it.
-func (s *Scheduler) deliverFlow(ctx context.Context, sc db.Schedule) (string, error) {
-	// Unified dispatch: LaunchRun validates the flow, runs it (budget-gated
-	// autonomous), and normalizes a flow-failure into an error.
-	res, err := s.rt.LaunchRun(ctx, RunSpec{
-		Trigger:    TriggerSchedule,
-		Input:      sc.Prompt,
-		Autonomous: true,
-		FlowID:     sc.FlowID,
-		Origin:     &db.SessionOrigin{Kind: db.OriginSchedule, EntityID: sc.ID},
-	})
-	if err != nil {
-		s.logger.Error("schedule deliver: flow run failed",
-			"schedule", sc.ID, "flow", sc.FlowID, "session", res.SessionID, "error", err)
-		return res.SessionID, err
-	}
-	return res.SessionID, nil
 }
 
 // deliverPrompt sends a standalone scheduled prompt to the agent and logs the

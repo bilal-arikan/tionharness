@@ -1,10 +1,9 @@
 import { forwardRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, Hourglass, Pencil, Workflow } from 'lucide-react'
-import type { Agent, Flow, Schedule } from '@/types'
+import { Play, Hourglass, Pencil } from 'lucide-react'
+import type { Agent, Schedule } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
-import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CardAction } from './pickers'
 import { COLUMN_ACCENT } from './automationMeta'
 import { fmtTime, isPast } from './timeUtils'
@@ -12,7 +11,6 @@ import { fmtTime, isPast } from './timeUtils'
 interface Props {
   schedule: Schedule
   agents: Agent[]
-  flows: Flow[]
   highlighted: boolean
   running: boolean
   onToggle: () => void
@@ -26,12 +24,10 @@ interface Props {
 // right. Deleting is intentionally NOT here — it lives inside the edit popup so a
 // mis-click on a dense lane cannot destroy a rule.
 export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleCard(
-  { schedule: s, agents, flows, highlighted, running, onToggle, onRunNow, onEdit, onTags },
+  { schedule: s, agents, highlighted, running, onToggle, onRunNow, onEdit, onTags },
   ref,
 ) {
   const { t } = useTranslation('schedules')
-  const flow = flows.find((f) => f.id === s.flowId)
-  const flowIcon = normalizeAvatar(flow?.emoji)
   const owner = agents.find((a) => a.id === s.agentId)
   const expired = isPast(s.expiresAt)
 
@@ -66,18 +62,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
               className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${s.enabled ? 'translate-x-4' : ''}`}
             />
           </button>
-          {s.flowId ? (
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-              title={t('scheduleCard.flowBased')}
-            >
-              {flowIcon ? (
-                <span className="text-base leading-none">{flowIcon}</span>
-              ) : (
-                <Workflow size={15} />
-              )}
-            </span>
-          ) : owner ? (
+          {owner ? (
             <AgentAvatar agent={owner} size={28} />
           ) : (
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-dim)]">
@@ -100,20 +85,11 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
             {s.oneShot ? t('scheduleCard.oneShotAt', { time: fmtTime(s.fireAt) }) : s.cronExpr}
           </div>
           <div className="truncate text-xs text-[var(--color-text-dim)]">
-            {t('common.targetArrow', {
-              target: s.flowId
-                ? `${flowIcon ?? '🔀'} ${flow?.name ?? s.flowId}`
-                : (owner?.name ?? t('common.none')),
-            })}
+            {t('common.targetArrow', { target: owner?.name ?? t('common.none') })}
           </div>
-          {(s.prompt || !s.flowId) && (
-            <div
-              className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]"
-              title={s.prompt}
-            >
-              {s.flowId ? t('common.input') : t('common.prompt')}: {s.prompt}
-            </div>
-          )}
+          <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]" title={s.prompt}>
+            {t('common.prompt')}: {s.prompt}
+          </div>
         </div>
 
         {/* Run + edit only; deleting lives inside the edit popup. */}

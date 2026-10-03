@@ -2,6 +2,7 @@ import type {
   AutomationTriggerKind,
   BoardAction,
   BoardOp,
+  FlowRuleStatus,
   SessionMode,
   TokenScope,
   TrajEndStatus,
@@ -27,9 +28,10 @@ export interface AutomationPayloadInput {
   trajRecipe: string
   trajEvent: TrajEvent
   trajStatus: TrajEndStatus
-  targetMode: 'agent' | 'flow'
+  flowAgentId: string
+  flowStatus: FlowRuleStatus
+  flowMaxGrade: number
   targetAgentId: string
-  flowId: string
   sessionMode: SessionMode
   promptTemplate: string
   maxIterations: string
@@ -61,21 +63,21 @@ export function buildAutomationPayload(input: AutomationPayloadInput) {
           }
         : input.kind === 'trajectory_end'
           ? { trajRecipe: input.trajRecipe.trim(), trajStatus: input.trajStatus }
-          : { triggerTag: input.triggerTag.trim() }
-  const target = isTargetlessAction
-    ? { targetAgentId: '', flowId: '' }
-    : input.targetMode === 'flow'
-      ? { flowId: input.flowId, targetAgentId: '' }
-      : { targetAgentId: input.targetAgentId, flowId: '' }
+          : input.kind === 'flow'
+            ? {
+                flowAgentId: input.flowAgentId.trim(),
+                flowStatus: input.flowStatus,
+                flowMaxGrade: input.flowMaxGrade,
+              }
+            : { triggerTag: input.triggerTag.trim() }
+  const target = isTargetlessAction ? { targetAgentId: '' } : { targetAgentId: input.targetAgentId }
 
   return {
     name: input.name.trim(),
     triggerKind: input.kind,
     ...trigger,
     ...target,
-    ...(input.targetMode === 'agent' && !isTargetlessAction
-      ? { sessionMode: input.sessionMode }
-      : {}),
+    ...(!isTargetlessAction ? { sessionMode: input.sessionMode } : {}),
     promptTemplate: input.promptTemplate.trim(),
     maxIterations: Number(input.maxIterations) || DEFAULT_MAX_ITERATIONS,
     cooldownSec: Number(input.cooldownSec) || 0,

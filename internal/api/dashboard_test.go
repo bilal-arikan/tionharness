@@ -28,12 +28,7 @@ func dashboardFixture(t *testing.T) *db.DB {
 	if _, err := database.CreateTask(ctx, db.Task{Title: "kart", BoardState: db.BoardTodo}); err != nil {
 		t.Fatalf("create task: %v", err)
 	}
-	if _, err := database.CreateFlow(ctx, db.Flow{Name: "f", Graph: `{"start":"s","nodes":[{"id":"s","type":"start"}]}`}); err != nil {
-		t.Fatalf("create flow: %v", err)
-	}
-	if _, err := database.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1", Status: db.FlowSuccess}); err != nil {
-		t.Fatalf("create run: %v", err)
-	}
+	seedFlowRun(t, database, db.FlowSuccess, "")
 	return database
 }
 

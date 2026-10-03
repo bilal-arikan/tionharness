@@ -12,7 +12,7 @@ import (
 
 // archiveKindsFixture builds a workspace holding one active session of every kind
 // plus the current session, and returns the tool bound to it. The returned map is
-// keyed by kind so assertions read as "the flow session must be archived".
+// keyed by kind so assertions read as "the task session must be archived".
 func archiveKindsFixture(t *testing.T, ctx context.Context) (*db.DB, ArchiveSessionsTool, map[string]string) {
 	t.Helper()
 	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
@@ -73,8 +73,8 @@ func TestArchiveSessionsSelectedKinds(t *testing.T) {
 	if got := stateOf(t, database, ctx, ids[sessionKindChat]); got != "active" {
 		t.Fatalf("chat session must be untouched when kinds:[spawned], got %q", got)
 	}
-	if got := stateOf(t, database, ctx, ids[sessionKindFlow]); got != "active" {
-		t.Fatalf("flow session must be untouched when kinds:[spawned], got %q", got)
+	if got := stateOf(t, database, ctx, ids[sessionKindTask]); got != "active" {
+		t.Fatalf("task session must be untouched when kinds:[spawned], got %q", got)
 	}
 }
 
@@ -119,18 +119,18 @@ func TestArchiveSessionsDryRunShowsKind(t *testing.T) {
 	ctx := context.Background()
 	database, tool, ids := archiveKindsFixture(t, ctx)
 
-	out, err := tool.Call(ctx, json.RawMessage(`{"kinds":["flow"],"dry_run":true}`))
+	out, err := tool.Call(ctx, json.RawMessage(`{"kinds":["task"],"dry_run":true}`))
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
 	if !strings.Contains(out, "DRY RUN") {
 		t.Fatalf("expected a dry-run preview:\n%s", out)
 	}
-	if !strings.Contains(out, "[flow]") {
+	if !strings.Contains(out, "[task]") {
 		t.Fatalf("dry-run line should carry the session kind:\n%s", out)
 	}
-	if got := stateOf(t, database, ctx, ids[sessionKindFlow]); got != "active" {
-		t.Fatalf("dry run must not change state, flow is %q", got)
+	if got := stateOf(t, database, ctx, ids[sessionKindTask]); got != "active" {
+		t.Fatalf("dry run must not change state, task is %q", got)
 	}
 }
 
@@ -146,8 +146,8 @@ func TestArchiveSessionsKindsRespectsGuards(t *testing.T) {
 	t.Cleanup(func() { _ = database.Close() })
 
 	current := mkSession(t, database, ctx, db.Session{Kind: sessionKindChat, Title: "Current", State: "active"})
-	spared := mkSession(t, database, ctx, db.Session{Kind: sessionKindFlow, Title: "Spared", State: "active"})
-	swept := mkSession(t, database, ctx, db.Session{Kind: sessionKindFlow, Title: "Swept", State: "active"})
+	spared := mkSession(t, database, ctx, db.Session{Kind: sessionKindTask, Title: "Spared", State: "active"})
+	swept := mkSession(t, database, ctx, db.Session{Kind: sessionKindTask, Title: "Swept", State: "active"})
 
 	tool := NewArchiveSessionsTool(database, current)
 	body := `{"kinds":["*"],"exclude":["` + spared + `"]}`
@@ -162,7 +162,7 @@ func TestArchiveSessionsKindsRespectsGuards(t *testing.T) {
 		t.Fatalf("excluded session must survive a kinds:[*] sweep, got %q", got)
 	}
 	if got := stateOf(t, database, ctx, swept); got != "archived" {
-		t.Fatalf("non-excluded flow session should be archived, got %q", got)
+		t.Fatalf("non-excluded task session should be archived, got %q", got)
 	}
 }
 
@@ -180,14 +180,14 @@ func TestResolveArchiveKinds(t *testing.T) {
 		t.Fatalf("nil kinds must default to chat, got %v", got)
 	}
 
-	got, err = resolveArchiveKinds([]string{"  FLOW ", "spawned"})
+	got, err = resolveArchiveKinds([]string{"  TASK ", "spawned"})
 	if err != nil {
 		t.Fatalf("mixed-case kinds: %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("expected flow+spawned, got %v", got)
+		t.Fatalf("expected task+spawned, got %v", got)
 	}
-	if _, ok := got[sessionKindFlow]; !ok {
+	if _, ok := got[sessionKindTask]; !ok {
 		t.Fatalf("kind matching should trim and lowercase, got %v", got)
 	}
 

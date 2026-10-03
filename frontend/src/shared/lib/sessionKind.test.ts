@@ -24,8 +24,6 @@ describe('isWritableSessionKind', () => {
   it('rejects read-only transcripts', () => {
     expect(isWritableSessionKind('insight')).toBe(false)
     expect(isWritableSessionKind('task')).toBe(false)
-    expect(isWritableSessionKind('flow')).toBe(false)
-    expect(isWritableSessionKind('flow-coordinator')).toBe(false)
     // Legacy kind — no session is created with it since TSK507, but any that
     // survive in a store stay read-only run logs.
     expect(isWritableSessionKind('inbox')).toBe(false)

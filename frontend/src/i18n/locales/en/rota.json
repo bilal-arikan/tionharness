@@ -128,7 +128,7 @@
   "panel": {
     "streamConnected": "Live stream connected",
     "streamConnecting": "Connecting to stream…",
-    "counts": "{{lanes}} lanes · {{sessions}} sessions · {{trajectories}} trajectories · {{runs}} flow runs · {{triggers}} triggers",
+    "counts": "{{lanes}} lanes · {{sessions}} sessions · {{trajectories}} trajectories · {{triggers}} triggers",
     "capacity": "spawn {{active}}/{{max}} · queue {{queue}}/{{queueMax}}",
     "autonomyPaused": "autonomy paused",
     "revisionTitle": "Stream seq / store revision",

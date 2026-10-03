@@ -27,10 +27,10 @@ const (
 	// OriginSubagent: a synchronous run_subagent child. TriggerSessionID is the
 	// parent turn's session.
 	OriginSubagent = "subagent"
-	// OriginFlow: the per-run transcript of a flow run, or a session a flow node
-	// opened (coordinator node). EntityID is the flow, RunID the run, NodeID the
+	// (OriginFlow was retired with the orchestration flows; legacy rows keep
+	// the raw string and read as OriginUser-less "unknown" origins.)
+	// EntityID is the owning entity, RunID the run, NodeID the
 	// node when one applies.
-	OriginFlow = "flow"
 	// OriginSchedule: a scheduled prompt delivery (reuse thread or spawn-mode run).
 	// EntityID is the schedule when known.
 	OriginSchedule = "schedule"
@@ -47,7 +47,7 @@ const (
 )
 
 var originKinds = []string{
-	OriginUser, OriginSpawn, OriginCoordinator, OriginSubagent, OriginFlow,
+	OriginUser, OriginSpawn, OriginCoordinator, OriginSubagent,
 	OriginSchedule, OriginAutomation, OriginHandoff, OriginInsight,
 }
 
@@ -143,10 +143,6 @@ func deriveOrigin(s Session) SessionOrigin {
 		return SessionOrigin{Kind: OriginSubagent, TriggerSessionID: s.ParentSessionID, RootSessionID: s.ParentSessionID}
 	}
 	switch s.Kind {
-	case "flow":
-		return SessionOrigin{Kind: OriginFlow, EntityID: s.SourceID}
-	case "flow-coordinator":
-		return SessionOrigin{Kind: OriginFlow, RunID: s.SourceID}
 	case "insight":
 		return SessionOrigin{Kind: OriginInsight, RunID: s.SourceID}
 	case "schedule", "schedule-run":

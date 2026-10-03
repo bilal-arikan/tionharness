@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -17,18 +16,11 @@ import (
 //
 //	go test ./internal/api -run '^$' -bench WorkspaceRunning -benchmem
 func BenchmarkWorkspaceRunning(b *testing.B) {
-	ctx := context.Background()
 	s, wsp := newWorkspaceServer(b)
 
 	// A store big enough that a full scan would be obvious in the numbers.
 	for range 2000 {
-		run, err := wsp.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1"})
-		if err != nil {
-			b.Fatalf("CreateFlowRun: %v", err)
-		}
-		if err := wsp.DB.FinishFlowRun(ctx, run.ID, db.FlowSuccess, "", ""); err != nil {
-			b.Fatalf("FinishFlowRun: %v", err)
-		}
+		seedFlowRun(b, wsp.DB, db.FlowSuccess, "")
 	}
 
 	b.ReportAllocs()

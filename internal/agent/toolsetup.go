@@ -281,10 +281,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// app-settings master toggle; the runner still enforces depth/cycle/budget/
 	// concurrency guards on every call.
 	builtins = append(builtins, tools.NewRunSubagentTool())
-	// run_adhoc_flow: a multi-round run_subagent plan (fan out, branch, fan out
-	// again) in one call, executed on the orchestration engine. Its runner is bound
-	// next to run_subagent's (withRunAdhocFlow) and shares the same guards.
-	builtins = append(builtins, tools.NewRunAdhocFlowTool())
 
 	// Coordinator/worker tools (M2, _Docs/47). withCoordination installs the runner
 	// on every session's turn, but populates only the capabilities that session
@@ -1043,10 +1039,7 @@ var cliLazyBridgeExcluded = map[string]bool{
 	"WebFetch":     true, // claude-cli has its own native WebFetch (see claudeOnlyBridgeExclusions)
 	"WebSearch":    true, // claude-cli has its own native WebSearch (defensive: eager, so not normally lazy)
 	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
-	// run_adhoc_flow needs the ad-hoc runner from the native loop's context, which
-	// the generic bridge dispatcher cannot supply (mirrors tools.bridgeExcluded).
-	"run_adhoc_flow": true,
-	"run_code":       true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
+	"run_code":     true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
 	// deactivate_tools is a TionHarness-native meta-tool (paired with activate_tools);
 	// the CLI uses its OWN ToolSearch, so this is never bridged — keep it out of the
 	// CLI catalog even though it is name-only on the native path.

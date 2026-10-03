@@ -55,14 +55,14 @@ func (GetViewTool) Def() providers.ToolDef {
 			"hid it counts and hands back as a drill-down ref.\n\n" +
 			"ids: 'workspace', 'board', 'budget', 'tools', 'logs' and category ids ('sessions', 'agents', …) " +
 			"are singletons — pass the kind as the id. Everything else takes the entity's own id, as `expand` " +
-			"returns it. sub= drills one level in (a card id on board, a node id on flowrun).\n" +
-			"Prefer this over list_tasks / get_flow_run + parsing raw state: a fraction of the tokens.",
+			"returns it. sub= drills one level in (a card id on board).\n" +
+			"Prefer this over list_tasks + parsing raw state: a fraction of the tokens.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "kind": { "type": "string", "enum": ["flowrun","session","board","workspace","schedule","agent","budget","tools","logs","artifact","automation","skill","insight","category"], "description": "Entity type to project." },
-    "id": { "type": "string", "description": "Entity id (a flow run / session / schedule id, or 'board'/'workspace' for the singletons)." },
-    "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a node id for a flow run, a card id for the board)." },
+    "kind": { "type": "string", "enum": ["session","board","workspace","schedule","agent","budget","tools","logs","artifact","automation","skill","insight","category"], "description": "Entity type to project." },
+    "id": { "type": "string", "description": "Entity id (a session / schedule id, or 'board'/'workspace' for the singletons)." },
+    "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a card id for the board)." },
     "level": { "type": "string", "enum": ["tiny","card","full"], "description": "Budget tier (default card)." }
   },
   "required": ["kind","id"],
@@ -74,7 +74,6 @@ func (GetViewTool) Def() providers.ToolDef {
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"kind":"workspace","id":"workspace"}`),
 			json.RawMessage(`{"kind":"board","id":"board","sub":"T3"}`),
-			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2","sub":"fetch-b"}`),
 			json.RawMessage(`{"kind":"session","id":"SES9a1","level":"full"}`),
 		},
 	}

@@ -55,6 +55,7 @@ func TestSystemAgentOwnership(t *testing.T) {
 		"insight-analyzer":   "insight",
 		"insight-applier":    "insight-applier",
 		"recipe-optimizer":   "recipe-optimizer",
+		"flow-optimizer":     "flow-optimizer",
 		"stall-judge":        "stall-judge",
 		"subagent-explore":   "subagent-explore",
 		"subagent-planner":   "subagent-planner",

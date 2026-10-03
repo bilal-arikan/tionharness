@@ -116,6 +116,11 @@ const (
 	// subagent's own activity trace (its tool calls, thinking, etc.) gathered in an
 	// isolated context. Persisted so the nested trace survives reload.
 	StepSubagent StepKind = "subagent"
+	// StepFlowNode marks one stage of the agent's evolving flow (_Docs/93): the
+	// card opens (Running) when the node starts and is replaced, same ID, when it
+	// finishes with its status, duration and an output excerpt. Only emitted for
+	// non-trivial flows — a plain input→respond→output turn shows no chrome.
+	StepFlowNode StepKind = "flow_node"
 )
 
 // TodoItem is one entry in a StepTodo checklist (mirrors the todo_write input).

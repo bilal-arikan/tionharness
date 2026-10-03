@@ -17,7 +17,7 @@ TionHarness primitive, not an aspiration.
 
 > Reference context (what TionHarness *is*): load `tionharness-guide`.
 > The tools that *do* these things: load `tionharness-self-management`.
-> Flow graph schema: load `tionharness-flows`. App settings: `tionharness-settings`.
+> Your own flow (stages per turn): load `tionharness-flows`. App settings: `tionharness-settings`.
 
 ## Concept map (playbook → TionHarness)
 
@@ -27,12 +27,12 @@ TionHarness primitive, not an aspiration.
 | `agents.md` / `CLAUDE.md` rules | **Workspace config** (editable prompt/instructions) + per-agent system prompt + `tionharness-settings` |
 | Skills ("anything done twice") | **File-based skills**: `create_skill` / `use_skill`, global+workspace tiers, auto-summary |
 | Automations (trigger → prompt) | **Schedules** (cron, workspace-scoped prompt delivery) for time triggers; **Automations** for board/session events; **Hooks** (tool + lifecycle events) for tool-level triggers |
-| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`spawn_worker`** (background worker, coordinator mode only), and **Flows** (graph engine) — all gated by the per-workspace autonomy brake |
+| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`spawn_worker`** (background worker, coordinator mode only), and per-agent **evolving flows** (a route node looping back inside one turn) — all gated by the per-workspace autonomy brake |
 | Quality gates | **Permission/approval layer** (`auto`/`ask`/`read-only`, arg-patterns) + **Hooks** |
-| Auto code review (e.g. Greptile) | A dedicated **reviewer agent** invoked by a flow or schedule |
+| Auto code review (e.g. Greptile) | A dedicated **reviewer agent** invoked by a schedule or automation, or a critic stage in your own flow |
 | Cloud vs local / infinite parallel | **Physical workspace isolation** + `run_subagent` (parallel isolated workers, each call synchronous) |
 | Git worktrees (avoid conflicts) | **Card-owned git worktrees** (one branch per kanban card) + per-workspace `store/` isolation; see limits below |
-| Multimodal (model per task) | **Per-agent provider/model** + a **flow** whose nodes use different agents/models |
+| Multimodal (model per task) | **Per-agent provider/model** + an evolving **flow** whose llm nodes may name another agent/model |
 | Flywheel: perfect tests/docs/logs | Recurring **schedules** that sweep docs, tests, and `read_logs` nightly |
 
 ## 1. Agents & providers — pick the harness per job
@@ -102,7 +102,7 @@ what changed."*
 
 ### Event triggers → Automations (the `Automation` entity)
 The richer, event-driven complement to a cron Schedule: `create_automation` fires a
-target agent **or** flow when a domain EVENT happens — a **tagged session finishing**
+target agent when a domain EVENT happens — a **tagged session finishing**
 a turn, a **kanban card changing**, cumulative **token spend** crossing a threshold,
 or a session's **message/tool count** crossing an interval. It carries its own
 guardrails (maxIterations/cooldown/expiry), a spawn-vs-continue **session mode**, and
@@ -123,7 +123,7 @@ automation + part of your quality gate. Lifecycle events (`UserPromptSubmit`,
 one more (bounded) pass with its reason as guidance.
 
 > The video's "PR opened → wait for review comments → address → push" automation
-> translates to: a **schedule or flow** that triggers a **reviewer agent**, which
+> translates to: a **schedule or automation** that triggers a **reviewer agent**, which
 > waits for / reads the review output and then has the worker agent apply fixes.
 
 ## 5. Loops — run until a goal is met
@@ -206,7 +206,7 @@ healthy without you in every cycle.
 
 ## 8. Multi-model pipeline (build → write → review)
 
-Encode model selection as a **skill + flow** so each step uses the right tool:
+Encode model selection as stages of the agent's **flow** so each step uses the right model:
 
 ```mermaid
 graph LR
@@ -220,8 +220,8 @@ graph LR
   need the frontier model.
 - **Review** with a *different* model than wrote it, for an independent viewpoint.
 
-In TionHarness: distinct agents (each pinned to its provider/model) wired as nodes in
-a flow, or a skill that says which agent to hand off to at each stage.
+In TionHarness: llm nodes of the agent's flow may name another agent (`agentId`) or
+a model override, or a skill says which agent to hand off to at each stage.
 
 ## 9. Guardrails — keep autonomy safe
 
@@ -237,7 +237,7 @@ a flow, or a skill that says which agent to hand off to at each stage.
 
 ## 10. The autonomous boot sequence (run this first, every time)
 
-A scheduled / spawned / flow turn starts with **no memory of the last run** — the
+A scheduled / spawned turn starts with **no memory of the last run** — the
 context window is fresh. Before touching any code, walk this fixed startup routine
 so a lost context never means lost orientation (the long-running-agent harness
 discipline). It is the autonomous mirror of a human opening the project each morning.
@@ -270,7 +270,7 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
 
 ### Step 3 — Verify the baseline BEFORE you build
 - Run the project's smoke / e2e check first — a `Bash` test command, or a
-  hand-testable **flow** (`run_flow`). This catches an *undocumented* broken state
+  hand-testable check script. This catches an *undocumented* broken state
   the previous turn may have left behind.
 - **If the baseline is red, that broken state IS this turn's task.** Fix it (or
   revert the offending commit — `git` is your undo), re-verify green, then stop.
@@ -301,7 +301,7 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
 3. Add standing **schedules**: nightly docs sweep, coverage check, production error sweep.
 4. Add **hooks** for event reactions (format-on-write) and hard gates (block destructive tools).
 5. For big jobs, **fan out with `run_subagent`** (parallel profiles or agents) and/or split across **workspaces**.
-6. Build the **multi-model flow** for feature work (plan → write → review).
+6. Evolve the agent's **flow** for feature work (plan → write → review stages).
 7. Cap everything with the **autonomy brake + permission mode** so it runs unattended safely.
 
 ## Pitfalls

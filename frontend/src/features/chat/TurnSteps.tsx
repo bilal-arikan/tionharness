@@ -17,6 +17,7 @@ import { SubagentStep } from './SubagentStep'
 import { ContextChangeCard } from './ContextChangeCard'
 import { CacheBreakCard } from './CacheBreakCard'
 import { CompactionCard } from './CompactionCard'
+import { FlowNodeStep } from './FlowNodeStep'
 import { isEditToolBase, synthDiffData } from '@/shared/lib/diff'
 import { toolBase } from './tools'
 import { ExecutionNotice } from './ExecutionNotice'
@@ -71,6 +72,7 @@ function renderStep(
   if (step.kind === 'cache_break')
     return <CacheBreakCard key={key} step={step} sessionId={sessionId} />
   if (step.kind === 'compaction') return <CompactionCard key={key} step={step} />
+  if (step.kind === 'flow_node') return <FlowNodeStep key={key} step={step} />
   if (step.kind === 'tool_delta') return <ToolDeltaStep key={key} step={step} />
   // 'tombstone' is a control signal handled before render (App.onStep); skip.
   if (step.kind === 'tombstone') return null

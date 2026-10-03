@@ -1,40 +1,34 @@
-/* Dark-themed overrides for React Flow's default Controls + MiniMap chrome so
-   the zoom/fit buttons and minimap blend with TionHarness's surfaces. */
-
+/* Theme-bound overrides for React Flow's chrome (controls + minimap) so the
+   canvas blends with TionHarness surfaces in both modes. */
 .react-flow__controls {
   box-shadow: var(--shadow-md);
   border-radius: 8px;
   overflow: hidden;
 }
-
 .react-flow__controls-button {
   background: var(--color-surface-2);
   color: var(--color-text);
   border-bottom: 1px solid var(--color-border);
 }
-
 .react-flow__controls-button:hover {
   background: var(--color-bg);
 }
-
 .react-flow__controls-button svg {
   fill: currentColor;
 }
-
 .react-flow__minimap {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 8px;
 }
-
-/* Larger, more grabbable connection handles. */
 .react-flow__handle {
-  width: 12px;
-  height: 12px;
-  background: var(--color-accent);
+  width: 11px;
+  height: 11px;
   border: 2px solid var(--color-surface);
 }
-
 .react-flow__handle:hover {
-  background: var(--color-text);
+  background: var(--color-text) !important;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--color-accent);
 }

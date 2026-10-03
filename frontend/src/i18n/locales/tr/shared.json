@@ -72,7 +72,7 @@
     },
     "flow": {
       "label": "Akışlar",
-      "hint": "Akış (flow) çalışması tamamlandı / başarısız oldu."
+      "hint": "Bir ajanın akışı evrildi, gözlemci öneri üretti veya kanvas kaydedildi."
     },
     "spawned": {
       "label": "Spawn",
@@ -257,6 +257,10 @@
     "subagent": {
       "label": "Alt-ajan",
       "description": "run_subagent ile başlatılan izole alt-ajan: kendi temiz bağlamında bir görevi yürütüp yalnız final sonucunu döndürür (ana bağlam kirlenmez). Katlanabilir kart; açılınca alt-ajanın kendi iz ağacı (SubSteps) iç içe gösterilir. Tek turda birden çok çağrı paralel koşar."
+    },
+    "flow_node": {
+      "label": "Akış düğümü",
+      "description": "Ajanın evrilen akışındaki bir aşama (plan, yanıt, eleştiri, yönlendirme…): aşama başlarken açılır, bitince süresi, durumu ve çıktı özetiyle kapanır. Yalnız varsayılan girdi→yanıt→çıktı dışına evrilmiş akışlarda görünür."
     }
   }
 }

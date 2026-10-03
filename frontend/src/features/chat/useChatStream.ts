@@ -621,7 +621,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionId],
   )
 
-  // Run a "/" command that posts an assistant message: summary (board/flows/
+  // Run a "/" command that posts an assistant message: summary (board/
   // tools) or conversation compaction (see performSummarize).
   const summarize = useCallback(
     (kind: string) => {
@@ -644,8 +644,7 @@ export function useChatStream(deps: ChatStreamDeps) {
   }, [activeSessionId, activeAgentId, setMessages, setError, refreshSessions, selectSession])
 
   // Slash commands available in the chat composer ("/" menu): built-in session
-  // commands only (running a flow from the composer was removed — flows run from
-  // the Flows panel; see buildChatCommands).
+  // commands only (see buildChatCommands).
   const chatCommands = useMemo<SlashCommand[]>(
     () => buildChatCommands({ summarize, handoff, openRewind }),
     [summarize, handoff, openRewind],

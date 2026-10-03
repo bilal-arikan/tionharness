@@ -134,7 +134,6 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	cur.Description = t.Description
 	cur.Prompt = t.Prompt
 	cur.OwnerAgentID = t.OwnerAgentID
-	cur.FlowID = t.FlowID
 	cur.BoardState = t.BoardState
 	if t.Dependencies != "" {
 		cur.Dependencies = t.Dependencies

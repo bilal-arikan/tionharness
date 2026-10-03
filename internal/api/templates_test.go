@@ -11,65 +11,12 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/market"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
-// TestResolveTemplateFlowGraph covers the agent-key resolution for both the
-// linear-steps and the full-graph (non-linear) template flow forms, plus the
-// missing-key failure path.
-func TestResolveTemplateFlowGraph(t *testing.T) {
-	ids := map[string]string{"a": "AGT1", "b": "AGT2"}
-
-	// Linear steps → sequential agent graph with ids wired.
-	lin := market.WorkspaceTemplateFlow{
-		Name: "lin",
-		Steps: []market.WorkspaceTemplateStep{
-			{ID: "s1", Title: "One", AgentKey: "a", Prompt: "{{input}}"},
-			{ID: "s2", Title: "Two", AgentKey: "b", Prompt: "{{last}}"},
-		},
-	}
-	g, ok := resolveTemplateFlowGraph(lin, ids)
-	if !ok {
-		t.Fatal("linear flow failed to resolve")
-	}
-	// A start node is prepended (required entry), so: start → s1(AGT1) → s2(AGT2).
-	if g.Start != "start" || len(g.Nodes) != 3 {
-		t.Fatalf("unexpected linear graph shape: %+v", g)
-	}
-	if g.Nodes[0].Type != orchestration.NodeStart || g.Nodes[0].Next != "s1" {
-		t.Fatalf("first node should be the start node → s1: %+v", g.Nodes[0])
-	}
-	if g.Nodes[1].AgentID != "AGT1" || g.Nodes[2].AgentID != "AGT2" {
-		t.Fatalf("agent ids not wired: %+v", g.Nodes)
-	}
-
-	// Non-linear graph (branch) with tmpl:<key> agent ids → substituted + valid.
-	branchJSON := `{"start":"route","nodes":[` +
-		`{"id":"route","type":"branch","branches":[{"contains":"yes","next":"yo"},{"contains":"","next":"no"}]},` +
-		`{"id":"yo","type":"agent","agentId":"tmpl:a","prompt":"{{input}}"},` +
-		`{"id":"no","type":"agent","agentId":"tmpl:b","prompt":"{{input}}"}]}`
-	bg, ok := resolveTemplateFlowGraph(market.WorkspaceTemplateFlow{Name: "branch", Graph: branchJSON}, ids)
-	if !ok {
-		t.Fatal("branch flow failed to resolve")
-	}
-	for _, n := range bg.Nodes {
-		if n.Type == orchestration.NodeAgent && strings.HasPrefix(n.AgentID, market.TemplateAgentKeyPrefix) {
-			t.Fatalf("unsubstituted agent id: %q", n.AgentID)
-		}
-	}
-
-	// A referenced agent key that does not resolve → failure.
-	bad := market.WorkspaceTemplateFlow{Name: "bad", Graph: `{"start":"x","nodes":[{"id":"x","type":"agent","agentId":"tmpl:missing","prompt":"hi"}]}`}
-	if _, ok := resolveTemplateFlowGraph(bad, ids); ok {
-		t.Fatal("expected failure for missing agent key")
-	}
-}
-
 // TestBundledTemplatePacksIntegrity verifies every bundled workspace-template
-// pack is internally consistent: it carries a workspace payload, unique flow step
-// ids, all flow/schedule agent keys resolve to a declared agent, and the
-// resulting orchestration graph validates. This guards the embedded packs the
+// pack is internally consistent: it carries a workspace payload and all
+// schedule/automation agent keys resolve to a declared agent. This guards the embedded packs the
 // create-workspace picker seeds from.
 func TestBundledTemplatePacksIntegrity(t *testing.T) {
 	// Bundled-only store (empty global dir): exactly the embedded template packs.
@@ -114,32 +61,15 @@ func TestBundledTemplatePacksIntegrity(t *testing.T) {
 				}
 			}
 
-			// Every flow (linear or graph) must resolve to a valid graph with the
-			// placeholder agent ids — exactly what seeding does at runtime.
-			ids := map[string]string{}
-			for k := range keys {
-				ids[k] = "agent-" + k
-			}
-			flowNames := map[string]bool{}
-			for _, tf := range wp.Flows {
-				if _, ok := resolveTemplateFlowGraph(tf, ids); !ok {
-					t.Fatalf("flow %q did not resolve to a valid graph", tf.Name)
-				}
-				flowNames[tf.Name] = true
-			}
-
-			// Automations must reference a declared agent key / flow name, since
+			// Automations must reference a declared agent key, since
 			// seedTemplateAutomations SKIPS the ones that do not resolve — a pack
 			// shipping a dangling reference would silently install one rule short.
 			for _, au := range wp.Automations {
 				if au.AgentKey != "" && !keys[au.AgentKey] {
 					t.Fatalf("automation %q references unknown agent key %q", au.Name, au.AgentKey)
 				}
-				if au.FlowName != "" && !flowNames[au.FlowName] {
-					t.Fatalf("automation %q references unknown flow %q", au.Name, au.FlowName)
-				}
-				if au.AgentKey == "" && au.FlowName == "" && au.BoardAction != db.BoardActionArchive {
-					t.Fatalf("automation %q has no agent or flow to run", au.Name)
+				if au.AgentKey == "" && au.BoardAction != db.BoardActionArchive {
+					t.Fatalf("automation %q has no agent to run", au.Name)
 				}
 			}
 
@@ -211,7 +141,6 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 		"Write", "Edit", "Bash", "PowerShell",
 		"create_task", "update_task", "delete_task", "move_task",
 		"create_agent", "update_agent", "delete_agent",
-		"create_flow", "update_flow", "delete_flow",
 		"create_schedule", "update_schedule", "delete_schedule",
 		"create_automation", "update_automation", "delete_automation",
 		"toggle_mcp_server",

@@ -182,6 +182,19 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		ctx = r.withDecisionClarification(ctx, agent, latestPolicyPrompt(req))
 	}
 	ctx = r.withToolRiskCheck(ctx, agent)
+	// Evolving flow (_Docs/93): a user-facing agent's turn runs through its main
+	// flow; each llm node comes back here through executeTurn. System agents and
+	// auxiliary calls take the direct path.
+	if f, g, ok := r.flowForTurn(ctx, agent); ok {
+		return r.runFlowTurn(ctx, f, g, agent, provider, req, autonomous, onStep)
+	}
+	return r.executeTurn(ctx, agent, provider, req, autonomous, onStep)
+}
+
+// executeTurn is one model turn after every gate and decision has been applied:
+// the plain completion, the claude-cli delegated loop or the native tool loop.
+// Flow nodes call it directly so a node never re-enters the gates.
+func (r *Runtime) executeTurn(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
 	t := &toolLoopTurn{r: r, ctx: ctx, agent: agent, provider: provider, req: req, autonomous: autonomous, onStep: onStep}
 	prepCleanup, err := t.prepare()
 	if err != nil {
@@ -209,9 +222,6 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// it (and the shared loop guards) from the context. &t.req lets an inherited-
 	// context subagent see the conversation as it stands when the tool fires.
 	t.ctx = r.withRunAgent(t.ctx, agent, &t.req, autonomous)
-	// run_adhoc_flow's runner, bound after withRunAgent so its legs inherit the
-	// same chain position and shared budget counter.
-	t.ctx = r.withRunAdhocFlow(t.ctx, agent, &t.req, autonomous)
 
 	t.emit = serializeStepEmitter(func(s TurnStep) {
 		if onStep != nil {

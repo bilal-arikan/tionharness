@@ -109,7 +109,7 @@ describe('diffSignals', () => {
     expect(diffSignals(b, c, (t) => t !== 'rota')).toEqual([])
   })
 
-  it('reports stall halts and flow failures', () => {
+  it('reports stall halts', () => {
     const a = emptyLanes()
     const b: LaneState = {
       ...a,
@@ -123,40 +123,7 @@ describe('diffSignals', () => {
           reason: 'no spawn in 3 turns',
         },
       ],
-      flowRuns: new Map([
-        [
-          'RUN1',
-          {
-            runId: 'RUN1',
-            flowId: 'FLW1',
-            rootRunId: 'RUN1',
-            status: 'running',
-            createdAt: 1,
-            updatedAt: 1,
-          },
-        ],
-      ]),
     }
     expect(diffSignals(a, b).map((o) => o.level)).toEqual(['error'])
-    const c: LaneState = {
-      ...b,
-      flowRuns: new Map([
-        [
-          'RUN1',
-          {
-            runId: 'RUN1',
-            flowId: 'FLW1',
-            rootRunId: 'RUN1',
-            status: 'failure',
-            error: 'boom',
-            createdAt: 1,
-            updatedAt: 2,
-          },
-        ],
-      ]),
-    }
-    expect(diffSignals(b, c)).toEqual([
-      { level: 'error', text: 'Akış koşusu RUN1 başarısız: boom' },
-    ])
   })
 })

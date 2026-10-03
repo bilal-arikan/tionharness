@@ -14,7 +14,6 @@ import (
 // from the runtime catalog and insights from the findings sidecar.
 const (
 	CategorySessions    = "sessions"
-	CategoryFlows       = "flows"
 	CategoryAgents      = "agents"
 	CategoryArtifacts   = "artifacts"
 	CategoryAutomations = "automations"
@@ -122,8 +121,6 @@ func categoryMeta(id string) (label, unit string, ok bool) {
 	switch id {
 	case CategorySessions:
 		return "OTURUMLAR", "tür", true
-	case CategoryFlows:
-		return "AKIŞLAR", "koşu", true
 	case CategoryAgents:
 		return "AJANLAR", "ajan", true
 	case CategoryArtifacts:

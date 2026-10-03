@@ -147,9 +147,7 @@ varlık ayrı bir `store_*.go` dosyasında sahiplenilir. Kesin liste için
 | `loadpar.go` | `parallelLoad`: boot dosya okumaları için worker havuzu |
 | `store_artifact.go` | Artifacts; oturum başına "onaylanan planlar" rolling artifact |
 | `store_task.go` | Kanban görevleri ve board değişiklik olayları |
-| `store_flow.go` | Flows ve flow run'ları |
-| `store_runcount.go` | Running flow-run sayacının drift koruması |
-| `store_flow_gc.go` | Flow koşusu GC: `DeleteFlowRunTree`, `PruneFlowRuns` |
+| `store_flow.go` / `models_flow.go` | Evrilen akışlar (2026-10-04): ajan-başına `Flow` (baş graf + politika + istatistik, `agent-flows/`), sürümler (`agent-flow-versions/<FLW>/<n>.json`), tur-başına `FlowRun` (`agent-flow-runs/`), gözlemci önerileri (`agent-flow-proposals/`), ajan prompt sürümleri (`agent-prompt-versions/<AGT>/<n>.json`). Eski `flows/` + `flow-runs/` dizinleri okunmaz |
 | `store_schedule.go` | Schedules |
 | `store_hook.go` | Hook yapılandırmaları |
 | `store_mcp.go` | MCP sunucu yapılandırmaları |
@@ -177,7 +175,7 @@ varlık ayrı bir `store_*.go` dosyasında sahiplenilir. Kesin liste için
 | `render_cleanup.go` | `render_template` çıktı TTL'i ve açılış temizliği |
 | `debug_journal.go` | `debug.jsonl` tanılama olayları, özet ve anomali tespiti |
 
-Model tanımları `models_*.go` dosyalarındadır (`models_task.go`, `models_flow.go`,
+Model tanımları `models_*.go` dosyalarındadır (`models_task.go`, `models_flow.go` (evrilen akış satırları),
 `models_hook.go`, `models_mcp.go`, `models_artifact.go`, `models_automation.go`,
 `models_attachment.go`); `Usage`/`Session`/`Agent` `models.go` içindedir.
 

@@ -30,16 +30,16 @@ func TestLazyCatalogHonoursAgentToolFilter(t *testing.T) {
 		t.Fatalf("blocked tool still activatable:\n%s", out)
 	}
 
-	out = callMetaTool(t, rt, ag, "activate_tools", map[string]any{"names": []string{"list_flows"}})
+	out = callMetaTool(t, rt, ag, "activate_tools", map[string]any{"names": []string{"list_flow_runs"}})
 	if strings.Contains(out, "Unknown names") {
 		t.Fatalf("unblocked sibling should activate:\n%s", out)
 	}
 
-	out = callMetaTool(t, rt, ag, "tool_search", map[string]any{"query": "get_flow list_flows"})
+	out = callMetaTool(t, rt, ag, "tool_search", map[string]any{"query": "get_flow list_flow_runs"})
 	if strings.Contains(out, "get_flow") {
 		t.Fatalf("blocked tool surfaced by tool_search:\n%s", out)
 	}
-	if !strings.Contains(out, "list_flows") {
+	if !strings.Contains(out, "list_flow_runs") {
 		t.Fatalf("unblocked sibling missing from tool_search:\n%s", out)
 	}
 }

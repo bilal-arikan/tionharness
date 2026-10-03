@@ -6,7 +6,6 @@ import { TaskBoard } from './TaskBoard'
 
 const api = vi.hoisted(() => ({
   listTasks: vi.fn(),
-  listFlows: vi.fn(),
   listArtifacts: vi.fn(),
   getWorkspaceSettings: vi.fn(),
 }))
@@ -23,7 +22,6 @@ beforeEach(() => {
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true
   api.listTasks.mockResolvedValue([])
-  api.listFlows.mockResolvedValue([])
   api.listArtifacts.mockResolvedValue({ items: [] })
   api.getWorkspaceSettings.mockResolvedValue({})
   container = document.createElement('div')

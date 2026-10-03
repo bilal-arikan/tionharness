@@ -1,17 +1,10 @@
-import { Sparkles, Users, GitBranch, Clock, Zap } from 'lucide-react'
+import { Sparkles, Users, Clock, Zap } from 'lucide-react'
 import type { Pack, WorkspacePayload } from '@/types'
 import type { PriceTable } from '@/api/providers'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { resolveModelLabel } from '@/shared/lib/modelLabel'
 import { useCatalog } from '@/shared/lib/catalog'
-import {
-  cacheLabel,
-  flowNodeSummary,
-  flowSummary,
-  NODE_ICON,
-  skillMeta,
-  stripFrontmatter,
-} from './marketHelpers'
+import { cacheLabel, skillMeta, stripFrontmatter } from './marketHelpers'
 import {
   CapBadge,
   ColumnsPreview,
@@ -74,29 +67,6 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
       </div>
     )
   }
-  if (pack.kind === 'flow' && p?.flow) {
-    const nodes = flowNodeSummary(p.flow.graph)
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-[var(--color-text-dim)]">
-          {t('preview.nodeCount', { count: nodes.length })}
-        </p>
-        <ul className="space-y-1">
-          {nodes.map((n, i) => (
-            <li key={i} className="flex gap-2 text-xs">
-              <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-text-dim)]">
-                {n.type}
-              </span>
-              <span>{n.title || n.id}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="pt-1 text-[11px] text-[var(--color-text-dim)]">
-          {t('preview.flowImportHint')}
-        </p>
-      </div>
-    )
-  }
   if (pack.kind === 'workspace' && p?.workspace) {
     return <WorkspacePackPreview wsp={p.workspace} catalog={catalog} />
   }
@@ -145,8 +115,7 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
 }
 
 // WorkspacePackPreview renders the full starter ecosystem of a workspace-template
-// pack: a stat strip plus the agent team (with config), flows (with node types),
-// schedules, automations, embedded skills, instructions and board layout.
+// pack: a stat strip plus the agent team (with config), schedules, automations, embedded skills, instructions and board layout.
 function WorkspacePackPreview({
   wsp,
   catalog,
@@ -156,7 +125,6 @@ function WorkspacePackPreview({
 }) {
   const { t } = useTranslation('market')
   const agents = wsp.agents ?? []
-  const flows = wsp.flows ?? []
   const schedules = wsp.schedules ?? []
   const automations = wsp.automations ?? []
   const skills = wsp.skills ?? []
@@ -168,9 +136,8 @@ function WorkspacePackPreview({
     <div className="space-y-4">
       {/* Stat strip. Automations only take a slot when the pack ships some — an
           always-visible "0" would imply every template has them. */}
-      <div className={`grid gap-2 ${automations.length > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+      <div className={`grid gap-2 ${automations.length > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
         <StatChip icon={Users} label={t('preview.workspace.agent')} value={agents.length} />
-        <StatChip icon={GitBranch} label={t('preview.workspace.flow')} value={flows.length} />
         <StatChip icon={Clock} label={t('preview.workspace.schedule')} value={schedules.length} />
         {automations.length > 0 && (
           <StatChip
@@ -243,61 +210,6 @@ function WorkspacePackPreview({
         </PreviewSection>
       )}
 
-      {flows.length > 0 && (
-        <PreviewSection title={t('preview.workspace.flows', { count: flows.length })}>
-          <div className="space-y-1.5">
-            {flows.map((f, i) => {
-              const nodes = flowSummary(f)
-              // Chip every non-linear node type present (branch/parallel/loop/
-              // await-input/subflow/spawn/join), not just the two original ones.
-              const special = Array.from(
-                new Set(
-                  nodes
-                    .map((n) => n.type)
-                    .filter((t) => t !== 'agent' && t !== 'start' && t !== 'end'),
-                ),
-              )
-              return (
-                <div
-                  key={i}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2"
-                >
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
-                    {f.name}
-                    {special.map((t) => (
-                      <MiniChip key={t}>{t}</MiniChip>
-                    ))}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                    {nodes.map((n, j) => {
-                      const NIcon = NODE_ICON[n.type]
-                      return (
-                        <span key={j} className="flex items-center gap-1">
-                          <span
-                            className="inline-flex items-center gap-1 rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px]"
-                            title={n.type}
-                          >
-                            {NIcon ? (
-                              <NIcon size={11} className="text-[var(--color-text-dim)]" />
-                            ) : (
-                              <span className="text-[var(--color-text-dim)]">{'•'}</span>
-                            )}
-                            {n.title || n.id}
-                          </span>
-                          {j < nodes.length - 1 && (
-                            <span className="text-[10px] text-[var(--color-text-dim)]">{'→'}</span>
-                          )}
-                        </span>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </PreviewSection>
-      )}
-
       {schedules.length > 0 && (
         <PreviewSection title={t('preview.workspace.schedules', { count: schedules.length })}>
           <div className="space-y-1.5">
@@ -356,11 +268,9 @@ function WorkspacePackPreview({
                   )}
                 </div>
                 <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
-                  {a.flowName
-                    ? t('preview.workspace.flowTarget', { name: a.flowName })
-                    : a.agentKey
-                      ? t('preview.workspace.agentTarget', { name: agentName(a.agentKey) })
-                      : t('preview.workspace.noLlmCall')}
+                  {a.agentKey
+                    ? t('preview.workspace.agentTarget', { name: agentName(a.agentKey) })
+                    : t('preview.workspace.noLlmCall')}
                 </div>
                 {a.promptTemplate && (
                   <p className="mt-1 line-clamp-2 leading-relaxed text-[var(--color-text-dim)]">

@@ -128,7 +128,7 @@
   "panel": {
     "streamConnected": "Canlı akış bağlı",
     "streamConnecting": "Akış bağlanıyor…",
-    "counts": "{{lanes}} şerit · {{sessions}} oturum · {{trajectories}} rota · {{runs}} akış koşusu · {{triggers}} tetik",
+    "counts": "{{lanes}} şerit · {{sessions}} oturum · {{trajectories}} rota · {{triggers}} tetik",
     "capacity": "spawn {{active}}/{{max}} · kuyruk {{queue}}/{{queueMax}}",
     "autonomyPaused": "otonomi duraklatıldı",
     "revisionTitle": "Akış seq / depo revizyonu",

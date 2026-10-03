@@ -1,9 +1,9 @@
-// Marketplace — shareable "packs" (skill / agent / provider / flow / workspace /
+// Marketplace — shareable "packs" (skill / agent / provider / workspace /
 // mcp / hook) resolved from four tiers (bundled / global / workspace / remote).
 // The catalog carries the manifest only; the kind-specific payload is fetched on
 // demand via the detail endpoint and used at install time. See _Docs/21-MARKET.md.
 
-export type PackKind = 'skill' | 'agent' | 'provider' | 'flow' | 'workspace' | 'mcp' | 'hook'
+export type PackKind = 'skill' | 'agent' | 'provider' | 'workspace' | 'mcp' | 'hook'
 type PackSource = 'bundled' | 'global' | 'remote'
 
 interface SkillPayload {
@@ -36,11 +36,6 @@ interface ProviderPayload {
   // ("native" | "auto" | "none" | undefined = unknown). Drives the preview badges.
   reasoning?: boolean
   promptCache?: string
-}
-
-interface FlowPayload {
-  name: string
-  graph: string
 }
 
 interface BoardColumn {
@@ -78,7 +73,7 @@ interface WorkspaceTemplateAgent {
 
 /** A starter automation rule shipped with a workspace template. Always seeded
  *  DISABLED — the wiring ships, the spending does not. Targets are referenced by
- *  template agent key / flow name so the rule stays portable. */
+ *  template agent key so the rule stays portable. */
 interface WorkspaceTemplateAutomation {
   name: string
   triggerKind?: string
@@ -95,25 +90,11 @@ interface WorkspaceTemplateAutomation {
   counterScope?: string
   counterInterval?: number
   agentKey?: string
-  flowName?: string
   sessionMode?: string
   promptTemplate?: string
   spawnTags?: string[]
   maxIterations?: number
   cooldownSec?: number
-}
-
-interface WorkspaceTemplateStep {
-  id: string
-  title: string
-  agentKey: string
-  prompt: string
-}
-
-export interface WorkspaceTemplateFlow {
-  name: string
-  steps?: WorkspaceTemplateStep[]
-  graph?: string
 }
 
 interface WorkspaceTemplateSchedule {
@@ -141,7 +122,6 @@ export interface WorkspacePayload {
   readme?: string
   skills?: WorkspaceTemplateSkill[]
   agents?: WorkspaceTemplateAgent[]
-  flows?: WorkspaceTemplateFlow[]
   schedules?: WorkspaceTemplateSchedule[]
   automations?: WorkspaceTemplateAutomation[]
 }
@@ -174,7 +154,6 @@ interface PackPayload {
   skill?: SkillPayload
   agent?: AgentPayload
   provider?: ProviderPayload
-  flow?: FlowPayload
   workspace?: WorkspacePayload
   mcp?: MCPPayload
   hook?: HookPayload

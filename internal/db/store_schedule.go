@@ -75,7 +75,6 @@ func (d *DB) UpdateSchedule(ctx context.Context, sc Schedule) error {
 	cur.AgentID = sc.AgentID
 	cur.CronExpr = sc.CronExpr
 	cur.Prompt = sc.Prompt
-	cur.FlowID = sc.FlowID
 	cur.SessionMode = sc.SessionMode
 	cur.ExpiresAt = sc.ExpiresAt
 	cur.UpdatedAt = now()

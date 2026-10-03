@@ -10,7 +10,7 @@
 // (row order is by creation time) so a live update never shuffles rows.
 import type { LaneFire, LaneSession, LaneState } from '@/shared/lib/laneModel'
 import { laneMembers, rootLanes, trajectoryForRoot } from '@/shared/lib/laneModel'
-import type { FlowRunData, ScheduleArmedData, TrajectoryData } from '@/api/workspaceEvents'
+import type { ScheduleArmedData, TrajectoryData } from '@/api/workspaceEvents'
 import type { ActivitySpan } from '@/types'
 import { clipWaits, waitSpans, type RotaWait } from './rotaWaits'
 import { barSegments } from './rotaSegments'
@@ -26,13 +26,12 @@ export interface RotaRow {
 export interface RotaBar {
   id: string
   rowId: string
-  kind: 'session' | 'flowrun'
+  kind: 'session'
   start: number
   end: number
   live: boolean
   state: string
   label: string
-  run?: FlowRunData
   // Stretches of a coordinator's bar spent waiting on its spawned workers
   // (rotaWaits.ts). Only ever set on a root's session bar.
   waits?: RotaWait[]
@@ -202,24 +201,6 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
         })
       }
     }
-  }
-
-  // Flow runs ride on the lane of the session that launched them.
-  for (const run of state.flowRuns.values()) {
-    const rowId = run.sessionId && rowById.has(run.sessionId) ? run.sessionId : ''
-    if (!rowId) continue
-    const live = run.status === 'running' || run.status === 'waiting'
-    bars.push({
-      id: 'run:' + run.runId,
-      rowId,
-      kind: 'flowrun',
-      start: run.createdAt,
-      end: live ? now : run.updatedAt,
-      live,
-      state: run.status,
-      label: run.flowId,
-      run,
-    })
   }
 
   // Automation fires mark the lane they were triggered from (or produced).

@@ -47,7 +47,11 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 		{"phase rule multi-word phase", func(a *Automation) { a.TriggerKind, a.TrajPhase = TriggerPhase, "plan code" }, "trajPhase"},
 		{"end rule ok", func(a *Automation) { a.TriggerKind, a.TrajStatus = TriggerTrajectoryEnd, TrajStatusFailed }, ""},
 		{"end rule bad status", func(a *Automation) { a.TriggerKind, a.TrajStatus = TriggerTrajectoryEnd, "running" }, "trajStatus"},
-		{"common: target required", func(a *Automation) { a.TriggerTag = "x"; a.TargetAgentID = "" }, "targetAgentId or flowId"},
+		{"flow rule ok", func(a *Automation) { a.TriggerKind, a.FlowStatus, a.FlowMaxGrade = TriggerFlow, FlowFailure, 2 }, ""},
+		{"flow rule any outcome ok", func(a *Automation) { a.TriggerKind = TriggerFlow }, ""},
+		{"flow rule bad status", func(a *Automation) { a.TriggerKind, a.FlowStatus = TriggerFlow, "running" }, "flowStatus"},
+		{"flow rule bad grade", func(a *Automation) { a.TriggerKind, a.FlowMaxGrade = TriggerFlow, 9 }, "flowMaxGrade"},
+		{"common: target required", func(a *Automation) { a.TriggerTag = "x"; a.TargetAgentID = "" }, "targetAgentId is required"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -65,7 +69,7 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 			}
 		})
 	}
-	if ValidTriggerKind("teleport") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) || !ValidTriggerKind(TriggerPhase) || !ValidTriggerKind(TriggerTrajectoryEnd) {
+	if ValidTriggerKind("teleport") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) || !ValidTriggerKind(TriggerPhase) || !ValidTriggerKind(TriggerTrajectoryEnd) || !ValidTriggerKind(TriggerFlow) {
 		t.Fatal("ValidTriggerKind mismatch")
 	}
 }

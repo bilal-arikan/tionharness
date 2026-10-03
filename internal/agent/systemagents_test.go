@@ -58,6 +58,7 @@ func TestSystemAgentDefaults(t *testing.T) {
 		{key: "lesson-extractor", promptKey: "lesson"},
 		{key: "insight", promptKey: "insight-analyzer"},
 		{key: "recipe-optimizer", promptKey: "recipe-optimizer"},
+		{key: "flow-optimizer", promptKey: "flow-optimizer"},
 		{key: "stall-judge", promptKey: "stall-judge"},
 		{key: "insight-applier", promptKey: "insight-applier"},
 		{key: "subagent-explore", promptKey: "subagent-explore"},
@@ -124,7 +125,7 @@ func TestSystemAgentDefaultsReturnsCopy(t *testing.T) {
 func TestSystemAgentKeysGolden(t *testing.T) {
 	want := []string{
 		"titler", "overview-summarizer", "compaction", "lesson-extractor", "insight",
-		"recipe-optimizer", "stall-judge", "insight-applier",
+		"recipe-optimizer", "flow-optimizer", "stall-judge", "insight-applier",
 		"subagent-explore", "subagent-planner", "subagent-coder", "subagent-reviewer",
 		"subagent-validator", "subagent-config",
 	}

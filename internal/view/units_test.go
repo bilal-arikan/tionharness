@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
-	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // The persisted models mix timestamp units and the types do not say which is
@@ -87,52 +86,6 @@ func TestSessionUsesSecondTimestamps(t *testing.T) {
 		if !strings.Contains(txt, want) {
 			t.Errorf("missing %q (timestamp unit misread):\n%s", want, txt)
 		}
-	}
-}
-
-func TestFlowRunMixesSecondAndMilliTimestamps(t *testing.T) {
-	now := time.Now()
-	startSec := now.Add(-5 * time.Minute).Unix()
-	startMs := now.Add(-5 * time.Minute).UnixMilli()
-
-	in := FlowRunInput{
-		Now: now,
-		Run: db.FlowRun{ID: "R1", FlowID: "F1", Status: db.FlowSuccess,
-			CreatedAt: startSec, UpdatedAt: startSec + 90},
-		Flow: db.Flow{ID: "F1", Name: "f"},
-		Graph: orchestration.Graph{Start: "s", Nodes: []orchestration.Node{
-			{ID: "s", Type: orchestration.NodeStart, Next: "fan"},
-			{ID: "fan", Type: orchestration.NodeParallel, Title: "fan",
-				Parallel: []string{"c1"}, JoinNext: ""},
-			{ID: "c1", Type: orchestration.NodeAgent, Title: "c1", AgentID: "A"},
-		}},
-		State: orchestration.State{Trace: []orchestration.TraceEntry{
-			// At: SECONDS. The gap to the run start is this node's wall time.
-			{NodeID: "s", Type: orchestration.NodeStart, Title: "s", At: startSec + 42},
-			// StartMs/EndMs: MILLISECONDS, in the very same struct.
-			{NodeID: "c1", Type: orchestration.NodeAgent, Title: "c1",
-				StartMs: startMs + 42_000, EndMs: startMs + 60_000, At: startSec + 60},
-			{NodeID: "fan", Type: orchestration.NodeParallel, Title: "fan", At: startSec + 60},
-		}},
-	}
-
-	v, err := ProjectFlowRun(in, LevelCard)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	txt := v.Text()
-
-	// Seconds path: 42s elapsed before the start node was recorded.
-	if !strings.Contains(txt, "start✓(42s)") {
-		t.Errorf("second-resolution node span misread:\n%s", txt)
-	}
-	// Millis path: the fan-out took 18s of wall time.
-	if !strings.Contains(txt, "parallel:fan[1/1✓ 18s]") {
-		t.Errorf("millisecond fan-out span misread:\n%s", txt)
-	}
-	// Header elapsed comes from the run's own second-resolution stamps.
-	if !strings.Contains(v.Header, "1m30s") {
-		t.Errorf("run elapsed misread: %q", v.Header)
 	}
 }
 

@@ -1,6 +1,6 @@
 // Tasks (kanban board) and cron schedules. The board is a passive status
-// surface: tasks are described, columned and optionally tagged with an agent or
-// flow. It never runs anything — flows, schedules and agent sessions do the work.
+// surface: tasks are described, columned and optionally tagged with an agent.
+// It never runs anything — schedules and agent sessions do the work.
 import type {
   Automation,
   AutomationFireRecord,
@@ -28,7 +28,6 @@ export const taskApi = {
     title?: string
     description?: string
     ownerAgentId?: string
-    flowId?: string
     boardState?: BoardState
     dependencies?: string
     priority?: Task['priority']
@@ -59,7 +58,6 @@ export const taskApi = {
   createSchedule: (data: {
     name?: string
     agentId?: string
-    flowId?: string
     cronExpr: string
     prompt?: string
     sessionMode?: ScheduleSessionMode
@@ -75,7 +73,6 @@ export const taskApi = {
     data: {
       name?: string
       agentId?: string
-      flowId?: string
       cronExpr: string
       prompt?: string
       sessionMode?: ScheduleSessionMode
@@ -130,7 +127,6 @@ export const taskApi = {
     tokenThreshold?: number
     sessionMode?: 'spawn' | 'continue'
     targetAgentId?: string
-    flowId?: string
     promptTemplate: string
     spawnTags?: string[]
     enabled?: boolean
@@ -164,7 +160,6 @@ export const taskApi = {
       tokenThreshold?: number
       sessionMode?: 'spawn' | 'continue'
       targetAgentId?: string
-      flowId?: string
       promptTemplate?: string
       spawnTags?: string[]
       enabled?: boolean

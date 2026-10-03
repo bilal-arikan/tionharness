@@ -5,7 +5,7 @@
 //
 // Stale rejection: the stream is ordered per workspace, but a REST seed can
 // land after events that are newer than it, and a reconnect can replay. So a
-// session/flow-run event older than what we hold (by updatedAt) is dropped,
+// session event older than what we hold (by updatedAt) is dropped,
 // and a trajectory event with a revision not above ours is dropped. Deletes
 // always apply.
 import type { Session } from '@/types/session'
@@ -16,7 +16,6 @@ import {
   dataOf,
   type AutomationFireData,
   type CoordinationData,
-  type FlowRunData,
   type LivenessData,
   type ReportData,
   type ScheduleArmedData,
@@ -177,12 +176,6 @@ function applyTrajectory(state: LaneState, d: TrajectoryData): LaneState {
   return bump(state, { trajectories: withEntry(state.trajectories, d.trajectoryId, d) })
 }
 
-function applyFlowRun(state: LaneState, d: FlowRunData): LaneState {
-  const prev = state.flowRuns.get(d.runId)
-  if (prev && prev.updatedAt > d.updatedAt) return state
-  return bump(state, { flowRuns: withEntry(state.flowRuns, d.runId, d) })
-}
-
 function applyArmed(state: LaneState, d: ScheduleArmedData): LaneState {
   const prev = state.armed.get(d.scheduleId)
   if (prev && prev.fireAt === d.fireAt) return state
@@ -219,11 +212,6 @@ export function applyLaneEvent(state: LaneState, ev: WorkspaceHubEvent): LaneSta
     case WorkspaceStreamKind.Trajectory: {
       const d = dataOf<TrajectoryData>(ev, ev.kind)
       if (d) next = applyTrajectory(state, d)
-      break
-    }
-    case WorkspaceStreamKind.FlowRun: {
-      const d = dataOf<FlowRunData>(ev, ev.kind)
-      if (d) next = applyFlowRun(state, d)
       break
     }
     case WorkspaceStreamKind.ScheduleArmed: {

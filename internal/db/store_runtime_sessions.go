@@ -16,9 +16,7 @@ type runtimeSessionsSnapshot struct {
 	rows []SessionRuntime
 }
 
-// RuntimeSessions reuses a compact projection until the store changes. Linked
-// flow sessions use direct run lookups; only legacy/missing-run sessions need
-// a newest-run index, built once per generation without sorting flow history.
+// RuntimeSessions reuses a compact projection until the store changes.
 func (d *DB) RuntimeSessions() []SessionRuntime {
 	if snap := d.runtimeSessions.Load(); snap != nil && snap.gen == d.mutGen.Load() {
 		return slices.Clone(snap.rows)
@@ -36,7 +34,6 @@ func (d *DB) RuntimeSessions() []SessionRuntime {
 		updated int64
 	}
 	ordered := make([]orderedRow, 0)
-	var newest map[string]FlowRun
 	for _, raw := range d.sessions {
 		sess := normalizeSessionMeta(raw)
 		row := SessionRuntime{SessionID: sess.ID, CoordinatorSessionID: sess.CoordinatorSessionID, RootCoordinatorSessionID: sess.RootCoordinator()}
@@ -44,21 +41,6 @@ func (d *DB) RuntimeSessions() []SessionRuntime {
 			switch sess.Kind {
 			case "task":
 				row.LastStatus = d.tasks[sess.SourceID].LastRunStatus
-			case "flow":
-				if run, ok := d.flowRuns[sess.Lineage().RunID]; ok {
-					row.LastStatus = run.Status
-				} else {
-					if newest == nil {
-						newest = make(map[string]FlowRun)
-						for _, run := range d.flowRuns {
-							prev, exists := newest[run.FlowID]
-							if !exists || flowRunBefore(prev, run) {
-								newest[run.FlowID] = run
-							}
-						}
-					}
-					row.LastStatus = newest[sess.SourceID].Status
-				}
 			}
 		}
 		if row.LastStatus != "" || row.CoordinatorSessionID != "" {

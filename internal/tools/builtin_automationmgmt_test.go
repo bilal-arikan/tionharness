@@ -58,7 +58,7 @@ func TestCreateTargetlessBoardMoveAutomation(t *testing.T) {
 	if move.BoardAction != db.BoardActionMove || move.BoardMoveToState != db.BoardDone {
 		t.Fatalf("persisted move contract = action %q destination %q", move.BoardAction, move.BoardMoveToState)
 	}
-	if move.TargetAgentID != "" || move.FlowID != "" || move.PromptTemplate != "" {
-		t.Fatalf("targetless move retained execution fields: agent=%q flow=%q prompt=%q", move.TargetAgentID, move.FlowID, move.PromptTemplate)
+	if move.TargetAgentID != "" || move.PromptTemplate != "" {
+		t.Fatalf("targetless move retained execution fields: agent=%q prompt=%q", move.TargetAgentID, move.PromptTemplate)
 	}
 }

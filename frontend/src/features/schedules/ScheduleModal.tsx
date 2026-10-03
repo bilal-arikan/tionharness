@@ -2,20 +2,19 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Clock, Sparkles, X } from 'lucide-react'
 import { api } from '@/api'
-import type { Agent, Flow, Schedule, ScheduleSessionMode } from '@/types'
+import type { Agent, Schedule, ScheduleSessionMode } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { toast } from '@/shared/components'
 import { COLUMN_ACCENT } from './automationMeta'
 import { PRESET_GROUPS } from './cronPresets'
 import { FormModal } from './FormModal'
-import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
+import { Field, inputCls } from './pickers'
 import { fmtTime, localInputToUnix, unixToLocalInput } from './timeUtils'
 import { FieldError } from './FieldError'
 import { useFieldErrors } from './useFieldErrors'
 
 interface Props {
   agents: Agent[]
-  flows: Flow[]
   /** null = create a new schedule; otherwise edit this one. */
   editing: Schedule | null
   onClose: () => void
@@ -27,20 +26,10 @@ interface Props {
 
 // ScheduleModal is the create/edit popup for cron schedules (the first board
 // column). It replaces the old always-visible inline form + inline edit row.
-export function ScheduleModal({
-  agents,
-  flows,
-  editing,
-  onClose,
-  onSaved,
-  onDelete,
-  onError,
-}: Props) {
+export function ScheduleModal({ agents, editing, onClose, onSaved, onDelete, onError }: Props) {
   const { t } = useTranslation('schedules')
-  const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
   const [name, setName] = useState(editing?.name ?? '')
   const [agentId, setAgentId] = useState(editing?.agentId ?? '')
-  const [flowId, setFlowId] = useState(editing?.flowId ?? '')
   const [cronExpr, setCronExpr] = useState(editing?.cronExpr ?? '*/5 * * * *')
   const [prompt, setPrompt] = useState(editing?.prompt ?? '')
   // An empty stored mode means the backend default (reuse), so show that.
@@ -50,19 +39,12 @@ export function ScheduleModal({
   const [expiresAt, setExpiresAt] = useState(unixToLocalInput(editing?.expiresAt))
   const [generatingTitle, setGeneratingTitle] = useState(false)
 
-  // A flow input is optional; an agent needs a prompt. Every schedule needs a
-  // target and a cron expression. Record order is the blocking priority.
+  // Every schedule needs a target agent, a prompt and a cron expression. Record
+  // order is the blocking priority.
   const { markAttempted, firstError, errorFor } = useFieldErrors({
     cron: !cronExpr.trim() ? t('validation.cronRequired') : '',
-    target:
-      targetMode === 'flow'
-        ? !flowId
-          ? t('validation.flowRequired')
-          : ''
-        : !agentId
-          ? t('validation.agentRequired')
-          : '',
-    prompt: targetMode === 'agent' && !prompt.trim() ? t('validation.promptRequired') : '',
+    target: !agentId ? t('validation.agentRequired') : '',
+    prompt: !prompt.trim() ? t('validation.promptRequired') : '',
   })
 
   // A one-shot wake (schedule_wake) is not an editable routine: it carries no cron
@@ -117,14 +99,13 @@ export function ScheduleModal({
       onError(t('validation.expiryFuture'))
       return
     }
-    const target = targetMode === 'flow' ? { flowId, agentId: '' } : { agentId, flowId: '' }
     try {
       if (editing) {
         const updated = await api.updateSchedule(editing.id, {
           // Sent even when empty: `|| undefined` would drop the key and make
           // clearing the name a silent no-op on a full-object PUT.
           name: name.trim(),
-          ...target,
+          agentId,
           cronExpr: cronExpr.trim(),
           prompt: prompt.trim(),
           sessionMode,
@@ -134,7 +115,7 @@ export function ScheduleModal({
       } else {
         const created = await api.createSchedule({
           name: name.trim() || undefined,
-          ...(targetMode === 'flow' ? { flowId } : { agentId }),
+          agentId,
           cronExpr: cronExpr.trim(),
           prompt: prompt.trim(),
           sessionMode,
@@ -201,35 +182,24 @@ export function ScheduleModal({
 
       <Field label={t('fields.target')} hint={t('scheduleModal.targetHint')}>
         <div className="flex flex-wrap items-center gap-2">
-          <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
-          {targetMode === 'flow' ? (
-            <div data-testid="schedule-create-flow-wrap">
-              <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />
-            </div>
-          ) : (
-            <div data-testid="schedule-create-agent-wrap">
-              <AgentPicker agents={agents} value={agentId} onChange={setAgentId} />
-            </div>
-          )}
+          <div data-testid="schedule-create-agent-wrap">
+            <AgentPicker agents={agents} value={agentId} onChange={setAgentId} />
+          </div>
         </div>
         <FieldError message={errorFor('target')} />
       </Field>
 
-      {/* Session mode applies only to an agent target: a flow-backed schedule
-          always records into its own per-run transcript. */}
-      {targetMode === 'agent' && (
-        <Field label={t('fields.session')} hint={t('scheduleModal.sessionHint')}>
-          <select
-            data-testid="schedule-create-session-mode-select"
-            value={sessionMode}
-            onChange={(e) => setSessionMode(e.target.value as ScheduleSessionMode)}
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-          >
-            <option value="reuse">{t('scheduleModal.sessionReuse')}</option>
-            <option value="spawn">{t('scheduleModal.sessionSpawn')}</option>
-          </select>
-        </Field>
-      )}
+      <Field label={t('fields.session')} hint={t('scheduleModal.sessionHint')}>
+        <select
+          data-testid="schedule-create-session-mode-select"
+          value={sessionMode}
+          onChange={(e) => setSessionMode(e.target.value as ScheduleSessionMode)}
+          className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
+        >
+          <option value="reuse">{t('scheduleModal.sessionReuse')}</option>
+          <option value="spawn">{t('scheduleModal.sessionSpawn')}</option>
+        </select>
+      </Field>
 
       <Field label={t('scheduleModal.cronExpression')} hint={t('scheduleModal.cronHint')}>
         <div className="flex flex-wrap items-center gap-2">
@@ -262,24 +232,14 @@ export function ScheduleModal({
         <FieldError message={errorFor('cron')} />
       </Field>
 
-      <Field
-        label={
-          targetMode === 'flow'
-            ? t('scheduleModal.flowInputOptional')
-            : t('scheduleModal.promptRequired')
-        }
-      >
+      <Field label={t('scheduleModal.promptRequired')}>
         <textarea
           data-testid={editing ? 'schedule-edit-prompt-input' : 'schedule-create-prompt-input'}
           data-schedule-id={editing?.id}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={4}
-          placeholder={
-            targetMode === 'flow'
-              ? t('scheduleModal.flowInputOptional')
-              : t('scheduleModal.promptPlaceholder')
-          }
+          placeholder={t('scheduleModal.promptPlaceholder')}
           className={`${inputCls} resize-y ${errorFor('prompt') ? 'border-[var(--color-danger)]' : ''}`}
         />
         <FieldError message={errorFor('prompt')} />

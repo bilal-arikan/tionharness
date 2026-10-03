@@ -72,7 +72,7 @@
     },
     "flow": {
       "label": "Flows",
-      "hint": "A flow run completed or failed."
+      "hint": "An agent's flow evolved, the observer filed a proposal, or the canvas was saved."
     },
     "spawned": {
       "label": "Spawn",
@@ -257,6 +257,10 @@
     "subagent": {
       "label": "Subagent",
       "description": "An isolated subagent started with run_subagent performs a task in its own clean context and returns only its final result. Expanding the card shows the subagent's nested trace. Multiple calls in one turn run in parallel."
+    },
+    "flow_node": {
+      "label": "Flow node",
+      "description": "One stage of the agent's evolving flow (plan, respond, critic, route…): the card opens when the stage starts and closes with its duration, status and an output excerpt. Shown only for flows that evolved beyond the default input→respond→output."
     }
   }
 }

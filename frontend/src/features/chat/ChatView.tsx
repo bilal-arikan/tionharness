@@ -3,7 +3,6 @@
 // wake banner, composer) and the rewind dialog. Extracted from App.tsx so the
 // shell only composes; all chat-turn machinery arrives via the `chat` handle.
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import { History } from 'lucide-react'
 import type { Agent, Artifact, Message } from '@/types'
 import { MessageList } from './MessageList'
 import { Composer } from './Composer'
@@ -52,7 +51,7 @@ export interface ChatViewProps {
   // True while the open session's transcript is being fetched.
   messagesLoading: boolean
   transcriptPaging?: ComponentProps<typeof MessageList>['transcriptPaging']
-  // When true the session is a read-only run log (task / flow / schedule): the
+  // When true the session is a read-only run log (task / schedule): the
   // composer and its ask/todo/pending/wake stack are hidden and a thin banner is
   // shown instead. The transcript, context preview, debug and info panels stay
   // fully available.
@@ -73,10 +72,6 @@ export interface ChatViewProps {
   onOpenSkill?: (slug: string) => void
   // Surfaces an API failure from the start panel in the shell's error banner.
   onError: (msg: string) => void
-  // For a read-only flow run log: opens the Flows screen on this flow's run
-  // history. Undefined for any non-flow session, so the link is shown only when
-  // it resolves.
-  onOpenRunHistory?: () => void
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
   defaultAgentId: string | null
   defaultAgentDeleted?: boolean
@@ -121,7 +116,6 @@ export function ChatView({
   onCoordinationChanged,
   onOpenSkill,
   onError,
-  onOpenRunHistory,
   defaultAgentId,
   defaultAgentDeleted,
   allAgents,
@@ -251,7 +245,7 @@ export function ChatView({
   )
   const runningWorkers = useMemo(() => workers.filter((w) => w.running), [workers])
 
-  // Retry policy for a failed turn's error card. Read-only run logs (task / flow
+  // Retry policy for a failed turn's error card. Read-only run logs (task
   // / schedule) retry non-destructively so the audit trail is preserved;
   // interactive chat deletes the failed pair first to keep history clean.
   const onRetry = readOnly ? chat.retryMessagePreserve : chat.retryMessage
@@ -325,7 +319,7 @@ export function ChatView({
           scrollBottomSignal={sendTick}
         />
       )}
-      {/* Read-only run log (task / flow / schedule): the composer and its
+      {/* Read-only run log (task / schedule): the composer and its
           ask/todo/pending/wake stack are meaningless — a new user turn has no run
           to attach to — so they are hidden entirely and replaced by a thin banner.
           The transcript above (and the header's context/debug/info panels) stay
@@ -389,21 +383,6 @@ export function ChatView({
               coordinatorTree={isInCoordinatorTree(sessionCoordination)}
               onStop={chat.stopTurn}
             />
-          )}
-          {/* NAVIGATION (B#4): a flow run log links to its flow's run history, so a
-              viewer can jump from this single run to the full runs/builder screen.
-              Present only for flow sessions (onOpenRunHistory resolves there). */}
-          {onOpenRunHistory && (
-            <div className="flex justify-center pb-1">
-              <button
-                type="button"
-                onClick={onOpenRunHistory}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-text-dim)] shadow-[var(--shadow-sm)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-              >
-                <History size={13} />
-                {t('chatView.openRunHistory')}
-              </button>
-            </div>
           )}
         </div>
       ) : (

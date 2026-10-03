@@ -1,11 +1,9 @@
 import {
   MessageSquare,
   LayoutGrid,
-  GitBranch,
   Clock,
   Activity,
   Sparkles,
-  Compass,
   Zap,
   Telescope,
   Bot,
@@ -14,14 +12,13 @@ import {
 import { i18next } from '@/i18n'
 
 // Shared display metadata for session-kind rendering. Every execution path
-// (chat / task / flow / schedule / spawn) funnels into a Session tagged with a
+// (chat / task / schedule / spawn) funnels into a Session tagged with a
 // kind, so the sessions sidebar, the bulk overview table and the agent activity
 // rail all render the same icon, label, id trimming and status pill.
 
 const KIND_META: Record<string, { labelKey: string; icon: LucideIcon }> = {
   chat: { labelKey: 'kind.chat', icon: MessageSquare },
   task: { labelKey: 'kind.task', icon: LayoutGrid },
-  flow: { labelKey: 'kind.flow', icon: GitBranch },
   schedule: { labelKey: 'kind.schedule', icon: Clock },
   // One persistent maintenance thread per token automation (see internal/agent/
   // automation_deliver.go); every fire continues it instead of spawning fresh.
@@ -36,9 +33,6 @@ const KIND_META: Record<string, { labelKey: string; icon: LucideIcon }> = {
   'schedule-run': { labelKey: 'kind.automation', icon: Clock },
   spawned: { labelKey: 'kind.spawned', icon: Sparkles },
   subagent: { labelKey: 'kind.subagent', icon: Bot },
-  // A flow's coordinator node opens one of these per run (see internal/agent/
-  // flow_coordinator.go); its workers hang off it like any coordinator's.
-  'flow-coordinator': { labelKey: 'kind.flowCoordinator', icon: Compass },
   // One read-only transcript per insight scan (see internal/agent/
   // insightsession.go); SourceID is the insight run id.
   insight: { labelKey: 'kind.insight', icon: Telescope },
@@ -46,7 +40,7 @@ const KIND_META: Record<string, { labelKey: string; icon: LucideIcon }> = {
 
 // Session filter chips (multi-select, display order). The kind chips cover EVERY
 // Session.Kind the backend can produce — including the ones the old filter tabs
-// left out (flow-coordinator, inbox) plus an "Diğer" catch-all for a kind this
+// left out (inbox) plus an "Diğer" catch-all for a kind this
 // build does not know — so nothing can be invisible in the list. The four
 // trailing scope chips widen the list instead of narrowing it by kind: sessions
 // with a live turn of their own, sessions idle but waiting on live workers below
@@ -76,7 +70,6 @@ function chip(key: string, labelKey: string): { key: string; readonly label: str
 export const SESSION_CHIPS: { key: string; readonly label: string }[] = [
   chip('chat', 'chip.chat'),
   chip('task', 'chip.task'),
-  chip('flow', 'chip.flow'),
   chip('spawned', 'chip.spawned'),
   chip(SUBAGENT_CHIP, 'chip.subagent'),
   // Cron schedules are time-triggered automations, so the chip unifies both
@@ -84,7 +77,6 @@ export const SESSION_CHIPS: { key: string; readonly label: string }[] = [
   // naming). The per-row icon still distinguishes them (Clock vs Zap).
   chip('automation', 'chip.automation'),
   chip('insight', 'chip.insight'),
-  chip('flow-coordinator', 'chip.flowCoordinator'),
   // Legacy: peer messages now land in the recipient's ordinary chat thread
   // (TSK507), so nothing creates an 'inbox' session any more. The chip stays so
   // sessions created before that change remain filterable rather than falling

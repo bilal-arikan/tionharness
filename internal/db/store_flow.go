@@ -1,46 +1,23 @@
 package db
 
 import (
+	"cmp"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
+
+	"github.com/bilal-arikan/tionharness/internal/flow"
 )
 
-// ---- Flows ----
+// ---- Flows (one per agent) ----
 
 func (d *DB) persistFlowLocked(f Flow) error {
-	return dbPersistLocked(d, d.flows, dirFlows, f.ID, f)
-}
-
-// CreateFlow inserts a new flow and returns the stored row.
-func (d *DB) CreateFlow(ctx context.Context, f Flow) (Flow, error) {
-	f.ID = d.nextID(idFlow)
-	f.CreatedAt = now()
-	f.UpdatedAt = f.CreatedAt
-	if f.Graph == "" {
-		f.Graph = "{}"
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return f, d.persistFlowLocked(f)
-}
-
-// FlowPath returns the absolute path of a flow's on-disk JSON file (one file per
-// flow under the workspace store's flows/ folder).
-func (d *DB) FlowPath(flowID string) (string, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	if _, ok := d.flows[flowID]; !ok {
-		return "", ErrNotFound
-	}
-	return d.dir(dirFlows, flowID+".json"), nil
+	return dbPersistLocked(d, d.flows, dirAgentFlows, f.ID, f)
 }
 
 // GetFlow loads a flow by id.
@@ -48,332 +25,388 @@ func (d *DB) GetFlow(ctx context.Context, id string) (Flow, error) {
 	return dbGet(d, d.flows, id)
 }
 
-// ListFlows returns the flow catalog, newest first. Ephemeral flows (the hidden
-// rows backing run_adhoc_flow runs) are excluded: they are not saved flows, and
-// every catalog consumer — the UI flow list, list_flows, summaries, publishing —
-// must not offer them. GetFlow still resolves them by id.
-func (d *DB) ListFlows(ctx context.Context) ([]Flow, error) {
-	all := dbList(d, d.flows, func(a, b Flow) bool { return a.CreatedAt > b.CreatedAt })
-	out := all[:0]
-	for _, f := range all {
-		if !f.Ephemeral {
-			out = append(out, f)
+// FlowForAgent returns the agent's main flow, or ErrNotFound when none was
+// created yet (see EnsureAgentFlow).
+func (d *DB) FlowForAgent(ctx context.Context, agentID string) (Flow, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if id, ok := d.flowByAgent[agentID]; ok {
+		if f, ok := d.flows[id]; ok {
+			return f, nil
 		}
 	}
+	return Flow{}, ErrNotFound
+}
+
+// EnsureAgentFlow returns the agent's main flow, creating the default
+// (input → respond → output) as version 1 when the agent has none.
+func (d *DB) EnsureAgentFlow(ctx context.Context, agentID string) (Flow, error) {
+	if f, err := d.FlowForAgent(ctx, agentID); err == nil {
+		return f, nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if id, ok := d.flowByAgent[agentID]; ok {
+		if f, ok := d.flows[id]; ok {
+			return f, nil
+		}
+	}
+	a, ok := d.agents[agentID]
+	if !ok {
+		return Flow{}, ErrNotFound
+	}
+	g := flow.DefaultGraph()
+	ts := now()
+	f := Flow{
+		ID:        d.nextID(idFlow),
+		AgentID:   agentID,
+		Name:      a.Name,
+		Graph:     flow.Encode(g),
+		Version:   1,
+		Policy:    DefaultFlowPolicy(),
+		CreatedAt: ts,
+		UpdatedAt: ts,
+	}
+	v := FlowVersion{FlowID: f.ID, Version: 1, Graph: f.Graph, Author: FlowAuthor{Kind: FlowAuthorSystem}, Reason: "default flow", CreatedAt: ts}
+	if err := d.writeFlowVersion(v); err != nil {
+		return Flow{}, err
+	}
+	d.flowByAgent[agentID] = f.ID
+	return f, d.persistFlowLocked(f)
+}
+
+// ListFlows returns every flow whose agent still exists (not deleted), newest
+// activity first.
+func (d *DB) ListFlows(ctx context.Context) ([]Flow, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	out := make([]Flow, 0, len(d.flows))
+	for _, f := range d.flows {
+		if a, ok := d.agents[f.AgentID]; !ok || a.Deleted {
+			continue
+		}
+		out = append(out, f)
+	}
+	slices.SortStableFunc(out, func(a, b Flow) int {
+		if c := cmp.Compare(b.UpdatedAt, a.UpdatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out, nil
 }
 
-// UpdateFlow edits a flow's name/graph.
-func (d *DB) UpdateFlow(ctx context.Context, f Flow) error {
+// CommitFlowVersion stores graph as the flow's new head version. The graph must
+// already be validated by the caller; the store only records it. Returns the
+// new version row.
+func (d *DB) CommitFlowVersion(ctx context.Context, flowID string, graph flow.Graph, author FlowAuthor, reason, proposalID string) (FlowVersion, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	cur, ok := d.flows[f.ID]
+	f, ok := d.flows[flowID]
+	if !ok {
+		return FlowVersion{}, ErrNotFound
+	}
+	prev, _ := flow.Parse(f.Graph)
+	diff := flow.Diff(prev, graph)
+	ts := now()
+	v := FlowVersion{
+		FlowID:     flowID,
+		Version:    f.Version + 1,
+		Parent:     f.Version,
+		Graph:      flow.Encode(graph.Normalized()),
+		Author:     author,
+		Reason:     strings.TrimSpace(reason),
+		ProposalID: proposalID,
+		Diff:       diff.String(),
+		CreatedAt:  ts,
+	}
+	if err := d.writeFlowVersion(v); err != nil {
+		return FlowVersion{}, err
+	}
+	f.Graph = v.Graph
+	f.Version = v.Version
+	f.UpdatedAt = ts
+	return v, d.persistFlowLocked(f)
+}
+
+// UpdateFlowLayout rewrites the head graph IN PLACE for a cosmetic change
+// (node positions): the version stays, the head version file is refreshed so a
+// later revert restores the positions too.
+func (d *DB) UpdateFlowLayout(ctx context.Context, flowID string, graph flow.Graph) (Flow, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	f, ok := d.flows[flowID]
+	if !ok {
+		return Flow{}, ErrNotFound
+	}
+	f.Graph = flow.Encode(graph.Normalized())
+	f.UpdatedAt = now()
+	if v, err := d.GetFlowVersion(ctx, flowID, f.Version); err == nil {
+		v.Graph = f.Graph
+		_ = d.writeFlowVersion(v)
+	}
+	return f, d.persistFlowLocked(f)
+}
+
+// UpdateFlowMeta edits the flow's name, note and policy (not its graph).
+func (d *DB) UpdateFlowMeta(ctx context.Context, flowID string, name, note *string, policy *FlowPolicy) (Flow, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	f, ok := d.flows[flowID]
+	if !ok {
+		return Flow{}, ErrNotFound
+	}
+	if name != nil && strings.TrimSpace(*name) != "" {
+		f.Name = strings.TrimSpace(*name)
+	}
+	if note != nil {
+		f.Note = strings.TrimSpace(*note)
+	}
+	if policy != nil {
+		f.Policy = policy.Normalized()
+	}
+	f.UpdatedAt = now()
+	return f, d.persistFlowLocked(f)
+}
+
+// MarkFlowOptimized records that the observer looked at the flow now.
+func (d *DB) MarkFlowOptimized(ctx context.Context, flowID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	f, ok := d.flows[flowID]
 	if !ok {
 		return ErrNotFound
 	}
-	cur.Name = f.Name
-	cur.Graph = f.Graph
-	cur.UpdatedAt = now()
-	return d.persistFlowLocked(cur)
+	f.Stats.RunsAtOptimize = f.Stats.Runs
+	f.Stats.LastOptimizeAt = now()
+	return d.persistFlowLocked(f)
 }
 
-// SetFlowEmoji replaces a flow's cosmetic emoji without touching its other
-// fields (mirrors SetFlowTags), so it survives independent name/graph saves.
-func (d *DB) SetFlowEmoji(ctx context.Context, id, emoji string) error {
+// RewindFlowOptimizeMarkerForTest resets the observer's "looked at" marker so a
+// test can make the policy window due again. Not used by production code.
+func (d *DB) RewindFlowOptimizeMarkerForTest(flowID string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	cur, ok := d.flows[id]
+	if f, ok := d.flows[flowID]; ok {
+		f.Stats.RunsAtOptimize = 0
+		_ = d.persistFlowLocked(f)
+	}
+}
+
+// DeleteFlowsForAgent removes an agent's flow, its versions, runs and
+// proposals. Called when an agent is purged; a soft-deleted agent keeps its
+// flow (ListFlows hides it).
+func (d *DB) DeleteFlowsForAgent(ctx context.Context, agentID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	id, ok := d.flowByAgent[agentID]
 	if !ok {
-		return ErrNotFound
-	}
-	cur.Emoji = emoji
-	cur.UpdatedAt = now()
-	return d.persistFlowLocked(cur)
-}
-
-// SetFlowTags replaces a flow's free-form tags without touching its other fields.
-func (d *DB) SetFlowTags(ctx context.Context, id string, tags []string) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	cur, ok := d.flows[id]
-	if !ok {
-		return ErrNotFound
-	}
-	cur.Tags = normalizeTags(tags)
-	cur.UpdatedAt = now()
-	return d.persistFlowLocked(cur)
-}
-
-// DeleteFlow removes a flow and all of its runs.
-func (d *DB) DeleteFlow(ctx context.Context, id string) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if _, ok := d.flows[id]; !ok {
-		return ErrNotFound
-	}
-	delete(d.flows, id)
-	d.markMutatedLocked()
-	if err := removeFile(d.dir(dirFlows, id+".json")); err != nil {
-		return err
-	}
-	for _, r := range d.flowRuns {
-		if r.FlowID == id {
-			d.deleteFlowRunLocked(r)
-		}
-	}
-	return nil
-}
-
-// ---- Flow runs ----
-
-// persistFlowRunLocked stores r and keeps runningFlowRuns in sync. prev is the
-// row's status BEFORE this write ("" for a brand-new run).
-//
-// prev is a required parameter rather than something read back from the map on
-// purpose: every caller already loads the old row in order to mutate it, so it
-// costs nothing — and making it mandatory is what forces a future
-// status-flipping path to confront the counter instead of silently skipping it
-// (the compiler flags the missing argument). The caller must hold d.mu.
-func (d *DB) persistFlowRunLocked(prev string, r FlowRun) error {
-	if err := dbPersistLocked(d, d.flowRuns, dirFlowRuns, r.ID, r); err != nil {
-		return err
-	}
-	// Checkpoint first, cleanup second: a crash can leave a detectable stale
-	// journal, but can never leave deltas without their checkpoint.
-	if err := d.deleteFlowRunStateDeltasLocked(r.ID); err != nil {
-		return err
-	}
-	d.applyFlowRunDelta(prev, r.Status)
-	return nil
-}
-
-// applyFlowRunDelta moves runningFlowRuns by the running-ness EDGE between two
-// statuses: a no-op when both sides are running or neither is. Deleting a run is
-// expressed as next == "".
-func (d *DB) applyFlowRunDelta(prev, next string) {
-	switch {
-	case prev != FlowRunning && next == FlowRunning:
-		d.runningFlowRuns.Add(1)
-	case prev == FlowRunning && next != FlowRunning:
-		d.runningFlowRuns.Add(-1)
-	}
-}
-
-// deleteFlowRunLocked removes a run row plus its file and releases its running
-// slot. Caller must hold d.mu.
-func (d *DB) deleteFlowRunLocked(r FlowRun) {
-	delete(d.flowRuns, r.ID)
-	d.markMutatedLocked()
-	_ = removeFile(d.dir(dirFlowRuns, r.ID+".json"))
-	_ = d.deleteFlowRunStateDeltasLocked(r.ID)
-	d.applyFlowRunDelta(r.Status, "")
-}
-
-func flowStateCheckpointID(state string) string {
-	sum := sha256.Sum256([]byte(state))
-	return hex.EncodeToString(sum[:])
-}
-
-func (d *DB) flowRunDeltaDir(id string) string { return d.dir(dirFlowRunStateDeltas, id) }
-
-func (d *DB) deleteFlowRunStateDeltasLocked(id string) error {
-	err := os.RemoveAll(d.flowRunDeltaDir(id))
-	if os.IsNotExist(err) {
 		return nil
 	}
-	return err
+	delete(d.flowByAgent, agentID)
+	for rid, r := range d.flowRuns {
+		if r.FlowID == id {
+			if err := dbDeleteLocked(d, d.flowRuns, dirAgentFlowRuns, rid); err != nil {
+				return err
+			}
+		}
+	}
+	for pid, p := range d.flowProposals {
+		if p.FlowID == id {
+			if err := dbDeleteLocked(d, d.flowProposals, dirAgentFlowProposals, pid); err != nil {
+				return err
+			}
+		}
+	}
+	_ = os.RemoveAll(d.dir(dirAgentFlowVersions, id))
+	return dbDeleteLocked(d, d.flows, dirAgentFlows, id)
 }
 
-func (d *DB) loadFlowRunStateDeltas(id string) ([]FlowRunStateDelta, error) {
-	entries, err := os.ReadDir(d.flowRunDeltaDir(id))
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+// ---- Versions (on disk only: <store>/agent-flow-versions/<flow>/<n>.json) ----
+
+func (d *DB) flowVersionPath(flowID string, version int) string {
+	return d.dir(dirAgentFlowVersions, flowID, strconv.Itoa(version)+".json")
+}
+
+func (d *DB) writeFlowVersion(v FlowVersion) error {
+	return atomicWriteJSON(d.flowVersionPath(v.FlowID, v.Version), v)
+}
+
+// GetFlowVersion reads one version.
+func (d *DB) GetFlowVersion(ctx context.Context, flowID string, version int) (FlowVersion, error) {
+	raw, err := os.ReadFile(d.flowVersionPath(flowID, version))
 	if err != nil {
+		if os.IsNotExist(err) {
+			return FlowVersion{}, ErrNotFound
+		}
+		return FlowVersion{}, err
+	}
+	var v FlowVersion
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return FlowVersion{}, fmt.Errorf("flow version %s/%d: %w", flowID, version, err)
+	}
+	return v, nil
+}
+
+// ListFlowVersions returns every version of a flow, newest first.
+func (d *DB) ListFlowVersions(ctx context.Context, flowID string) ([]FlowVersion, error) {
+	entries, err := os.ReadDir(d.dir(dirAgentFlowVersions, flowID))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	files := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
-			files = append(files, entry.Name())
+	out := make([]FlowVersion, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+			continue
 		}
-	}
-	slices.Sort(files)
-	deltas := make([]FlowRunStateDelta, 0, len(files))
-	for _, name := range files {
-		data, err := os.ReadFile(filepath.Join(d.flowRunDeltaDir(id), name))
+		n, err := strconv.Atoi(strings.TrimSuffix(e.Name(), ".json"))
 		if err != nil {
-			return nil, err
+			continue
 		}
-		var delta FlowRunStateDelta
-		if err := json.Unmarshal(data, &delta); err != nil {
-			return nil, fmt.Errorf("flow run %s delta %s: %w", id, name, err)
+		v, err := d.GetFlowVersion(ctx, flowID, n)
+		if err != nil {
+			continue
 		}
-		deltas = append(deltas, delta)
+		out = append(out, v)
 	}
-	return deltas, nil
+	slices.SortFunc(out, func(a, b FlowVersion) int { return cmp.Compare(b.Version, a.Version) })
+	return out, nil
 }
 
-func applyFlowRunStateDelta(state string, deltas []FlowRunStateDelta) (string, error) {
-	if len(deltas) == 0 {
-		return state, nil
-	}
-	checkpointID := flowStateCheckpointID(state)
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(state), &document); err != nil {
-		return "", err
-	}
-	for i, delta := range deltas {
-		expected := uint64(i + 1)
-		if delta.Version != FlowRunStateDeltaVersion {
-			return "", fmt.Errorf("unsupported delta version %d", delta.Version)
-		}
-		if delta.CheckpointID != checkpointID {
-			return "", fmt.Errorf("delta checkpoint mismatch: got %q want %q", delta.CheckpointID, checkpointID)
-		}
-		if delta.Sequence != expected {
-			return "", fmt.Errorf("delta sequence %d, want %d", delta.Sequence, expected)
-		}
-		maps.Copy(document, delta.Scalars)
-		var outputs map[string]string
-		if raw := document["outputs"]; len(raw) > 0 {
-			if err := json.Unmarshal(raw, &outputs); err != nil {
-				return "", err
-			}
-		}
-		if outputs == nil {
-			outputs = map[string]string{}
-		}
-		maps.Copy(outputs, delta.OutputsUpsert)
-		for _, key := range delta.OutputsDelete {
-			delete(outputs, key)
-		}
-		if len(delta.OutputsUpsert) > 0 || len(delta.OutputsDelete) > 0 {
-			document["outputs"], _ = json.Marshal(outputs)
-		}
-		for key, tail := range map[string][]json.RawMessage{"trace": delta.TraceAppend, "thread": delta.ThreadAppend} {
-			if len(tail) == 0 {
-				continue
-			}
-			var values []json.RawMessage
-			if raw := document[key]; len(raw) > 0 {
-				if err := json.Unmarshal(raw, &values); err != nil {
-					return "", err
-				}
-			}
-			values = append(values, tail...)
-			document[key], _ = json.Marshal(values)
-		}
-		if delta.Spawned != nil {
-			document["spawned"] = delta.Spawned
-		}
-	}
-	data, err := json.Marshal(document)
-	return string(data), err
+// ---- Runs ----
+
+func (d *DB) persistFlowRunLocked(r FlowRun) error {
+	return dbPersistLocked(d, d.flowRuns, dirAgentFlowRuns, r.ID, r)
 }
 
-func (d *DB) materializeFlowRunState(id, checkpoint string) (string, error) {
-	deltas, err := d.loadFlowRunStateDeltas(id)
-	if err != nil {
-		return "", err
+// CreateFlowRun opens a run (status running) and bumps the flow's counters.
+func (d *DB) CreateFlowRun(ctx context.Context, r FlowRun) (FlowRun, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	f, ok := d.flows[r.FlowID]
+	if !ok {
+		return FlowRun{}, ErrNotFound
 	}
-	state, err := applyFlowRunStateDelta(checkpoint, deltas)
-	if err != nil {
-		return "", fmt.Errorf("materialize flow run %s: %w", id, err)
+	r.ID = d.nextID(idFlowRun)
+	r.Status = FlowRunning
+	r.CreatedAt = now()
+	r.UpdatedAt = r.CreatedAt
+	if r.Version == 0 {
+		r.Version = f.Version
 	}
-	return state, nil
+	if r.AgentID == "" {
+		r.AgentID = f.AgentID
+	}
+	if err := d.persistFlowRunLocked(r); err != nil {
+		return FlowRun{}, err
+	}
+	d.runningFlowRuns.Add(1)
+	f.Stats.Runs++
+	f.Stats.LastRunAt = r.CreatedAt
+	f.Stats.LastRunID = r.ID
+	f.UpdatedAt = r.CreatedAt
+	return r, d.persistFlowLocked(f)
 }
 
-// FlowRunStateJournalInfo returns the immutable checkpoint identity and the
-// last durable sequence. Callers use it to continue a journal after restart.
-func (d *DB) FlowRunStateJournalInfo(ctx context.Context, id string) (string, uint64, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	if _, ok := d.flowRuns[id]; !ok {
-		return "", 0, ErrNotFound
+// FinishFlowRun closes a run with its outcome and folds it into the flow stats.
+func (d *DB) FinishFlowRun(ctx context.Context, id string, status, output, errText string, steps json.RawMessage, stepCount int, durationMs int64, usage FlowRunUsage) (FlowRun, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.flowRuns[id]
+	if !ok {
+		return FlowRun{}, ErrNotFound
 	}
-	data, err := os.ReadFile(d.dir(dirFlowRuns, id+".json"))
-	if err != nil {
-		return "", 0, err
+	if r.Status == FlowRunning {
+		d.runningFlowRuns.Add(-1)
 	}
-	var checkpoint FlowRun
-	if err := json.Unmarshal(data, &checkpoint); err != nil {
-		return "", 0, err
+	r.Status = status
+	r.Output = output
+	r.Error = errText
+	r.Steps = steps
+	r.StepCount = stepCount
+	r.DurationMs = durationMs
+	r.Usage = usage
+	r.UpdatedAt = now()
+	if err := d.persistFlowRunLocked(r); err != nil {
+		return FlowRun{}, err
 	}
-	deltas, err := d.loadFlowRunStateDeltas(id)
-	if err != nil {
-		return "", 0, err
+	if f, ok := d.flows[r.FlowID]; ok {
+		switch status {
+		case FlowSuccess:
+			f.Stats.Success++
+		case FlowFailure:
+			f.Stats.Failure++
+		}
+		f.Stats.TotalMs += durationMs
+		f.Stats.TotalTokens += usage.InputTokens + usage.OutputTokens
+		f.UpdatedAt = r.UpdatedAt
+		if err := d.persistFlowLocked(f); err != nil {
+			return FlowRun{}, err
+		}
 	}
-	if _, err := applyFlowRunStateDelta(checkpoint.State, deltas); err != nil {
-		return "", 0, err
-	}
-	return flowStateCheckpointID(checkpoint.State), uint64(len(deltas)), nil
+	return r, nil
 }
 
-// AppendFlowRunStateDelta atomically adds one ordered sidecar and updates the
-// in-memory materialized State exposed to all DB/API readers.
-func (d *DB) AppendFlowRunStateDelta(ctx context.Context, id string, delta FlowRunStateDelta) error {
+// SetFlowRunGrade records the decision model's grade (1..5) of a finished
+// run and folds it into the flow's rolling stats; grading the same run twice
+// replaces the earlier grade.
+func (d *DB) SetFlowRunGrade(ctx context.Context, id string, grade int, confidence float64) (FlowRun, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.flowRuns[id]
+	if !ok {
+		return FlowRun{}, ErrNotFound
+	}
+	if grade < 1 || grade > 5 {
+		return FlowRun{}, fmt.Errorf("grade %d out of range 1..5", grade)
+	}
+	prev := r.Grade
+	r.Grade, r.GradeConfidence = grade, confidence
+	r.UpdatedAt = now()
+	if err := d.persistFlowRunLocked(r); err != nil {
+		return FlowRun{}, err
+	}
+	if f, ok := d.flows[r.FlowID]; ok {
+		if prev > 0 {
+			f.Stats.GradeSum -= prev
+		} else {
+			f.Stats.Graded++
+		}
+		f.Stats.GradeSum += grade
+		f.UpdatedAt = r.UpdatedAt
+		if err := d.persistFlowLocked(f); err != nil {
+			return FlowRun{}, err
+		}
+	}
+	return r, nil
+}
+
+// SetFlowRunMessage links a run to the assistant message it produced.
+func (d *DB) SetFlowRunMessage(ctx context.Context, id, messageID string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	r, ok := d.flowRuns[id]
 	if !ok {
 		return ErrNotFound
 	}
-	deltas, err := d.loadFlowRunStateDeltas(id)
-	if err != nil {
-		return err
-	}
-	checkpointData, err := os.ReadFile(d.dir(dirFlowRuns, id+".json"))
-	if err != nil {
-		return err
-	}
-	var checkpoint FlowRun
-	if err := json.Unmarshal(checkpointData, &checkpoint); err != nil {
-		return err
-	}
-	if delta.Sequence != uint64(len(deltas)+1) {
-		return fmt.Errorf("delta sequence %d, want %d", delta.Sequence, len(deltas)+1)
-	}
-	if delta.CheckpointID != flowStateCheckpointID(checkpoint.State) {
-		return fmt.Errorf("delta checkpoint mismatch")
-	}
-	all := append(deltas, delta)
-	materialized, err := applyFlowRunStateDelta(checkpoint.State, all)
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(d.flowRunDeltaDir(id), fmt.Sprintf("%020d.json", delta.Sequence))
-	if err := atomicWriteJSON(path, delta); err != nil {
-		return err
-	}
-	r.State = materialized
-	r.UpdatedAt = now()
-	d.flowRuns[id] = r
-	d.markMutatedLocked()
-	return nil
+	r.MessageID = messageID
+	return d.persistFlowRunLocked(r)
 }
 
-// HasRunningFlowRuns reports, in O(1) and WITHOUT taking d.mu, whether any flow
-// run is in the running state. It is the fast-negative gate for the activity
-// endpoints: a false answer skips the full scan entirely (the idle case), a true
-// answer only means "now run the real query". Waiting runs do NOT count,
-// mirroring ListRunningFlowRuns — a suspended run must not pulse the UI.
-func (d *DB) HasRunningFlowRuns() bool { return d.runningFlowRuns.Load() > 0 }
-
-// CreateFlowRun opens a new run in the running state.
-func (d *DB) CreateFlowRun(ctx context.Context, r FlowRun) (FlowRun, error) {
-	r.ID = d.nextID(idFlowRun)
-	r.CreatedAt = now()
-	r.UpdatedAt = r.CreatedAt
-	if r.Status == "" {
-		r.Status = FlowRunning
-	}
-	if r.State == "" {
-		r.State = "{}"
-	}
+// SetFlowRunFeedback mirrors a message rating onto the run that produced it.
+func (d *DB) SetFlowRunFeedback(ctx context.Context, messageID string, rating int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return r, d.persistFlowRunLocked("", r)
+	for id, r := range d.flowRuns {
+		if r.MessageID == messageID {
+			r.Feedback = rating
+			_ = dbPersistLocked(d, d.flowRuns, dirAgentFlowRuns, id, r)
+			return
+		}
+	}
 }
 
 // GetFlowRun loads a run by id.
@@ -381,226 +414,205 @@ func (d *DB) GetFlowRun(ctx context.Context, id string) (FlowRun, error) {
 	return dbGet(d, d.flowRuns, id)
 }
 
-func (d *DB) GetFlowRunByDispatchKey(ctx context.Context, key string) (FlowRun, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	for _, run := range d.flowRuns {
-		if key != "" && run.DispatchKey == key {
-			return run, nil
-		}
-	}
-	return FlowRun{}, ErrNotFound
-}
-
-// ListFlowRuns returns runs for a flow (or all if flowID is empty), newest first.
-//
-// The order is the exact reverse of flowRunBefore, NOT a plain CreatedAt compare:
-// CreatedAt has second granularity (see now()), so two runs started within the
-// same second are indistinguishable by time and a bare timestamp sort leaves
-// their relative order down to map iteration — i.e. different on every call.
-// Callers that take runs[0] as "the newest run" (the executions feed's status
-// chip) would then flip between them at random. The id counter breaks the tie.
-func (d *DB) ListFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error) {
-	return dbFilter(d, d.flowRuns,
+// ListFlowRuns returns runs newest first, all flows when flowID is "". limit
+// <= 0 returns everything.
+func (d *DB) ListFlowRuns(ctx context.Context, flowID string, limit int) ([]FlowRun, error) {
+	out := dbFilter(d, d.flowRuns,
 		func(r FlowRun) bool { return flowID == "" || r.FlowID == flowID },
-		func(a, b FlowRun) bool { return flowRunBefore(b, a) }), nil
-}
-
-// ListRootFlowRuns is ListFlowRuns restricted to runs nothing else launched, so
-// a run list is not flooded by every subflow/spawn child of a composed flow.
-// Children remain reachable via ListFlowRunTree (or directly by id).
-func (d *DB) ListRootFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error) {
-	return dbFilter(d, d.flowRuns,
-		func(r FlowRun) bool { return (flowID == "" || r.FlowID == flowID) && r.IsRootRun() },
-		func(a, b FlowRun) bool { return flowRunBefore(b, a) }), nil // same tie-break as ListFlowRuns
-}
-
-// flowRunSeq extracts the monotonic counter nextID appended to a run id
-// ("RUN12" → 12), used to order runs created within the same second. Ids are not
-// zero-padded, so a lexicographic compare would put "RUN10" before "RUN2".
-// Returns -1 for an unparseable id, which sorts such runs first but stably.
-func flowRunSeq(id string) int64 {
-	i := len(id)
-	for i > 0 && id[i-1] >= '0' && id[i-1] <= '9' {
-		i--
-	}
-	if i == len(id) {
-		return -1
-	}
-	n, err := strconv.ParseInt(id[i:], 10, 64)
-	if err != nil {
-		return -1
-	}
-	return n
-}
-
-// flowRunBefore is the deterministic creation order of two runs. CreatedAt alone
-// is NOT enough: it has second granularity (see now()), and a composed flow
-// creates a parent and its children within the same second — leaving their
-// relative order arbitrary. The id counter breaks the tie.
-func flowRunBefore(a, b FlowRun) bool {
-	if a.CreatedAt != b.CreatedAt {
-		return a.CreatedAt < b.CreatedAt
-	}
-	return flowRunSeq(a.ID) < flowRunSeq(b.ID)
-}
-
-// ListFlowRunTree returns every run in rootID's tree — the root itself plus all
-// descendants at any depth — ordered BREADTH-FIRST from the root, so a parent
-// always precedes its children and siblings stay grouped. Resolving membership
-// by RootRunID keeps this a single scan instead of a walk per level; the parent
-// links then only order what that scan already found.
-//
-// Ordering walks ParentRunID rather than trusting timestamps: CreatedAt is
-// second-granular, so a parent and the child it launches milliseconds later are
-// routinely indistinguishable by time. Siblings are ordered by creation
-// (flowRunBefore).
-//
-// An unknown or non-root id yields an empty result rather than an error: a tree
-// that no longer exists is an empty tree, not a failure. Any member the walk
-// cannot reach (a parent row deleted out from under it) is appended at the end
-// in creation order rather than silently dropped.
-func (d *DB) ListFlowRunTree(ctx context.Context, rootID string) ([]FlowRun, error) {
-	if rootID == "" {
-		return nil, nil
-	}
-	members := dbFilter(d, d.flowRuns,
-		func(r FlowRun) bool { return r.RootOf() == rootID },
-		flowRunBefore)
-	if len(members) == 0 {
-		return nil, nil
-	}
-
-	childrenOf := map[string][]FlowRun{}
-	var root *FlowRun
-	for i, r := range members {
-		if r.ID == rootID {
-			root = &members[i]
-			continue
-		}
-		childrenOf[r.ParentRunID] = append(childrenOf[r.ParentRunID], r)
-	}
-
-	out := make([]FlowRun, 0, len(members))
-	seen := map[string]bool{}
-	if root != nil {
-		queue := []FlowRun{*root}
-		for len(queue) > 0 {
-			cur := queue[0]
-			queue = queue[1:]
-			if seen[cur.ID] { // defensive: a cycle must not spin forever
-				continue
+		func(a, b FlowRun) bool {
+			if a.CreatedAt != b.CreatedAt {
+				return a.CreatedAt > b.CreatedAt
 			}
-			seen[cur.ID] = true
-			out = append(out, cur)
-			queue = append(queue, childrenOf[cur.ID]...)
-		}
-	}
-	for _, r := range members {
-		if !seen[r.ID] {
-			out = append(out, r)
-		}
+			return a.ID > b.ID
+		})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }
 
-// SetFlowRunState persists the restart-safe state snapshot mid-run.
-func (d *DB) SetFlowRunState(ctx context.Context, id, state string) error {
+// DeleteFlowRun removes one run.
+func (d *DB) DeleteFlowRun(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	r, ok := d.flowRuns[id]
-	if !ok {
-		return ErrNotFound
+	if r, ok := d.flowRuns[id]; ok && r.Status == FlowRunning {
+		d.runningFlowRuns.Add(-1)
 	}
-	r.State = state
-	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(r.Status, r) // status untouched: zero delta
+	return dbDeleteLocked(d, d.flowRuns, dirAgentFlowRuns, id)
 }
 
-// SetFlowRunSession links a run to the transcript session it produced. Merges
-// into the existing record (state/status untouched) so it can be called after
-// the run finishes.
-func (d *DB) SetFlowRunSession(ctx context.Context, id, sessionID string) error {
+// HasRunningFlowRuns is the O(1) activity probe.
+func (d *DB) HasRunningFlowRuns() bool { return d.runningFlowRuns.Load() > 0 }
+
+// FailOrphanedFlowRuns marks every run still "running" as failed: called at
+// boot, because a run only outlives its process when that process died.
+func (d *DB) FailOrphanedFlowRuns(ctx context.Context) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	r, ok := d.flowRuns[id]
-	if !ok {
-		return ErrNotFound
+	n := 0
+	for id, r := range d.flowRuns {
+		if r.Status != FlowRunning {
+			continue
+		}
+		r.Status = FlowFailure
+		r.Error = "interrupted by restart"
+		r.UpdatedAt = now()
+		if err := dbPersistLocked(d, d.flowRuns, dirAgentFlowRuns, id, r); err == nil {
+			n++
+		}
 	}
-	r.SessionID = sessionID
-	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(r.Status, r) // status untouched: zero delta
+	d.runningFlowRuns.Store(0)
+	return n
 }
 
-// FinishFlowRun records the terminal status, final output and error.
-func (d *DB) FinishFlowRun(ctx context.Context, id, status, output, errText string) error {
+// PruneFlowRuns keeps the newest keep finished runs per flow (keep <= 0 = all).
+func (d *DB) PruneFlowRuns(ctx context.Context, keep int) (int, error) {
+	if keep <= 0 {
+		return 0, nil
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	r, ok := d.flowRuns[id]
-	if !ok {
-		return ErrNotFound
+	byFlow := map[string][]FlowRun{}
+	for _, r := range d.flowRuns {
+		if r.Status != FlowRunning {
+			byFlow[r.FlowID] = append(byFlow[r.FlowID], r)
+		}
 	}
-	prev := r.Status // read BEFORE the mutation below overwrites it
-	r.Status = status
-	r.Output = output
-	r.Error = errText
-	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(prev, r)
+	removed := 0
+	for _, runs := range byFlow {
+		if len(runs) <= keep {
+			continue
+		}
+		slices.SortFunc(runs, func(a, b FlowRun) int { return cmp.Compare(b.CreatedAt, a.CreatedAt) })
+		for _, r := range runs[keep:] {
+			if err := dbDeleteLocked(d, d.flowRuns, dirAgentFlowRuns, r.ID); err != nil {
+				return removed, err
+			}
+			removed++
+		}
+	}
+	return removed, nil
 }
 
-// ListRunningFlowRuns returns runs still in the running state (for resume on boot),
-// oldest first. Waiting runs are intentionally excluded — they sleep until input,
-// so boot never revives them (no orphan).
-func (d *DB) ListRunningFlowRuns(ctx context.Context) ([]FlowRun, error) {
-	return dbFilter(d, d.flowRuns,
-		func(r FlowRun) bool { return r.Status == FlowRunning },
-		func(a, b FlowRun) bool { return a.CreatedAt < b.CreatedAt }), nil
+// ---- Proposals ----
+
+func (d *DB) persistProposalLocked(p FlowProposal) error {
+	return dbPersistLocked(d, d.flowProposals, dirAgentFlowProposals, p.ID, p)
 }
 
-// MarkFlowRunWaiting durably suspends a run at an await-input node: it persists
-// the state snapshot AND flips the status to waiting in one step, so a crash
-// between the two can't leave a "running" row with await-input state.
-func (d *DB) MarkFlowRunWaiting(ctx context.Context, id, state string) error {
+// CreateFlowProposal files a proposal (status pending unless preset).
+func (d *DB) CreateFlowProposal(ctx context.Context, p FlowProposal) (FlowProposal, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	r, ok := d.flowRuns[id]
+	f, ok := d.flows[p.FlowID]
 	if !ok {
-		return ErrNotFound
+		return FlowProposal{}, ErrNotFound
 	}
-	prev := r.Status // read BEFORE the mutation below overwrites it
-	r.State = state
-	r.Status = FlowWaiting
-	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(prev, r)
+	p.ID = d.nextID(idFlowProposal)
+	if p.AgentID == "" {
+		p.AgentID = f.AgentID
+	}
+	if p.BaseVersion == 0 {
+		p.BaseVersion = f.Version
+	}
+	if p.Status == "" {
+		p.Status = ProposalPending
+	}
+	p.CreatedAt = now()
+	return p, d.persistProposalLocked(p)
 }
 
-// ListWaitingFlowRuns returns runs suspended at an await-input node (for the
-// timeout sweeper), oldest suspend first.
-func (d *DB) ListWaitingFlowRuns(ctx context.Context) ([]FlowRun, error) {
-	return dbFilter(d, d.flowRuns,
-		func(r FlowRun) bool { return r.Status == FlowWaiting },
-		func(a, b FlowRun) bool { return a.UpdatedAt < b.UpdatedAt }), nil
-}
-
-// ClaimWaitingFlowRun atomically transitions a run from waiting → running and
-// returns it, so exactly one resume wins the race (concurrent input from multiple
-// windows). Returns ErrNotFound if the run is missing and a plain error if the run
-// is not currently waiting (already resumed, finished, or never suspended).
-func (d *DB) ClaimWaitingFlowRun(ctx context.Context, id string) (FlowRun, error) {
+// ResolveFlowProposal sets a proposal's terminal status.
+func (d *DB) ResolveFlowProposal(ctx context.Context, id, status string, appliedVersion int, errText string) (FlowProposal, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	r, ok := d.flowRuns[id]
+	p, ok := d.flowProposals[id]
 	if !ok {
-		return FlowRun{}, ErrNotFound
+		return FlowProposal{}, ErrNotFound
 	}
-	if r.Status != FlowWaiting {
-		return FlowRun{}, fmt.Errorf("flow run %s is not waiting (status %q)", id, r.Status)
+	p.Status = status
+	p.AppliedVersion = appliedVersion
+	p.Error = errText
+	p.ResolvedAt = now()
+	return p, d.persistProposalLocked(p)
+}
+
+// GetFlowProposal loads a proposal.
+func (d *DB) GetFlowProposal(ctx context.Context, id string) (FlowProposal, error) {
+	return dbGet(d, d.flowProposals, id)
+}
+
+// ListFlowProposals returns a flow's proposals newest first ("" = all flows).
+func (d *DB) ListFlowProposals(ctx context.Context, flowID string) ([]FlowProposal, error) {
+	return dbFilter(d, d.flowProposals,
+		func(p FlowProposal) bool { return flowID == "" || p.FlowID == flowID },
+		func(a, b FlowProposal) bool { return a.CreatedAt > b.CreatedAt }), nil
+}
+
+// CountPendingFlowProposals counts open proposals across the workspace.
+func (d *DB) CountPendingFlowProposals() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	n := 0
+	for _, p := range d.flowProposals {
+		if p.Status == ProposalPending {
+			n++
+		}
 	}
-	prev := r.Status // FlowWaiting, checked above — read before the flip
-	r.Status = FlowRunning
-	r.UpdatedAt = now()
-	if err := d.persistFlowRunLocked(prev, r); err != nil {
-		return FlowRun{}, err
+	return n
+}
+
+// ---- Agent prompt versions (<store>/agent-prompt-versions/<agent>/<n>.json) ----
+
+func (d *DB) promptVersionPath(agentID string, version int) string {
+	return d.dir(dirAgentPromptVersions, agentID, strconv.Itoa(version)+".json")
+}
+
+// ListAgentPromptVersions returns an agent's prompt history, newest first.
+func (d *DB) ListAgentPromptVersions(ctx context.Context, agentID string) ([]AgentPromptVersion, error) {
+	entries, err := os.ReadDir(d.dir(dirAgentPromptVersions, agentID))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return r, nil
+	out := make([]AgentPromptVersion, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(d.dir(dirAgentPromptVersions, agentID), e.Name()))
+		if err != nil {
+			continue
+		}
+		var v AgentPromptVersion
+		if json.Unmarshal(raw, &v) == nil {
+			out = append(out, v)
+		}
+	}
+	slices.SortFunc(out, func(a, b AgentPromptVersion) int { return cmp.Compare(b.Version, a.Version) })
+	return out, nil
+}
+
+// RecordAgentPromptVersion snapshots the agent's CURRENT soul/identity as the
+// next version. The first call on an agent writes version 1 with the values as
+// they were before any evolution, so a restore can always go back to the start.
+func (d *DB) RecordAgentPromptVersion(ctx context.Context, agentID string, author FlowAuthor, reason, proposalID string) (AgentPromptVersion, error) {
+	d.mu.RLock()
+	a, ok := d.agents[agentID]
+	d.mu.RUnlock()
+	if !ok {
+		return AgentPromptVersion{}, ErrNotFound
+	}
+	existing, err := d.ListAgentPromptVersions(ctx, agentID)
+	if err != nil {
+		return AgentPromptVersion{}, err
+	}
+	next := 1
+	if len(existing) > 0 {
+		next = existing[0].Version + 1
+	}
+	v := AgentPromptVersion{AgentID: agentID, Version: next, Soul: a.Soul, Identity: a.Identity, Author: author, Reason: strings.TrimSpace(reason), ProposalID: proposalID, CreatedAt: now()}
+	return v, atomicWriteJSON(d.promptVersionPath(agentID, next), v)
 }

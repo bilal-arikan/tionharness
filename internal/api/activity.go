@@ -54,15 +54,13 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 		switch sess.Kind {
 		case "", "chat":
 			st.Chat = true
-		case "flow":
-			st.Flow = true
 		case "schedule":
 			st.Schedule = true
 		}
 	}
 
-	// Flow: any running flow run. Pure existence question, so the counter IS the
-	// answer — no scan, and no store lock, on either path.
+	// Flow: any agent turn currently inside its flow. Pure existence question,
+	// so the counter IS the answer — no scan, and no store lock, on either path.
 	if wsp.DB.HasRunningFlowRuns() {
 		st.Flow = true
 		st.Executions = true

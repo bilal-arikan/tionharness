@@ -175,6 +175,14 @@ type Automation struct {
 	TrajRecipe string `json:"trajRecipe,omitempty"`
 	TrajEvent  string `json:"trajEvent,omitempty"`
 	TrajStatus string `json:"trajStatus,omitempty"`
+	// Flow trigger fields (TriggerFlow, _Docs/93): FlowAgentID narrows the rule
+	// to runs of one agent's flow ("" = every agent); FlowStatus to one
+	// outcome ("" = any, FlowSuccess, FlowFailure); FlowMaxGrade (1..5) fires
+	// only for runs the decision model graded at or below it (0 = ignore the
+	// grade).
+	FlowAgentID  string `json:"flowAgentId,omitempty"`
+	FlowStatus   string `json:"flowStatus,omitempty"`
+	FlowMaxGrade int    `json:"flowMaxGrade,omitempty"`
 	// TriggerTag is the session tag this rule watches (TriggerTag kind). A
 	// finishing session whose Tags contain TriggerTag fires the rule.
 	TriggerTag string `json:"triggerTag"`
@@ -207,22 +215,13 @@ type Automation struct {
 	// BoardMoveToState is the explicit destination column for BoardActionMove.
 	// It is not inferred from workspace column order.
 	BoardMoveToState string `json:"boardMoveToState,omitempty"`
-	// TargetAgentID is the agent that runs the spawned session. Optional when
-	// FlowID is set (a flow-backed automation runs a flow instead of one agent).
+	// TargetAgentID is the agent that runs the spawned session.
 	TargetAgentID string `json:"targetAgentId"`
-	// FlowID, when set, makes this a flow-backed automation: on fire the rendered
-	// prompt is run as that orchestration flow's input (RunFlowRecorded) instead
-	// of spawning a session for TargetAgentID. A flow-backed automation is a
-	// per-trigger dispatch — it does not self-loop via SpawnTags (flow sessions
-	// carry no trigger tag and do not re-fire the rule), so the loop guardrails
-	// (MaxIterations/Cooldown/ExpiresAt) still bound how often the trigger fires.
-	FlowID string `json:"flowId,omitempty"`
 	// SessionMode selects, for an AGENT-backed automation, whether each fire runs in
 	// a fresh session (SessionModeSpawn) or continues one persistent per-automation
 	// thread that carries prior turns forward (SessionModeContinue, history-aware).
 	// Empty resolves per kind via EffectiveSessionMode (tag/board → spawn, token →
-	// continue) so old rows keep their original behavior. Ignored for
-	// flow-backed automations (a flow always accumulates its own transcript).
+	// continue) so old rows keep their original behavior.
 	SessionMode string `json:"sessionMode,omitempty"`
 	// PromptTemplate is the prompt delivered to the spawned session. Placeholders:
 	// {{result}} (the finishing session's final reply), {{title}} (its title),

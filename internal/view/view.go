@@ -28,7 +28,6 @@ import (
 type Kind string
 
 const (
-	KindFlowRun  Kind = "flowrun"
 	KindSession  Kind = "session"
 	KindBoard    Kind = "board"
 	KindSpace    Kind = "workspace"

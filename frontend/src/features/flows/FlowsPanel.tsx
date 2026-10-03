@@ -1,573 +1,646 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from 'react'
-import { useStableCallback } from '@/shared/lib/useStableCallback'
-import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { ChevronDown, GitBranch, Save, Sparkles, X } from 'lucide-react'
+import type { Connection } from '@xyflow/react'
+import type {
+  Agent,
+  AgentPromptVersion,
+  Flow,
+  FlowEdge,
+  FlowGraph,
+  FlowNode,
+  FlowNodeType,
+  FlowProposal,
+  FlowRun,
+  FlowVersion,
+  Automation,
+} from '@/types'
 import { api } from '@/api'
-import { useRegisterDirty } from '@/shared/lib/dirtySignals'
-import type { FlowNodeEvent } from '@/api/flows'
-import { TemplatePreview } from './TemplatePreview'
-import { RunTreeView } from './RunTreeView'
-import { FLOW_TEMPLATES, flowTemplateGraph } from './flowTemplates'
-import { graphToReactFlow, reactFlowToGraph, canonicalGraphKey, type FlowRFNode } from './flowGraph'
-import type { EdgeStyle } from './FlowCanvas'
-import { safeParse, type FlowsTab } from './flowsPanelShared'
-import { createFlowGraphOps } from './flowGraphOps'
-import { createFlowActions } from './flowActions'
-import { FlowsListPane } from './FlowsListPane'
-import { FlowsHeader } from './FlowsHeader'
-import { FlowEditorView } from './FlowEditorView'
-import type { Agent, Flow, FlowRun, FlowState } from '@/types'
-import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
+import { Badge, Button, EmptyState, ListPane, PaneHeader, ModalOverlay } from '@/shared/components'
+import { SidebarHeader, RefreshButton, SELECTED_ITEM_CLS } from '@/shared/components/SidebarChrome'
+import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useSessionState } from '@/shared/hooks/useSessionState'
-import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+import { useViewport } from '@/shared/hooks/useViewport'
+import { useRegisterDirty } from '@/shared/lib/dirtySignals'
+import { subscribeFlowNode } from '@/shared/lib/flowNodeBus'
 import { SIGNAL_FLOWS } from '@/app/eventToRefreshSignals'
 import { compareText } from '@/shared/lib/intl'
-import { useTranslation } from 'react-i18next'
+import { FlowCanvas } from './FlowCanvas'
+import { NodeInspector } from './NodeInspector'
+import { RunsTab } from './RunsTab'
+import { EvolutionTab } from './EvolutionTab'
+import { TestTab } from './TestTab'
+import {
+  applyPositions,
+  autoLayout,
+  canonicalKey,
+  defaultNode,
+  freshEdgeId,
+  freshNodeId,
+  layoutKey,
+  lint,
+  needsLayout,
+  parseGraph,
+  toReactFlow,
+  type FlowRFNode,
+  type NodeStatus,
+} from './flowGraph'
 
-// Backstop refresh for the Koşular tab; run lifecycle also arrives over SSE.
-const RUNS_POLL_MS = 15000
+type Tab = 'canvas' | 'runs' | 'evolution' | 'test'
+const TABS: Tab[] = ['canvas', 'runs', 'evolution', 'test']
+const RUNS_POLL_MS = 5000
 
 interface Props {
   agents: Agent[]
   onError: (msg: string) => void
-  // Deep-link: when set, open this flow's run history (from the Activity screen).
-  openFlowId?: string | null
-  // Active left-column tab, driven by the URL (#/w/{ws}/flows/{tab}); null/unknown
-  // → "flows". onTabChange writes it back so the hash reflects the current tab.
   tab?: string | null
   onTabChange?: (tab: string | null) => void
+  onOpenSession?: (sessionId: string) => void
 }
 
-// FlowsPanel is the visual protocol builder: pick a flow, edit it on a drag-and-
-// drop node canvas (React Flow), save, run with an input, and watch per-node
-// progress stream live on the canvas and in the trace below. The panel owns the
-// state; the list column (FlowsListPane), top bar (FlowsHeader), editor body
-// (FlowEditorView) and the action factories (flowActions / flowGraphOps) render
-// and mutate it.
-export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabChange }: Props) {
+function tabOf(raw: string | null | undefined): Tab {
+  return raw === 'runs' || raw === 'evolution' || raw === 'test' ? raw : 'canvas'
+}
+
+// FlowsPanel is the evolving-flow screen: one flow per agent on the left, and
+// for the selected flow a node canvas with an inspector, its runs, its
+// evolution (policy, proposals, versions, prompt versions) and a test runner.
+// Layout follows the viewport: docked columns on wide landscape screens, a
+// drawer list + stacked panes + bottom-sheet inspector on narrow, square and
+// portrait screens.
+export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenSession }: Props) {
   const { t } = useTranslation('flows')
-  const flowsTick = useRefreshTrigger(SIGNAL_FLOWS)
+  const tick = useRefreshTrigger(SIGNAL_FLOWS)
+  const { tier, aspect } = useViewport()
+  const stacked = tier === 'narrow' || tier === 'square' || aspect === 'portrait'
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.flowsListOpen')
+
   const [flows, setFlows] = useState<Flow[]>([])
-  // Selection + active tab persist across screen switches within the session
-  // (reset on app reload). The selected flow's editor state is re-loaded on mount
-  // by the restore effect below.
+  const [loadingFlows, setLoadingFlows] = useState(true)
   const [selectedId, setSelectedId] = useSessionState<string | null>('flows.selectedId', null)
-  // Absolute path of the selected flow's on-disk JSON file (for copy / reveal).
-  const [flowPath, setFlowPath] = useState('')
-  // Left-column tab: own flows, read-only template gallery, or run history. Driven
-  // by the URL (deep-linkable, #/w/{ws}/flows/{tab}); the parent owns the value so
-  // the hash and the tab stay in sync. Unknown/absent → "flows".
-  const tab: FlowsTab = tabProp === 'templates' || tabProp === 'runs' ? tabProp : 'flows'
-  // Matches the useState setter shape consumers expect (value OR updater), but
-  // routes the result to the URL-owning parent instead of local state.
-  const setTab = useCallback<Dispatch<SetStateAction<FlowsTab>>>(
-    (t) => onTabChange?.(typeof t === 'function' ? t(tab) : t),
-    [onTabChange, tab],
-  )
-  const [templateId, setTemplateId] = useSessionState<string | null>('flows.templateId', null)
-  // Run history (all flows, newest first) + the selected run for the read-only viewer.
-  const [runs, setRuns] = useState<FlowRun[]>([])
-  // Runs tab filter: off (default) lists only root runs, so one run of a composed
-  // flow is one row instead of a burst of its subflow/spawn children. The children
-  // are not lost — they are still reachable by id and through the run tree.
-  const [showSubRuns, setShowSubRuns] = useSessionState('flows.showSubRuns', false)
-  const [selectedRunId, setSelectedRunId] = useSessionState<string | null>(
-    'flows.selectedRunId',
-    null,
-  )
-  // Left-list search (adapts to the active tab: flow/template name, or a run's
-  // flow name).
   const [q, setQ] = useState('')
-  // Flow tag filter (Akışlarım tab): selected tags a flow must carry (ANY match).
-  // Empty = no tag filter.
-  const [tagFilter, setTagFilter] = useState<string[]>([])
-  // "Node ekle" palette section: vertically collapsible (persisted).
-  const [paletteOpen, setPaletteOpen] = useState(
-    () => localStorage.getItem('tionharness.flowPaletteOpen') !== '0',
+  const tab = tabOf(tabProp)
+  const setTab = useCallback(
+    (next: Tab) => onTabChange?.(next === 'canvas' ? null : next),
+    [onTabChange],
   )
-  const togglePalette = () =>
-    setPaletteOpen((o) => {
-      const next = !o
-      localStorage.setItem('tionharness.flowPaletteOpen', next ? '1' : '0')
-      return next
-    })
-  // Whole left palette column (Node ekle + Görünüm) show/hide, toggled from the
-  // top bar. Persisted; hidden gives the canvas full width.
-  const [paletteVisible, setPaletteVisible] = useState(
-    () => localStorage.getItem('tionharness.flowPaletteVisible') !== '0',
+
+  // Draft graph of the selected flow (canvas state).
+  const [draft, setDraft] = useState<FlowGraph | null>(null)
+  const [savedKey, setSavedKey] = useState('')
+  const [savedLayout, setSavedLayout] = useState('')
+  const [draftFlowId, setDraftFlowId] = useState<string | null>(null)
+  const [selNode, setSelNode] = useState<string | null>(null)
+  const [selEdge, setSelEdge] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [statuses, setStatuses] = useState<Map<string, NodeStatus>>(new Map())
+
+  // Per-flow data for the other tabs.
+  const [runs, setRuns] = useState<FlowRun[]>([])
+  const [runsLoading, setRunsLoading] = useState(true)
+  const [versions, setVersions] = useState<FlowVersion[]>([])
+  const [proposals, setProposals] = useState<FlowProposal[]>([])
+  const [promptVersions, setPromptVersions] = useState<AgentPromptVersion[]>([])
+
+  // Fall back to the first flow when nothing (or something gone) is selected —
+  // derived, so no effect has to write the selection back.
+  const selected = useMemo(() => {
+    if (flows.length === 0) return null
+    return flows.find((f) => f.id === selectedId) ?? flows[0]
+  }, [flows, selectedId])
+  const agentNames = useMemo(() => new Map(agents.map((a) => [a.id, a.name])), [agents])
+  // Automations feed the trigger node's picker and the canvas labels; a load
+  // failure only leaves the picker empty.
+  const [automations, setAutomations] = useState<Automation[]>([])
+  useEffect(() => {
+    let cancelled = false
+    api
+      .listAutomations()
+      .then((list) => {
+        if (!cancelled) setAutomations(list)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [tick])
+  const automationNames = useMemo(
+    () => new Map(automations.map((a) => [a.id, a.name || a.id])),
+    [automations],
   )
-  const togglePaletteVisible = () =>
-    setPaletteVisible((v) => {
-      const next = !v
-      localStorage.setItem('tionharness.flowPaletteVisible', next ? '1' : '0')
-      return next
-    })
-  // Auto-grow the run input upward: the run panel is bottom-anchored (below the
-  // flex-1 canvas), so growing the textarea moves its top edge up while its bottom
-  // stays put. Height tracks content up to a cap; then the textarea scrolls.
-  const runInputRef = useRef<HTMLTextAreaElement>(null)
-
-  // Editor state for the selected flow.
-  const [name, setName] = useState('')
-  // Cosmetic emoji for the selected flow. Persisted independently (setFlowEmoji),
-  // like tags — not via the Save button — so it survives graph/name saves.
-  const [emoji, setEmoji] = useState('')
-  // Flow tags persist independently (setFlowTags), not via the Save button.
-  const [tags, setTags] = useState<string[]>([])
-  const [start, setStart] = useState('')
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  // Edge presentation (cosmetic). Stored per-flow in the graph; localStorage
-  // holds the last-used edge style as the default for flows that have none.
-  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(
-    () => (localStorage.getItem('tionharness.flowEdgeStyle') as EdgeStyle) || 'default',
-  )
-  const [animated, setAnimated] = useState(false)
-  // Accumulate mode: sequential agent nodes share a growing conversation thread
-  // (prompt-cache reuse). Stored per-flow in the graph; defaults ON for flows that
-  // never set it (a new flow or a pre-feature one).
-  const [accumulate, setAccumulate] = useState(true)
-  const changeEdgeStyle = (s: EdgeStyle) => {
-    setEdgeStyle(s)
-    localStorage.setItem('tionharness.flowEdgeStyle', s)
-  }
-
-  // Run state.
-  const [input, setInput] = useState('')
-  const [running, setRunning] = useState(false)
-  const [run, setRun] = useState<FlowRun | null>(null)
-  const [liveNodes, setLiveNodes] = useState<FlowNodeEvent[]>([])
-  // True while a re-run kicked off from the Koşular tab (RunView) is in flight.
-  const [rerunning, setRerunning] = useState(false)
-
-  // True until the first flow list lands — the list column shows a loading state
-  // rather than the "no flows yet" copy.
-  const [flowsLoading, setFlowsLoading] = useState(true)
 
   const loadFlows = useCallback(() => {
     api
       .listFlows()
-      .then(setFlows)
-      .catch((e) => onError(e.message))
-      .finally(() => setFlowsLoading(false))
+      .then((list) => {
+        setFlows(list)
+        setLoadingFlows(false)
+      })
+      .catch((e: Error) => {
+        setLoadingFlows(false)
+        onError(e.message)
+      })
   }, [onError])
 
-  useEffect(() => loadFlows(), [loadFlows, flowsTick])
-
-  // Resize the run input to fit its content (grows upward, capped at 160px).
   useEffect(() => {
-    const el = runInputRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-  }, [input, selectedId])
+    loadFlows()
+  }, [loadFlows, tick])
 
-  // While the Koşular tab is open, load all flow runs and poll every 3s so
-  // in-progress runs advance live. Polling stops when leaving the tab. Toggling
-  // showSubRuns re-runs the effect, so the list switches filter immediately
-  // instead of waiting out the current poll interval.
-  useEffect(() => {
-    if (tab !== 'runs') return
-    let alive = true
+  // (Re)load the draft when the selected flow or its head version changes. A
+  // pending unsaved edit survives an external head change (the agent or the
+  // observer committed a version meanwhile): the next save lands on top of it.
+  const dirty = !!draft && canonicalKey(draft) !== savedKey
+  const layoutDirty = !!draft && layoutKey(draft) !== savedLayout
+  useRegisterDirty('flows', dirty)
+  const headKey = selected ? `${selected.id}@${selected.version}` : ''
+  const resetDraft = (key: string) => {
+    if (!selected || !key) {
+      setDraft(null)
+      return
+    }
+    if (dirty && draftFlowId?.split('@')[0] === selected.id) return
+    let g = parseGraph(selected.graph)
+    if (needsLayout(g)) g = autoLayout(g)
+    setDraft(g)
+    setSavedKey(canonicalKey(g))
+    setSavedLayout(layoutKey(parseGraph(selected.graph)))
+    setDraftFlowId(key)
+    setSelNode(null)
+    setSelEdge(null)
+    setStatuses(new Map())
+  }
+  useKeyedReset(headKey, resetDraft)
+  // First render has no draft yet: seed it once (useKeyedReset only fires on changes).
+  if (draft === null && selected && draftFlowId !== headKey) {
+    resetDraft(headKey)
+  }
+
+  // Loading flips on when the selected flow changes (render-time reset) and off
+  // in the fetch's finally, so no effect sets state synchronously.
+  useKeyedReset(selected?.id ?? '', () => setRunsLoading(true))
+  const loadDetails = useCallback(() => {
+    if (!selected) return
     api
-      .listAllFlowRuns(!showSubRuns)
-      .then((rs) => alive && setRuns(rs))
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [tab, showSubRuns])
-  useVisiblePoll(
-    () => {
-      api
-        .listAllFlowRuns(!showSubRuns)
-        .then(setRuns)
-        .catch(() => {})
-    },
-    RUNS_POLL_MS,
-    [showSubRuns],
-    tab === 'runs',
-  )
+      .listFlowRuns(selected.id, 100)
+      .then(setRuns)
+      .catch((e: Error) => onError(e.message))
+      .finally(() => setRunsLoading(false))
+    api
+      .listFlowVersions(selected.id)
+      .then(setVersions)
+      .catch(() => undefined)
+    api
+      .listFlowProposals(selected.id)
+      .then(setProposals)
+      .catch(() => undefined)
+    api
+      .listPromptVersions(selected.agentId)
+      .then(setPromptVersions)
+      .catch(() => undefined)
+  }, [selected, onError])
 
-  // Deep-link from the Activity screen: open this flow's run history and select
-  // its latest run (runs are newest-first). Consumed once per target so polling
-  // doesn't keep re-selecting.
-  const consumedFlowTarget = useRef<string | null>(null)
-  // Stable so the effect keys on the target alone: setTab itself changes with
-  // the current tab, and re-running on that would snap the user back to runs.
-  const openRunsTab = useStableCallback(() => setTab('runs'))
   useEffect(() => {
-    if (openFlowId) openRunsTab?.()
-  }, [openFlowId, openRunsTab])
-  useEffect(() => {
-    if (!openFlowId || tab !== 'runs' || consumedFlowTarget.current === openFlowId) return
-    const latest = runs.find((r) => r.flowId === openFlowId)
-    if (latest) {
-      setSelectedRunId(latest.id)
-      consumedFlowTarget.current = openFlowId
-    }
-  }, [openFlowId, tab, runs, setSelectedRunId])
+    loadDetails()
+  }, [loadDetails, tick])
+  // Runs keep arriving while turns run; a slow poll backs the live frames.
+  useVisiblePoll(loadDetails, RUNS_POLL_MS, [loadDetails], tab === 'runs' || tab === 'test')
 
-  const selectFlow = useCallback(
-    (f: Flow) => {
-      setSelectedId(f.id)
-      setFlowPath('')
-      api
-        .flowPath(f.id)
-        .then((r) => setFlowPath(r.path))
-        .catch(() => setFlowPath(''))
-      setName(f.name)
-      setEmoji(f.emoji ?? '')
-      setTags(f.tags ?? [])
-      setRun(null)
-      setInput('')
-      setLiveNodes([])
-      setSelectedNodeId(null)
-      try {
-        const g = f.graph ? JSON.parse(f.graph) : { start: '', nodes: [] }
-        const { nodes: rn, edges: re } = graphToReactFlow({
-          start: g.start ?? '',
-          nodes: Array.isArray(g.nodes) ? g.nodes : [],
-        })
-        setNodes(rn)
-        setEdges(re)
-        setStart(g.start ?? '')
-        setEdgeStyle(
-          (g.edgeStyle as EdgeStyle) ||
-            (localStorage.getItem('tionharness.flowEdgeStyle') as EdgeStyle) ||
-            'default',
+  // Live node status on the canvas for the selected flow.
+  useEffect(() => {
+    if (!selected) return
+    return subscribeFlowNode(selected.id, (frame) => {
+      setStatuses((prev) => {
+        const next =
+          frame.event.index === 1 && frame.event.phase === 'start'
+            ? new Map<string, NodeStatus>()
+            : new Map(prev)
+        next.set(
+          frame.event.nodeId,
+          frame.event.phase === 'start'
+            ? 'running'
+            : frame.event.phase === 'done'
+              ? 'done'
+              : 'error',
         )
-        setAnimated(!!g.animated)
-        // Default ON unless the flow explicitly stored accumulate:false. The raw
-        // JSON distinguishes an absent field (undefined → default on) from an
-        // explicit false (→ off), which the backend now persists verbatim.
-        setAccumulate(g.accumulate === undefined ? true : !!g.accumulate)
-      } catch {
-        setNodes([])
-        setEdges([])
-        setStart('')
-        setAnimated(false)
-        setAccumulate(true)
+        return next
+      })
+      if (frame.event.type === 'output' && frame.event.phase !== 'start') {
+        setTimeout(() => {
+          loadFlows()
+          loadDetails()
+        }, 400)
       }
-    },
-    [setNodes, setEdges, setSelectedId],
-  )
+    })
+  }, [selected, loadFlows, loadDetails])
 
-  // Restore the session-persisted flow selection on mount: once flows load, if a
-  // flow was selected earlier this session, re-load its editor state (runs once —
-  // later user clicks are unaffected).
-  const didRestoreRef = useRef(false)
-  useEffect(() => {
-    if (didRestoreRef.current || flows.length === 0 || !selectedId) return
-    didRestoreRef.current = true
-    const f = flows.find((x) => x.id === selectedId)
-    if (f) selectFlow(f)
-  }, [flows, selectedId, selectFlow])
+  // ---- draft mutations ----
+  const update = (fn: (g: FlowGraph) => FlowGraph) => setDraft((g) => (g ? fn(g) : g))
+  const addNode = (type: FlowNodeType) => {
+    update((g) => {
+      const id = freshNodeId(g, type === 'llm' ? 'stage' : type)
+      const n = defaultNode(type, id, t(`defaultTitle.${type}`))
+      const maxY = Math.max(0, ...g.nodes.map((x) => x.y ?? 0))
+      return { ...g, nodes: [...g.nodes, { ...n, x: 0, y: maxY + 140 }] }
+    })
+  }
+  const changeNode = (id: string, patch: Partial<FlowNode>) =>
+    update((g) => ({ ...g, nodes: g.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }))
+  const changeEdge = (id: string, patch: Partial<FlowEdge>) =>
+    update((g) => ({ ...g, edges: g.edges.map((e) => (e.id === id ? { ...e, ...patch } : e)) }))
+  const deleteNodes = (ids: string[]) => {
+    update((g) => {
+      const keep = new Set(
+        g.nodes
+          .filter((n) => !ids.includes(n.id) || n.type === 'input' || n.type === 'output')
+          .map((n) => n.id),
+      )
+      return {
+        ...g,
+        nodes: g.nodes.filter((n) => keep.has(n.id)),
+        edges: g.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+      }
+    })
+    setSelNode(null)
+  }
+  const deleteEdges = (ids: string[]) => {
+    update((g) => ({ ...g, edges: g.edges.filter((e) => !ids.includes(e.id)) }))
+    setSelEdge(null)
+  }
+  const connect = (c: Connection) => {
+    if (!c.source || !c.target || c.source === c.target) return
+    update((g) => {
+      if (g.edges.some((e) => e.from === c.source && e.to === c.target)) return g
+      const from = g.nodes.find((n) => n.id === c.source)
+      // Linear nodes keep one outgoing edge: a new connection replaces it.
+      const edges =
+        from && from.type !== 'route' ? g.edges.filter((e) => e.from !== c.source) : g.edges
+      return {
+        ...g,
+        edges: [
+          ...edges,
+          { id: freshEdgeId(g, c.source!, c.target!), from: c.source!, to: c.target! },
+        ],
+      }
+    })
+  }
+  const nodesChanged = (nodes: FlowRFNode[]) => update((g) => applyPositions(g, nodes))
+  const relayout = () => update((g) => autoLayout(g))
 
-  // Multi-select (Ctrl/Cmd+Click, Shift-range) on the "Akışlarım" tab for bulk
-  // run / delete. Runs fire-and-forget with an empty input.
-  const sel = useMultiSelect()
-  // Left flow list collapse (slim rail / mobile drawer).
-  const {
-    open: flowsListOpen,
-    toggle: toggleFlowsList,
-    setOpen: setFlowsListOpen,
-  } = useCollapsibleList('tionharness.flowsListOpen')
-  // Landing on the screen with no flow selected: open the list drawer so a narrow
-  // screen shows the pickable flow list instead of an empty canvas. Runs once on
-  // mount; on md+ the list is always visible so this is a no-op there.
-  useEffect(() => {
-    if (!selectedId) setFlowsListOpen(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  // Node editor popup: clicking a node (not dragging) opens a modal to edit it,
-  // instead of a docked side panel. Closing keeps the node selected on canvas.
-  const [nodeEditorOpen, setNodeEditorOpen] = useState(false)
-  const openNodeEditor = (id: string) => {
-    setSelectedNodeId(id)
-    setNodeEditorOpen(true)
+  const save = (why: string) => {
+    if (!selected || !draft) return
+    setSaving(true)
+    api
+      .saveFlow(selected.id, draft, why)
+      .then((res) => {
+        setSavedKey(canonicalKey(draft))
+        setSavedLayout(layoutKey(draft))
+        setFlows((list) => list.map((f) => (f.id === res.flow.id ? res.flow : f)))
+        setDraftFlowId(`${res.flow.id}@${res.flow.version}`)
+        setSaveOpen(false)
+        setReason('')
+        loadDetails()
+      })
+      .catch((e: Error) => onError(e.message))
+      .finally(() => setSaving(false))
+  }
+  const discard = () => {
+    if (!selected) return
+    let g = parseGraph(selected.graph)
+    if (needsLayout(g)) g = autoLayout(g)
+    setDraft(g)
+    setSavedKey(canonicalKey(g))
+    setSavedLayout(layoutKey(parseGraph(selected.graph)))
+    setSelNode(null)
+    setSelEdge(null)
   }
 
-  // Canvas node operations (add / patch / start / delete / duplicate / arrange),
-  // re-created each render over the live editor state — exactly like the former
-  // inline definitions.
-  const ops = createFlowGraphOps({
-    agents,
-    nodes,
-    setNodes,
-    edges,
-    setEdges,
-    start,
-    setStart,
-    selectedNodeId,
-    setSelectedNodeId,
-  })
+  const rf = useMemo(
+    () =>
+      draft ? toReactFlow(draft, statuses, agentNames, automationNames) : { nodes: [], edges: [] },
+    [draft, statuses, agentNames, automationNames],
+  )
+  const problems = useMemo(() => (draft ? lint(draft) : []), [draft])
+  const filtered = useMemo(
+    () =>
+      flows
+        .filter(
+          (f) =>
+            !q.trim() ||
+            `${f.name} ${f.agentName} ${f.id}`.toLowerCase().includes(q.trim().toLowerCase()),
+        )
+        .sort((a, b) => compareText(a.agentName, b.agentName)),
+    [flows, q],
+  )
+  const inspectorOpen = !!selNode || !!selEdge
 
-  // Flow-level actions (create / instantiate / save / emoji / delete / bulk / run).
-  const actions = createFlowActions({
-    agents,
-    selectedId,
-    setSelectedId,
-    setFlows,
-    loadFlows,
-    selectFlow,
-    setTab,
-    name,
-    setEmoji,
-    nodes,
-    edges,
-    start,
-    edgeStyle,
-    animated,
-    accumulate,
-    input,
-    setRunning,
-    runs,
-    setRuns,
-    rootOnlyRuns: !showSubRuns,
-    setSelectedRunId,
-    sel,
-    onError,
-  })
-
-  // Tag edits persist immediately (setFlowTags) and sync the list array so the
-  // flow row's tag chips refresh live.
-  // Resolves to false when the write failed — the optimistic chips are rolled
-  // back and TagEditor keeps the typed tag so it can be retried.
-  const handleTagsChange = async (next: string[]): Promise<boolean> => {
-    const prevTags = tags
-    setTags(next)
-    if (!selectedId) return true
-    setFlows((prev) => prev.map((x) => (x.id === selectedId ? { ...x, tags: next } : x)))
-    try {
-      await api.setFlowTags(selectedId, next)
-      return true
-    } catch (e) {
-      setTags(prevTags)
-      setFlows((prev) => prev.map((x) => (x.id === selectedId ? { ...x, tags: prevTags } : x)))
-      onError((e as Error).message)
-      return false
-    }
-  }
-
-  // rerunRun re-executes an already-finished run's flow with the SAME input
-  // (Koşular tab). It streams so the run-list refreshes live, then selects the
-  // freshly produced run in the viewer. Uses the CURRENT flow definition.
-  const rerunRun = useCallback(
-    async (r: FlowRun) => {
-      setRerunning(true)
-      const refresh = () =>
-        api
-          .listAllFlowRuns(!showSubRuns)
-          .then(setRuns)
-          .catch(() => {})
-      try {
-        await api.runFlowStreamStandalone(r.flowId, r.input, {
-          // Surface the new running run in the left list as it progresses.
-          onNode: () => refresh(),
-          onReply: (res) => {
-            // Upsert the finished run so selection is instant (no poll-gap flicker).
-            setRuns((prev) => {
-              const rest = prev.filter((x) => x.id !== res.run.id)
-              return [res.run, ...rest]
-            })
-            setSelectedRunId(res.run.id)
-            refresh()
-          },
-          onError: (e) => onError(e),
-        })
-      } catch (e) {
-        onError((e as Error).message)
-      } finally {
-        setRerunning(false)
-        refresh()
-      }
-    },
-    [onError, showSubRuns, setSelectedRunId],
+  const tabs = (
+    <div
+      className="flex overflow-hidden rounded-md border border-[var(--color-border)] text-xs"
+      role="tablist"
+    >
+      {TABS.map((k) => (
+        <button
+          key={k}
+          role="tab"
+          aria-selected={tab === k}
+          onClick={() => setTab(k)}
+          data-testid={`flows-tab-${k}`}
+          className={`px-2.5 py-1 ${tab === k ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]' : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'}`}
+        >
+          {t(`tabs.${k}`)}
+          {k === 'evolution' && selected && selected.pendingProposals > 0 && (
+            <span className="ml-1 rounded-full bg-[var(--color-warning)] px-1 text-[9px] text-[var(--color-on-warning)]">
+              {selected.pendingProposals}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
   )
 
-  // Unsaved-edits (dirty) signal for the nav "Akışlar" item + workspace label:
-  // compare the live editor (name + structural graph) to the stored flow.
-  // Cosmetic-only fields (edgeStyle/animated) are ignored so they don't raise a
-  // false amber dot. Best-effort — a parse failure reads as "not dirty".
-  const flowDirty = useMemo(() => {
-    const stored = flows.find((f) => f.id === selectedId)
-    if (!selectedId || !stored) return false
-    if (name !== stored.name) return true
-    try {
-      // Compare live canvas vs stored via canonicalGraphKey, which round-trips
-      // both sides through the same graphToReactFlow → reactFlowToGraph pipeline.
-      // This absorbs the backend's `omitempty` marshaling (dropping next:"",
-      // x/y:0, empty prompt…) so a freshly opened, unedited flow isn't flagged
-      // dirty — only real structural edits differ.
-      const cur = canonicalGraphKey(reactFlowToGraph(nodes, edges, start))
-      const raw = stored.graph ? JSON.parse(stored.graph) : { start: '', nodes: [] }
-      return cur !== canonicalGraphKey(raw)
-    } catch {
-      return false
-    }
-  }, [flows, selectedId, name, nodes, edges, start])
-  useRegisterDirty('flows', flowDirty)
+  const title = selected ? (
+    <div className="flex min-w-0 items-center gap-2">
+      <AgentAvatar
+        agent={{
+          id: selected.agentId,
+          name: selected.agentName,
+          avatar: selected.agentAvatar,
+          color: selected.agentColor,
+        }}
+        size={24}
+      />
+      <span className="truncate text-sm font-semibold">{selected.name}</span>
+      <Badge tone="muted">{t('version', { v: selected.version })}</Badge>
+      {dirty && <Badge tone="warning">{t('header.unsaved')}</Badge>}
+      {selected.trivial && !dirty && <Badge tone="muted">{t('header.trivial')}</Badge>}
+    </div>
+  ) : (
+    <span className="text-sm font-semibold">{t('title')}</span>
+  )
 
-  // Unique, sorted tags across all flows — the pool of chips for the tag filter.
-  const allTags = useMemo(() => {
-    const set = new Set<string>()
-    flows.forEach((f) => f.tags?.forEach((t) => set.add(t)))
-    return [...set].sort((a, b) => compareText(a, b))
-  }, [flows])
-  const toggleTagFilter = (t: string) =>
-    setTagFilter((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
-
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId)?.data.node ?? null
-  const trace: FlowState | null = run?.state ? safeParse(run.state) : null
-  const selectedTemplate = FLOW_TEMPLATES.find((t) => t.id === templateId) ?? null
-  // Derived from the polled `runs` list, so the selected run refreshes live.
-  const selectedRun = runs.find((r) => r.id === selectedRunId) ?? null
+  const right = selected && tab === 'canvas' && (
+    <>
+      {dirty && (
+        <Button size="sm" variant="secondary" onClick={discard} disabled={saving}>
+          <X size={12} /> {t('header.discard')}
+        </Button>
+      )}
+      <Button
+        size="sm"
+        onClick={() => (dirty ? setSaveOpen(true) : layoutDirty ? save('layout') : undefined)}
+        disabled={saving || (!dirty && !layoutDirty) || problems.length > 0}
+        data-testid="flow-save"
+        title={problems.length ? t('header.fixProblems') : undefined}
+      >
+        <Save size={12} /> {dirty ? t('header.save') : t('header.saveLayout')}
+      </Button>
+    </>
+  )
 
   return (
-    <div className="flex h-full min-h-0 flex-1">
-      {/* Flow list / template gallery — full-height sibling column (like chat). */}
-      <FlowsListPane
-        flowsListOpen={flowsListOpen}
-        toggleFlowsList={toggleFlowsList}
-        tab={tab}
-        setTab={setTab}
-        q={q}
-        setQ={setQ}
-        flows={flows}
-        flowsLoading={flowsLoading}
-        runs={runs}
-        showSubRuns={showSubRuns}
-        setShowSubRuns={setShowSubRuns}
-        templateId={templateId}
-        setTemplateId={setTemplateId}
-        selectedId={selectedId}
-        selectedRunId={selectedRunId}
-        setSelectedRunId={setSelectedRunId}
-        allTags={allTags}
-        tagFilter={tagFilter}
-        toggleTagFilter={toggleTagFilter}
-        setTagFilter={setTagFilter}
-        sel={sel}
-        selectFlow={selectFlow}
-        createFlow={actions.createFlow}
-        removeFlow={actions.removeFlow}
-        bulkRun={actions.bulkRun}
-        bulkDelete={actions.bulkDelete}
+    <div className="flex h-full min-h-0 flex-col" data-testid="flows-panel">
+      <PaneHeader
+        listOpen={listOpen}
+        onToggleList={toggleList}
+        titleSlot={title}
+        secondary={tabs}
+        right={right || undefined}
       />
-
-      {/* Main column: the title bar sits ONLY here (right of the list), like chat. */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <FlowsHeader
-          flowsListOpen={flowsListOpen}
-          toggleFlowsList={toggleFlowsList}
-          tab={tab}
-          flows={flows}
-          selectedId={selectedId}
-          selectedTemplate={selectedTemplate}
-          selectedRun={selectedRun}
-          emoji={emoji}
-          changeEmoji={actions.changeEmoji}
-          name={name}
-          setName={setName}
-          flowPath={flowPath}
-          saveFlow={actions.saveFlow}
-          instantiateTemplate={actions.instantiateTemplate}
-          rerunRun={rerunRun}
-          rerunning={rerunning}
-        />
-        {/* Main: template preview or flow editor */}
-        {tab === 'templates' ? (
-          <div className="flex min-w-0 flex-1 flex-col">
-            {!selectedTemplate ? (
-              <div className="flex-1 p-6">
-                <p className="text-sm text-[var(--color-text-dim)]">{t('empty.template')}</p>
-              </div>
-            ) : (
-              // Template name/description + actions now live in the top PaneHeader.
-              <div className="min-h-0 flex-1">
-                <TemplatePreview graph={flowTemplateGraph(selectedTemplate)} agents={agents} />
-              </div>
-            )}
-          </div>
-        ) : tab === 'runs' ? (
-          !selectedRun ? (
-            <div className="flex-1 p-6">
-              <p className="text-sm text-[var(--color-text-dim)]">{t('empty.run')}</p>
-            </div>
-          ) : (
-            <RunTreeView
-              run={selectedRun}
-              flows={flows}
-              agents={agents}
-              onRerun={rerunRun}
-              rerunning={rerunning}
-              onResumed={() =>
-                api
-                  .listAllFlowRuns(!showSubRuns)
-                  .then(setRuns)
-                  .catch(() => {})
-              }
+      <div className="flex min-h-0 flex-1">
+        <ListPane
+          open={listOpen}
+          onToggle={toggleList}
+          widthKey="tionharness.flowsListWidth"
+          label={t('list.title')}
+          testId="flows-list"
+        >
+          <SidebarHeader title={t('list.title')} onCollapse={toggleList}>
+            <RefreshButton onClick={loadFlows} />
+          </SidebarHeader>
+          <div className="px-3 pb-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t('list.search')}
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs focus:border-[var(--color-accent)] focus:outline-none"
             />
-          )
-        ) : !selectedId ? (
-          <div className="flex-1 p-6">
-            <p className="text-sm text-[var(--color-text-dim)]">{t('empty.flow')}</p>
           </div>
-        ) : (
-          <FlowEditorView
-            agents={agents}
-            flows={flows.filter((f) => f.id !== selectedId)}
-            nodes={nodes}
-            edges={edges}
-            edgeStyle={edgeStyle}
-            animated={animated}
-            setAnimated={setAnimated}
-            accumulate={accumulate}
-            setAccumulate={setAccumulate}
-            changeEdgeStyle={changeEdgeStyle}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            setEdges={setEdges}
-            setSelectedNodeId={setSelectedNodeId}
-            openNodeEditor={openNodeEditor}
-            addNode={ops.addNode}
-            addNodeAt={ops.addNodeAt}
-            autoArrange={ops.autoArrange}
-            paletteOpen={paletteOpen}
-            togglePalette={togglePalette}
-            paletteVisible={paletteVisible}
-            togglePaletteVisible={togglePaletteVisible}
-            tags={tags}
-            onTagsChange={handleTagsChange}
-            nodeEditorOpen={nodeEditorOpen}
-            setNodeEditorOpen={setNodeEditorOpen}
-            selectedNode={selectedNode}
-            start={start}
-            patchSelected={ops.patchSelected}
-            duplicateSelected={ops.duplicateSelected}
-            deleteSelected={ops.deleteSelected}
-            runInputRef={runInputRef}
-            input={input}
-            setInput={setInput}
-            doRun={actions.doRun}
-            running={running}
-            run={run}
-            liveNodes={liveNodes}
-            trace={trace}
-          />
-        )}
+          <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            {!loadingFlows && filtered.length === 0 && (
+              <EmptyState icon={GitBranch} title={t('list.empty')} />
+            )}
+            {filtered.map((f) => (
+              <li key={f.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(f.id)
+                    if (stacked) toggleList()
+                  }}
+                  data-testid={`flow-row-${f.id}`}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs hover:bg-[var(--color-surface-2)] ${selectedId === f.id ? SELECTED_ITEM_CLS : ''}`}
+                >
+                  <AgentAvatar
+                    agent={{
+                      id: f.agentId,
+                      name: f.agentName,
+                      avatar: f.agentAvatar,
+                      color: f.agentColor,
+                    }}
+                    size={26}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{f.name}</span>
+                    <span className="block truncate text-[10px] text-[var(--color-text-dim)]">
+                      {t('list.meta', { v: f.version, nodes: f.nodeCount, runs: f.stats.runs })}
+                    </span>
+                  </span>
+                  {f.pendingProposals > 0 && (
+                    <span
+                      className="shrink-0 rounded-full bg-[var(--color-warning)] px-1.5 text-[9px] text-[var(--color-on-warning)]"
+                      title={t('list.pending', { count: f.pendingProposals })}
+                    >
+                      {f.pendingProposals}
+                    </span>
+                  )}
+                  {!f.trivial && (
+                    <Sparkles size={12} className="shrink-0 text-[var(--color-accent)]" />
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </ListPane>
+
+        <main className="relative flex min-w-0 flex-1 flex-col">
+          {!selected ? (
+            <EmptyState
+              icon={GitBranch}
+              title={loadingFlows ? t('list.loading') : t('list.noneSelected')}
+              className="flex-1 justify-center"
+            />
+          ) : tab === 'canvas' && draft ? (
+            <div className="flex min-h-0 flex-1">
+              <div className="relative min-w-0 flex-1">
+                <FlowCanvas
+                  nodes={rf.nodes}
+                  edges={rf.edges}
+                  showMinimap={!stacked}
+                  onNodesChange={nodesChanged}
+                  onConnect={connect}
+                  onEdgesDelete={deleteEdges}
+                  onNodesDelete={deleteNodes}
+                  onSelect={({ nodeId, edgeId }) => {
+                    setSelNode(nodeId)
+                    setSelEdge(edgeId)
+                  }}
+                  onAdd={addNode}
+                  onAutoLayout={relayout}
+                />
+                {problems.length > 0 && (
+                  <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 rounded-md border border-[var(--color-warning)]/50 bg-[var(--color-surface)] px-3 py-1.5 text-[11px] text-[var(--color-warning)] shadow-[var(--shadow-md)]">
+                    {problems.slice(0, 3).map((p, i) => (
+                      <div key={i}>{t(p.key, p.params)}</div>
+                    ))}
+                  </div>
+                )}
+                {/* Bottom-sheet inspector on stacked layouts. */}
+                {stacked && inspectorOpen && (
+                  <div
+                    className="absolute inset-x-0 bottom-0 z-20 max-h-[58%] overflow-y-auto rounded-t-xl border-t border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
+                    data-testid="flow-inspector-sheet"
+                  >
+                    <div className="sticky top-0 flex justify-center bg-[var(--color-surface)] pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelNode(null)
+                          setSelEdge(null)
+                        }}
+                        className="rounded p-1 text-[var(--color-text-dim)]"
+                        aria-label={t('inspector.close')}
+                      >
+                        <ChevronDown size={16} />
+                      </button>
+                    </div>
+                    <NodeInspector
+                      graph={draft}
+                      nodeId={selNode}
+                      edgeId={selEdge}
+                      agents={agents}
+                      automations={automations}
+                      ownerAgentId={selected.agentId}
+                      readOnly={false}
+                      onChangeNode={changeNode}
+                      onChangeEdge={changeEdge}
+                      onDeleteNode={(id) => deleteNodes([id])}
+                      onDeleteEdge={(id) => deleteEdges([id])}
+                      onClose={() => {
+                        setSelNode(null)
+                        setSelEdge(null)
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+              {!stacked && (
+                <aside
+                  className="w-[22rem] shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]"
+                  data-testid="flow-inspector"
+                >
+                  <NodeInspector
+                    graph={draft}
+                    nodeId={selNode}
+                    edgeId={selEdge}
+                    agents={agents}
+                    automations={automations}
+                    ownerAgentId={selected.agentId}
+                    readOnly={false}
+                    onChangeNode={changeNode}
+                    onChangeEdge={changeEdge}
+                    onDeleteNode={(id) => deleteNodes([id])}
+                    onDeleteEdge={(id) => deleteEdges([id])}
+                    onClose={() => {
+                      setSelNode(null)
+                      setSelEdge(null)
+                    }}
+                  />
+                  {selected.note && (
+                    <p className="border-t border-[var(--color-border)] px-4 py-3 text-[11px] text-[var(--color-text-dim)]">
+                      {selected.note}
+                    </p>
+                  )}
+                </aside>
+              )}
+            </div>
+          ) : tab === 'runs' ? (
+            <RunsTab
+              flow={selected}
+              runs={runs}
+              loading={runsLoading}
+              stacked={stacked}
+              onReload={loadDetails}
+              onOpenSession={onOpenSession}
+              onError={onError}
+            />
+          ) : tab === 'evolution' ? (
+            <EvolutionTab
+              flow={selected}
+              versions={versions}
+              proposals={proposals}
+              promptVersions={promptVersions}
+              busy={saving}
+              onChanged={() => {
+                loadFlows()
+                loadDetails()
+              }}
+              onError={onError}
+              onOpenSession={onOpenSession}
+            />
+          ) : tab === 'test' ? (
+            <TestTab flow={selected} onOpenSession={onOpenSession} onError={onError} />
+          ) : null}
+        </main>
       </div>
+
+      {saveOpen && selected && (
+        <ModalOverlay onClose={() => setSaveOpen(false)}>
+          <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-2xl">
+            <h2 className="mb-1 text-sm font-semibold">
+              {t('save.title', { v: selected.version + 1 })}
+            </h2>
+            <p className="mb-3 text-xs text-[var(--color-text-dim)]">{t('save.hint')}</p>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder={t('save.placeholder')}
+              data-testid="flow-save-reason"
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm focus:border-[var(--color-accent)] focus:outline-none"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setSaveOpen(false)}>
+                {t('save.cancel')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => save(reason.trim() || t('save.defaultReason'))}
+                disabled={saving}
+                data-testid="flow-save-confirm"
+              >
+                {saving ? t('save.saving') : t('save.confirm')}
+              </Button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
     </div>
   )
 }

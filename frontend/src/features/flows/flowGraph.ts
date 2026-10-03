@@ -1,320 +1,268 @@
-// Adapter between TionHarness's orchestration graph (FlowGraph: start + nodes with
-// next/branches/parallel/joinNext) and React Flow's nodes+edges model. The
-// FlowNode itself is carried as RFNode.data so custom node components and the
-// inspector edit it directly; edges are derived from the routing fields.
-import type { Edge, Node as RFNode } from '@xyflow/react'
-import type { FlowGraph, FlowNode, FlowNodeType } from '@/types'
-import type { ChildProgress } from './runTree'
-import { i18next } from '@/i18n'
+// Pure graph helpers for the Flows screen: parsing, defaults, auto layout,
+// React Flow conversion and a cheap client-side lint. The engine's real
+// validation runs on the backend (POST /api/flows/{id}/validate, PUT save).
+import type { Edge, Node } from '@xyflow/react'
+import type { FlowEdge, FlowGraph, FlowNode, FlowNodeType } from '@/types'
 
-export type FlowRFNode = RFNode<{
+export type NodeStatus = 'running' | 'done' | 'error'
+
+export interface FlowNodeData extends Record<string, unknown> {
   node: FlowNode
-  isStart: boolean
   status?: NodeStatus
-  // A finished node's output (run views only) → rendered as an inline preview on
-  // the node when status is "done". Undefined in the editor (no run outputs).
-  output?: string
-  // Live progress of the child run a subflow/spawn node launched (only in run
-  // views that follow the run tree) → rendered as a rollup line on the node.
-  // Undefined in the editor and for node types that launch nothing.
-  child?: ChildProgress
-}>
-export type NodeStatus = 'running' | 'done' | 'error' | 'waiting'
-
-// Layout grid spacing for auto-placed nodes. Kept tight (a node is ≤220px wide)
-// so an auto-arranged graph stays compact and readable without much panning.
-const COL_W = 230
-// Vertical gap between layered rows. Just clears a node with a prompt + 3-line
-// output preview (run views); tighter would risk overlap.
-const ROW_H = 120
-
-// edgeId builds a stable id for a routing edge. `slot` distinguishes a branch's
-// multiple outgoing edges (one per arm) so they don't collide.
-function edgeId(source: string, target: string, slot = ''): string {
-  return `e:${source}:${slot}->${target}`
+  // Where a route node's outgoing arms go (label → target id), for the card body.
+  arms?: { when: string; to: string }[]
+  agentName?: string
+  automationName?: string
 }
 
-// graphToReactFlow converts a stored FlowGraph into React Flow nodes + edges.
-// Nodes without persisted x/y are positioned by autoLayout.
-export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges: Edge[] } {
-  const positions = needsLayout(graph) ? autoLayout(graph) : {}
-  const nodes: FlowRFNode[] = graph.nodes.map((n) => ({
-    id: n.id,
-    type: n.type,
-    position: { x: n.x ?? positions[n.id]?.x ?? 0, y: n.y ?? positions[n.id]?.y ?? 0 },
-    data: { node: n, isStart: n.type === 'start' },
-  }))
+export type FlowRFNode = Node<FlowNodeData, 'flow'>
+export type FlowRFEdge = Edge<{ when?: string; isRoute: boolean }>
 
-  const edges: Edge[] = []
-  const add = (source: string, target: string, opts: Partial<Edge> & { slot?: string } = {}) => {
-    if (!target) return // "" = end
-    const { slot, ...rest } = opts
-    edges.push({ id: edgeId(source, target, slot), source, target, ...rest })
+export const NODE_W = 220
+const COL_GAP = 60
+const ROW_GAP = 120
+
+export function emptyGraph(): FlowGraph {
+  return { version: 2, nodes: [], edges: [] }
+}
+
+export function parseGraph(raw: string): FlowGraph {
+  try {
+    const g = JSON.parse(raw) as Partial<FlowGraph>
+    return {
+      version: 2,
+      nodes: Array.isArray(g.nodes) ? g.nodes : [],
+      edges: Array.isArray(g.edges) ? g.edges : [],
+      maxSteps: g.maxSteps,
+    }
+  } catch {
+    return emptyGraph()
   }
+}
 
-  for (const n of graph.nodes) {
-    switch (n.type) {
-      case 'agent':
-      case 'delay':
-      case 'transform':
-      case 'await-input':
-      case 'subflow':
-      case 'start':
-      case 'spawn':
-      case 'join':
-      case 'coordinator':
-        add(n.id, n.next ?? '')
-        break
-      case 'end':
-        break // terminal — no outgoing edge
-      case 'branch':
-        ;(n.branches ?? []).forEach((b, i) =>
-          add(n.id, b.next, {
-            slot: `b${i}`,
-            sourceHandle: `b${i}`,
-            label: b.contains || i18next.t('nodes.defaultBranch', { ns: 'flows' }),
-            animated: false,
-          }),
-        )
-        break
-      case 'parallel':
-        ;(n.parallel ?? []).forEach((childId) =>
-          add(n.id, childId, { slot: 'fan', sourceHandle: 'fan' }),
-        )
-        add(n.id, n.joinNext ?? '', { slot: 'join', sourceHandle: 'join', label: 'join' })
-        break
-      case 'loop':
-        add(n.id, n.body ?? '', {
-          slot: 'body',
-          sourceHandle: 'body',
-          label: i18next.t('inspector.loopBody', { ns: 'flows', defaultValue: 'body' }),
-        })
-        add(n.id, n.loopNext ?? '', {
-          slot: 'loop',
-          sourceHandle: 'loop',
-          label: i18next.t('inspector.loopExit', { ns: 'flows', defaultValue: 'exit' }),
-        })
-        break
+// canonicalKey is the dirty-detection key: it ignores node positions, which are
+// cosmetic and saved without a version bump.
+export function canonicalKey(g: FlowGraph): string {
+  const nodes = [...g.nodes]
+    .map((n) => {
+      const { x: _x, y: _y, ...rest } = n
+      return rest
+    })
+    .sort((a, b) => a.id.localeCompare(b.id))
+  const edges = [...g.edges].sort((a, b) => a.id.localeCompare(b.id))
+  return JSON.stringify({ nodes, edges, maxSteps: g.maxSteps ?? 0 })
+}
+
+export function layoutKey(g: FlowGraph): string {
+  return JSON.stringify(g.nodes.map((n) => [n.id, Math.round(n.x ?? 0), Math.round(n.y ?? 0)]))
+}
+
+export function freshNodeId(g: FlowGraph, base: string): string {
+  const taken = new Set(g.nodes.map((n) => n.id))
+  if (!taken.has(base)) return base
+  for (let i = 2; ; i++) {
+    const cand = `${base}_${i}`
+    if (!taken.has(cand)) return cand
+  }
+}
+
+export function freshEdgeId(g: FlowGraph, from: string, to: string): string {
+  const taken = new Set(g.edges.map((e) => e.id))
+  const base = `e_${from}_${to}`
+  if (!taken.has(base)) return base
+  for (let i = 2; ; i++) {
+    const cand = `${base}_${i}`
+    if (!taken.has(cand)) return cand
+  }
+}
+
+export function defaultNode(type: FlowNodeType, id: string, title: string): FlowNode {
+  switch (type) {
+    case 'llm':
+      return { id, type, title, prompt: '{{input}}', context: 'thread', tools: 'inherit' }
+    case 'route':
+      return { id, type, title, mode: 'contains', maxVisits: 3 }
+    case 'transform':
+      return { id, type, title, template: '{{last}}' }
+    case 'trigger':
+      return { id, type, title, template: '{{last}}' }
+    case 'output':
+      return { id, type, title, template: '{{last}}' }
+    default:
+      return { id, type, title }
+  }
+}
+
+export function outgoing(g: FlowGraph, id: string): FlowEdge[] {
+  return g.edges.filter((e) => e.from === id)
+}
+
+// autoLayout places nodes top-to-bottom by BFS depth from the input node; a
+// back edge (loop) does not pull its target down. Nodes the walk never reaches
+// are stacked below. Returns a new graph; the input is not mutated.
+export function autoLayout(g: FlowGraph): FlowGraph {
+  const depth = new Map<string, number>()
+  const input = g.nodes.find((n) => n.type === 'input')
+  const order: string[] = []
+  if (input) {
+    const queue: string[] = [input.id]
+    depth.set(input.id, 0)
+    while (queue.length) {
+      const cur = queue.shift()!
+      order.push(cur)
+      for (const e of outgoing(g, cur)) {
+        if (!depth.has(e.to)) {
+          depth.set(e.to, (depth.get(cur) ?? 0) + 1)
+          queue.push(e.to)
+        }
+      }
     }
   }
+  // The output node sits at the bottom even when a short branch reaches it early.
+  const maxDepth = Math.max(0, ...[...depth.values()])
+  for (const n of g.nodes) {
+    if (n.type === 'output' && depth.has(n.id))
+      depth.set(n.id, Math.max(depth.get(n.id)!, maxDepth))
+  }
+  let extra = maxDepth + 1
+  for (const n of g.nodes) {
+    if (!depth.has(n.id)) depth.set(n.id, extra++)
+  }
+  const rows = new Map<number, string[]>()
+  for (const n of g.nodes) {
+    const d = depth.get(n.id) ?? 0
+    rows.set(d, [...(rows.get(d) ?? []), n.id])
+  }
+  const pos = new Map<string, { x: number; y: number }>()
+  for (const [d, ids] of rows) {
+    const width = ids.length * NODE_W + (ids.length - 1) * COL_GAP
+    ids.forEach((id, i) => {
+      pos.set(id, { x: -width / 2 + i * (NODE_W + COL_GAP), y: d * ROW_GAP * 1.4 })
+    })
+  }
+  return {
+    ...g,
+    nodes: g.nodes.map((n) => ({ ...n, ...(pos.get(n.id) ?? { x: n.x ?? 0, y: n.y ?? 0 }) })),
+  }
+}
+
+// needsLayout reports whether every node still sits at the origin (a graph
+// written by the backend or an agent, which never positions nodes).
+export function needsLayout(g: FlowGraph): boolean {
+  if (g.nodes.length <= 1) return false
+  const seen = new Set<string>()
+  for (const n of g.nodes) {
+    const key = `${Math.round(n.x ?? 0)}:${Math.round(n.y ?? 0)}`
+    if (seen.has(key)) return true
+    seen.add(key)
+  }
+  return false
+}
+
+export function toReactFlow(
+  g: FlowGraph,
+  statuses: Map<string, NodeStatus>,
+  agentNames: Map<string, string>,
+  automationNames: Map<string, string> = new Map(),
+): { nodes: FlowRFNode[]; edges: FlowRFEdge[] } {
+  const nodes: FlowRFNode[] = g.nodes.map((n) => ({
+    id: n.id,
+    type: 'flow',
+    position: { x: n.x ?? 0, y: n.y ?? 0 },
+    data: {
+      node: n,
+      status: statuses.get(n.id),
+      arms:
+        n.type === 'route'
+          ? outgoing(g, n.id).map((e) => ({ when: e.when ?? '', to: e.to }))
+          : undefined,
+      agentName: n.agentId ? agentNames.get(n.agentId) : undefined,
+      automationName: n.automationId ? automationNames.get(n.automationId) : undefined,
+    },
+    draggable: true,
+  }))
+  const byId = new Map(g.nodes.map((n) => [n.id, n]))
+  const edges: FlowRFEdge[] = g.edges.map((e) => ({
+    id: e.id,
+    source: e.from,
+    target: e.to,
+    type: 'flow',
+    data: { when: e.when, isRoute: byId.get(e.from)?.type === 'route' },
+  }))
   return { nodes, edges }
 }
 
-// reactFlowToGraph rebuilds a FlowGraph from canvas nodes + edges, reading the
-// routing back out of the edges (by source handle) and persisting positions.
-export function reactFlowToGraph(nodes: FlowRFNode[], edges: Edge[], start: string): FlowGraph {
-  const out: FlowNode[] = nodes.map((rn) => {
-    const base: FlowNode = { ...rn.data.node, x: round(rn.position.x), y: round(rn.position.y) }
-    const outgoing = edges.filter((e) => e.source === rn.id)
-    switch (base.type) {
-      case 'agent':
-      case 'delay':
-      case 'transform':
-      case 'await-input':
-      case 'subflow':
-      case 'start':
-      case 'spawn':
-      case 'join':
-      case 'coordinator':
-        base.next = outgoing[0]?.target ?? ''
-        break
-      case 'end':
-        break // terminal — no next
-      case 'branch': {
-        // Keep existing arm conditions, re-target by branch slot order.
-        const arms = base.branches ?? []
-        base.branches = arms.map((b, i) => {
-          const e = outgoing.find((x) => x.sourceHandle === `b${i}`)
-          return { contains: b.contains, next: e?.target ?? '' }
-        })
-        break
-      }
-      case 'parallel':
-        base.parallel = outgoing.filter((e) => e.sourceHandle === 'fan').map((e) => e.target)
-        base.joinNext = outgoing.find((e) => e.sourceHandle === 'join')?.target ?? ''
-        break
-      case 'loop':
-        base.body = outgoing.find((e) => e.sourceHandle === 'body')?.target ?? ''
-        base.loopNext = outgoing.find((e) => e.sourceHandle === 'loop')?.target ?? ''
-        break
+// applyPositions writes the canvas positions back into the graph.
+export function applyPositions(g: FlowGraph, nodes: FlowRFNode[]): FlowGraph {
+  const pos = new Map(nodes.map((n) => [n.id, n.position]))
+  return {
+    ...g,
+    nodes: g.nodes.map((n) => {
+      const p = pos.get(n.id)
+      return p ? { ...n, x: Math.round(p.x), y: Math.round(p.y) } : n
+    }),
+  }
+}
+
+// lint runs the structural checks that need no backend: counts, dangling edges,
+// linear fan-out. Messages are i18n keys with params.
+export function lint(g: FlowGraph): { key: string; params?: Record<string, unknown> }[] {
+  const out: { key: string; params?: Record<string, unknown> }[] = []
+  const ids = new Set(g.nodes.map((n) => n.id))
+  const inputs = g.nodes.filter((n) => n.type === 'input').length
+  const outputs = g.nodes.filter((n) => n.type === 'output').length
+  if (inputs !== 1) out.push({ key: 'lint.oneInput', params: { count: inputs } })
+  if (outputs !== 1) out.push({ key: 'lint.oneOutput', params: { count: outputs } })
+  for (const e of g.edges) {
+    if (!ids.has(e.from) || !ids.has(e.to))
+      out.push({ key: 'lint.danglingEdge', params: { id: e.id } })
+  }
+  for (const n of g.nodes) {
+    const outs = outgoing(g, n.id).length
+    if (
+      (n.type === 'llm' || n.type === 'transform' || n.type === 'trigger' || n.type === 'input') &&
+      outs !== 1
+    ) {
+      out.push({ key: 'lint.oneOutgoing', params: { id: n.id, count: outs } })
     }
-    return base
-  })
-  return { start, nodes: out }
-}
-
-// canonicalGraphKey returns a stable string identity for a FlowGraph, invariant
-// to representational differences: the backend's `omitempty` marshaling drops
-// next:""/x/y:0/empty-prompt, and JSON key order isn't guaranteed. It re-runs the
-// editor's own graphToReactFlow → reactFlowToGraph round-trip so a stored graph
-// and the live canvas reconstruction collapse to the same key when structurally
-// equal. Cosmetic fields (edgeStyle/animated) are intentionally excluded, so they
-// never raise a false "unsaved edits" signal. Use for dirty-checking.
-export function canonicalGraphKey(graph: FlowGraph): string {
-  const { nodes, edges } = graphToReactFlow({
-    start: graph.start ?? '',
-    nodes: Array.isArray(graph.nodes) ? graph.nodes : [],
-  })
-  const g = reactFlowToGraph(nodes, edges, graph.start ?? '')
-  return JSON.stringify({ start: g.start ?? '', nodes: g.nodes ?? [] })
-}
-
-// needsLayout reports whether any node lacks a persisted position.
-function needsLayout(graph: FlowGraph): boolean {
-  return graph.nodes.some((n) => n.x === undefined || n.y === undefined)
-}
-
-// autoLayout assigns a layered grid position to every node VERTICALLY: the BFS
-// depth from start flows top→bottom (y), and siblings at the same depth spread
-// left→right (x). Cyclic graphs are bounded by a visited set so this always
-// terminates.
-export function autoLayout(graph: FlowGraph): Record<string, { x: number; y: number }> {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]))
-  const depth = new Map<string, number>()
-  const queue: Array<{ id: string; d: number }> = []
-  if (graph.start && byId.has(graph.start)) queue.push({ id: graph.start, d: 0 })
-
-  while (queue.length) {
-    const { id, d } = queue.shift()!
-    if (depth.has(id)) {
-      depth.set(id, Math.max(depth.get(id)!, d))
-      continue
+    if (n.type === 'route' && outs === 0) out.push({ key: 'lint.routeNoArm', params: { id: n.id } })
+    if (n.type === 'route' && n.mode === 'criteria') {
+      if (!(n.criteria ?? []).some((c) => c.trim()))
+        out.push({ key: 'lint.criteriaEmpty', params: { id: n.id } })
+      const labels = outgoing(g, n.id).map((e) => (e.when ?? '').trim().toLowerCase())
+      if (!labels.includes('pass') && !labels.includes('fail'))
+        out.push({ key: 'lint.criteriaArms', params: { id: n.id } })
     }
-    depth.set(id, d)
-    for (const t of successors(byId.get(id))) {
-      if (t && byId.has(t)) queue.push({ id: t, d: d + 1 })
-    }
+    if (n.type === 'trigger' && !n.automationId?.trim())
+      out.push({ key: 'lint.triggerAutomation', params: { id: n.id } })
+    if (n.type === 'output' && outs !== 0)
+      out.push({ key: 'lint.outputNoOutgoing', params: { id: n.id } })
+    if (n.type === 'transform' && !n.template?.trim())
+      out.push({ key: 'lint.transformTemplate', params: { id: n.id } })
   }
+  return out
+}
 
-  // Unreachable nodes get appended at increasing depths so they're still visible.
-  let extra = (depth.size ? Math.max(...depth.values()) : -1) + 1
-  for (const n of graph.nodes) if (!depth.has(n.id)) depth.set(n.id, extra++)
-
-  // Vertical layout: depth = row (down the y-axis), sibling order = column
-  // (spread across the x-axis) so the flow reads top→bottom.
-  const colByDepth = new Map<number, number>()
-  const pos: Record<string, { x: number; y: number }> = {}
-  for (const n of graph.nodes) {
-    const d = depth.get(n.id) ?? 0
-    const col = colByDepth.get(d) ?? 0
-    colByDepth.set(d, col + 1)
-    pos[n.id] = { x: col * COL_W, y: d * ROW_H }
+// shapeOf renders the one-line summary the backend also produces, so the list
+// row and the inspector agree before a save.
+export function shapeOf(g: FlowGraph): string {
+  const input = g.nodes.find((n) => n.type === 'input')
+  if (!input) return `${g.nodes.length} nodes`
+  const seen = new Set<string>()
+  const parts: string[] = []
+  let cur: string | undefined = input.id
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const n = g.nodes.find((x) => x.id === cur)
+    if (!n) break
+    if (n.type === 'input' || n.type === 'output') parts.push(n.type)
+    else if (n.type === 'route') {
+      const arms = outgoing(g, n.id).map((e) => `${e.when || '*'}→${e.to}`)
+      parts.push(`${n.id}(route: ${arms.join(', ')})`)
+    } else parts.push(`${n.id}(${n.type})`)
+    const outs = outgoing(g, n.id)
+    cur = outs.find((e) => !seen.has(e.to))?.to
   }
-  return pos
-}
-
-// successors lists the node ids a node routes to, across all node types.
-function successors(n: FlowNode | undefined): string[] {
-  if (!n) return []
-  switch (n.type) {
-    case 'agent':
-    case 'delay':
-    case 'transform':
-    case 'await-input':
-    case 'subflow':
-    case 'start':
-    case 'spawn':
-    case 'join':
-    case 'coordinator':
-      return [n.next ?? '']
-    case 'end':
-      return []
-    case 'branch':
-      return (n.branches ?? []).map((b) => b.next)
-    case 'parallel':
-      return [...(n.parallel ?? []), n.joinNext ?? '']
-    case 'loop':
-      return [n.body ?? '', n.loopNext ?? '']
-    default:
-      return []
-  }
-}
-
-function round(v: number): number {
-  return Math.round(v)
-}
-
-// ensureStartNode upgrades a graph to the required start-node model: when it lacks
-// a start node it prepends one (Next = the old entry) and repoints start to it.
-// Mirrors the backend's MigrateAddStart so templates/previews render + instantiate
-// validly. Idempotent.
-export function ensureStartNode(graph: FlowGraph): FlowGraph {
-  if (graph.nodes.some((n) => n.type === 'start')) return graph
-  const id = graph.nodes.some((n) => n.id === 'start') ? `start_${graph.nodes.length}` : 'start'
-  const startNode: FlowNode = {
-    id,
-    type: 'start',
-    title: defaultNodeTitle('start'),
-    next: graph.start || '',
-  }
-  return { ...graph, start: id, nodes: [startNode, ...graph.nodes] }
-}
-
-// defaultNodeTitle resolves a title only when a new node is created. Existing
-// saved/user titles remain stored data and are never rewritten on locale changes.
-export function defaultNodeTitle(type: FlowNodeType): string {
-  return i18next.t(`nodeTypes.${type}`, { ns: 'flows' })
-}
-
-// nextNodeId returns the smallest unused "n<i>" id for a new node.
-export function nextNodeId(nodes: FlowNode[]): string {
-  let i = 1
-  while (nodes.some((n) => n.id === `n${i}`)) i++
-  return `n${i}`
-}
-
-// blankNode builds a default node of the given type.
-export function blankNode(id: string, type: FlowNodeType, defaultAgentId = ''): FlowNode {
-  const node: FlowNode = { id, type, title: '' }
-  if (type === 'agent') {
-    node.agentId = defaultAgentId
-    node.prompt = '{{input}}'
-    node.next = ''
-  } else if (type === 'branch') {
-    node.branches = [{ contains: '', next: '' }]
-    node.matchMode = 'contains'
-  } else if (type === 'delay') {
-    node.delayMs = 1000
-    node.next = ''
-  } else if (type === 'transform') {
-    node.template = '{{last}}'
-    node.next = ''
-  } else if (type === 'loop') {
-    node.body = ''
-    node.loopNext = ''
-    node.maxIters = 3
-    node.until = ''
-    node.untilMode = 'contains'
-  } else if (type === 'await-input') {
-    node.next = ''
-    node.title = defaultNodeTitle(type)
-  } else if (type === 'subflow') {
-    node.flowRef = ''
-    node.template = '{{last}}'
-    node.next = ''
-    node.title = defaultNodeTitle(type)
-  } else if (type === 'start') {
-    node.next = ''
-    node.title = defaultNodeTitle(type)
-  } else if (type === 'end') {
-    node.title = defaultNodeTitle(type)
-  } else if (type === 'spawn') {
-    node.spawnFlows = []
-    node.template = '{{last}}'
-    node.next = ''
-    node.title = defaultNodeTitle(type)
-  } else if (type === 'join') {
-    node.spawnRef = ''
-    node.next = ''
-    node.title = defaultNodeTitle(type)
-  } else if (type === 'coordinator') {
-    node.agentId = defaultAgentId
-    node.prompt = '{{last}}'
-    node.next = ''
-    node.title = defaultNodeTitle(type)
-  } else {
-    node.parallel = []
-    node.joinNext = ''
-  }
-  return node
+  for (const n of g.nodes) if (!seen.has(n.id)) parts.push(`${n.id}(${n.type})`)
+  return parts.join(' → ')
 }

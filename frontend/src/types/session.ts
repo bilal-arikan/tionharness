@@ -2,19 +2,11 @@
 
 // Session origin kinds (db.Origin* constants).
 type SessionOriginKind =
-  | 'user'
-  | 'spawn'
-  | 'coordinator'
-  | 'subagent'
-  | 'flow'
-  | 'schedule'
-  | 'automation'
-  | 'handoff'
-  | 'insight'
+  'user' | 'spawn' | 'coordinator' | 'subagent' | 'schedule' | 'automation' | 'handoff' | 'insight'
 
 // Who started a session and from where (db.SessionOrigin). Field meaning
-// depends on kind: entityId names the automation/schedule/flow, runId the flow
-// or insight run, nodeId the flow node, triggerSessionId the session whose
+// depends on kind: entityId names the automation/schedule, runId the insight
+// run, triggerSessionId the session whose
 // activity caused this one (coordinator, parent turn, handed-off session, tagged
 // session), rootSessionId the top of the tree (empty = this session is a root).
 export interface SessionOrigin {
@@ -36,8 +28,8 @@ export interface Session {
   // "user". Grows as agents author or are addressed. Empty on legacy sessions →
   // treat as [agentId]. (db.Session.Participants; generic participant model.)
   participants?: string[]
-  // Broad category of what produced the transcript: chat | task | flow |
-  // schedule. Drives the executions feed's kind badge.
+  // Broad category of what produced the transcript: chat | task | schedule.
+  // Drives the executions feed's kind badge.
   kind: string
   // Stable execution classification. New UI classification must prefer these
   // fields over legacy kind; old persisted sessions may omit both.
@@ -47,7 +39,7 @@ export interface Session {
   visibility?: string
   targetProfile?: string
   targetAgentId?: string
-  // Links the session to the entity that owns it (a task or flow id); empty for
+  // Links the session to the entity that owns it (a task id); empty for
   // plain chat and agent-keyed kinds (schedule).
   sourceId?: string
   // Who started this session and from where (db.Session.Origin). The single
@@ -168,7 +160,7 @@ export interface GitInfo {
 }
 
 // Execution is one row of the unified executions feed (GET /api/executions): a
-// session-backed transcript produced by any path (chat/task/flow/schedule),
+// session-backed transcript produced by any path (chat/task/schedule),
 // enriched with the agent name, a live-running flag and a last-run status.
 export interface Execution {
   sessionId: string
