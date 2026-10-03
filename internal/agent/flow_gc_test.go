@@ -23,7 +23,10 @@ func TestDeleteFlowRunRemovesSidecarsAndAnnounces(t *testing.T) {
 		t.Fatalf("create flow: %v", err)
 	}
 	mkRun := func() db.FlowRun {
-		run, _ := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flow.ID})
+		run, err := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flow.ID})
+		if err != nil {
+			t.Fatalf("create run: %v", err)
+		}
 		if err := rt.db.FinishFlowRun(ctx, run.ID, db.FlowSuccess, "", ""); err != nil {
 			t.Fatalf("finish: %v", err)
 		}
@@ -36,11 +39,10 @@ func TestDeleteFlowRunRemovesSidecarsAndAnnounces(t *testing.T) {
 		}
 		return run
 	}
+	// Creation order is stable even within one second: this fresh fixture's
+	// increasing run ids break equal-timestamp ties.
 	old := mkRun()
 	newer := mkRun()
-	// Make ordering deterministic: old is older.
-	rt.db.SetFlowRunCreatedAtForTest(old.ID, 1000)
-	rt.db.SetFlowRunCreatedAtForTest(newer.ID, 2000)
 
 	deleted, err := rt.DeleteFlowRun(ctx, old.ID)
 	if err != nil || len(deleted) != 1 || deleted[0] != old.ID {
@@ -67,7 +69,6 @@ func TestDeleteFlowRunRemovesSidecarsAndAnnounces(t *testing.T) {
 
 	// Retention: keep 1 per flow → with a third finished run, the oldest goes.
 	third := mkRun()
-	rt.db.SetFlowRunCreatedAtForTest(third.ID, 3000)
 	tun.SetFlowRunRetention(1)
 	if n := rt.sweepFlowRunRetention(ctx); n != 1 {
 		t.Fatalf("sweep pruned %d, want 1", n)

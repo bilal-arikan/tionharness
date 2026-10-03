@@ -178,19 +178,6 @@ func (r *Runtime) notifyNewAnomalies(ctx context.Context, sessionID string) {
 	}
 }
 
-// AddSessionTag is a small exported helper to add a single derived tag outside a
-// turn (e.g. the moment a session is archived). No-op if already present.
-func (r *Runtime) AddSessionTag(ctx context.Context, sessionID, tag string) {
-	if sessionID == "" || tag == "" {
-		return
-	}
-	sess, err := r.db.GetSession(ctx, sessionID)
-	if err != nil {
-		return
-	}
-	r.addSessionTags(ctx, sess, []string{tag})
-}
-
 // addSessionTags unions add into the session's existing tags and persists only
 // when something changed, then emits a "session" event for live UI refresh.
 func (r *Runtime) addSessionTags(ctx context.Context, sess db.Session, add []string) bool {

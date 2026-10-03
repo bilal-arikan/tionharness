@@ -96,35 +96,57 @@ func TestResolveTitleConfigRoutesCLICaller(t *testing.T) {
 	}
 }
 
-// TestFoldContextTargets pins the two fold-target shapes: same provider + cheaper
-// model stamps an agent-only override (the fold keeps the provider object it was
-// handed), while a CLI caller with an anthropic key is routed to the API
-// instance; a caller already on the compaction model stamps nothing.
+// TestFoldContextTargets exercises the fold request after runtime routing: a
+// cheaper model keeps the caller's provider, a CLI caller can move to the API,
+// and a caller already on the compaction model keeps its original request.
 func TestFoldContextTargets(t *testing.T) {
 	rt, tun := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
+	provider := &compactorTestProvider{}
+	fold := func(fctx context.Context, caller db.Agent) error {
+		t.Helper()
+		_, err := conversation.BuildHandoff(fctx, rt.db, provider, caller, "", "user: continue", conversation.HandoffEnv{}, "")
+		return err
+	}
 
 	// No registry: the fold stays on the handed provider with the compaction
 	// agent's model (haiku suggested for a keyless/claude-cli caller).
-	fctx := rt.FoldContext(ctx, db.Agent{ID: "A1", Provider: "", Model: "m"})
-	target, ok := conversation.FoldTargetAgent(fctx)
-	if !ok || target.Model != "haiku" || target.Provider != "" {
-		t.Fatalf("same-provider fold target = %+v (ok=%v), want model haiku on the same provider", target, ok)
+	caller := db.Agent{ID: "A1", Provider: "", Model: "m"}
+	if err := fold(rt.FoldContext(ctx, caller), caller); err != nil {
+		t.Fatal(err)
+	}
+	if provider.request.Model != "haiku" || !provider.request.CLIRestrictNativeTools {
+		t.Fatalf("same-provider fold request = %+v, want a tool-less haiku request", provider.request)
 	}
 
 	// Routed: CLI caller + anthropic key.
 	withAnthropicInstance(rt)
-	fctx = rt.FoldContext(ctx, db.Agent{ID: "A1", Provider: "claude-cli", Model: "opus"})
-	target, ok = conversation.FoldTargetAgent(fctx)
+	caller = db.Agent{ID: "A1", Provider: "claude-cli", Model: "opus"}
+	target, ok := rt.resolveFoldAgent(caller)
 	if !ok || target.Provider != "anthropic" || target.Model != "claude-haiku-4-5-20251001" {
 		t.Fatalf("routed fold target = %+v (ok=%v), want anthropic/haiku API id", target, ok)
+	}
+	// Cancel before the call so the real native transport cannot reach the network.
+	// The fixture provider ignores cancellation: a routing fallback would succeed
+	// and populate its request instead of returning the native transport's error.
+	provider.request = providers.Request{}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := fold(rt.FoldContext(cancelled, caller), caller); !errors.Is(err, context.Canceled) {
+		t.Fatalf("native fold must use the cancelled API transport: %v", err)
+	}
+	if provider.request.Model != "" {
+		t.Fatalf("native fold unexpectedly used the caller's provider: %+v", provider.request)
 	}
 
 	// Routing off and caller already on the compaction model: nothing stamped.
 	tun.SetAuxNativeRouting(false)
-	fctx = rt.FoldContext(ctx, db.Agent{ID: "A1", Provider: "claude-cli", Model: "haiku"})
-	if _, ok := conversation.FoldTargetAgent(fctx); ok {
-		t.Fatal("no override expected when the caller already matches the fold target")
+	caller = db.Agent{ID: "A1", Provider: "claude-cli", Model: "haiku"}
+	if err := fold(rt.FoldContext(ctx, caller), caller); err != nil {
+		t.Fatal(err)
+	}
+	if provider.request.Model != caller.Model {
+		t.Fatalf("matching caller must keep its model: %+v", provider.request)
 	}
 }
 

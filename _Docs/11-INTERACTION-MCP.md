@@ -892,7 +892,7 @@ da erteleniyordu → ilk turda `No such tool available`.
 - Kod: `internal/interaction/server.go` (`Server`, `serveStream`, `PushToolsChanged`),
   `internal/api/server.go` (`interactionSrv` concrete alan). Test:
   `TestInteraction_GetStreamReceivesPush`, `TestInteraction_PushNoStreamIsNoop`.
-- Spike prototipi: `_spikes/52-gateway/server/main.go` (aynı desen, claude-cli 2.1.201 ile doğrulandı).
+- Spike prototipi: `_Docs/arsiv/araclar/52-gateway/server/main.go` (aynı desen, claude-cli 2.1.201 ile doğrulandı).
 
 ---
 

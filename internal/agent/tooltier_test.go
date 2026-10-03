@@ -28,7 +28,7 @@ func TestWorkspaceTierFiltersCatalog(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 
-	full := rt.WorkspaceToolCatalog(ctx)
+	full, _ := rt.WorkspaceToolCatalogWithState(ctx)
 	if !hasTool(full, "Read") || !hasTool(full, "WebFetch") {
 		t.Fatalf("full catalog missing built-ins: %v", full)
 	}
@@ -36,7 +36,7 @@ func TestWorkspaceTierFiltersCatalog(t *testing.T) {
 	if err := rt.db.SetWorkspaceToolConfig(ctx, db.WorkspaceToolConfig{DisabledTools: []string{"WebFetch"}}); err != nil {
 		t.Fatalf("set workspace tool config: %v", err)
 	}
-	active := rt.ActiveToolCatalog(ctx)
+	active, _ := rt.ActiveToolCatalogWithState(ctx)
 	if hasTool(active, "WebFetch") {
 		t.Fatal("workspace-disabled tool must be absent from the active catalog")
 	}
@@ -44,7 +44,8 @@ func TestWorkspaceTierFiltersCatalog(t *testing.T) {
 		t.Fatal("non-disabled tool must remain active")
 	}
 	// The full catalog is unaffected by the denylist.
-	if !hasTool(rt.WorkspaceToolCatalog(ctx), "WebFetch") {
+	full, _ = rt.WorkspaceToolCatalogWithState(ctx)
+	if !hasTool(full, "WebFetch") {
 		t.Fatal("full workspace catalog must still list disabled tools")
 	}
 }
@@ -58,7 +59,7 @@ func TestWebSearchVisibleInWorkspaceCatalog(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 
-	full := rt.WorkspaceToolCatalog(ctx)
+	full, _ := rt.WorkspaceToolCatalogWithState(ctx)
 	if !hasTool(full, "WebSearch") {
 		t.Fatalf("workspace catalog must list WebSearch (sibling of WebFetch): %v", full)
 	}

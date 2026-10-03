@@ -956,7 +956,7 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 	// parked to disk and the turn returns an *askSuspend sentinel instead of
 	// blocking a goroutine on the interactive asker (see ask_suspend.go). The
 	// caller persists the state + opens a durable card; the answer endpoint
-	// re-drives the loop via ResumeAsk. Gated by WithDurableAsk (only the
+	// re-drives the loop via ResumeAskAndRecord. Gated by WithDurableAsk (only the
 	// interactive chat turn runner sets it) so every other path keeps today's
 	// blocking behavior. "Clean" = this ask is the sole call in its batch, no
 	// parallel subagents are in flight, and no code-execution container is

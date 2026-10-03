@@ -202,19 +202,11 @@ func (l *Ledger) Append(rec Record) {
 }
 
 func (l *Ledger) appendLine(line []byte) error {
-	if err := os.MkdirAll(filepath.Dir(l.path), 0o755); err != nil {
-		return err
-	}
-	if fi, err := os.Stat(l.path); err == nil && fi.Size()+int64(len(line)) > l.maxBytes {
+	return appendJSONL(l.path, l.maxBytes, line, func() error {
+		// Keep ledger rotation best-effort even when the destination is blocked.
 		_ = os.Rename(l.path, rotatedLedgerPath(l.path))
-	}
-	f, err := os.OpenFile(l.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.Write(line)
-	return err
+		return nil
+	})
 }
 
 func rotatedLedgerPath(path string) string {

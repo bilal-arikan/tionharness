@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -326,24 +325,10 @@ func oldestAsk(asks []db.SessionAsk) *db.SessionAsk {
 
 // sessionNames lists up to max session ids, reporting the remainder as a count.
 func sessionNames(ss []db.Session, max int) string {
-	ids := make([]string, 0, max)
-	for i, s := range ss {
-		if i >= max {
-			return strings.Join(ids, ", ") + fmt.Sprintf(" +%d", len(ss)-max)
-		}
-		ids = append(ids, s.ID)
-	}
-	return strings.Join(ids, ", ")
+	return idSummary(len(ss), max, func(i int) string { return ss[i].ID })
 }
 
 // runNames lists up to max flow-run ids, reporting the remainder as a count.
 func runNames(rs []db.FlowRun, max int) string {
-	ids := make([]string, 0, max)
-	for i, r := range rs {
-		if i >= max {
-			return strings.Join(ids, ", ") + fmt.Sprintf(" +%d", len(rs)-max)
-		}
-		ids = append(ids, r.ID)
-	}
-	return strings.Join(ids, ", ")
+	return idSummary(len(rs), max, func(i int) string { return rs[i].ID })
 }

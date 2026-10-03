@@ -105,9 +105,6 @@ export const flowApi = {
       body: JSON.stringify({ name, graph }),
     }),
   deleteFlow: (id: string) => req<{ result: string }>(`/api/flows/${id}`, { method: 'DELETE' }),
-  // Removes a FINISHED run and its whole tree (409 while any member is live).
-  deleteFlowRun: (id: string) =>
-    req<{ deleted: string[] }>(`/api/flow-runs/${id}`, { method: 'DELETE' }),
   // Replace a flow's free-form tags (organizational).
   setFlowTags: (id: string, tags: string[]) =>
     req<{ id: string; tags: string[] }>(`/api/flows/${id}/tags`, {
@@ -131,15 +128,12 @@ export const flowApi = {
       timeoutMs: 0, // Blocking flow runs use the runtime's execution limits.
       body: JSON.stringify({ input }),
     }).then((r) => r.run),
-  listFlowRuns: (flowId: string) =>
-    req<FlowRun[]>(`/api/flow-runs?flowId=${encodeURIComponent(flowId)}`),
   // All flow runs across flows (newest first) — backend returns everything when
   // no flowId is given. Used by the FlowsPanel "Koşular" tab. Pass rootOnly to
   // leave out the subflow/spawn children of composed flows, so one run of a
   // composed flow is one row; the children stay reachable via flowRunTree.
   listAllFlowRuns: (rootOnly = false) =>
     req<FlowRun[]>(`/api/flow-runs${rootOnly ? '?rootOnly=true' : ''}`),
-  getFlowRun: (id: string) => req<FlowRun>(`/api/flow-runs/${id}`),
   // Every run in one composed flow's tree, breadth-first (parent before its
   // children). Accepts ANY member id, not just the root — the backend normalises
   // to the root. Also the resync path when the live event stream drops.

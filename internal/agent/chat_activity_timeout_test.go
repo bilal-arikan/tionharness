@@ -9,7 +9,7 @@ import (
 
 func TestChatTurnStalledStreamIsReclaimed(t *testing.T) {
 	const idle = 50 * time.Millisecond
-	ctx, stop := WithChatActivityTimeout(context.Background(), 0, idle)
+	ctx, stop := WithChatActivityTimeout(context.Background(), idle)
 	defer stop()
 	tracker := ActivityTrackerFrom(ctx)
 	tracker.ObserveStep(TurnStep{Kind: StepDelta, Text: "first"})
@@ -25,7 +25,7 @@ func TestChatTurnStalledStreamIsReclaimed(t *testing.T) {
 
 func TestHeartbeatLikeNoiseDoesNotKeepChatAlive(t *testing.T) {
 	const idle = 45 * time.Millisecond
-	ctx, stop := WithChatActivityTimeout(context.Background(), 0, idle)
+	ctx, stop := WithChatActivityTimeout(context.Background(), idle)
 	defer stop()
 	tracker := ActivityTrackerFrom(ctx)
 	ticker := time.NewTicker(5 * time.Millisecond)

@@ -18,7 +18,7 @@ import (
 // spawnTimeout bounds the turn-finished / failed-turn HOOK firing (a completion
 // side-effect, not a work turn) that shares this package-level default. Every
 // background WORK turn — spawn, worker, coordinator, inbox delivery — instead uses
-// the run-scoped semantic inactivity watchdog (see withActivityTimeout). Deprecated
+// the run-scoped semantic inactivity watchdog (see WithActivityTimeout). Deprecated
 // SpawnTimeout storage no longer bounds productive execution.
 const spawnTimeout = 10 * time.Minute
 

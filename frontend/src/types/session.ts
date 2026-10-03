@@ -125,38 +125,6 @@ export interface WorkdirInfo {
   branch: string
 }
 
-// ProgressTodo is one persisted checklist item (durable todo_write entry).
-interface ProgressTodo {
-  content: string
-  status: 'pending' | 'in_progress' | 'completed'
-  category?: string
-  steps?: string[]
-}
-
-// ProgressLogEntry is one line of the rolling progress journal.
-interface ProgressLogEntry {
-  ts: number
-  sessionId?: string
-  note: string
-}
-
-// ProgressRecord is the decoded persistent-progress file (todos + log).
-interface ProgressRecord {
-  version: number
-  updatedAt: number
-  sessionId?: string
-  agentId?: string
-  todos: ProgressTodo[]
-  log?: ProgressLogEntry[]
-}
-
-// SessionProgress is the read-only viewer's view of a session's progress file.
-export interface SessionProgress {
-  path: string
-  exists: boolean
-  record: ProgressRecord | null
-}
-
 // ActivitySpan is one stretch a session spent working, in unix seconds. Start
 // === End is legitimate: a single message no neighbour joined.
 export interface ActivitySpan {
@@ -228,13 +196,6 @@ export interface ExecutionRuntimeRow {
   lastStatus?: string
   coordinatorSessionId?: string
   rootCoordinatorSessionId?: string
-}
-
-export interface SessionContext {
-  contextTokens: number
-  hasSummary: boolean
-  summaryMsgCount: number
-  messageCount: number
 }
 
 // The exact next-turn context a session's agent would be sent (debug preview):

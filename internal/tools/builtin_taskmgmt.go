@@ -39,18 +39,6 @@ func truncateForTool(s string, max int) string {
 	return textutil.TruncBytes(s, max) + "…(truncated)"
 }
 
-func placeholderTaskTitle(source string) string {
-	source = strings.TrimSpace(source)
-	if i := strings.IndexAny(source, "\r\n"); i >= 0 {
-		source = strings.TrimSpace(source[:i])
-	}
-	runes := []rune(source)
-	if len(runes) > 60 {
-		return strings.TrimSpace(string(runes[:60])) + "…"
-	}
-	return source
-}
-
 // ---- list_tasks ----
 
 // ListTasksTool returns the board as a compact list.
@@ -321,7 +309,7 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	title := in.Title
 	autoTitle := title == "" && titleSource != ""
 	if autoTitle {
-		title = placeholderTaskTitle(titleSource)
+		title = textutil.PlaceholderTaskTitle(titleSource)
 	}
 	created, err := t.d.db.CreateTask(ctx, db.Task{
 		Title:        title,

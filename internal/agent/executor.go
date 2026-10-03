@@ -70,7 +70,7 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 // complete is the shared single-prompt provider call. system is the static
 // prefix, systemDynamic the volatile suffix (see providers.Request);
 // outputSchema (may be "") constrains the reply via structured outputs on
-// supporting providers/models. It routes through CompleteWithTools, which
+// supporting providers/models. It routes through CompleteWithToolsStream, which
 // enforces the daily budget (when autonomous), records usage, and runs the
 // agentic tool loop when the agent has tools enabled. Used by the orchestration
 // flow runner (flow.go).

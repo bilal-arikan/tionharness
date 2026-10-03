@@ -16,6 +16,11 @@ func TestNewArtifactSinkPersists(t *testing.T) {
 	ctx := context.Background()
 
 	sink := rt.NewArtifactSink("SES1", "AGT1")
+	if _, ok := sink.(interface {
+		AppendPlanArtifact(context.Context, string) (tools.ArtifactRef, error)
+	}); ok {
+		t.Fatal("autonomous sink unexpectedly exposed the chat plan-approval capability")
+	}
 	ref, err := sink.CreateArtifact(ctx, tools.CreateArtifactSpec{Title: "Doc", Kind: "markdown", Content: "hello"})
 	if err != nil {
 		t.Fatalf("create artifact: %v", err)

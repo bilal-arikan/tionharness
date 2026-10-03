@@ -228,13 +228,6 @@ export interface WorkspaceArchives {
   archives: BackupArchiveFile[]
 }
 
-export interface ProviderTestResult {
-  ok: boolean
-  model?: string
-  sample?: string
-  error?: string
-}
-
 // Provider/model catalog for the UI's pickers.
 export interface CatalogModel {
   id: string

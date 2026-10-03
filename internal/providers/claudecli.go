@@ -725,24 +725,9 @@ const cliStartupTimeoutDefault = 90 * time.Second
 
 var (
 	cliStartupMu sync.RWMutex
-	// cliStartupTimeoutDuration is the effective window. Tests shrink it so the
-	// startup-watchdog branch is reachable without a 90s wait — the same injection
-	// pattern as SetCLISessionIdleTimeout.
+	// Tests shrink the effective window to reach the startup-watchdog branch.
 	cliStartupTimeoutDuration = cliStartupTimeoutDefault
 )
-
-// SetCLIStartupTimeout configures the time-to-first-output watchdog for every
-// subsequent claude-cli turn (one-shot and persistent). d <= 0 restores the
-// default rather than disabling the guard: a startup hang holds the turn — and,
-// on the persistent path, the session mutex — with nothing else to bound it.
-func SetCLIStartupTimeout(d time.Duration) {
-	cliStartupMu.Lock()
-	if d <= 0 {
-		d = cliStartupTimeoutDefault
-	}
-	cliStartupTimeoutDuration = d
-	cliStartupMu.Unlock()
-}
 
 func cliStartupTimeout() time.Duration {
 	cliStartupMu.RLock()

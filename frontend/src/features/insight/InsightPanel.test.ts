@@ -1,8 +1,72 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment jsdom
+
+import { act, createElement, type ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Agent, InsightSettings } from '@/types'
+import { render, query } from '@/test/render'
 import { persistAnalysisAgentSelection, withDefaultAnalysisAgent } from './insightAgentSelection'
-import panelSource from './InsightPanel.tsx?raw'
-import settingsSource from './SettingsTab.tsx?raw'
+import { InsightPanel } from './InsightPanel'
+
+const calls = vi.hoisted(() => ({
+  getInsightSettings: vi.fn(),
+  listAgents: vi.fn(),
+  listInsightLenses: vi.fn(),
+  listInsightFindings: vi.fn(),
+  getInsightScanStatus: vi.fn(),
+  updateInsightSettings: vi.fn(),
+  runInsightScan: vi.fn(),
+  t: (key: string) => key,
+}))
+
+vi.mock('@/api', () => ({ api: calls }))
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-i18next')>()),
+  useTranslation: () => ({ t: calls.t }),
+}))
+vi.mock('@/shared/components', () => ({
+  ListPane: ({ children }: { children: ReactNode }) =>
+    createElement('aside', { 'data-testid': 'scan-rail' }, children),
+  PaneHeader: () => null,
+  toast: { success: vi.fn() },
+}))
+vi.mock('@/shared/components/SidebarChrome', () => ({ SidebarHeader: () => null }))
+vi.mock('@/shared/hooks/useCollapsibleList', () => ({
+  useCollapsibleList: () => ({ open: true, toggle: vi.fn() }),
+}))
+vi.mock('@/shared/components/agents/AgentIdentity', () => ({
+  AgentIdentity: ({ agent }: { agent: Agent }) => createElement('span', {}, agent.name),
+}))
+vi.mock('./FindingsTab', () => ({ FindingsTab: () => null }))
+vi.mock('./FleetTab', () => ({ FleetTab: () => null }))
+vi.mock('./RunsTab', () => ({ RunsTab: () => null }))
+vi.mock('./LessonsTab', () => ({ LessonsTab: () => null }))
+vi.mock('@/features/settings/LessonsList', () => ({ LessonsList: () => null }))
+vi.mock('./LensList', () => ({
+  LensList: ({ onScanLens }: { onScanLens: (id: string) => void }) =>
+    createElement('button', { onClick: () => onScanLens('LENS1') }, 'scan-one-lens'),
+}))
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  calls.getInsightSettings.mockResolvedValue({ maxSessions: 25 })
+  calls.listAgents.mockResolvedValue([
+    { id: 'OLD', name: 'Archived', archived: true },
+    { id: 'AGT1', name: 'Ada' },
+    { id: 'AGT2', name: 'Bryn' },
+  ])
+  calls.listInsightLenses.mockResolvedValue([])
+  calls.listInsightFindings.mockResolvedValue([])
+  calls.getInsightScanStatus.mockResolvedValue({ scanning: false })
+  calls.updateInsightSettings.mockImplementation(async (settings: InsightSettings) => settings)
+  calls.runInsightScan.mockResolvedValue({})
+})
+
+async function renderPanel(tab = 'findings') {
+  const onError = vi.fn()
+  const rendered = render(createElement(InsightPanel, { tab, onError }))
+  await act(async () => {})
+  return { ...rendered, onError }
+}
 
 const agents = [{ id: 'AGT1' }, { id: 'AGT2' }] as Agent[]
 
@@ -53,22 +117,44 @@ describe('InsightPanel analysis agent selection', () => {
     expect(onError).toHaveBeenCalledWith('PUT failed')
   })
 
-  it('keeps the picker under the scan action in the rail and out of SettingsTab', () => {
-    expect(panelSource).toContain('Promise.all([api.getInsightSettings(), api.listAgents()])')
-    expect(panelSource).toContain('withDefaultAnalysisAgent(loadedSettings, loadedAgents)')
-    expect(panelSource.indexOf("t('scan.startTitle')")).toBeGreaterThan(-1)
-    expect(panelSource.indexOf("t('scan.analysisAgent')")).toBeGreaterThan(
-      panelSource.indexOf("t('scan.startTitle')"),
-    )
-    expect(panelSource.indexOf("t('scan.analysisAgent')")).toBeLessThan(
-      panelSource.indexOf('Sub-page rail.'),
-    )
-    expect(settingsSource).not.toContain('AgentPicker')
-    expect(settingsSource).not.toContain('scan.analysisAgent')
+  it('loads the live default into the rail picker and persists a changed selection', async () => {
+    const { container, onError } = await renderPanel('settings')
+    const rail = query<HTMLElement>(container, '[data-testid="scan-rail"]')
+    const trigger = query<HTMLButtonElement>(rail, '[data-testid="agent-picker-trigger"]')
+    const scan = query<HTMLButtonElement>(rail, 'button[title="scan.startTitle"]')
+    expect(trigger.textContent).toContain('Ada')
+    expect(scan.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(container.querySelectorAll('[data-testid="agent-picker-trigger"]')).toHaveLength(1)
+
+    act(() => trigger.click())
+    const options = [
+      ...rail.querySelectorAll<HTMLButtonElement>('[data-testid="agent-picker-option"]'),
+    ]
+    expect(options.map((option) => option.textContent)).toEqual(['Ada', 'Bryn'])
+    await act(async () => options[1].click())
+    expect(calls.updateInsightSettings).toHaveBeenCalledWith({
+      maxSessions: 25,
+      autoScanAgentId: 'AGT2',
+    })
+    expect(trigger.textContent).toContain('Bryn')
+    expect(onError).not.toHaveBeenCalled()
   })
 
-  it('keeps manual scans on the persisted backend agent fallback', () => {
-    expect(panelSource).toContain('api.runInsightScan(lensIds ? { lensIds } : {})')
-    expect(panelSource).not.toContain('analysisAgentId')
+  it('starts a manual scan without overriding the persisted backend agent', async () => {
+    calls.getInsightSettings.mockResolvedValue({ autoScanAgentId: 'AGT2' })
+    const { container } = await renderPanel()
+    const scan = query<HTMLButtonElement>(container, 'button[title="scan.startTitle"]')
+    await act(async () => scan.click())
+    expect(calls.runInsightScan).toHaveBeenCalledWith({})
+    expect(scan.disabled).toBe(true)
+  })
+
+  it('forwards only the selected lens when starting a lens scan', async () => {
+    const { container } = await renderPanel('lenses')
+    const scan = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'scan-one-lens',
+    )!
+    await act(async () => scan.click())
+    expect(calls.runInsightScan).toHaveBeenCalledWith({ lensIds: ['LENS1'] })
   })
 })

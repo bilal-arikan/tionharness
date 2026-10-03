@@ -1,6 +1,6 @@
 # TionHarness — Genel Bakış
 
-> **Özet (2026-09-28):** TionHarness'in giriş dokümanı — projenin ne olduğunu, teknoloji özetini, temel kavramları (Agent/Swarm/Session/Task/Provider) ve `_Docs` altındaki tüm doküman dizinini (00–88 + `arsiv/`) listeler. Durum: **uygulandı ve canlı** — Faz 0–8 tamamlandı, public yayın yapıldı (repo + tanıtım sitesi, Apache-2.0), Rota F0–F5 sonrasında monitor, karar katmanı ve süreç izleme de eklendi; güncel değişiklikler `05-ILERLEME.md` içinde izlenir. En önemli kararlar: SQLite yerine dosya-tabanlı depolama, Wails yerine CGO'suz native WebView2 penceresi, memory alt sisteminin 2026-07-05'te tamamen kaldırılması. Bir ajan için: projeye ilk kez bakan veya hangi dokümanın neyi anlattığını bulmak isteyen herkesin başlangıç noktası.
+> **Özet (2026-10-03):** Projenin amacı, teknoloji özeti, temel kavramları ve aktif/tarihsel doküman dizinidir. Uygulama canlıdır; ilk fazlar tamamlandı, memory alt sistemi 2026-07-05'te kaldırıldı. Güncel değişiklikler kısa `05-ILERLEME.md` günlüğünde, önceki aylar tarihli arşivlerde tutulur. GitHub kamusal yayın hattıdır; Gitea ayrı bir kendi barındırılan sürüm feed'ine yayın yapabilir. Merkezi ajan kataloğu, ayarlar ve on karar mercii ilgili rehberlerde açıklanır.
 
 > **TionHarness**, Go diliyle, kendi UI/UX tasarımıyla sıfırdan yazılmış çok-ajanlı AI runtime'ıdır.
 
@@ -10,8 +10,9 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 > **Public yayın (2026-08-27):** repo `https://github.com/bilal-arikan/tionharness`
 > altında herkese açık, tanıtım sitesi `https://tionharness.com` adresinde canlı
-> (GitHub Pages), lisans **Apache-2.0**. Yayın hattı GitHub Actions'a taşındı, VPS
-> deploy hattı kaldırıldı — detay `75-YAYIN-SURECI.md`.
+> (GitHub Pages), lisans **Apache-2.0**. Kamusal yayın GitHub Actions üzerinden
+> yapılır; Gitea'nın ayrı kendi barındırılan feed hattı kamusal feed'i değiştirmez.
+> Ayrıntı `75-YAYIN-SURECI.md`.
 
 ## Neden Go?
 
@@ -53,8 +54,8 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [02-VERI-MODELI.md](02-VERI-MODELI.md) | Dosya-tabanlı varlık modeli ve ilişkileri |
 | [03-YOL-HARITASI.md](03-YOL-HARITASI.md) | Aşama aşama (faz) geliştirme planı |
 | [04-TEKNOLOJI-SECIMLERI.md](04-TEKNOLOJI-SECIMLERI.md) | Kütüphane seçimleri ve gerekçeleri |
-| [05-ILERLEME.md](05-ILERLEME.md) | Yapılanlar / sıradaki adımlar takibi (**canlı durum** — 2026-07-01'den bugüne; en yeni kayıt üstte) |
-| [05-ARSIV.md](05-ARSIV.md) | İlerleme arşivi (**2026-06-30 ve öncesi** tamamlanmış kayıtlar). Kesim 2026-07-27'de 06-19'dan 06-30'a taşındı — ana dosya ay-başı sınırında tutulur |
+| [05-ILERLEME.md](05-ILERLEME.md) | Yakın dönem ilerleme günlüğü (2026-09-28 ve sonrası; en yeni tarih üstte) ve önceki ayların arşiv bağlantıları |
+| [05-ARSIV.md](05-ARSIV.md) | 2026-06-30 ve öncesinin tamamlanmış kayıtları; Temmuz–Eylül tarihli arşivler ana günlükte listelenir |
 | [06-WORKSPACES.md](06-WORKSPACES.md) | Workspace izolasyonu tasarımı (fiziksel ayrım) |
 | [07-CHAT-UX.md](07-CHAT-UX.md) | Zengin sohbet arayüzü + SSE adım-adım akış + clipboard/artifact görsel çizimi |
 | [08-DEPOLAMA.md](08-DEPOLAMA.md) | Dosya-tabanlı depolama tasarımı (JSON/JSONL, DB yok) |
@@ -118,7 +119,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [72-TANITIM-SITESI.md](72-TANITIM-SITESI.md) | **UYGULANDI (2026-08-25)** — `website/` altındaki statik tanıtım ve dokümantasyon sitesi (Astro 5 + Tailwind v4). Placeholder politikası (`site.config.ts`'te `null` = henüz yok → ölü link yerine "Coming soon"), bölüm akışı, uygulamadan elle senkronlanan tema dosyaları, `scripts\shots.ps1` Playwright screenshot hattı ve koda karşı doğrulanan içerik kaynakları |
 | [73-LOKALIZASYON.md](73-LOKALIZASYON.md) | **Altyapı UYGULANDI (2026-08-25)** — UI i18n: `Settings.UILanguage` (ajan yanıt dilinden ayrı eksen, `""` = onu izle), i18next + feature-bazlı JSON katalogları, `Intl` biçimlendirme katmanı (`shared/lib/intl.ts`), dil değişiminde ağaç remount'u, katalog parite/çoğul guard testleri, migre klasörler için ESLint hardcoded-metin kapısı ve `npm run i18n:extract`. Kelime çevirileri kademeli |
 | [74-SISTEM-AJANLARI.md](74-SISTEM-AJANLARI.md) | Sistem ajanları: canonical registry, kilitli yerleşik satır + özelleştirme çocuğu modeli (2026-09-03), çözümleme ve fallback, restore/disable semantiği, API/UI, özyineleme koruması ve usage taksonomisi |
-| [75-YAYIN-SURECI.md](75-YAYIN-SURECI.md) | **Yayın hattı UYGULANDI (2026-08-27)** — Etiket→test→derleme→GitHub Release + GitHub Pages akışı (`.github/workflows/release.yml`), `latest.json` şeması ve `deploy/release-host/` ile yerel Docker önizlemesi. VPS deploy hattı kaldırıldı |
+| [75-YAYIN-SURECI.md](75-YAYIN-SURECI.md) | Kamusal GitHub Release + Pages hattı, Gitea'nın ayrı kendi barındırılan feed yayını, `latest.json` şeması ve yerel Docker önizlemesi |
 | [76-ARTIFACT-SISTEMI.md](76-ARTIFACT-SISTEMI.md) | **Uygulandı (TSK476/TSK477)** — Artifact sistemi: image artifact'ları üzerine tarayıcıda çizim ve türetilmiş (`derivedFromArtifactId`) artifact olarak kaydetme |
 | [77-ROTA-ALTYAPI-PLANI.md](77-ROTA-ALTYAPI-PLANI.md) | **UYGULANDI: R1–R10 (2026-09-02), üstüne Rota F0–F5 (2026-09-02/03)** — Rota (oturumları dinamik/çatallanan akış grafiğine hizalama + workspace canlı görünümü + koşu-sonu optimizer) öncesi altyapı hazırlığı: 10 refactor kalemi (oturum kökeni `SessionOrigin`, canlılık kaydı, workspace olay günlüğü, sidecar soyutlaması, otomasyon tetik registry + arşiv, reçete şeması, koordinasyon gözlemcisi, flow bağlantı düzeltmeleri, view/graph, frontend), üç dalga, kapı ölçütleri |
 | [78-ROTA-EKRANI.md](78-ROTA-EKRANI.md) | **F0–F5 tamamlandı (2026-09-02/03)** — Rota ekranı: workspace-kök zaman ekseni kanvası (git-graf metaforu: kök şerit + worker/handoff alt şeritleri, `spawned`/`reported`/`forked_from` kenarları, akış koşusu çubukları, ⚡/↷/✕ işaretleri, kurulu zamanlayıcı gelecek şeridi), `laneStore` veri yolu, `GET /api/trajectories[/{id}]`, sağ panelde `ViewPanel`; F1a: rota varlığı üretimi (reçeteden tohum, R7 gözlemcisiyle spawn/rapor/akış koşusu/Ask kapısı bağlama), `trajectory` aracı (`get|plan|phase|finish`), `<trajectory>` durum bloğu; F1b: rota-içi faz-sütunlu görünüm + derin bağlantı, sohbet başlığında rol rozeti + mini rota şeridi, oturum kökeni çipi, Beceriler'de reçete çipleri, otomasyon ateşleme defteri, `ws:*` → toast köprüsü; F2: `phase`/`trajectory_end` tetikleri, reçete izleyicilerinin ateşlenmesi ve grafta "neden ateşlenmedi"; F3: rota bitiş özeti (süre/token/maliyet/hayalet faz/sessiz izleyici), reçete istatistikleri, LLM'siz haftalık küratör (arşivle/öner, provenance, pin) + Küratör paneli; F4: `recipe-optimizer` sistem ajanı, kodda zorlanan değişmezler (kanıt, büyüme bütçesi), `recipe-opt` içgörü kanalı (yalnız öneri); F5: faz kapıları (artifact/verdict/human = Durable Ask), kanvastan faz ekle/atla/tamamla, buradan çatalla, RunView → Rota; F4-v2 `auto_prune` oto-budama |
@@ -130,17 +131,28 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [83-EVRIM-MEKANIZMASI.md](83-EVRIM-MEKANIZMASI.md) | **Tarihsel araştırma ve tasarım; özellik 2026-09-29'da kaldırıldı.** Hedef güdümlü workspace evrimi için önceki yaklaşımı, uygulanmış eski fazları ve sonraki faz önerilerini kaydeder; güncel ürün davranışını anlatmaz. |
 | [85-MONITOR-SOZLESMESI.md](85-MONITOR-SOZLESMESI.md) | **Uygulandı (2026-09-22)** — `monitor` aracı: arka plan kabuğunun çıktısını bir regex'e karşı izler ve eşleşmede ajanı uyandırır, böylece bekleyiş tur harcamaz. `MonitorSource` arayüzü (terminal durum tam bir kez, geçici hata yoklamayı kesmez), kendi bayt imlecini tutan kabuk kaynağı (`drainFrom` — `shell_manage` ile tam bağımsız okuma), `ScheduleWake`'ten çıkarılan ortak `armWake` üzerine kurulu `WakeNow` (tek teslim zinciri, en fazla bir kez), kapasiteler (8 monitör / 2 KB yük / 10 olay / 5 sn soğuma / `max_fires`), `ReleaseSessionRuntimeState` ile `monitorMgrs`+`shellMgrs`+`readTrackers` sızıntı düzeltmesi; **v2 (TSK941)** ile dosya (sandbox'tan geçen, `fsnotify` yerine `os.Stat` yoklaması — gerekçeli), URL (gövde değişiminde ateşler, 30 sn taban aralık) ve WebSocket (okuyucu goroutine + sınırlı kuyruk) kaynakları, `shell_id`/`path`/`url`'den tam birini isteyen kaynak seçimi, ve WebFetch ile paylaşılan SSRF korumalı dialer (`egress_guard.go`) |
 | [86-DUYURU-FAN-OUT.md](86-DUYURU-FAN-OUT.md) | **Uygulandı (2026-09-22)** — Sürüm duyurusunu CI botu değil TionHarness'in kendi schedule + agent zinciri yapar (dogfood): `announce_release` aracı `_Docs/release.json`'u okur, manşet üretir (yalnız BREAKING/Features/Fixes, bölüm başına 5 giriş, 1800 rune sınırı, kırpmada notlar linki korunur) ve Discord webhook / Telegram Bot API'ye atar. Adresler **vault'ta** (`ANNOUNCE_*`), argümanda değil; açıkça istenen ama yapılandırılmamış kanal hatadır; araç idempotent **değildir** ve kısmi başarıda hangi kanallara çıktığını söyler; egress WebFetch ile aynı SSRF korumalı taşıyıcıdan geçer |
-| [87-KARAR-KATMANI.md](87-KARAR-KATMANI.md) | **Uygulandı (2026-09-22)** — Karar katmanı (`internal/decider`): tipli sorulara (noul/choice/score) olasılıkla cevap veren karar modelleri, chat provider'larından ayrı. **Karar modelleri** sağlayıcılar gibi eklenip düzenlenir (kendi uç noktası + şifreli anahtar ya da ödünç sağlayıcı hesabı); backend'ler: OpenRouter Decisions (Jev), System One API (TypeSafe · OpenJev), logprobs üzerinden herhangi bir yerel LLM (Ollama, LM Studio, llama.cpp, vLLM). **Karar mercileri** kayıt tabanlı: `off/shadow/on`, eşik, merci başına model + yedek + rakip; dört bağlı merci (tool-risk, stall-judge, flow-judge, phase-gate), yeni merciler için Pick/Select/Triage desenleri; karar sağlayıcıları Ayarlar → Sağlayıcılar'da, merciler Ayarlar → Karar Mercileri'nde |
+| [87-KARAR-KATMANI.md](87-KARAR-KATMANI.md) | Tipli karar modelleri ve on kayıtlı merci: dört güvenlik/akış noktası ile [92](92-JEV-IS-AKISLARI.md)'deki altı iş akışı. `off/shadow/on`, eşik, ana/yedek/rakip model; ortak `Pick` ve merciye özel soru kurucuları |
 | [87-KARAR-DEBUG.md](87-KARAR-DEBUG.md) | **Uygulandı (2026-10-01)** — Karar debug: çağrı zaman çizelgesi, model/HTTP/yedek/rakip denemeleri, eşik ve olasılıklar, oturum/tur korelasyonu, sınırlı JSONL geçmişi, filtre/JSON dışa aktarımı ve `read_decider_debug`; dört mevcut kayıt ve canlı Jev testinden elde edilen fayda değerlendirmesi |
 | [87-JEV-FIKIRLERI.md](87-JEV-FIKIRLERI.md) | **Öneri (2026-10-01)** — Alt ajan araştırması ve kullanıcı örneklerinden 20 kullanım fikri: compact/hatırlatma, toplu skill/tool seçimi, provider/model router, clarification, worker sentezi; her fikir için ölçüm ve hata yolu |
 | [88-SUREC-IZLEME.md](88-SUREC-IZLEME.md) | **Uygulandı (2026-09-23)** — Süreç defteri (`internal/procwatch`): ajanlar adına başlatılan yerel süreçler (kabuk çağrıları, arka plan kabukları, `run_code`/`transform_data` yorumlayıcıları, claude-cli/codex-cli taşıyıcıları, stdio MCP sunucuları, hook'lar, harici araç koşuları) tek bir sınırlı defterde toplanır: komut satırı, PID, sahip (workspace/oturum/ajan), durum (`running`/`succeeded`/`failed`/`killed`/`timed_out`), çıkış kodu, 4 KB çıktı kuyruğu. Sahiplik tur ctx'ine tek yerden damgalanır; okuma `GET /api/workspace/processes` + salt okunur `list_processes` aracı + Workspace → **İşlemler** sekmesi (yüksüz `process` SSE frame'iyle canlı); durdurma yalnız kullanıcıya ait (onaylı), `shell_manage` kill'i de aynı kapıdan geçer |
+| [90-MERKEZI-AGENT-KATALOGU.md](90-MERKEZI-AGENT-KATALOGU.md) | Merkezi ajan profilleri, workspace atamaları, kalıtım, onay ve `agent-catalog/` taşıma/yedekleme kuralları |
 | [91-CLAUDE-55-DESTEGI.md](91-CLAUDE-55-DESTEGI.md) | **Uygulandı (2026-10-01)** — Sonnet 5.5 ve Opus 5.5: Anthropic API, Claude CLI ve OpenRouter model kimlikleri; adaptif/between-tools düşünme, imzalı geçmiş uyumluluğu, fiyat tahminleri ve abonelik tüketmeden yerel doğrulama |
 | [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) | Maliyet düşürme planı — claude-cli batching/serial maliyet analizi ve aksiyonları |
+| [AYARLAR-SADELESTIRME.md](AYARLAR-SADELESTIRME.md) | Ayar kategorileri, kategoriye özel kayıt davranışı ve eski bağlantıların yönlendirilmesi |
 | [92-JEV-IS-AKISLARI.md](92-JEV-IS-AKISLARI.md) | **Uygulandı (2026-10-01)** — Session hazırlığı, model router, soru kontrolü, compact koruması, hatırlatma ve worker incelemesi; gruplu Karar Mercileri UI, oturum pin/feedback ve iz bağlantıları |
 | [INSIGHT-BACKLOG.md](INSIGHT-BACKLOG.md) | **Otomatik üretilir** — Insight taramasının "app-fix" kanalı; uygulama-tarafı bulgu birikimi (elle düzenlenmez; bkz. [60](60-RETROSPEKTIF-TARAMA.md)) |
 | [analiz-harici-ajan-arac-eslestirme.md](analiz-harici-ajan-arac-eslestirme.md) | the external agent project↔TionHarness araç eşleştirme analizi |
 | [analiz-harici-baglam-yonetimi.md](analiz-harici-baglam-yonetimi.md) | Harici ajan ↔ TionHarness bağlam yönetimi karşılaştırması (salt analiz) |
+| [TEMIZLIK-2026-10-03.md](TEMIZLIK-2026-10-03.md) | 65 maddelik depo temizliğinin sonuçları, değişiklikler ve doğrulama kanıtları |
 | **arsiv/** | Tarihsel dokümanlar: kaldırılan özellikler, tamamlanan planlar ve ana dokümanlardan taşınan plan gövdeleri (referans/appendix) |
+| [arsiv/05-ILERLEME-2026-07.md](arsiv/05-ILERLEME-2026-07.md) | Temmuz 2026 ilerleme kayıtları; içerik korunarak tarih sırasına kondu |
+| [arsiv/05-ILERLEME-2026-08.md](arsiv/05-ILERLEME-2026-08.md) | Ağustos 2026 ilerleme kayıtları |
+| [arsiv/05-ILERLEME-2026-09.md](arsiv/05-ILERLEME-2026-09.md) | 27 Eylül ve öncesinin Eylül 2026 ilerleme kayıtları |
+| [arsiv/03-YOL-HARITASI-TAMAMLANAN.md](arsiv/03-YOL-HARITASI-TAMAMLANAN.md) | İlk fazlar ve tamamlanan işlerin tarih/commit/kanıt dökümü; eski açık işaretler tarihsel görüntüdür |
+| [arsiv/68-OZET-HARITASI-ODAK-TASARIMI.md](arsiv/68-OZET-HARITASI-ODAK-TASARIMI.md) | Eski React Flow odak grafiği, erişilebilirlik kararları ve bileşen planı |
+| [arsiv/HARICI-ARAC-GUNCELLEMELERI-2026-09-29.md](arsiv/HARICI-ARAC-GUNCELLEMELERI-2026-09-29.md) | Kişisel araç bakım raporu; bekleyen yönetici adımları/yerel yedekler korunur, Go uyumluluğu [04](04-TEKNOLOJI-SECIMLERI.md)'te |
+| [arsiv/araclar/README.md](arsiv/araclar/README.md) | Tarihsel gateway prototipi, göç betikleri ve encoding onarım aracının kullanım sınırları |
+| [Ajan ayarları tasarım arşivi](arsiv/tasarim/agent-edit-toggle-options/README.md) | Aktif rehbere bağlı olmayan ajan ayarları tasarım kaynakları |
 | [arsiv/13-HARICI-AJANLAR-INCELEME.md](arsiv/13-HARICI-AJANLAR-INCELEME.md) | external-agent-oss release incelemesi → TionHarness çıkarımları |
 | [arsiv/14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md) | Çoklu-provider mimarisi incelemesi (gelecek plan) |
 | [arsiv/23-ILISKI-GRAFIGI.md](arsiv/23-ILISKI-GRAFIGI.md) | ~~İlişki grafiği / Ağ ekranı~~ (**KALDIRILDI 2026-09-05**, yerini Harita [68](68-OZET-HARITASI.md) aldı; 2026-09-22'de `arsiv/`'e taşındı) |
@@ -165,8 +177,10 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [arsiv/52-MCP-GATEWAY-PLANLAMA.md](arsiv/52-MCP-GATEWAY-PLANLAMA.md) | 52'nin uygulama öncesi analizi/faz planı (§0–§10) |
 | [arsiv/59-CLI-STEER-PLANI-TASARIM.md](arsiv/59-CLI-STEER-PLANI-TASARIM.md) | 59'un ilk plan/tasarım bölümleri |
 
-> **Numara notu:** Her numara tek dosyaya karşılık gelir; ana dizindeki boş numaralar (10,
-> 13–14, 23, 31, 42, 51, 55, 64, 70) tarihsel dokümanların `arsiv/`'e taşınmasından kalır.
+> **Numara notu:** Numara bir konu ailesini gösterir; 05, 69 ve 87 gibi ailelerde
+> farklı alt rehberler aynı numarayı kullanabilir. Yeni bağımsız konuya sıradaki
+> numara verilir. Ana dizindeki boş numaralar (10, 13–14, 23, 31, 42, 51, 55, 64, 70)
+> tarihsel dokümanların `arsiv/`'e taşınmasından kalır.
 
 ## Kurulu Ortam
 
@@ -186,15 +200,17 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | `tailscale-serve.ps1` | Tailnet üzerinden **otomatik HTTPS** ile sunar (telefonda mikrofon/STT için güvenli bağlam). Ön planda koşar, çıkışta serve config'i söker | [48](48-VPS-REMOTE-CLIENT.md) |
 | `worktree.ps1` | Geliştirici git worktree yardımcısı (`add`/`list`/`remove`/`prune`); node_modules junction'lar | [26](26-CALISMA-DIZINI.md) |
 | `e2e-smoke.ps1` | 12 adımlı uçtan uca smoke testi (`-SkipLLM` ile hızlı/ucuz) | [33](33-DIS-AJAN-OTOMASYONU.md) |
-| `repair-encoding.ps1` | Bozuk UTF-8 kayıtlarını onarır (varsayılan dry-run, `-Apply`) | [33](33-DIS-AJAN-OTOMASYONU.md) |
+| [repair-encoding.ps1](arsiv/araclar/repair-encoding.ps1) | Tarihsel UTF-8 onarım aracı; aktif geliştirme/derleme hattında kullanılmaz, varsayılan dry-run | [33](33-DIS-AJAN-OTOMASYONU.md) |
 | `test.sh` | Test kapısı: `fast` (değişen Go paketleri + vitest) / `full` (`go test ./...` + vitest + `depcheck.sh` + `git diff --check`) | `CLAUDE.md` |
 | `depcheck.sh` | `internal/agent`'tan ayrılan paketlerin onu geri import etmediğini doğrular (`test.sh full` koşar) | [81](81-PAKET-BOLME-PLANI.md) |
+| `ci.sh` | CI ortak kapısı: `bash scripts/ci.sh backend`, `frontend` veya `release`; kurulum/derleme tekrarı önlenir | [75](75-YAYIN-SURECI.md) |
 | `build-release.sh` | Sürüm derlemesi (çoklu hedef; CI `release.yml` kullanır) | [75](75-YAYIN-SURECI.md) |
 | `install.sh` / `install.ps1` | Sürüm feed'inden binary indirip kuran kurulum script'leri | [75](75-YAYIN-SURECI.md) |
 | `shots.ps1` | Tanıtım sitesi için ürün ekran görüntüleri (çalışan örneğe bağlanır, hash rotalarını gezer, `website/public/shots/`'a yazar). Playwright talep üzerine kurulur: `-InstallDeps` | [72](72-TANITIM-SITESI.md) |
 
 ## Proje Durumu
 
-Güncel durum ve sıradaki adımlar için [05-ILERLEME.md](05-ILERLEME.md) (en yeni kayıt üstte);
-2026-06-30 ve öncesi [05-ARSIV.md](05-ARSIV.md). Memory (hafıza) alt sistemi 2026-07-05'te
-tamamen kaldırıldı.
+Güncel değişiklikler [05-ILERLEME.md](05-ILERLEME.md) içindedir; önceki ayların
+bağlantıları aynı dosyanın başındadır. 2026-06-30 ve öncesi [05-ARSIV.md](05-ARSIV.md)
+dosyasında korunur. Açık işler [03-YOL-HARITASI.md](03-YOL-HARITASI.md) içindedir.
+Memory (hafıza) alt sistemi 2026-07-05'te tamamen kaldırıldı.

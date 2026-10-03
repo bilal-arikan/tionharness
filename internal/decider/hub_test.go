@@ -113,9 +113,6 @@ func TestHubOwnCredentialsAndModelBinding(t *testing.T) {
 	if resp.BillingProvider != billingLocal {
 		t.Errorf("billing = %q, want local for a loopback server", resp.BillingProvider)
 	}
-	if got := h.EffectiveModel(testGate); got != "DM2" {
-		t.Errorf("effective model = %q", got)
-	}
 	// A disabled model does not answer for an authority, but can be tested.
 	in := ModelInput{ID: m.ID, Backend: m.Backend, Label: m.Label, Enabled: false, Model: m.Model, BaseURL: m.BaseURL}
 	if _, err := h.UpsertModel(in); err != nil {

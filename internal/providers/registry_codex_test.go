@@ -14,8 +14,8 @@ func TestCodexCLIRegistryWiring(t *testing.T) {
 	if r.Available("codex-cli") {
 		t.Error("codex-cli reported available with no binary")
 	}
-	if r.CodexCLIAvailable() {
-		t.Error("CodexCLIAvailable true with no binary")
+	if r.CodexCLIPath() != "" {
+		t.Error("CodexCLIPath nonempty with no binary")
 	}
 	if _, err := r.Get("codex-cli"); err == nil {
 		t.Error("Get(codex-cli): want unconfigured error, got nil")
@@ -49,8 +49,8 @@ func TestCodexConfigDirReachesResolvedConfig(t *testing.T) {
 	}
 }
 
-// TestSetCodexCLIPathEmptyRestoresAutoDetect mirrors SetClaudeCLIPath: clearing
-// the override must fall back to PATH lookup, not pin an empty path that would
+// TestSetCodexCLIPathEmptyRestoresAutoDetect checks that clearing
+// the override falls back to PATH lookup, not an empty path that would
 // make the provider permanently unavailable.
 func TestSetCodexCLIPathEmptyRestoresAutoDetect(t *testing.T) {
 	r := NewRegistry()

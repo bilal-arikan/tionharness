@@ -67,8 +67,8 @@ func TestCLISessionTurnHonoursContextCancellation(t *testing.T) {
 func TestCLISessionTurnIdleWatchdogReclaimsSilentStream(t *testing.T) {
 	s, out := newTestCLISession(t)
 	prev := cliSessionIdleWindow()
-	SetCLISessionIdleTimeout(80 * time.Millisecond)
-	t.Cleanup(func() { SetCLISessionIdleTimeout(prev) })
+	setCLISessionIdleTimeout(80 * time.Millisecond)
+	t.Cleanup(func() { setCLISessionIdleTimeout(prev) })
 
 	var kills []WatchdogKill
 	killed := make(chan struct{}, 1)

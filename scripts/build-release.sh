@@ -26,8 +26,13 @@ fi
 repo_root=$(git rev-parse --show-toplevel) || fail "not inside a git repository"
 cd "$repo_root"
 
+skip_install=0
+if [[ ${1:-} == --skip-install ]]; then
+  skip_install=1
+  shift
+fi
 if (($# > 1)); then
-  fail "usage: scripts/build-release.sh <version>"
+  fail "usage: scripts/build-release.sh [--skip-install] [<version>]"
 fi
 
 if (($# == 1)); then
@@ -58,7 +63,9 @@ ldflags="-s -w -X github.com/bilal-arikan/tionharness/internal/api.BuildVersion=
 printf '==> Building frontend\n'
 (
   cd frontend
-  npm ci
+  if ((skip_install == 0)); then
+    npm ci
+  fi
   npm run build
 )
 

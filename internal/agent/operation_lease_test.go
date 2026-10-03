@@ -27,10 +27,10 @@ func (p blockingOperationProvider) Complete(context.Context, providers.Request) 
 func waitForOperationLeaseCleanup(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
-	for (len(operationLeaseAdmission) != 0 || DetachedOperationCount() != 0) && time.Now().Before(deadline) {
+	for (len(operationLeaseAdmission) != 0 || detachedOperations.Load() != 0) && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if slots, detached := len(operationLeaseAdmission), DetachedOperationCount(); slots != 0 || detached != 0 {
+	if slots, detached := len(operationLeaseAdmission), detachedOperations.Load(); slots != 0 || detached != 0 {
 		t.Fatalf("operation lease cleanup incomplete: slots=%d detached=%d", slots, detached)
 	}
 }

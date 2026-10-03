@@ -10,7 +10,7 @@ import (
 // A turn that finished before any watchdog fired and left no terminal marker is
 // the only case that may be reported as completed.
 func TestClassifyTurnOutcome_Clean(t *testing.T) {
-	ctx, stop := withActivityTimeout(context.Background(), time.Minute, time.Minute)
+	ctx, stop := WithActivityTimeout(context.Background(), time.Minute, time.Minute)
 	defer stop()
 
 	got := classifyTurnOutcome(ctx, []TurnStep{{Kind: StepText, Text: "done"}}, time.Minute, time.Minute)
@@ -28,7 +28,7 @@ func TestClassifyTurnOutcome_Clean(t *testing.T) {
 // The SES17 regression: the wall-clock ceiling cancels the context, the provider
 // salvages partial text and returns nil — the turn must NOT read as completed.
 func TestClassifyTurnOutcome_HardTimeout(t *testing.T) {
-	ctx, stop := withActivityTimeout(context.Background(), 10*time.Millisecond, time.Minute)
+	ctx, stop := WithActivityTimeout(context.Background(), 10*time.Millisecond, time.Minute)
 	defer stop()
 	<-ctx.Done()
 
@@ -43,7 +43,7 @@ func TestClassifyTurnOutcome_HardTimeout(t *testing.T) {
 
 // The idle watchdog is a different failure (hung, not slow) and must say so.
 func TestClassifyTurnOutcome_IdleTimeout(t *testing.T) {
-	ctx, stop := withActivityTimeout(context.Background(), time.Hour, 10*time.Millisecond)
+	ctx, stop := WithActivityTimeout(context.Background(), time.Hour, 10*time.Millisecond)
 	defer stop()
 	<-ctx.Done()
 
@@ -59,7 +59,7 @@ func TestClassifyTurnOutcome_IdleTimeout(t *testing.T) {
 // A human pressing "Durdur" cancels the same context; the cause must stay plain
 // context.Canceled so the caller can still report it as "killed", not a timeout.
 func TestClassifyTurnOutcome_UserStopIsNotTimeout(t *testing.T) {
-	ctx, stop := withActivityTimeout(context.Background(), time.Hour, time.Hour)
+	ctx, stop := WithActivityTimeout(context.Background(), time.Hour, time.Hour)
 	stop()
 	<-ctx.Done()
 

@@ -71,7 +71,7 @@ func TestFoldTargetOverridesModelAndProvider(t *testing.T) {
 	if session.hits != 2 || native.hits != 1 || native.req.Model != routed.Model {
 		t.Fatalf("provider override: session hits=%d native hits=%d model=%q", session.hits, native.hits, native.req.Model)
 	}
-	if got, ok := FoldTargetAgent(ctx); !ok || got.Provider != "anthropic" {
-		t.Fatalf("FoldTargetAgent = %+v ok=%v", got, ok)
+	if gotProvider, gotAgent := foldTargetFrom(ctx, session, agent); gotProvider != native || gotAgent.Provider != "anthropic" {
+		t.Fatalf("fold target = %T/%+v, want the native anthropic provider and agent", gotProvider, gotAgent)
 	}
 }

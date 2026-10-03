@@ -103,13 +103,6 @@ func foldTargetFrom(ctx context.Context, provider providers.Provider, agent db.A
 	return provider, t.agent
 }
 
-// FoldTargetAgent reports the agent copy a fold on ctx would run as, when an
-// override is stamped. Diagnostic/test accessor.
-func FoldTargetAgent(ctx context.Context) (db.Agent, bool) {
-	t, ok := ctx.Value(foldTargetCtxKey{}).(foldTarget)
-	return t.agent, ok
-}
-
 // preCompactCtxKey carries a callback fired just before Prepare folds history
 // into the rolling summary — the seam the API layer uses to run PreCompact
 // lifecycle hooks without conversation importing agent (which would cycle).

@@ -62,17 +62,6 @@ func testRuntime(t *testing.T) *Runtime {
 	}
 }
 
-func TestExecHook_Block_ExitCode2(t *testing.T) {
-	r := testRuntime(t)
-	dec, err := r.execHook(context.Background(), db.Hook{Command: blockCmd(), TimeoutSec: 10}, hookPayload{ToolName: "shell"})
-	if err != nil {
-		t.Fatalf("execHook err: %v", err)
-	}
-	if dec.Decision != "block" {
-		t.Fatalf("expected block, got %q (reason %q)", dec.Decision, dec.Reason)
-	}
-}
-
 func TestExecHook_UpdatedOutput(t *testing.T) {
 	r := testRuntime(t)
 	want := "compressed"
@@ -129,16 +118,20 @@ func TestExecHook_InterpreterSyntaxErrorIsErrorNotBlock(t *testing.T) {
 // The inverse guard: a hook that deliberately exits 2 with an ordinary reason on
 // stderr must still BLOCK. Hardening the interpreter case must not weaken deny.
 func TestExecHook_DeliberateExit2StillBlocks(t *testing.T) {
-	r := testRuntime(t)
-	dec, err := r.execHook(context.Background(), db.Hook{Command: blockCmd(), TimeoutSec: 10}, hookPayload{ToolName: "Bash"})
-	if err != nil {
-		t.Fatalf("a deliberate deny must not become an error: %v", err)
-	}
-	if dec.Decision != "block" {
-		t.Fatalf("expected block, got %q", dec.Decision)
-	}
-	if !strings.Contains(dec.Reason, "denied by test") {
-		t.Errorf("deny reason lost: %q", dec.Reason)
+	for _, tool := range []string{"shell", "Bash"} {
+		t.Run(tool, func(t *testing.T) {
+			r := testRuntime(t)
+			dec, err := r.execHook(context.Background(), db.Hook{Command: blockCmd(), TimeoutSec: 10}, hookPayload{ToolName: tool})
+			if err != nil {
+				t.Fatalf("a deliberate deny must not become an error: %v", err)
+			}
+			if dec.Decision != "block" {
+				t.Fatalf("expected block, got %q", dec.Decision)
+			}
+			if !strings.Contains(dec.Reason, "denied by test") {
+				t.Errorf("deny reason lost: %q", dec.Reason)
+			}
+		})
 	}
 }
 

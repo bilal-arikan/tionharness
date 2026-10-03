@@ -7,6 +7,12 @@
 > doğrulamasıdır. İlk deney önerisi: context koruma, skill/tool seçimi,
 > hatırlatma. Model ve davranış değişikliği önce gölgede ölçülmelidir.
 
+> **Durum güncellemesi (2026-10-03):** Bu ilk araştırmadan sonra başlangıç
+> seçimi, model router, soru kontrolü, compact koruması, hatırlatma ve worker
+> incelemesi [altı kayıtlı iş akışı](92-JEV-IS-AKISLARI.md) olarak uygulandı.
+> Aşağıdaki tablo fikirlerin ölçüm ve hata yolu kaydıdır; uygulanmış davranışın
+> yetkili sözleşmesi 92 numaralı rehberdir.
+
 ## Kullanıcının örnekleriyle başlayan liste
 
 | # | Öneri | Girdi → JEV kararı | Uygulama noktası | Başarı ölçüsü / hata yolu |
@@ -41,8 +47,9 @@ kararlardır. Kod cevapları birleştirip skill içeriklerini okur, araçları t
 etkinleştirir ve uygun provider'a bağlanır.
 
 Bu yaklaşım “JEV skill içeriği üretir veya tool'u kendi açar” anlamına gelmez.
-Mevcut `Hub.Select/Triage` büyük aday kümelerini böler; projedeki üst sınır istek
-başına 64 sorudur. Büyük katalog tek ağ çağrısına sığmayabilir. Ön eleme ve aday
+Mevcut iş akışları merciye özel soru kurucularını `Hub.Decide` üzerinden çalıştırır;
+genel `Hub.Select/Triage` API'si yoktur. Protokol üst sınırı istek başına 64 sorudur.
+Büyük katalog tek ağ çağrısına sığmayabilir. Ön eleme ve aday
 metadata'sı gerekir; JEV'e bütün skill/tool metinlerini göndermek tasarrufu silebilir.
 
 Native compact hattında korunacak parçaları uygulama seçebilir. Claude/Codex

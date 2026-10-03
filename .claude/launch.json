@@ -3,12 +3,15 @@
   "configurations": [
     {
       "name": "tionharness",
-      "runtimeExecutable": "go",
+      "runtimeExecutable": "powershell.exe",
       "runtimeArgs": [
-        "run",
-        "./cmd/tionharness"
+        "-NoProfile",
+        "-File",
+        "scripts/serve.ps1",
+        "-Loopback",
+        "-NoKillPort"
       ],
-      "port": 8080
+      "port": 8090
     },
     {
       "name": "frontend-dev",
@@ -36,8 +39,12 @@
       "runtimeExecutable": "powershell.exe",
       "runtimeArgs": [
         "-NoProfile",
-        "-Command",
-        "$env:TIONHARNESS_ADDR='127.0.0.1:8090'; go run ./cmd/tionharness"
+        "-File",
+        "scripts/dev.ps1",
+        "-BackendOnly",
+        "-Loopback",
+        "-NoBrowser",
+        "-NoKillPort"
       ],
       "port": 8090
     }

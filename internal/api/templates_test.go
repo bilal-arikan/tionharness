@@ -237,7 +237,8 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 	runtime := agent.NewRuntime(database, providers.NewRegistry(), agent.NewTunables(), t.TempDir(), t.TempDir(), nil, nil, "WS1", "Test", nil, logger)
 	defer runtime.CloseMCP()
 	registered := make(map[string]bool)
-	for _, def := range runtime.WorkspaceToolCatalog(context.Background()) {
+	catalog, _ := runtime.WorkspaceToolCatalogWithState(context.Background())
+	for _, def := range catalog {
 		registered[def.Name] = true
 	}
 	// spawn_session is bound per session (it needs the spawn function), so it is

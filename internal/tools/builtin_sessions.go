@@ -10,6 +10,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 )
 
 // ListSessionsTool lets an agent pull the workspace's sessions on demand —
@@ -169,11 +170,7 @@ func sessSnippet(summary string) string {
 }
 
 func sessClip(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return strings.TrimSpace(string(r[:n])) + "…"
+	return textutil.TruncRunesEllipsis(s, n)
 }
 
 func sessAge(sec int64) string {

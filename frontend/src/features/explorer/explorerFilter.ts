@@ -36,16 +36,6 @@ export function sessionKindLabel(kind: string): string {
   return key ? i18next.t(`sessionKind.${key}`, { ns: 'explorer' }) : kind
 }
 
-// Kept for callers that use the existing lookup contract. Values are resolved
-// lazily so changing the UI language cannot leave a module-level label frozen.
-export const SESSION_KIND_LABEL: Record<string, string> = {}
-for (const kind of Object.keys(SESSION_KIND_KEYS)) {
-  Object.defineProperty(SESSION_KIND_LABEL, kind, {
-    enumerable: true,
-    get: () => sessionKindLabel(kind),
-  })
-}
-
 export const emptyExplorerFilter = (): ExplorerFilter => ({
   hiddenBuckets: [],
   liveOnly: false,

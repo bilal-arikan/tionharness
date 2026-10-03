@@ -45,16 +45,6 @@ func (d *DB) SetSessionCLICompactionState(ctx context.Context, sessionID, cliSes
 	})
 }
 
-// ClearSessionCLINativeCompactionPending closes a failed or cancelled attempt.
-// If this write fails the marker deliberately remains set and recovery stays
-// fail-closed.
-func (d *DB) ClearSessionCLINativeCompactionPending(ctx context.Context, sessionID string) error {
-	return d.mutateSessionAfterWriteLocked(sessionID, func(s *Session) error {
-		s.CLINativeCompactionPending = false
-		return nil
-	})
-}
-
 // RetireSessionCLINativeCompactionRecovery atomically discards stale external
 // resume authority when the pending recovery cannot run through a compatible
 // resumer. A failed write leaves the old state and marker untouched.

@@ -60,19 +60,6 @@ func (d *DB) WriteInflight(t InflightTurn) error {
 	return atomicWriteJSON(d.inflightPath(t.SessionID), t)
 }
 
-// ClearInflight removes a session's sidecar. A missing file is not an error —
-// the turn completed cleanly and there was nothing to recover.
-func (d *DB) ClearInflight(sessionID string) error {
-	if sessionID == "" {
-		return nil
-	}
-	err := os.Remove(d.inflightPath(sessionID))
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
-}
-
 // ClearInflightExpected removes only the sidecar owned by the expected run and
 // reply. It is a filesystem CAS: a detached predecessor cannot clear a newer
 // generation's recovery snapshot.

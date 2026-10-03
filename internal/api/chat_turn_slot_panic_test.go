@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // TestPreflightPanicReleasesTurnSlot guards the window between the turn-slot claim
@@ -43,11 +44,10 @@ func TestPreflightPanicReleasesTurnSlot(t *testing.T) {
 		t.Fatal("preflight must still propagate the panic to its caller")
 	}
 
-	// The slot must be free again. ClaimSessionUserTurn is the ctx-aware form, so a
-	// leaked slot shows up as a deadline error instead of hanging the test forever.
+	// A leaked slot must produce a deadline error instead of hanging the test.
 	claimCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	release, cerr := wsp.Runtime.ClaimSessionUserTurn(claimCtx, sess.ID)
+	release, cerr := wsp.Runtime.TurnQueue().Acquire(claimCtx, sess.ID, turnqueue.KindUser, "test user turn")
 	if cerr != nil {
 		t.Fatalf("turn slot leaked: a panic in preflight left the session's slot held: %v", cerr)
 	}
@@ -89,7 +89,7 @@ func TestPreflightReleasesTurnSlotOnceOnTheNormalPath(t *testing.T) {
 	// Still held: preflight returned normally, so its panic guard released nothing.
 	heldCtx, cancelHeld := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancelHeld()
-	if rel, cerr := wsp.Runtime.ClaimSessionUserTurn(heldCtx, sess.ID); cerr == nil {
+	if rel, cerr := wsp.Runtime.TurnQueue().Acquire(heldCtx, sess.ID, turnqueue.KindUser, "test user turn"); cerr == nil {
 		rel()
 		t.Fatal("the slot must still be held when preflight returns it to the caller")
 	}
@@ -97,7 +97,7 @@ func TestPreflightReleasesTurnSlotOnceOnTheNormalPath(t *testing.T) {
 	release() // the caller's defer — the single release
 	claimCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	rel, cerr := wsp.Runtime.ClaimSessionUserTurn(claimCtx, sess.ID)
+	rel, cerr := wsp.Runtime.TurnQueue().Acquire(claimCtx, sess.ID, turnqueue.KindUser, "test user turn")
 	if cerr != nil {
 		t.Fatalf("the caller's release must free the slot: %v", cerr)
 	}

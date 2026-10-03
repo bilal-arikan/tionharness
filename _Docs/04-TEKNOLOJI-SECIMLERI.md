@@ -53,3 +53,13 @@ Uygulama aynı zamanda saf web servisi (`localhost`) olarak çalışır.
 - Runtime tunables: `internal/agent/tunables_test.go` (get/set + eşzamanlı erişim).
 - Rota kaydı: `internal/api/server_test.go` (yinelenen/bozuk pattern panik regresyon koruması).
 - MCP canlı testi: `internal/mcp/live_test.go`.
+
+## Go hata yollarıyla uyumluluk
+
+2026-09-29 doğrulamasında Go 1.27'nin bazı JSON hata yollarını
+`Graph.nodes.0.branches.0` biçiminde ürettiği görüldü. Araç şeması hata açıklamaları,
+önceki `Node.nodes.branches` biçimiyle birlikte tanınır; ortak çözümleme
+`internal/tools/graph_error_path.go` ve regresyon testlerindedir. Bu uyumluluk
+minimum Go sürümünü değiştirmez. Kişisel araç kurulumu, yerel yedekler ve bekleyen
+yönetici işlemleri [tarihsel bakım raporunda](arsiv/HARICI-ARAC-GUNCELLEMELERI-2026-09-29.md)
+korunur; ortak kurulum gereksinimi sayılmaz.

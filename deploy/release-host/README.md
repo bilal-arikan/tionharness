@@ -1,11 +1,11 @@
 # TionHarness sürüm sunucusu — YEREL ÖNİZLEME
 
-> **Bu birim üretimde kullanılmaz.** Üretimde ortada VPS yoktur: binary'ler GitHub
-> Release asset'i, `latest.json` ise GitHub Pages üzerinden
-> `https://tionharness.com/latest.json` adresinde sunulur
-> (`.github/workflows/release.yml` + `pages.yml`, ayrıntı:
-> `_Docs\75-YAYIN-SURECI.md`). Aşağıdaki Caddy birimi yalnızca feed + indirme
-> yerleşimini **yerelde** denemek içindir.
+Bu Docker Compose birimi feed ve indirme yerleşimini **yerelde** denemek içindir.
+Kamusal yayın GitHub Release dosyaları ve GitHub Pages üzerindeki
+`https://tionharness.com/latest.json` adresidir. Gitea'nın `RELEASE_*` secret'larıyla
+yönettiği kendi barındırılan feed ayrı bir yayın hedefidir; buradaki yerel örnek
+ayarlar onu yapılandırmaz. Ayrıntı:
+[`_Docs/75-YAYIN-SURECI.md`](../../_Docs/75-YAYIN-SURECI.md).
 
 Bu Docker Compose birimi, Caddy ile iki statik site sunar:
 
@@ -21,19 +21,20 @@ docker compose up -d
 ```
 
 İndirme sitesi `http://localhost:8080`, WWW sitesi `http://localhost:8081` adresindedir. WWW için host portu `8081`, container portu `81` ile eşlenir.
+Geliştirme backend'inin `8090` portu bu önizleme sunucusundan ayrıdır.
 
 ## Sürüm yayımlama
 
-Önce depo kökünde sürüm çıktısını üretin:
+Önce depo kökünde yerel indirme adreslerini taşıyan çıktıyı üretin:
 
 ```bash
-./scripts/build-release.sh <version>
+FEED_BASE=http://localhost:8080 ./scripts/build-release.sh 1.2.3
 ```
 
-Bu betik başka çalışma kapsamında hazırlanıyor ve henüz mevcut olmayabilir. Ardından bu dizinde çıktıyı yayımlayın:
+Ardından bu dizinde çıktıyı yayımlayın:
 
 ```bash
-./sync-release.sh <version>
+./sync-release.sh 1.2.3
 ```
 
 Kontrol:
@@ -41,6 +42,9 @@ Kontrol:
 ```bash
 curl http://localhost:8080/latest.json
 ```
+
+`build-release.sh` bağımsız çalışırken frontend bağımlılıklarını kurar ve UI'yı
+derler. CI aynı kurulumun tekrarlanmaması için `--skip-install` kullanır.
 
 ## www sitesini yayımlama
 
@@ -87,15 +91,7 @@ kökünü gösterir ve buraya verilirse `rsync --delete` tüm sürüm dosyaları
 siler. Zorunlu bir değişken boşsa betik hata yazıp `exit 1` ile durur; sessizce
 devam etmez.
 
-## VPS'e taşıma (ARTIK GEÇERLİ DEĞİL)
-
-Aşağıdaki adımlar yalnızca tarihsel referanstır; mevcut yayın mimarisi VPS
-kullanmaz. Kendi barındırma altyapınıza taşımak isterseniz izlenecek yol budur:
-
-1. `deploy/release-host/` dizinini VPS'e kopyalayın.
-2. `.env.example` dosyasını `.env` olarak kopyalayıp üretim profilindeki site adreslerini ve `80`/`443` portlarını ayarlayın.
-3. VPS güvenlik duvarında TCP 80 ve 443 portlarını açın.
-4. DNS sağlayıcınızın yönetim panelinde `dl`, `www` ve apex alan adları için VPS IP adresini gösteren A kayıtları ekleyin.
-5. `docker compose up -d` çalıştırın. Caddy sertifikaları otomatik alır ve yeniler.
-
-`caddy_data` named volume kalıcı tutulmalıdır. Bu volume silinirse sertifikalar yeniden alınır ve sık tekrarda Let's Encrypt hız sınırlarına takılabilirsiniz.
+Docker önizlemesinin `.env.example` dosyası yalnızca yerel portları tanımlar.
+Uzak yayın ayarları bu yerel profilden bağımsızdır; yukarıdaki ortam değişkenleri
+ve Gitea yayın rehberi kullanılır. Kamusal siteye ait DNS ve VPS taşıma adımları
+bu yerel önizlemenin kapsamına girmez.

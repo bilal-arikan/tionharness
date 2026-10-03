@@ -1,31 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useShellLayout } from './useShellLayout'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
-import { Settings, ChevronLeft, Boxes } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import type { Workspace } from '@/types'
 import { WorkspaceSwitcher } from '@/features/workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
-import { NAV } from './navItems'
+import { NAV, PINNED_NAV } from './navItems'
 import { useTranslation } from 'react-i18next'
+import type { View } from './viewMetadata'
 
-export type View =
-  | 'dashboard'
-  | 'chat'
-  | 'agents'
-  | 'rota'
-  | 'explorer'
-  | 'board'
-  | 'schedules'
-  | 'flows'
-  | 'artifacts'
-  | 'skills'
-  | 'tools'
-  | 'market'
-  | 'budget'
-  | 'prompts'
-  | 'insights'
-  | 'workspace'
-  | 'settings'
+export type { View } from './viewMetadata'
+
+const [workspaceNav, settingsNav] = PINNED_NAV
+const WorkspaceIcon = workspaceNav.icon
+const SettingsIcon = settingsNav.icon
 
 interface Props {
   view: View
@@ -282,7 +270,7 @@ export function NavRail({
         {/* View navigation */}
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
           {NAV.map((item) => {
-            const label = item.labelKey ? t(item.labelKey) : item.label
+            const label = t(item.labelKey)
             const Icon = item.icon
             const isActive = view === item.key
             const busy = busyViews?.has(item.key) ?? false
@@ -316,33 +304,33 @@ export function NavRail({
           <button
             onClick={() => selectView('workspace')}
             data-testid="nav-workspace"
-            aria-label={t('navigation.workspace')}
+            aria-label={t(workspaceNav.labelKey)}
             aria-current={view === 'workspace' ? 'page' : undefined}
             title={
               collapsed
                 ? active?.name
                   ? t('shell.workspaceNamed', { name: active.name })
-                  : t('navigation.workspace')
+                  : t(workspaceNav.labelKey)
                 : undefined
             }
             className={`w-full ${navItemClass(view === 'workspace', collapsed)}`}
           >
             {view === 'workspace' && <ActiveBar />}
-            <Boxes size={18} strokeWidth={2} className="shrink-0" />
-            {!collapsed && <span>{t('navigation.workspace')}</span>}
+            <WorkspaceIcon size={18} strokeWidth={2} className="shrink-0" />
+            {!collapsed && <span>{t(workspaceNav.labelKey)}</span>}
             <NavDots dirty={dirtyViews?.has('workspace')} collapsed={collapsed} />
           </button>
           <button
             onClick={() => selectView('settings')}
             data-testid="nav-settings"
-            aria-label={t('navigation.settings')}
+            aria-label={t(settingsNav.labelKey)}
             aria-current={view === 'settings' ? 'page' : undefined}
-            title={collapsed ? t('navigation.settings') : undefined}
+            title={collapsed ? t(settingsNav.labelKey) : undefined}
             className={`w-full ${navItemClass(view === 'settings', collapsed)}`}
           >
             {view === 'settings' && <ActiveBar />}
-            <Settings size={18} strokeWidth={2} className="shrink-0" />
-            {!collapsed && <span>{t('navigation.settings')}</span>}
+            <SettingsIcon size={18} strokeWidth={2} className="shrink-0" />
+            {!collapsed && <span>{t(settingsNav.labelKey)}</span>}
             <NavDots dirty={dirtyViews?.has('settings')} collapsed={collapsed} />
           </button>
         </div>

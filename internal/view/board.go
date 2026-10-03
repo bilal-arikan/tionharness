@@ -473,14 +473,7 @@ func unassignedCount(tasks []db.Task) int {
 // namesOf lists up to max card ids, reporting the remainder as a count so the
 // signal line never implies it named everything.
 func namesOf(tasks []db.Task, max int) string {
-	ids := make([]string, 0, max)
-	for i, t := range tasks {
-		if i >= max {
-			return strings.Join(ids, ", ") + fmt.Sprintf(" +%d", len(tasks)-max)
-		}
-		ids = append(ids, t.ID)
-	}
-	return strings.Join(ids, ", ")
+	return idSummary(len(tasks), max, func(i int) string { return tasks[i].ID })
 }
 
 // boardRevision is a cheap change stamp: the newest UpdatedAt on the board. Two

@@ -5,9 +5,9 @@
 // ordinary unsaved edit, so a customisation that has drifted can be put back
 // without deleting the row (which would also drop its model/tool choices).
 
-import { act, type ButtonHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { render, query as q } from '@/test/render'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Agent, AgentPatch } from '@/types'
 
 const agentBuiltinPrompt = vi.fn()
@@ -29,26 +29,9 @@ vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [],
   thinkingOptionsForModel: (available: unknown) => available,
 }))
-vi.mock('@/shared/components', () => ({
-  Button: (props: ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />,
-  PromptEditor: ({
-    value,
-    onChange,
-    ...props
-  }: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange'> & {
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <textarea {...props} value={value} onChange={(event) => onChange(event.currentTarget.value)} />
-  ),
-}))
+vi.mock('@/shared/components', async () => import('@/test/formStubs'))
 
 import { AgentSettingsForm } from './AgentSettingsForm'
-
-const reactTestEnvironment = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT: boolean
-}
-reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
 const BUILTIN_SOUL = 'koddaki gomulu prompt'
 
@@ -74,24 +57,12 @@ const customization = {
   overrides: ['soul'],
 } as Agent
 
-const roots: Root[] = []
-
 function renderForm(agent: Agent, extra: Record<string, unknown> = {}) {
   const onSave = vi.fn(async (_patch: AgentPatch) => {})
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  roots.push(root)
-  act(() =>
-    root.render(<AgentSettingsForm agent={agent} onSave={onSave} parent={parent} {...extra} />),
+  const { container } = render(
+    <AgentSettingsForm agent={agent} onSave={onSave} parent={parent} {...extra} />,
   )
   return { container, onSave }
-}
-
-function q<T extends Element>(container: HTMLElement, selector: string): T {
-  const element = container.querySelector<T>(selector)
-  if (!element) throw new Error(`Not found: ${selector}`)
-  return element
 }
 
 // React installs its own `value` setter on the element, so assigning directly
@@ -110,11 +81,6 @@ const soulTextarea = (container: HTMLElement) =>
 beforeEach(() => {
   agentBuiltinPrompt.mockReset()
   agentBuiltinPrompt.mockResolvedValue({ systemKey: 'titler', soul: BUILTIN_SOUL })
-})
-
-afterEach(() => {
-  for (const root of roots.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
 })
 
 describe('AgentSettingsForm built-in prompt revert', () => {

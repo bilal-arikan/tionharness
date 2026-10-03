@@ -131,8 +131,8 @@ func TestCLIUndecodableTypeStillFailsTheTurn(t *testing.T) {
 func TestCLISessionStartupWatchdogUsesInjectedWindow(t *testing.T) {
 	s, _ := newTestCLISession(t)
 	prev := cliStartupTimeout()
-	SetCLIStartupTimeout(80 * time.Millisecond)
-	t.Cleanup(func() { SetCLIStartupTimeout(prev) })
+	setCLIStartupTimeout(80 * time.Millisecond)
+	t.Cleanup(func() { setCLIStartupTimeout(prev) })
 
 	var kills []WatchdogKill
 	req := Request{OnWatchdog: func(k WatchdogKill) { kills = append(kills, k) }}

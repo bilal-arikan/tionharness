@@ -81,6 +81,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+. (Join-Path $PSScriptRoot "lib\ports.ps1")
 
 # Dev-run diagnostics (_devlogs/, gitignored via *.log).
 #
@@ -221,29 +222,12 @@ function Stop-Tree($p, $label) {
     } catch { }
 }
 
-# Free-Port clears a leftover listener on $pt before we try to bind it. A prior
-# run killed from outside (window closed, task ended) can orphan the go/node
-# child still holding the port; without this the new backend dies on bind and
-# the script collapses with a generic "child exited" message. We identify the
-# owning PID, report what it is, and (unless -NoKillPort) kill its tree so the
-# port is reusable. With -NoKillPort we abort early with a clear message instead.
-function Free-Port($pt, $label) {
-    $conns = Get-NetTCPConnection -LocalPort $pt -State Listen -ErrorAction SilentlyContinue
-    if (-not $conns) { return }
-    $owners = $conns | Select-Object -ExpandProperty OwningProcess -Unique
-    foreach ($procId in $owners) {
-        $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
-        $name = if ($proc) { $proc.ProcessName } else { "bilinmeyen" }
-        if ($NoKillPort) {
-            Write-Host "==> HATA: $label portu $pt dolu (PID $procId / $name). -NoKillPort acik, cikiliyor." -ForegroundColor Red
-            throw "port-busy"
-        }
-        Write-Host "==> $label portu $pt dolu (PID $procId / $name) -> orphan temizleniyor..." -ForegroundColor Yellow
-        Write-Lifecycle "dev.ps1 pre-flight: force-killing orphan on port $pt (pid=$procId name=$name, taskkill /T /F)"
-        taskkill /PID $procId /T /F 2>$null | Out-Null
+# Preserve the development lifecycle record before the shared helper kills a listener.
+function Free-DevPort($pt, $label) {
+    Free-Port $pt $label -NoKillPort:$NoKillPort -BeforeKill {
+        param($portNumber, $processId, $processName)
+        Write-Lifecycle "dev.ps1 pre-flight: force-killing orphan on port $portNumber (pid=$processId name=$processName, taskkill /T /F)"
     }
-    # Give the OS a moment to release the socket before we rebind.
-    Start-Sleep -Milliseconds 400
 }
 
 # Test-FrontendDeps answers "will `npm run dev` actually start?" -- deliberately by
@@ -271,7 +255,7 @@ try {
     Write-Lifecycle "dev.ps1 start (bind=${bindHost}:$Port backendOnly=$BackendOnly frontendOnly=$FrontendOnly)"
     if (-not $FrontendOnly) {
         # Pre-flight: clear any orphan still holding the backend port.
-        Free-Port $Port "Backend"
+        Free-DevPort $Port "Backend"
         # Build FIRST, run the exe second (see the WHY note at the top of this
         # file): no go.exe wrapper means no orphaned server and no "exit status 1"
         # masking the real exit code. A compile error also surfaces here, before
@@ -323,7 +307,7 @@ try {
 
     if (-not $BackendOnly) {
         # Pre-flight: clear any orphan still holding the Vite dev port (5173).
-        Free-Port 5173 "Frontend"
+        Free-DevPort 5173 "Frontend"
         $fe = Join-Path $root "frontend"
         # Pre-flight: repair node_modules before launching, escalating only as far as
         # needed (see Test-FrontendDeps for the two failure modes this exists for).
@@ -433,7 +417,7 @@ finally {
     # owner instead. Only on a self-exit: on a normal Ctrl+C teardown a listener
     # on this port would belong to somebody else and must not be touched.
     if ($script:backendSelfExited -and -not $FrontendOnly) {
-        try { Free-Port $Port "Backend (orphan)" } catch { }
+        try { Free-DevPort $Port "Backend (orphan)" } catch { }
     }
 
     # Surface captured stderr right here: a runtime fatal is worthless if nobody

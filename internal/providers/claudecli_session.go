@@ -100,14 +100,6 @@ var (
 	cliSessionIdleTimeoutDuration = cliSessionIdleTimeout
 )
 
-// SetCLISessionIdleTimeout configures the stdout-silence watchdog for every
-// subsequent persistent claude-cli turn. d <= 0 disables it.
-func SetCLISessionIdleTimeout(d time.Duration) {
-	cliSessionIdleMu.Lock()
-	cliSessionIdleTimeoutDuration = d
-	cliSessionIdleMu.Unlock()
-}
-
 func cliSessionIdleWindow() time.Duration {
 	cliSessionIdleMu.RLock()
 	defer cliSessionIdleMu.RUnlock()

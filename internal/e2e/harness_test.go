@@ -162,13 +162,12 @@ type turnResult struct {
 	resp     *providers.Response   // final provider response (text stitched)
 	steps    []agent.TurnStep      // full persisted activity trace
 	streamed []agent.TurnStep      // steps delivered live via the onStep sink
-	reply    db.Message            // persisted assistant message
 	prep     conversation.Prepared // the budgeting result for this turn
 }
 
 // send drives ONE full chat turn the way api/chat_stream does: persist the user
 // message, replay history through the conversation budgeter, compose the system +
-// dynamic (memory) context, run the streaming tool loop, then persist the reply
+// dynamic context, run the streaming tool loop, then persist the reply
 // and journal it. Returns everything a test needs to assert on.
 func (h *harness) send(a db.Agent, sess db.Session, userText string) turnResult {
 	h.t.Helper()
@@ -177,6 +176,13 @@ func (h *harness) send(a db.Agent, sess db.Session, userText string) turnResult 
 	if _, err := h.db.AddMessage(ctx, db.Message{SessionID: sess.ID, Role: providers.RoleUser, Text: userText}); err != nil {
 		h.t.Fatalf("persist user message: %v", err)
 	}
+	return h.answer(ctx, a, sess, true)
+}
+
+// answer runs the shared reply pipeline after the user message was persisted.
+// Every agent receives its skill catalog and the latest prepared summary.
+func (h *harness) answer(ctx context.Context, a db.Agent, sess db.Session, stream bool) turnResult {
+	h.t.Helper()
 	history, err := h.db.ListMessages(ctx, sess.ID)
 	if err != nil {
 		h.t.Fatalf("list messages: %v", err)
@@ -192,7 +198,7 @@ func (h *harness) send(a db.Agent, sess db.Session, userText string) turnResult 
 	if sb := h.rt.SkillsCatalogBlockForAgent(a); sb != "" {
 		system = strings.TrimSpace(system + "\n\n" + sb)
 	}
-	dynamic := h.composeDynamic(ctx, a, userText)
+	dynamic := ""
 	if prep.Summary != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n# Conversation summary\n" + prep.Summary)
 	}
@@ -209,15 +215,17 @@ func (h *harness) send(a db.Agent, sess db.Session, userText string) turnResult 
 	}
 
 	var streamed []agent.TurnStep
-	resp, steps, err := h.rt.CompleteWithToolsStream(ctx, a, h.provider, req, false, func(st agent.TurnStep) {
-		streamed = append(streamed, st)
-	})
+	var onStep func(agent.TurnStep)
+	if stream {
+		onStep = func(st agent.TurnStep) { streamed = append(streamed, st) }
+	}
+	resp, steps, err := h.rt.CompleteWithToolsStream(ctx, a, h.provider, req, false, onStep)
 	if err != nil {
 		h.t.Fatalf("turn failed: %v", err)
 	}
 
 	stepsJSON, _ := json.Marshal(steps)
-	reply, err := h.db.AddMessage(ctx, db.Message{
+	_, err = h.db.AddMessage(ctx, db.Message{
 		SessionID: sess.ID,
 		Role:      providers.RoleAssistant,
 		AgentID:   a.ID,
@@ -228,7 +236,7 @@ func (h *harness) send(a db.Agent, sess db.Session, userText string) turnResult 
 		h.t.Fatalf("persist assistant message: %v", err)
 	}
 
-	return turnResult{resp: resp, steps: steps, streamed: streamed, reply: reply, prep: prep}
+	return turnResult{resp: resp, steps: steps, streamed: streamed, prep: prep}
 }
 
 // sendMulti drives ONE turn answered by several agents in order, the way
@@ -245,48 +253,9 @@ func (h *harness) sendMulti(agents []db.Agent, sess db.Session, userText string)
 
 	var out []turnResult
 	for _, a := range agents {
-		ctx := baseCtx
-		history, err := h.db.ListMessages(ctx, sess.ID)
-		if err != nil {
-			h.t.Fatalf("list messages: %v", err)
-		}
-		s, _ := h.db.GetSession(ctx, sess.ID)
-		prep, err := h.convo.Prepare(ctx, h.db, h.provider, s, a, history)
-		if err != nil {
-			h.t.Fatalf("prepare: %v", err)
-		}
-
-		req := providers.Request{
-			Model:         a.Model,
-			System:        "You are " + a.Name + ".",
-			SystemDynamic: h.composeDynamic(ctx, a, userText),
-			Messages:      prep.Messages,
-		}
-		if h.decorate != nil {
-			ctx = h.decorate(ctx)
-		}
-		resp, steps, err := h.rt.CompleteWithToolsStream(ctx, a, h.provider, req, false, nil)
-		if err != nil {
-			h.t.Fatalf("turn failed for %s: %v", a.Name, err)
-		}
-		stepsJSON, _ := json.Marshal(steps)
-		reply, err := h.db.AddMessage(ctx, db.Message{
-			SessionID: sess.ID, Role: providers.RoleAssistant, AgentID: a.ID,
-			Text: resp.Text, Steps: string(stepsJSON),
-		})
-		if err != nil {
-			h.t.Fatalf("persist reply for %s: %v", a.Name, err)
-		}
-		out = append(out, turnResult{resp: resp, steps: steps, reply: reply, prep: prep})
+		out = append(out, h.answer(baseCtx, a, sess, false))
 	}
 	return out
-}
-
-// composeDynamic previously mirrored the memory half of the per-turn dynamic
-// context. The memory subsystem was removed, so there is no per-turn dynamic
-// suffix to compose here; kept as a no-op so the turn drivers stay unchanged.
-func (h *harness) composeDynamic(ctx context.Context, a db.Agent, query string) string {
-	return ""
 }
 
 // --- assertion helpers -------------------------------------------------------

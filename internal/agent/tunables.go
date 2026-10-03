@@ -196,11 +196,10 @@ type Tunables struct {
 	// freeze). coordStallSweepMin bounds the staleness window; <0 disables the
 	// sweeper while leaving the turn-end guard on. coordStallMaxNudges caps the
 	// consecutive corrective nudges before deferring to the sweeper / turn cap.
-	coordStallGuard      bool          // master switch (default on)
-	coordStallSweepMin   int           // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
-	coordStallMaxNudges  int           // 0 → DefaultCoordinatorStallMaxNudges
-	coordWorkerNoteGrace time.Duration // 0 → DefaultCoordinatorWorkerNoteGrace
-	coordWorkerBatch     time.Duration // 0 → DefaultCoordinatorWorkerBatchWindow; <0 disables batching
+	coordStallGuard     bool          // master switch (default on)
+	coordStallSweepMin  int           // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
+	coordStallMaxNudges int           // 0 → DefaultCoordinatorStallMaxNudges
+	coordWorkerBatch    time.Duration // 0 → DefaultCoordinatorWorkerBatchWindow; <0 disables batching
 	// coordStallHaltTotal is the CUMULATIVE (persisted) stall count that hard-halts a
 	// coordinator even when its in-memory streak keeps being reset. <0 →
 	// DefaultCoordinatorStallHaltTotal; 0 disables this tier.
@@ -785,31 +784,8 @@ func (t *Tunables) CoordinatorStallMaxNudges() int {
 	return t.coordStallMaxNudges
 }
 
-// SetCoordinatorWorkerNoteGrace configures the recent-worker-note exemption.
-// Zero selects DefaultCoordinatorWorkerNoteGrace.
-func (t *Tunables) SetCoordinatorWorkerNoteGrace(window time.Duration) {
-	t.mu.Lock()
-	t.coordWorkerNoteGrace = window
-	t.mu.Unlock()
-}
-
 // CoordinatorWorkerNoteGrace returns the recent-worker-note exemption window.
-func (t *Tunables) CoordinatorWorkerNoteGrace() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.coordWorkerNoteGrace == 0 {
-		return DefaultCoordinatorWorkerNoteGrace
-	}
-	return t.coordWorkerNoteGrace
-}
-
-// SetCoordinatorWorkerBatchWindow configures worker-note coalescing. Zero selects
-// the production default; a negative duration disables the wait for tests.
-func (t *Tunables) SetCoordinatorWorkerBatchWindow(window time.Duration) {
-	t.mu.Lock()
-	t.coordWorkerBatch = window
-	t.mu.Unlock()
-}
+func (*Tunables) CoordinatorWorkerNoteGrace() time.Duration { return DefaultCoordinatorWorkerNoteGrace }
 
 // CoordinatorWorkerBatchWindow returns the first-note batching window.
 func (t *Tunables) CoordinatorWorkerBatchWindow() time.Duration {
@@ -822,16 +798,6 @@ func (t *Tunables) CoordinatorWorkerBatchWindow() time.Duration {
 		return 0
 	}
 	return t.coordWorkerBatch
-}
-
-// SetCoordinatorStallHaltTotal configures the cumulative-count halt tier: the
-// number of PERSISTED stall nudges (Session.StallNudges) at which a coordinator is
-// hard-halted even though its in-memory streak never reached the nudge cap. 0
-// disables the tier; negative selects the built-in default.
-func (t *Tunables) SetCoordinatorStallHaltTotal(n int) {
-	t.mu.Lock()
-	t.coordStallHaltTotal = n
-	t.mu.Unlock()
 }
 
 // CoordinatorStallHaltTotal returns the cumulative stall threshold that hard-halts a

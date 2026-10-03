@@ -37,6 +37,7 @@ case "$mode" in
     run_frontend
     echo "== depcheck"
     scripts/depcheck.sh || status=$?
+    bash scripts/tests/depcheck_test.sh || status=$?
     ;;
   fast)
     # Changed files = uncommitted + committed on this branch since main (falls back

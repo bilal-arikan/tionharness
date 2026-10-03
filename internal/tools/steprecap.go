@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 )
 
 // RecapStep is the minimal shape parsed out of a message's serialized Steps
@@ -199,7 +201,7 @@ func (st RecapStep) recapLine(maxOutput int) string {
 		}
 		return "- " + head
 	}
-	result := truncRunes(strings.TrimSpace(st.Output), maxOutput)
+	result := textutil.TruncRunesEllipsis(strings.TrimSpace(st.Output), maxOutput)
 	if st.IsError {
 		if result == "" {
 			result = "error"
@@ -228,18 +230,9 @@ func recapArgHint(input json.RawMessage) string {
 	for _, key := range []string{"command", "file_path", "path", "pattern", "url", "query", "old_string"} {
 		if v, ok := m[key]; ok {
 			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				return truncRunes(strings.TrimSpace(s), recapMaxArgHint)
+				return textutil.TruncRunesEllipsis(strings.TrimSpace(s), recapMaxArgHint)
 			}
 		}
 	}
 	return ""
-}
-
-// truncRunes caps s to max runes (Unicode-safe), appending "…" when cut.
-func truncRunes(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return strings.TrimSpace(string(r[:max])) + "…"
 }

@@ -464,12 +464,6 @@ func (h *Hub) effectiveModel(cfg Config, id string) string {
 	return ""
 }
 
-// EffectiveModel is the decision model that answers for authority right now.
-func (h *Hub) EffectiveModel(authority string) string {
-	cfg := h.Config()
-	return h.effectiveModel(cfg, cfg.Authority(authority).Model)
-}
-
 // Log appends a record to the ledger.
 func (h *Hub) Log(rec Record) {
 	if h == nil {

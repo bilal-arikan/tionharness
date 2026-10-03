@@ -1,13 +1,14 @@
 # 75 — Yayın Süreci (release pipeline)
 
-> **Durum: GitHub tabanlı hat UYGULANDI (2026-08-27).** Yayını **GitHub Actions
+> **Özet (2026-10-03):** Kamusal yayını **GitHub Actions
 > sahiplenir**: `.github/workflows/release.yml`. Derleme betiği
 > `scripts/build-release.sh`; feed'i GitHub Pages'e taşıyan workflow
 > `.github/workflows/pages.yml`.
 >
-> **Ortada VPS yoktur.** Sıfır altyapı: binary'ler GitHub Release asset'i,
-> `latest.json` GitHub Pages. `deploy/release-host/` artık yalnızca **yerel
-> önizleme** aracıdır (aşağıya bakın), üretim bileşeni değildir.
+> Kamusal hatta binary'ler GitHub Release asset'i, `latest.json` GitHub Pages'tedir.
+> Gitea ayrı, secret ile yapılandırılmış kendi barındırılan feed'e rsync ile yayın
+> yapar; yalnız doğrulama hattı değildir. `deploy/release-host/` depo içindeki
+> **yerel önizleme** birimidir; uzak yayın hedefi onunla özdeş kabul edilmez.
 >
 > **Sürüm notları üretilir, elle yazılmaz (2026-09-22):** `cmd/changelog`,
 > `<önceki sürüm etiketi>..<etiket>` aralığındaki conventional commit'leri tipe
@@ -26,9 +27,9 @@ git tag v1.2.3 → push (GitHub)
         ▼
   .github/workflows/release.yml   (tek job, permissions: contents: write)
         │
-        ├── gate: go vet + go test ./... -race + frontend npm ci/test
+        ├── gate: bash scripts/ci.sh release
         │        kırmızıysa burada durur, hiçbir şey yayımlanmaz
-        ├── scripts/build-release.sh <version>
+        ├── bash scripts/build-release.sh --skip-install <version>
         │        FEED_BASE=https://tionharness.com
         │        ARTIFACT_BASE=https://github.com/bilal-arikan/tionharness/releases/download/v1.2.3
         │        → dist/release/1.2.3/  (arşivler + SHA256SUMS + latest.json)
@@ -87,7 +88,7 @@ ARTIFACT_BASE=https://github.com/bilal-arikan/tionharness/releases/download/v1.2
 
 ## Üretilen çıktı
 
-`scripts/build-release.sh <version>` beş hedefi `CGO_ENABLED=0` ile çapraz derler
+`bash scripts/build-release.sh <version>` beş hedefi `CGO_ENABLED=0` ile çapraz derler
 (linux amd64/arm64, windows amd64, darwin arm64/amd64) ve şunları yazar:
 
 ```
@@ -148,9 +149,9 @@ aralığındaki commit'leri **conventional commit** tipine göre gruplayıp üre
 depoya tek bir bağımlılık eklemeden aynı işi yapıyor.
 
 ```bash
-go run ./cmd/changelog render v1.2.3   # Markdown bölümünü yazdır
-go run ./cmd/changelog json   v1.2.3   # release.json'u yazdır
-go run ./cmd/changelog write  v1.2.3   # _Docs/CHANGELOG.md başına ekle + release.json yaz
+go run ./cmd/changelog render v1.2.3   # Print the Markdown section
+go run ./cmd/changelog json   v1.2.3   # Print release.json
+go run ./cmd/changelog write  v1.2.3   # Prepend CHANGELOG.md and write release.json
 ```
 
 Kurallar:
@@ -189,16 +190,17 @@ duyurur, geçmişi değil.
    gövdesi olur.
 2. **Publish feed to Pages içinde** — `write`, `latest.json` ile aynı commit'te
    `_Docs/CHANGELOG.md` + `_Docs/release.json` dosyalarını default branch'e
-   yazar. Bu adım dal değiştirdiği için changelog **checkout'tan sonra yeniden**
-   üretilir: `git checkout` etiket üzerinde yazılmış dosyaları atardı.
-   Yeniden üretmek ucuz ve aynı etiketi okuduğu için iki kopya yapıca özdeştir.
+   yazar. Etiket checkout'unda yalnız `render` kullanılır; izlenen changelog
+   dosyaları **default branch checkout'undan sonra** `write` ile üretilir.
+   Böylece dal değiştirirken etiket aşamasında oluşturulmuş bir dosya kaybolmaz.
 
-## Gereken secret'lar — yok
+## Kamusal GitHub hattının izinleri
 
-GitHub hattı **hiçbir secret istemez**. Release oluşturma ve feed commit'i için
-otomatik `GITHUB_TOKEN` yeterlidir; workflow bunu `permissions: contents: write`
-(+ `pages.yml` tarafında `pages: write`, `id-token: write`) ile talep eder. SSH
-anahtarı, rsync, `RELEASE_*` secret'ları ve VPS **kaldırılmıştır**.
+GitHub hattı ek kullanıcı secret'ı istemez. Release oluşturma ve feed commit'i için
+otomatik `GITHUB_TOKEN`, Pages akışını açıkça tetiklemek için `actions: write`
+kullanılır. Release workflow'u `contents: write`; Pages workflow'u `pages: write`
+ve `id-token: write` izinlerini talep eder. `RELEASE_*` SSH/rsync ayarları yalnız
+aşağıdaki ayrı Gitea hattına aittir.
 
 ## Depo ayarları (bir kez yapılır)
 
@@ -228,7 +230,8 @@ anahtarı, rsync, `RELEASE_*` secret'ları ve VPS **kaldırılmıştır**.
 ## Gitea tarafı: kendi barındırılan sürüm sunucusuna yayın
 
 `.gitea/workflows/release.yml` de `v*` etiketiyle tetiklenir ve şu sırayı izler:
-kapı (vet + `go test -race` + frontend testleri) → `scripts/build-release.sh` →
+kapı (`bash scripts/ci.sh release`: backend + frontend kurulum/testleri) →
+`bash scripts/build-release.sh --skip-install "$VERSION"` →
 `latest.json` doğrulaması → rsync ile yayın. **Yayın en son adımdır**: kapı veya
 derleme kırılırsa runner'dan hiçbir dosya çıkmaz, sunucudaki feed eski sürümü
 göstermeye devam eder.
@@ -249,18 +252,20 @@ değildir:
 
 Bu, GitHub Pages feed'inden **ayrı** bir feed'dir: yalnız `RELEASE_PATH` altına
 yazar. `RELEASE_FEED_BASE`'i Pages alan adına yönlendirmeyin — o zaman iki hat aynı
-`latest.json` üzerinde yarışır. Bugünkü hedef yerel Docker volume'ü
-(`deploy/release-host/srv/dl`), ileride VPS; workflow dosyası değişmez.
+`latest.json` üzerinde yarışır. Gerçek hedef runner secret'larıyla seçilir;
+yerel Docker volume'ünün veya belirli bir VPS'in kullanıldığı kaynak dosyasından
+varsayılmaz. Arşivler yayınlandıktan sonra kökteki feed yenilenir.
 
 ## Yerel önizleme (üretim DEĞİL)
 
 `deploy/release-host/` altındaki Caddy birimi artık yalnızca bir **yerel önizleme**
-aracıdır: feed + indirme yerleşimini VPS'e ihtiyaç duymadan denemeye yarar. Üretimde
-karşılığı yoktur; üretimde arşivler GitHub Release asset'i, feed ise Pages'tedir.
+aracıdır: feed + indirme yerleşimini uzak sunucuya ihtiyaç duymadan denemeye yarar.
+Kamusal üretimde arşivler GitHub Release asset'i, feed Pages'tedir; Gitea'nın
+ayrı uzak yayını kendi `RELEASE_*` hedefini kullanır.
 
 ```bash
 # 1) Sürüm çıktısını üret (depo kökünde)
-./scripts/build-release.sh 1.2.3
+bash scripts/build-release.sh 1.2.3
 
 # 2) Statik sunucuyu ayağa kaldır
 cd deploy/release-host
@@ -282,7 +287,7 @@ bir düzen, uzak sunucuda da doğrudur.
 Farklı bir feed adresiyle denemek için derlemeyi `FEED_BASE` ile koştur:
 
 ```bash
-FEED_BASE=http://localhost:8080 ./scripts/build-release.sh 1.2.3
+FEED_BASE=http://localhost:8080 bash scripts/build-release.sh 1.2.3
 ```
 
 Bu durumda `latest.json` içindeki `url` alanları yerel sunucuyu gösterir ve indirme
@@ -375,6 +380,7 @@ powershell -NoProfile -File scripts/install.ps1 -FeedUrl http://localhost:8080
 | `website/public/CNAME` | Pages custom domain (`tionharness.com`) |
 | `.gitea/workflows/release.yml` | Etiket → kapı → derleme → `latest.json` doğrulama → rsync (kendi barındırılan sürüm sunucusu, `RELEASE_*` secret'ları) |
 | `scripts/build-release.sh` | Çapraz derleme, arşivleme, `SHA256SUMS`, `latest.json` (`FEED_BASE` + `ARTIFACT_BASE`) |
+| `scripts/ci.sh` | Ortak `backend` / `frontend` / `release` doğrulama kapıları; CI örnekleri `bash scripts/ci.sh <mode>` kullanır |
 | `cmd/changelog` | Conventional commit'lerden changelog üretir (`render` / `json` / `write`) |
 | `internal/changelog` | Commit ayrıştırma, tür gruplama, aralık çözümü, Markdown + JSON render |
 | `_Docs/CHANGELOG.md` | Yayın geçmişi; her yayında en yeni bölüm **başa** eklenir (üretilir, elle yazılmaz) |

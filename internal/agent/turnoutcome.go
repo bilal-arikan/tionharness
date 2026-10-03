@@ -217,7 +217,7 @@ func (r *Runtime) reconcileTurnOutcome(ctx context.Context, output string, steps
 // watchdog (ErrTurnIdleTimeout), as opposed to the hard ceiling (ErrTurnHardTimeout),
 // a clean finish, or a human "Durdur" (context.Canceled). Only an idle cut is
 // eligible for the single-shot resume. Reads the cancellation CAUSE, which
-// withActivityTimeout records under WithCancelCause and keeps as the FIRST cause —
+// WithActivityTimeout records under WithCancelCause and keeps as the FIRST cause —
 // so a later stop() (context.Canceled) never masks an idle cut the timer already set.
 func turnHitIdleTimeout(ctx context.Context) bool {
 	return errors.Is(context.Cause(ctx), ErrTurnIdleTimeout)
@@ -253,7 +253,7 @@ func (r *Runtime) runTurnWithIdleResume(
 		err    error
 	)
 	for attempt := 1; ; attempt++ {
-		ctx, cancel := withActivityTimeout(parent, hard, idle)
+		ctx, cancel := WithActivityTimeout(parent, hard, idle)
 		output, steps, err = invoke(ctx, cancel, attempt, output)
 		// Resume ONLY on a genuine idle-watchdog cut, and only within budget (attempt
 		// counts from 1, so `attempt > maxResume` first trips after maxResume resumes;

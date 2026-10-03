@@ -30,12 +30,6 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 	r.enqueueCoordinatorWake(coordSessionID, keepIdleAck, false, time.Time{})
 }
 
-// enqueueCoordinatorWorkerTurn opens a fixed batching window on the first worker
-// note. Later notes join that batch without moving its deadline.
-func (r *Runtime) enqueueCoordinatorWorkerTurn(coordSessionID string, keepIdleAck bool) {
-	r.enqueueCoordinatorWorkerTurnAt(coordSessionID, keepIdleAck, time.Now())
-}
-
 func (r *Runtime) enqueueCoordinatorWorkerTurnAt(coordSessionID string, keepIdleAck bool, persistedAt time.Time) {
 	r.enqueueCoordinatorWake(coordSessionID, keepIdleAck, true, persistedAt)
 }

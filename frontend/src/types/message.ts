@@ -233,19 +233,6 @@ export interface Message {
   createdAt: number
 }
 
-// InflightSnapshot is a session's in-progress streaming reply as written to the
-// crash sidecar on a throttle (backend db.InflightTurn). Fetched after a mid-turn
-// reload to restore the partial assistant bubble (agent + steps-so-far) while the
-// detached turn keeps running. `steps` is JSON-encoded TurnStep[] (may be "[]").
-export interface InflightSnapshot {
-  messageId: string
-  sessionId: string
-  agentId: string
-  startedAt: number
-  text: string
-  steps: string
-}
-
 // MessageUsage is an assistant turn's token consumption (compact keys mirror the
 // backend db.MessageUsage).
 export interface MessageUsage {
@@ -265,18 +252,6 @@ interface MessageFeedback {
 interface Usage {
   inputTokens: number
   outputTokens: number
-}
-
-export interface ChatResponse {
-  reply: string
-  usage: Usage
-  model: string
-  userMessage: Message
-  replyMessage: Message
-  // Live activity trace for this turn (tool calls + intermediate text).
-  steps?: TurnStep[]
-  // Present only when the first turn auto-generated the session title.
-  sessionTitle?: string
 }
 
 // BtwResponse is one side-chat ("btw") answer. It carries no message ids because

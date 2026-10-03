@@ -30,15 +30,6 @@ func policyText(s string, budget int) string {
 	return s[:budget]
 }
 
-func hasPolicyEntry(state db.SessionDecisions, authority string) bool {
-	for _, e := range state.Entries {
-		if e.Authority == authority && e.Status != "fallback" {
-			return true
-		}
-	}
-	return false
-}
-
 func hasPolicyModeEntry(state db.SessionDecisions, authority string, mode decider.Mode) bool {
 	for _, e := range state.Entries {
 		if e.Authority == authority && e.Mode == string(mode) && e.Status != "fallback" {

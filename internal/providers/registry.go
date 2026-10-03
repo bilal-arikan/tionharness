@@ -95,18 +95,6 @@ func (r *Registry) SetInstances(list []Instance) {
 	r.mu.Unlock()
 }
 
-// SetClaudeCLIPath overrides the autodetected claude binary path fallback used
-// when an instance's own cliPath field is empty. An empty value re-runs PATH
-// auto-detection so clearing the override restores default behaviour.
-func (r *Registry) SetClaudeCLIPath(path string) {
-	if path == "" {
-		path, _ = exec.LookPath("claude")
-	}
-	r.mu.Lock()
-	r.claudeCLIPath = path
-	r.mu.Unlock()
-}
-
 // SetCodexCLIPath overrides the autodetected codex binary path fallback used
 // when an instance's own cliPath field is empty. An empty value re-runs PATH
 // auto-detection so clearing the override restores default behaviour.
@@ -250,13 +238,6 @@ func (r *Registry) ClaudeCLIPath() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.claudeCLIPath
-}
-
-// CodexCLIAvailable reports whether the codex CLI was found.
-func (r *Registry) CodexCLIAvailable() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.codexCLIPath != ""
 }
 
 // CodexCLIPath returns the resolved path to the `codex` binary, or "" when it

@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/archive"
+	"github.com/bilal-arikan/tionharness/internal/artifacts"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/textutil"
@@ -93,75 +94,13 @@ func artifactsContextBlock(ctx context.Context, database *db.DB, sessionID strin
 // artifactSink adapts a workspace DB into a tools.ArtifactSink for one chat
 // turn, stamping every artifact with its origin session and creating agent.
 type artifactSink struct {
-	db        *db.DB
-	sessionID string
-	agentID   string
-	// emit publishes a workspace-scoped "artifact" change event so open windows
-	// badge the Artifacts view / workspace label and (per prefs) raise a toast.
-	// Optional (nil-safe) — the generic change-notification signal for agent-made
-	// artifacts, the main "external notification" case.
-	emit func(events.Event)
+	*artifacts.Sink
 }
 
 // newArtifactSink builds a sink bound to the given session/agent. emit may be nil
 // (no change notification is published then).
 func newArtifactSink(database *db.DB, sessionID, agentID string, emit func(events.Event)) artifactSink {
-	return artifactSink{db: database, sessionID: sessionID, agentID: agentID, emit: emit}
-}
-
-// notifyArtifact publishes the generic artifact change event (best-effort).
-func (s artifactSink) notifyArtifact(a db.Artifact, verb string) {
-	if s.emit == nil {
-		return
-	}
-	s.emit(events.Event{
-		Type:  "artifact",
-		Level: "info",
-		Title: "Artifact " + verb + ": " + a.Title,
-		Body:  a.Kind,
-		Target: map[string]string{
-			"view":       "artifacts",
-			"artifactId": a.ID,
-			"sessionId":  s.sessionID,
-		},
-	})
-}
-
-func (s artifactSink) CreateArtifact(ctx context.Context, spec tools.CreateArtifactSpec) (tools.ArtifactRef, error) {
-	row := db.Artifact{
-		SessionID: s.sessionID,
-		AgentID:   s.agentID,
-		Title:     spec.Title,
-		Kind:      spec.Kind,
-		Language:  spec.Language,
-		Content:   spec.Content,
-		Origin:    "tool",
-	}
-	// Media/file kinds carry a file path, not inline bytes: resolve it to a
-	// workspace-relative path (copying the file in if it lives outside) so the
-	// viewer can stream it and the artifact owns a stable copy.
-	if spec.SourcePath != "" {
-		rel, err := s.db.ImportMediaSource(s.sessionID, s.sourcePath(ctx, spec.SourcePath))
-		if err != nil {
-			return tools.ArtifactRef{}, err
-		}
-		row.SourcePath = rel
-	}
-	a, err := s.db.CreateArtifact(ctx, row)
-	if err != nil {
-		return tools.ArtifactRef{}, err
-	}
-	s.notifyArtifact(a, "oluşturuldu")
-	return toArtifactRef(a), nil
-}
-
-func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (tools.ArtifactRef, error) {
-	a, err := s.db.UpdateArtifactContent(ctx, id, content)
-	if err != nil {
-		return tools.ArtifactRef{}, err
-	}
-	s.notifyArtifact(a, "güncellendi")
-	return toArtifactRef(a), nil
+	return artifactSink{Sink: artifacts.NewSink(database, sessionID, agentID, emit)}
 }
 
 // AppendPlanArtifact records an approved plan (ExitPlanMode) in this session's
@@ -169,16 +108,7 @@ func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (t
 // plan-approval bridge (callExitPlan), kept off the generic tools.ArtifactSink
 // interface and reached there via a duck-typed assertion. Best-effort.
 func (s artifactSink) AppendPlanArtifact(ctx context.Context, planMarkdown string) (tools.ArtifactRef, error) {
-	a, err := s.db.AppendPlanArtifact(ctx, s.sessionID, s.agentID, planMarkdown)
-	if err != nil {
-		return tools.ArtifactRef{}, err
-	}
-	s.notifyArtifact(a, "güncellendi")
-	return toArtifactRef(a), nil
-}
-
-func toArtifactRef(a db.Artifact) tools.ArtifactRef {
-	return tools.ArtifactRef{ID: a.ID, Title: a.Title, Kind: a.Kind}
+	return s.RecordPlan(ctx, planMarkdown)
 }
 
 // attachmentArtifactKind maps a chat attachment's coarse kind to an artifact

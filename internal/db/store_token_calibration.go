@@ -107,15 +107,6 @@ func (d *DB) ObserveTokenCalibration(ctx context.Context, c TokenCalibration) (T
 	return c, atomicWriteJSON(d.dir(tokenCalibrationsFile), d.tokenCalibrations)
 }
 
-// TokenCalibrations returns a copy of every learned fact, keyed by Key.
-func (d *DB) TokenCalibrations(ctx context.Context) map[string]TokenCalibration {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make(map[string]TokenCalibration, len(d.tokenCalibrations))
-	maps.Copy(out, d.tokenCalibrations)
-	return out
-}
-
 // loadTokenCalibrations reads the singleton document. An absent or unreadable
 // file leaves the map empty: every fact is re-learned from the next turn (or
 // re-counted), so a lost file costs one measurement, never correctness.

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -438,10 +437,4 @@ func (d *DB) dropTrajectoryForRoot(rootSessionID string) {
 			"session", rootSessionID, "trajectory", entry.ID, "error", err)
 	}
 	d.fireTrajectoryHook(TrajectoryChangeEvent{TrajectoryID: entry.ID, RootSessionID: rootSessionID, Op: TrajectoryOpDelete})
-}
-
-// TrajectoryPath returns the absolute sidecar path for a root session (for
-// diagnostics / "open file" affordances). It does not check existence.
-func (d *DB) TrajectoryPath(rootSessionID string) string {
-	return filepath.Clean(d.trajectorySidecar(rootSessionID).Path())
 }

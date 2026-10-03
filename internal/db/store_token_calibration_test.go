@@ -99,7 +99,7 @@ func TestTokenCalibrationSurvivesReopen(t *testing.T) {
 	if !ok || c.Tokens != 26000 || c.Samples != 1 || c.Provider != "claude-cli" {
 		t.Fatalf("after reopen = %+v ok=%v", c, ok)
 	}
-	if n := len(again.TokenCalibrations(ctx)); n != 1 {
+	if n := len(again.tokenCalibrations); n != 1 {
 		t.Fatalf("calibrations after reopen = %d, want 1", n)
 	}
 }

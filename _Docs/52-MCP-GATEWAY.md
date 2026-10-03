@@ -74,7 +74,7 @@ hâlâ o dosyaya referans verirken dosya siliniyor (Windows'ta açık handle sor
 
 ### 3-E. Faz 0 spike SONUÇLARI (2026-07-06, gerçek claude-cli 2.1.201 + claude-fable-5)
 
-Harness: `_spikes/52-gateway/` — stateful streamable-HTTP Go MCP server (`server/main.go`)
+Harness: `_Docs/arsiv/araclar/52-gateway/` — stateful streamable-HTTP Go MCP server (`server/main.go`)
 GET SSE akışını açık tutuyor, `spike_grow` çağrılınca `spike_secret`'i `registerTool` edip
 **`notifications/tools/list_changed`** push ediyor. claude tek `-p` turunda, allowlist
 **yalnız `mcp__spike`** wildcard'ı ile sürüldü.
@@ -162,7 +162,7 @@ olduğu için çapraz-agent token karışması yapısal olarak imkânsız.
   (Bun) bağımlılığının kalkması. İç CLI-fix (Faz 0-2) bundan **bağımsız** değerli; Faz 3
   ayrı tetiklenir.
 
-**✅ Göç aracı (2026-07-06): `_spikes/52-gateway/migrate-vps.py`.** TS `config.json`'ı
+**✅ Göç aracı (2026-07-06): `_Docs/arsiv/araclar/52-gateway/migrate-vps.py`.** TS `config.json`'ı
 TionHarness'in **mevcut** `POST /api/mcp-servers/import` endpoint'inin kabul ettiği standart
 `{"mcpServers":{...}}` formatına dönüştürür (yeni endpoint gerekmedi). Dönüşümler:
 `transportType`/`url` → `type:"http"`; `${VAR}` placeholder'ları `secrets.json`/env'den çözer;
@@ -172,7 +172,7 @@ düşürülür. Masked template üzerinde doğrulandı (18 server: stdio/http do
 **Uygulama prosedürü (canlı, elle — secrets içerir):**
 ```bash
 # 1) TS config'i normalize et (gerçek config.json + secrets.json ile)
-python _spikes/52-gateway/migrate-vps.py \
+python _Docs/arsiv/araclar/52-gateway/migrate-vps.py \
   <projects>/mcp-server/config.json \
   --secrets <projects>/mcp-server/secrets.json > import.json
 # 2) default workspace'e toplu import et
@@ -220,7 +220,7 @@ Ampirik warm-reuse oranı ölçümü Faz 4'e bırakıldı (çalışan TionHarnes
 ### ✅ Faz 1-a — stateful streaming server (UYGULANDI, 2026-07-06)
 
 `interaction/server.go` POST-only stateless'ten **stateful + streaming**'e yükseltildi
-(`go test ./...` **694 passed**). Spike server (`_spikes/52-gateway/server`) referans alındı.
+(`go test ./...` **694 passed**). Spike server (`_Docs/arsiv/araclar/52-gateway/server`) referans alındı.
 
 - `initialize` → `capabilities.tools.listChanged:true` (eskiden `{}`).
 - `GET` → gerçek server→client **SSE stream** açar + tutar (eskiden 405). Tool sonuçları
@@ -473,7 +473,7 @@ Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_tur
 
 ### ✅ VPS göç aracı (2026-07-06)
 
-`_spikes/52-gateway/migrate-vps.py` — TS `config.json` → `/api/mcp-servers/import` formatı.
+`_Docs/arsiv/araclar/52-gateway/migrate-vps.py` — TS `config.json` → `/api/mcp-servers/import` formatı.
 Prosedür §11-B'de. Masked template'te doğrulandı (18 server). Canlı import elle (secrets).
 
 ### Tam-runtime QA — durum + manuel checklist
@@ -514,7 +514,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   overwrite +23 (non-colliding `codebase-memory` korundu → 24), WS8: +23, WS9: +23**;
   0 hata, **dupe yok** (doğrulandı). Geçici server durduruldu, secret taşıyan ara çıktı +
   binary silindi. Sonraki masaüstü açılışında WS1/5/8/9'da 23 server hazır. Araçlar:
-  `_spikes/52-gateway/migrate-vps.py` + `apply-migration.py`.
+  `_Docs/arsiv/araclar/52-gateway/migrate-vps.py` + `apply-migration.py`.
   > **Ek düzeltme (2026-07-06):** Import her server'ı **enabled** oluşturduğundan (import
   > endpoint'i `disabled` alanı taşımıyor), TS'de disabled olan 13 server TionHarness'te açık
   > geldi → app açılışta backend'i çalışmayanlara eager dial → `dial failed`/`context canceled`

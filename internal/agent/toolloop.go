@@ -74,7 +74,7 @@ func resolveThinkingBudget(model, level string) int {
 	return thinkingBudgetForLevel(level)
 }
 
-// CompleteWithTools runs a completion that may use tools. Behaviour depends on
+// CompleteWithToolsTraced runs a completion that may use tools. Behaviour depends on
 // the agent and provider:
 //
 //   - MCP disabled            → a single plain completion.
@@ -90,13 +90,8 @@ func resolveThinkingBudget(model, level string) int {
 // cache and the turn's own tool-use state.
 //
 // autonomous gates the daily budget; usage is always recorded.
-func (r *Runtime) CompleteWithTools(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool) (*providers.Response, error) {
-	resp, _, err := r.CompleteWithToolsTraced(ctx, agent, provider, req, autonomous)
-	return resp, err
-}
-
-// CompleteWithToolsTraced is CompleteWithTools plus an ordered activity trace
-// (intermediate text + tool calls/results) for the rich chat turn renderer.
+// The result includes the response and ordered activity trace (intermediate
+// text + tool calls/results) for the rich chat turn renderer.
 func (r *Runtime) CompleteWithToolsTraced(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool) (*providers.Response, []TurnStep, error) {
 	return r.completeTraced(ctx, agent, provider, req, autonomous, nil)
 }

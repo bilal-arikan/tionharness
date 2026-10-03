@@ -1,7 +1,6 @@
-# TionHarness — Ilerleme Arsivi (2026-06-19 ve oncesi)
+# TionHarness — İlerleme Arşivi (2026-06-30 ve öncesi)
 
-> Bu dosya [05-ILERLEME.md](05-ILERLEME.md) ana ilerleme gunlugunden arsivlenen, tamamlanmis faz/is kayitlaridir.
-> Canli/guncel durum icin ana dosyaya bakin. Buradaki en yeni kayit 2026-06-19 tarihlidir.
+> **Özet (2026-10-03):** Ana ilerleme günlüğünden arşivlenen, 2026-06-30 ve öncesinin tamamlanmış faz/iş kayıtlarıdır. En yeni kayıt 2026-06-30 tarihlidir. Canlı durum ve sonraki ayların arşivleri için [05-ILERLEME.md](05-ILERLEME.md) dosyasına bakın; tarihsel kayıtlar mevcut davranışın kanıtı değildir.
 
 ---
 
@@ -67,7 +66,7 @@ BOM'suz-UTF-8-dosya-ANSI-okuma hatası (`dev.ps1` ASCII-only kuralının aynıs�
 UTF-8'dir, meşru Latin-1'den ayırt edilemez → sessiz yanlış-pozitif riski; sınır
 istemcidir).
 
-**Yapılanlar:** (1) `scripts\repair-encoding.ps1` — bir-seferlik güvenli onarım: span
+**Yapılanlar:** (1) `_Docs\arsiv\araclar\repair-encoding.ps1` — bir-seferlik güvenli onarım: span
 bazlı (ftfy-benzeri) ters-çevirme, yalnız geçerli-UTF-8 oluşturan + lead-bayt `C2-C5/E2`
 koşuları (temiz Türkçe harf/sembolde yanlış pozitif yok; karışık bozuk-Q+temiz-A
 satırları da düzelir), knowledge'da stale `embedding` null'lanır (Go `unmarshalVector(nil)`

@@ -35,9 +35,6 @@ export const trajectoryApi = {
   },
   getTrajectory: (id: string): Promise<Trajectory> =>
     req<Trajectory>(`/api/trajectories/${encodeURIComponent(id)}`),
-  // Rota F3: recompute the deterministic end-of-run summary on demand.
-  summarizeTrajectory: (id: string): Promise<Trajectory> =>
-    req<Trajectory>(`/api/trajectories/${encodeURIComponent(id)}/summarize`, { method: 'POST' }),
   // Rota F4: run the recipe optimizer now; proposals land on the recipe-opt
   // insight channel. The result lists what was filed and what was dropped.
   optimizeRecipe: (slug: string): Promise<OptimizerResult> =>

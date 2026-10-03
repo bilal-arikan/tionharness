@@ -83,5 +83,4 @@ export const marketApi = {
       // include; blank fields are dropped so the server applies its defaults.
       body: JSON.stringify({ kind, sourceId, include, ...meta }),
     }),
-  importPack: (raw: string) => req<Pack>('/api/market/import', { method: 'POST', body: raw }),
 }

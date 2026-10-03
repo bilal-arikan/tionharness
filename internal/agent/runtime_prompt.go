@@ -229,7 +229,7 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 	// Serve through the prompt epoch (frozen snapshot) keyed to this session, so a
 	// headless run's prefix is as drift-proof as a chat turn's. Headless sessions
 	// are single-agent (multiAgent=false); drift is surfaced by the dynamic suffix
-	// via PromptEpochStale (autonomousDynamicSuffix).
+	// via the context-change note (autonomousDynamicSuffix).
 	sys, _ := r.EpochStaticSystem(ctx, SessionIDFrom(ctx), a, false, false, cwd, build)
 	return sys
 }

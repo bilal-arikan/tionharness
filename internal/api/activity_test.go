@@ -189,8 +189,8 @@ func TestCommandTurnLightsActivity(t *testing.T) {
 	if !s.workspaceRunning(wsp) {
 		t.Fatal("running slash command did not light the workspace")
 	}
-	if ids := wsp.Runtime.BusyTurnSessionIDs(); len(ids) != 1 || ids[0] != "SES1" {
-		t.Fatalf("BusyTurnSessionIDs = %v, want [SES1]", ids)
+	if ids := wsp.Runtime.TurnQueue().BusySessionIDs(); len(ids) != 1 || ids[0] != "SES1" {
+		t.Fatalf("BusySessionIDs = %v, want [SES1]", ids)
 	}
 	release()
 	if s.workspaceRunning(wsp) {

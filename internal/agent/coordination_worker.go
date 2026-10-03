@@ -473,17 +473,6 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 	return info
 }
 
-// runWorker executes a worker's background turn (initial spawn or a send_to_worker
-// continuation): it runs a history-aware turn, records the reply (or the failure)
-// as an assistant turn, releases the concurrency slots, and — crucially — injects a
-// <task-notification> into the coordinator session and triggers a coordinator turn.
-// It mirrors runSpawn but is coordinator-aware and notifies on EVERY outcome
-// (completed / failed / killed), unlike a plain spawn.
-func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessionID string) {
-	runCtx, cancelRun, ctl := r.newWorkerRun(workerSessionID)
-	r.runWorkerRegistered(runCtx, cancelRun, agent, workerSessionID, prompt, coordSessionID, ctl)
-}
-
 // newWorkerRun creates the worker turn's cancellable context and registers BOTH
 // stop paths — the coordinator's workerCancels entry and the session cancel
 // registry CancelSession reads — before the turn goroutine is started. The launch
@@ -636,7 +625,7 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 		case ctl.stopped.Load():
 			status = turnStatusKilled
 			replyText = "⏹️ Worker turu koordinatör tarafından durduruldu."
-		// A deadline check must precede the plain-cancel check: withActivityTimeout
+		// A deadline check must precede the plain-cancel check: WithActivityTimeout
 		// cancels the context, so an expired turn ALSO satisfies context.Canceled and
 		// would otherwise be misreported as a clean human stop.
 		case outcome.Status == turnStatusTimeout:

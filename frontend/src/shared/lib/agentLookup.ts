@@ -1,5 +1,4 @@
 import type { Agent } from '@/types'
-import { i18next } from '@/i18n'
 import { sharedText } from './sharedI18n'
 
 // A session outlives the agent that owned it, so any view that renders history
@@ -12,14 +11,6 @@ import { sharedText } from './sharedI18n'
 export function deletedAgentLabel(): string {
   return sharedText('agents.deleted')
 }
-
-// Compatibility binding for older consumers. Rendering code uses the function
-// above; the live binding is refreshed as well so an imported legacy value does
-// not stay in the language active at module initialization.
-export let DELETED_AGENT_LABEL = deletedAgentLabel()
-i18next.on('languageChanged', () => {
-  DELETED_AGENT_LABEL = deletedAgentLabel()
-})
 
 export interface ResolvedAgent {
   id: string

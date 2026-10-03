@@ -8,18 +8,15 @@ import type {
   WorkerInfo,
   CoordinatorTree,
   CoordinatorAncestor,
-  SessionContext,
   SessionContextPreview,
   SearchHit,
   WorkdirInfo,
   BrowseResp,
   GitInfo,
   SessionUsageDetail,
-  SessionProgress,
   SessionDebugSummary,
   SessionDebugEvent,
   TurnDebug,
-  InflightSnapshot,
   SessionChangeStep,
   SessionActivity,
 } from '@/types'
@@ -101,28 +98,11 @@ export const sessionApi = {
   // to restore the "thinking" indicator for detached turns still in flight.
   activeSessions: () =>
     req<{ sessionIds: string[] }>('/api/sessions/active').then((r) => r.sessionIds),
-  // The session's in-progress streaming snapshot (partial reply — agent, text and
-  // trace so far), or null when no turn is streaming. Fetched after a mid-turn
-  // reload to restore the in-progress assistant bubble instead of losing its
-  // steps/agent until the turn finishes.
-  getInflight: (sessionId: string) =>
-    req<InflightSnapshot | null>(`/api/sessions/${encodeURIComponent(sessionId)}/inflight`),
   createSession: (agentId = '', title = '') =>
     req<Session>('/api/sessions', {
       method: 'POST',
       body: JSON.stringify({ agentId, title }),
     }),
-  // Spawn a new independent session and run the agent's turn in the background
-  // (fire-and-forget). Capacity may queue it before a session id exists.
-  // modelOverride swaps only the model (provider unchanged).
-  spawnSession: (agentId: string, prompt: string, modelOverride = '') =>
-    req<{ sessionId: string; agentName: string; queued: boolean; queuePosition?: number }>(
-      '/api/sessions/spawn',
-      {
-        method: 'POST',
-        body: JSON.stringify({ agentId, prompt, modelOverride }),
-      },
-    ),
   listMessages: (sessionId: string) => req<Message[]>(`/api/sessions/${sessionId}/messages`),
   listMessagePage: (
     sessionId: string,
@@ -306,18 +286,11 @@ export const sessionApi = {
   dropSessionCliProcess: (sessionId: string) =>
     req<{ dropped: number }>(`/api/sessions/${sessionId}/cli-process`, { method: 'DELETE' }),
 
-  sessionContext: (sessionId: string) => req<SessionContext>(`/api/sessions/${sessionId}/context`),
-
   // Per-session lifetime spend + savings (cost, per-origin/model breakdown,
   // cache savings, tool-output compaction bytes). The session-scoped analog of
   // agentUsage — this conversation's own cost, not the agent's whole-day total.
   sessionUsageDetail: (sessionId: string) =>
     req<SessionUsageDetail>(`/api/sessions/${sessionId}/usage-detail`),
-
-  // Persistent progress (durable todo_write checklist + rolling log) for the
-  // read-only viewer card. Resolved from the session's working dir / store fallback.
-  sessionProgress: (sessionId: string) =>
-    req<SessionProgress>(`/api/sessions/${sessionId}/progress`),
 
   // Per-session debug journal aggregate (turn timings, token spend by model,
   // per-tool latency/size/errors, compaction/recovery counts) for the Debug tab.

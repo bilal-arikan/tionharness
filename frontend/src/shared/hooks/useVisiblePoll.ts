@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPollingSubscription } from './pollingSubscription'
 
 // useVisiblePoll runs `fn` on an interval, but only while the document is
 // visible — and fires one catch-up run when it becomes visible again.
@@ -26,33 +27,7 @@ export function useVisiblePoll(
 
   useEffect(() => {
     if (!enabled) return
-    const tick = () => fnRef.current()
-
-    let timer: ReturnType<typeof setInterval> | null = null
-    const stop = () => {
-      if (timer !== null) {
-        clearInterval(timer)
-        timer = null
-      }
-    }
-    const start = () => {
-      if (timer === null) timer = setInterval(tick, intervalMs)
-    }
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        stop()
-        return
-      }
-      tick()
-      start()
-    }
-
-    if (document.visibilityState !== 'hidden') start()
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      stop()
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
+    return createPollingSubscription(() => fnRef.current(), intervalMs)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intervalMs, enabled, ...deps])
 }

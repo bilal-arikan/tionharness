@@ -147,30 +147,6 @@ func (r *Runtime) ReleaseAsk(ask db.SessionAsk, status string) {
 	r.releaseAskInTrajectory(ask, status)
 }
 
-// ResumeAsk delivers an answer to a durably-suspended ask and re-drives the turn.
-// Exactly one answerer wins the waiting→resolved CAS (ClaimSessionAsk); the answer
-// is folded back as the pending tool_use's tool_result and the native loop resumes
-// in-place. Returns the turn's response and full step trace (pre-suspend steps +
-// the resumed continuation). If the resumed turn hits ANOTHER clean ask, it parks
-// again and returns an *askSuspend sentinel (the caller opens a fresh card).
-func (r *Runtime) ResumeAsk(ctx context.Context, askID, answer string, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
-	ask, err := r.db.ClaimSessionAsk(ctx, askID, answer)
-	if err != nil {
-		return nil, nil, err // ErrNotFound or not-waiting (already answered) → caller 409s
-	}
-	r.ReleaseAsk(ask, db.SessionAskResolved)
-	agentRow, err := r.db.GetAgent(ctx, ask.AgentID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("resume ask: agent gone: %w", err)
-	}
-	provider, err := r.providers.Get(agentRow.ProviderRef())
-	if err != nil {
-		return nil, nil, err
-	}
-	resp, steps, _, err := r.driveResumedAsk(ctx, ask, agentRow, provider, answer, onStep)
-	return resp, steps, err
-}
-
 // ResumeAskAndRecord drives an already-claimed ask to completion (or re-suspend)
 // and records the resulting assistant turn on the session. onStep streams live
 // steps to the caller (which broadcasts them on the session hub). Returns the

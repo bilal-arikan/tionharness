@@ -132,25 +132,13 @@ func (j *DebugJournal) append(event DebugEvent) {
 }
 
 func (j *DebugJournal) persist(line []byte) error {
-	if err := os.MkdirAll(filepath.Dir(j.path), 0o755); err != nil {
-		return err
-	}
-	if info, err := os.Stat(j.path); err == nil && info.Size()+int64(len(line)) > j.maxBytes {
+	return appendJSONL(j.path, j.maxBytes, line, func() error {
 		// Windows cannot replace an existing destination with os.Rename.
 		if err := os.Remove(j.rotatedPath()); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-		if err := os.Rename(j.path, j.rotatedPath()); err != nil {
-			return err
-		}
-	}
-	f, err := os.OpenFile(j.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.Write(line)
-	return err
+		return os.Rename(j.path, j.rotatedPath())
+	})
 }
 
 func (j *DebugJournal) snapshot() []DebugEvent {

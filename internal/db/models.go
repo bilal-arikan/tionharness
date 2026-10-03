@@ -119,18 +119,17 @@ type Agent struct {
 	// defaulting — see each db.Agent literal at the call site that flips false to
 	// true; the DB layer does NOT default this because Go bools cannot distinguish
 	// "unset" from "explicit false"). Access is then narrowed two independent ways:
-	//   - BlockedTools: per-agent denylist (the user-facing model in agent
-	//     detail). Empty = nothing blocked = all tools. New tools added later are
-	//     reachable automatically unless explicitly blocked here.
+	//   - ToolOverrides: per-agent tiers, including "blocked". New tools added
+	//     later remain reachable unless an override pattern blocks them.
 	//   - AllowedTools: a legacy allowlist of tool-name patterns. Retained because
 	//     the built-in subagent profiles (explore/coder/reviewer) restrict an
 	//     isolated worker to a fixed tool set. Empty = allow all. User-facing
-	//     agents leave this empty and use the denylist instead.
+	//     agents leave this empty and use the override map instead.
 	// Both compose: a tool is offered iff it is not blocked AND (the allowlist is
 	// empty OR matches it).
 	MCPEnabled   bool   `json:"mcpEnabled"`
 	AllowedTools string `json:"allowedTools"` // JSON array (legacy allowlist; subagent profiles)
-	BlockedTools string `json:"blockedTools"` // JSON array (per-agent denylist)
+	BlockedTools string `json:"blockedTools"` // JSON array (legacy compatibility mirror)
 
 	// ToolOverrides is the per-agent tool override map (JSON object: tool name —
 	// or a "prefix*" pattern — → tier). Tiers are the four visibility tiers
@@ -141,11 +140,11 @@ type Agent struct {
 	//
 	// A key absent from the map inherits the workspace-effective tier. The
 	// "blocked" tier is not a visibility state: it drops the tool from the agent's
-	// catalog entirely and is the successor to BlockedTools, which is now DERIVED
-	// from this map on every write (a one-way mirror kept so market packs,
-	// workspace templates and pre-existing agent files still parse). Reading code
-	// should go through agent.ParseToolOverrides, which folds a legacy
-	// BlockedTools list back into this map.
+	// catalog entirely. Valid old or mixed inputs are normalized into this map
+	// at store load/create/write boundaries. BlockedTools is a derived mirror
+	// retained for older readers and exports. ParseAgentToolOverrides is the one
+	// compatibility adapter for raw imported agents and malformed documents;
+	// permission readers must propagate its error to fail closed.
 	ToolOverrides string `json:"toolOverrides"` // JSON object (name/pattern → tier)
 
 	// Skills is the list of skill slugs enabled for this agent. Only these skills

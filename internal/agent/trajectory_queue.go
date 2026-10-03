@@ -18,7 +18,7 @@ type trajectoryQueue struct {
 	items   []func()
 	running bool
 	// pending counts enqueued-but-not-finished closures so tests can wait for
-	// the projection to settle (backgroundWorkPending).
+	// the projection to settle.
 	pending atomic.Int64
 }
 
@@ -65,6 +65,3 @@ func (r *Runtime) drainTrajectoryWork() {
 		}()
 	}
 }
-
-// trajectoryWorkPending reports whether binder writes are still queued.
-func (r *Runtime) trajectoryWorkPending() bool { return r.trajWork.pending.Load() > 0 }

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, type ButtonHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { render, query } from '@/test/render'
+import { describe, expect, it, vi } from 'vitest'
 import type { Agent, AgentPatch } from '@/types'
 
 vi.mock('@/shared/lib/dirtySignals', () => ({ useRegisterDirty: () => undefined }))
@@ -22,28 +22,10 @@ vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [],
   thinkingOptionsForModel: (available: unknown) => available,
 }))
-vi.mock('@/shared/components', () => ({
-  Button: (props: ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />,
-  PromptEditor: ({
-    value,
-    onChange,
-    ...props
-  }: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange'> & {
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <textarea {...props} value={value} onChange={(event) => onChange(event.currentTarget.value)} />
-  ),
-}))
+vi.mock('@/shared/components', async () => import('@/test/formStubs'))
 
 import { AgentSettingsForm } from './AgentSettingsForm'
 
-const reactTestEnvironment = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT: boolean
-}
-reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
-
-const roots: Root[] = []
 const baseAgent = {
   id: 'AGT1',
   name: 'Agent',
@@ -56,26 +38,16 @@ const baseAgent = {
 } as Agent
 
 function renderForm(agent: Agent = baseAgent, onSave = vi.fn(async (_patch: AgentPatch) => {})) {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  roots.push(root)
-  act(() => root.render(<AgentSettingsForm agent={agent} onSave={onSave} />))
+  const { container } = render(<AgentSettingsForm agent={agent} onSave={onSave} />)
   return { container, onSave }
 }
 
 function option(container: HTMLElement, group: string, value: string) {
-  const element = container.querySelector<HTMLButtonElement>(
+  return query<HTMLButtonElement>(
+    container,
     `[data-testid="${group}-option"][data-value="${value}"]`,
   )
-  if (!element) throw new Error(`Option not found: ${group}/${value}`)
-  return element
 }
-
-afterEach(() => {
-  for (const root of roots.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
-})
 
 describe('AgentSettingsForm boolean option pills', () => {
   it('defaults an unstored native web search setting to Açık', () => {

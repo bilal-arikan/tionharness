@@ -6,6 +6,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
@@ -86,9 +87,5 @@ func toolRecapLines(stepsJSON string) []string {
 
 // truncateRunes caps s to max runes (Turkish-safe), appending "…" when cut.
 func truncateRunes(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return strings.TrimSpace(string(r[:max])) + "…"
+	return textutil.TruncRunesEllipsis(s, max)
 }

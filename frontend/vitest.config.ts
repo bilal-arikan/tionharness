@@ -7,8 +7,8 @@ import { defineConfig } from 'vitest/config'
 // output, and pulling those in only slows the run down and couples it to the
 // bundle config.
 //
-// Scope: `node` environment, no DOM. Component tests would need jsdom +
-// @testing-library; add that (and switch `environment`) when the first one lands.
+// Pure logic uses the node environment; component tests opt into jsdom with
+// their file-level environment directive.
 export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

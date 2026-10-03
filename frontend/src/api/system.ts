@@ -3,7 +3,6 @@
 import type {
   AppSettings,
   SettingsPatch,
-  ProviderTestResult,
   CatalogEntry,
   PromptsResponse,
   LogEntry,
@@ -224,12 +223,6 @@ export const systemApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
-  testProvider: (provider: string, model?: string) =>
-    req<ProviderTestResult>('/api/settings/test-provider', {
-      method: 'POST',
-      body: JSON.stringify({ provider, model: model ?? '' }),
-    }),
-
   // Provider/model catalog (for agent + settings pickers).
   getCatalog: async () => (await req<CatalogEntry[]>('/api/catalog')).map(localizeCatalogEntry),
 

@@ -29,28 +29,10 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+. (Join-Path $PSScriptRoot "lib\ports.ps1")
 
 $bindHost = if ($Loopback) { "127.0.0.1" } else { "0.0.0.0" }
 $bin = Join-Path $root "bin\tionharness.exe"
-
-# Free-Port clears a leftover listener on $pt (an orphaned prior run holding the
-# port) so the new backend can bind. With -NoKillPort we abort with a clear message.
-function Free-Port($pt, $label) {
-    $conns = Get-NetTCPConnection -LocalPort $pt -State Listen -ErrorAction SilentlyContinue
-    if (-not $conns) { return }
-    $owners = $conns | Select-Object -ExpandProperty OwningProcess -Unique
-    foreach ($procId in $owners) {
-        $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
-        $name = if ($proc) { $proc.ProcessName } else { "unknown" }
-        if ($NoKillPort) {
-            Write-Host "==> ERROR: $label port $pt busy (PID $procId / $name). -NoKillPort set, aborting." -ForegroundColor Red
-            throw "port-busy"
-        }
-        Write-Host "==> $label port $pt busy (PID $procId / $name) -> killing orphan..." -ForegroundColor Yellow
-        taskkill /PID $procId /T /F 2>$null | Out-Null
-    }
-    Start-Sleep -Milliseconds 400
-}
 
 # 1) Clean build (explicit link -> always current source).
 if ($Clean) {
@@ -65,7 +47,7 @@ $mb = [math]::Round((Get-Item $bin).Length / 1MB, 1)
 Write-Host "==> Build OK: $bin ($mb MB)" -ForegroundColor Green
 
 # 2) Free the port and set env (gated feature matches dev.ps1).
-Free-Port $Port "Backend"
+Free-Port $Port "Backend" -NoKillPort:$NoKillPort
 $env:TIONHARNESS_ADDR = "${bindHost}:$Port"
 $env:TIONHARNESS_ENABLE_SHELL = "1"
 

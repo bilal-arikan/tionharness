@@ -150,7 +150,6 @@ varlık ayrı bir `store_*.go` dosyasında sahiplenilir. Kesin liste için
 | `store_flow.go` | Flows ve flow run'ları |
 | `store_runcount.go` | Running flow-run sayacının drift koruması |
 | `store_flow_gc.go` | Flow koşusu GC: `DeleteFlowRunTree`, `PruneFlowRuns` |
-| `store_flow_testhooks.go` | Yalnız test: `SetFlowRunCreatedAtForTest` |
 | `store_schedule.go` | Schedules |
 | `store_hook.go` | Hook yapılandırmaları |
 | `store_mcp.go` | MCP sunucu yapılandırmaları |
@@ -168,7 +167,6 @@ varlık ayrı bir `store_*.go` dosyasında sahiplenilir. Kesin liste için
 | `sidecar.go` | `Sidecar[T]` — varlığın yanında tipli JSON dosyası, atomik yazım, bozuk dosya karantinası |
 | `models_trajectory.go` / `store_trajectory.go` | Rota modeli ve deposu (`sessions/<root>/trajectory.json`, `trajectories/index.json`, `UpdateTrajectory` CAS) |
 | `store_curator.go` / `store_optimizer.go` / `store_pin.go` | Küratör raporu, reçete optimizer bookkeeping, küratörden muafiyet bayrağı (Rota F3/F4) |
-| `store_hook_testhooks.go` | Yalnız test: `SetHookCreatedAtForTest` |
 | `store_model_resolution.go` | İstenen model id → servis edilen model eşlemesi |
 | `filestore.go` | Varlıktan bağımsız generic CRUD/persist yapı taşları |
 | `board_columns.go` | Kanban kolon anahtarı doğrulama ve yerleşik kolon sabitleri |

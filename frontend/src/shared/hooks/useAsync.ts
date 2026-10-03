@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPollingSubscription } from './pollingSubscription'
 
 export interface UseAsyncOptions {
   // When set, re-run `fn` on this interval (ms) after the initial load. Polling
@@ -84,38 +85,7 @@ export function useAsync<T>(
     if (!enabled) return
     run()
     if (!pollMs) return
-    if (!pauseWhenHidden) {
-      const t = setInterval(run, pollMs)
-      return () => clearInterval(t)
-    }
-
-    // Visibility-gated polling: the interval only exists while the document is
-    // visible, and becoming visible fires an immediate catch-up so returning to
-    // a window never shows data as stale as the time it spent hidden.
-    let timer: ReturnType<typeof setInterval> | null = null
-    const stop = () => {
-      if (timer !== null) {
-        clearInterval(timer)
-        timer = null
-      }
-    }
-    const start = () => {
-      if (timer === null) timer = setInterval(run, pollMs)
-    }
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        stop()
-        return
-      }
-      run()
-      start()
-    }
-    if (document.visibilityState !== 'hidden') start()
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      stop()
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
+    return createPollingSubscription(run, pollMs, pauseWhenHidden)
   }, [run, pollMs, enabled, pauseWhenHidden])
 
   return { data, loading, error, refresh: run }

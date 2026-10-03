@@ -67,9 +67,17 @@ func TestDecisionEvidenceBoundsUTF8AndFitsSmallerDecisionWindow(t *testing.T) {
 		t.Fatal("evidence exceeded its UTF-8 byte bounds")
 	}
 	h := rt.deciderHub()
-	m, ok := h.Model(h.EffectiveModel(authContextReminder))
-	if !ok {
-		t.Fatal("fixture has no decision model")
+	models := h.Models()
+	if len(models) != 1 || !models[0].Enabled {
+		t.Fatalf("fixture must have one enabled decision model: %+v", models)
+	}
+	m := models[0]
+	cfg := h.Config()
+	ac := cfg.Authorities[authContextReminder]
+	ac.Model = m.ID
+	cfg.Authorities[authContextReminder] = ac
+	if _, err := h.Update(cfg); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := h.UpsertModel(decider.ModelInput{ID: m.ID, Backend: m.Backend, Model: m.Model, Enabled: true, Credentials: m.Credentials, ProviderInstanceID: m.ProviderInstanceID, ContextTokens: 4000}); err != nil {
 		t.Fatal(err)

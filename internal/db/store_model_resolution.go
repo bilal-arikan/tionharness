@@ -76,16 +76,6 @@ func (d *DB) ResolvedModelFor(provider, requested string) string {
 	return d.modelResolutions[modelResolutionKey(provider, requested)].Resolved
 }
 
-// ModelResolutions returns a copy of every observed resolution, keyed
-// "<provider>|<requested>".
-func (d *DB) ModelResolutions(ctx context.Context) map[string]ModelResolution {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make(map[string]ModelResolution, len(d.modelResolutions))
-	maps.Copy(out, d.modelResolutions)
-	return out
-}
-
 // loadModelResolutions reads the singleton document. An absent or unreadable file
 // leaves the map empty: these are re-learned from the next turn, so a lost file
 // costs one turn of "no version shown", never correctness.

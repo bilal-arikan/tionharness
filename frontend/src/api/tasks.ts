@@ -91,16 +91,6 @@ export const taskApi = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
-  pinSchedule: (id: string, pinned: boolean) =>
-    req<{ id: string; pinned: boolean }>(`/api/schedules/${id}/pin`, {
-      method: 'POST',
-      body: JSON.stringify({ pinned }),
-    }),
-  archiveSchedule: (id: string, archived: boolean) =>
-    req<{ id: string; archived: boolean }>(`/api/schedules/${id}/archive`, {
-      method: 'POST',
-      body: JSON.stringify({ archived }),
-    }),
   // Fire a schedule immediately ("Run" button), regardless of enabled state.
   runSchedule: (id: string) => req<Schedule>(`/api/schedules/${id}/run`, { method: 'POST' }),
   setScheduleTags: (id: string, tags: string[]) =>

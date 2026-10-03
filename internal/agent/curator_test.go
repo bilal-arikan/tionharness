@@ -2,6 +2,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -56,9 +59,25 @@ func TestCuratorArchivesAgentMadeAndSuggestsUserMade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := rt.db.SetHookCreatedAtForTest(ctx, hook.ID, now-40*24*3600); err != nil {
+	// Load an aged persisted hook instead of exposing a production timestamp
+	// mutator solely for this fixture.
+	hook.CreatedAt = now - 40*24*3600
+	hookData, err := json.Marshal(hook)
+	if err != nil {
 		t.Fatal(err)
 	}
+	storeRoot := rt.db.Root()
+	if err := rt.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storeRoot, "hooks", hook.ID+".json"), hookData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rt.db, err = db.Open(storeRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rt.db.Close() })
 
 	rep, err := rt.RunCurator(ctx, "manual", true)
 	if err != nil {

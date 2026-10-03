@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(\"/c/Users/Bilal/AppData/Local/Programs/codebase-memory-mcp/codebase-memory-mcp.exe\" hook-augment *)",
-      "Bash(go mod *)",
-      "Bash(go list *)"
-    ]
-  }
-}

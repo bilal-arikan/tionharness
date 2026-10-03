@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 )
 
 func (d *DB) persistMCPLocked(m MCPServer) error {
@@ -139,34 +138,27 @@ func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bo
 	if err := json.Unmarshal([]byte(toolOverrides), &overrides); err != nil {
 		return fmt.Errorf("tool overrides must be a JSON object: %w", err)
 	}
-	blocked := []string{}
-	for name, tier := range overrides {
-		if tier == TierBlocked {
-			blocked = append(blocked, name)
-		}
+	if overrides == nil {
+		overrides = map[string]string{}
 	}
-	slices.Sort(blocked) // stable on-disk order (map iteration is random)
-	blockedJSON, err := json.Marshal(blocked)
-	if err != nil {
-		return err
-	}
+	toolOverrides, blockedJSON := encodeAgentToolOverrides(overrides)
 	// A built-in's tool access is customised installation-wide, like every other
 	// field on it (see store_agent_system_edit.go), rather than refused.
 	if locked, ok := d.lockedSystemAgent(agentID); ok {
 		return d.editBuiltinSystemAgent(ctx, locked, []string{"tools", "allowedTools"}, func(a *Agent) {
 			a.MCPEnabled = mcpEnabled
 			a.ToolOverrides = toolOverrides
-			a.BlockedTools = string(blockedJSON)
+			a.BlockedTools = blockedJSON
 			a.AllowedTools = "[]"
 		})
 	}
-	_, err = d.mutateAgentLockedErr(agentID, func(a *Agent) error {
+	_, err := d.mutateAgentLockedErr(agentID, func(a *Agent) error {
 		if a.Locked {
 			return ErrAgentLocked
 		}
 		a.MCPEnabled = mcpEnabled
 		a.ToolOverrides = toolOverrides
-		a.BlockedTools = string(blockedJSON)
+		a.BlockedTools = blockedJSON
 		a.AllowedTools = "[]"
 		// The tool trio is one inheritance unit; the allowlist reset above is a
 		// write too, so a child pins both.

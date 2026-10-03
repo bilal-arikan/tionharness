@@ -286,7 +286,7 @@ func TestTrajectoryCorruptSidecar(t *testing.T) {
 	ctx := context.Background()
 	d, _, root := newTrajStore(t)
 	tr, _ := d.CreateTrajectory(ctx, planDevTest(root))
-	if err := os.WriteFile(d.TrajectoryPath(root), []byte("{"), 0o644); err != nil {
+	if err := os.WriteFile(d.trajectorySidecar(root).Path(), []byte("{"), 0o644); err != nil {
 		t.Fatalf("corrupt: %v", err)
 	}
 	if _, err := d.GetTrajectory(ctx, tr.ID); !IsSidecarCorrupt(err) {

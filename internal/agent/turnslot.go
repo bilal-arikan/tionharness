@@ -14,9 +14,9 @@ import (
 //
 // Every turn-entry path in the process goes through one of these:
 //
-//	BeginSessionUserTurn / ClaimSessionUserTurn  → a user message (interactive or queued)
+//	BeginSessionUserTurn                        → a user message (interactive or queued)
 //	ClaimSessionCommandTurn                      → /compact, /handoff
-//	claimSessionTurnSlot(kind)                   → coordinator, worker, wake, peer, spawn, automation
+//	claimSessionTurnSlotCtx(kind)                → coordinator, worker, wake, peer, spawn, automation
 //
 // There is no priority: whoever asked first runs first. A priority scheme is
 // exactly how the coordinator's own auto-turns used to starve a waiting user
@@ -36,13 +36,6 @@ func (r *Runtime) BeginSessionUserTurn(sessionID string) (release func()) {
 	return rel
 }
 
-// ClaimSessionUserTurn is the ctx-aware form of BeginSessionUserTurn for a caller
-// that must be able to give up while waiting. On cancellation it returns a non-nil
-// error and a no-op release.
-func (r *Runtime) ClaimSessionUserTurn(ctx context.Context, sessionID string) (release func(), err error) {
-	return r.claimTurnSlot(ctx, sessionID, turnqueue.KindUser, "kullanıcı mesajı", true)
-}
-
 // ClaimSessionCommandTurn claims the slot for an out-of-queue slash command
 // (/compact, /handoff) that runs a direct provider call on the HTTP goroutine. It
 // does NOT reset the auto-turn cap — a compaction is not a human re-entering the
@@ -51,16 +44,7 @@ func (r *Runtime) ClaimSessionCommandTurn(ctx context.Context, sessionID, label 
 	return r.claimTurnSlot(ctx, sessionID, turnqueue.KindCommand, label, false)
 }
 
-// claimSessionTurnSlot claims the session's turn slot for an AUTONOMOUS turn
-// (coordinator auto-turn, worker, scheduler wake, scheduled prompt, peer inbox
-// delivery, spawn opening turn). Unlike a user turn it does NOT reset the auto-turn
-// cap (no human re-entered the loop). Returns the release func — defer it.
-func (r *Runtime) claimSessionTurnSlot(sessionID string, kind turnqueue.Kind, label string) (release func()) {
-	rel, _ := r.claimTurnSlot(context.Background(), sessionID, kind, label, false)
-	return rel
-}
-
-// claimSessionTurnSlotCtx is claimSessionTurnSlot for a turn whose cancel func is
+// claimSessionTurnSlotCtx claims an autonomous turn slot whose cancel func is
 // registered BEFORE it queues (a spawn: see launchSpawn). Without it a stop issued
 // while the turn waits for the slot would be silently outlived — the queued turn
 // would start after the stop and run to completion.
@@ -116,12 +100,5 @@ func (r *Runtime) publishTurnQueue(sessionID string) {
 	r.emitLiveness(sessionID)
 }
 
-// BusyTurnSessionIDs lists the sessions that currently hold their admission slot.
-// The activity endpoints use it as the CENTRAL busy source: because every turn
-// entry path above claims the slot, a new one shows up in the nav rail's busy
-// dots with no extra bookkeeping (a slash command used to publish a live "working"
-// bubble yet report idle, precisely because it had none).
-func (r *Runtime) BusyTurnSessionIDs() []string { return r.turns.BusySessionIDs() }
-
-// HasBusyTurns is the allocation-free yes/no form of BusyTurnSessionIDs.
+// HasBusyTurns reports whether any session currently holds its admission slot.
 func (r *Runtime) HasBusyTurns() bool { return r.turns.HasBusy() }

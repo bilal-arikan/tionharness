@@ -34,7 +34,6 @@ import { deciderApi } from './api/decider'
 import { archiveApi } from './api/archive'
 
 export { setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace }
-export type { ChatStreamHandlers } from './api/chat'
 
 export const api = {
   ...workspaceApi,

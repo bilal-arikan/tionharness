@@ -399,16 +399,8 @@ func operationLeaseCause(ctx context.Context, startedAt time.Time, leaseDuration
 	return cause
 }
 
-func DetachedOperationCount() int64 { return detachedOperations.Load() }
-
-func withActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
-	return WithActivityTimeout(parent, hard, idle)
-}
-
-// WithChatActivityTimeout installs semantic idle tracking. The legacy hard
-// parameter remains for source compatibility but never limits a chat run.
-func WithChatActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
-	_ = hard // legacy source compatibility; normal chat has no wall-clock ceiling
+// WithChatActivityTimeout installs semantic idle tracking for a chat run.
+func WithChatActivityTimeout(parent context.Context, idle time.Duration) (context.Context, func()) {
 	return WithActivityTimeout(parent, 0, idle)
 }
 

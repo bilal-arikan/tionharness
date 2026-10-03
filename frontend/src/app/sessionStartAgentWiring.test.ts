@@ -1,37 +1,78 @@
-import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+// @vitest-environment jsdom
 
-function source(relative: string): string {
-  return readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8')
-}
+import { act, createElement } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { sessionStartTest as calls } from '@/test/sessionStartEnvironment'
+import { render, query } from '@/test/render'
+import type { Agent } from '@/types'
+import App from './App'
+import { useSessionsController } from './useSessionsController'
 
-// The filter only protects the user if the session-start surfaces actually
-// consume it. These assertions pin the wiring: a refactor that hands the raw
-// roster back to the empty state would otherwise silently re-open the bug
-// (TSK979) with every unit test still green.
+const service = { id: 'SERVICE', name: 'Titler', system: true, systemKey: 'titler' } as Agent
+const archived = { id: 'OLD', name: 'Archived developer', archived: true } as Agent
+const ada = { id: 'ADA', name: 'Ada' } as Agent
+const bryn = { id: 'BRYN', name: 'Bryn' } as Agent
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  localStorage.clear()
+  localStorage.setItem('tionharness.hasSetup', '1')
+  calls.listAgents.mockResolvedValue([service, archived, ada, bryn])
+  // Failed settings leave the default empty without overwriting stored preferences.
+  calls.getWorkspaceSettings.mockRejectedValue(new Error('settings unavailable'))
+  calls.listSessions.mockResolvedValue({ items: [], total: 0, hasMore: false })
+  calls.getSessionsByIds.mockResolvedValue([])
+  calls.activeSessions.mockResolvedValue([])
+  calls.listArtifacts.mockResolvedValue({ items: [] })
+  calls.createSession.mockImplementation(async (agentId: string) => ({
+    id: 'NEW',
+    agentId,
+    kind: 'chat',
+    messageCount: 0,
+  }))
+})
+
 describe('session-start agent wiring', () => {
-  it('derives the startable subset in the controller and exports it', () => {
-    const controller = source('./useSessionsController.ts')
-    expect(controller).toContain("import { startableAgents } from './startableAgents'")
-    expect(controller).toContain('const sessionStartAgents = useMemo(() => startableAgents(agents)')
-    expect(controller).toContain('sessionStartAgents,')
+  it('offers only startable agents through the actual app and empty chat view', async () => {
+    const { container } = render(createElement(App))
+    await act(async () => {})
+    const select = query<HTMLSelectElement>(container, '[data-testid="chat-empty-agent-select"]')
+    expect([...select.options].map((option) => option.value)).toEqual(['ADA', 'BRYN'])
+    expect(query<HTMLButtonElement>(container, '[data-testid="sidebar-new-chat"]').disabled).toBe(
+      false,
+    )
   })
 
-  it('opens a new session from the startable subset, not the raw roster', () => {
-    const controller = source('./useSessionsController.ts')
-    expect(controller).toContain('const aid = defaultAgentId ?? sessionStartAgents[0]?.id')
-    expect(controller).not.toContain('const aid = defaultAgentId ?? agents[0]?.id')
+  it('disables the app new-chat button when only service or archived agents exist', async () => {
+    calls.listAgents.mockResolvedValue([service, archived])
+    const { container } = render(createElement(App))
+    await act(async () => {})
+    const button = query<HTMLButtonElement>(container, '[data-testid="sidebar-new-chat"]')
+    expect(button.disabled).toBe(true)
+    expect(container.querySelector('[data-testid="chat-empty-agent-select"]')).toBeNull()
+    act(() => button.click())
+    expect(calls.createSession).not.toHaveBeenCalled()
   })
 
-  it('feeds the empty state the startable subset', () => {
-    const chatView = source('../features/chat/ChatView.tsx')
-    expect(chatView).toContain('agents={sessionStartAgents}')
-  })
-
-  it('gates the sidebar new-chat button on a startable agent existing', () => {
-    const app = source('./App.tsx')
-    expect(app).toContain('newDisabled={ctl.sessionStartAgents.length === 0}')
-    expect(app).toContain('sessionStartAgents={ctl.sessionStartAgents}')
+  it('falls back to a startable agent when settings did not provide a default', async () => {
+    let controller: ReturnType<typeof useSessionsController> | undefined
+    const setError = vi.fn()
+    function Harness() {
+      controller = useSessionsController({
+        activeWorkspaceId: 'WS1',
+        chipsParam: '',
+        showArchived: false,
+        setError,
+        setView: calls.noop,
+      })
+      return null
+    }
+    render(createElement(Harness))
+    await act(async () => {})
+    expect(controller!.defaultAgentId).toBeNull()
+    expect(controller!.sessionStartAgents.map((agent) => agent.id)).toEqual(['ADA', 'BRYN'])
+    await act(async () => controller!.newSession())
+    expect(calls.createSession).toHaveBeenCalledWith('ADA')
+    expect(setError).not.toHaveBeenCalled()
   })
 })

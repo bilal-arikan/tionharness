@@ -71,7 +71,7 @@ func TestSubagentTargetArchivedIsExplicit(t *testing.T) {
 func TestToolLoopRefusesArchivedAgent(t *testing.T) {
 	r := lifecycleRuntime(t)
 	a := archivedAgent(t, r.db, "Idle")
-	_, err := r.CompleteWithTools(context.Background(), a, nil, providers.Request{}, false)
+	_, _, err := r.CompleteWithToolsTraced(context.Background(), a, nil, providers.Request{}, false)
 	if !errors.Is(err, archive.ErrArchived) {
 		t.Fatalf("err = %v, want ErrArchived", err)
 	}

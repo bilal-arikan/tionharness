@@ -34,9 +34,8 @@ func TestParseToolOverridesExplicitBeatsLegacyMirror(t *testing.T) {
 	}
 }
 
-// A corrupt override document must not make the agent unrunnable — it degrades
-// to "no overrides" rather than failing the whole registry build. Unknown tiers
-// are dropped for the same reason.
+// Display parsing tolerates corrupt documents and drops unknown tiers. Permission
+// readers use the strict parser and must fail closed instead.
 func TestParseToolOverridesIgnoresGarbage(t *testing.T) {
 	got := ParseToolOverrides(db.Agent{ToolOverrides: `not json`, BlockedTools: `also not json`})
 	if len(got) != 0 {

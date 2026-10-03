@@ -55,7 +55,7 @@ func (s *Server) runChatTurnCaptured(clientGone context.Context, wsp *workspace.
 	// this session forever and its queued inbox messages are never delivered. The
 	// chat wrapper installs the heartbeat interval too, so a long step-less
 	// operation is kept alive while a truly stalled stream is still reclaimed.
-	ctx, stopTimeout := agent.WithChatActivityTimeout(runCtx, 0, s.chatTurnIdle())
+	ctx, stopTimeout := agent.WithChatActivityTimeout(runCtx, s.chatTurnIdle())
 	defer stopTimeout()
 	run := s.runs.register(runID, req.SessionID, wsp.ID, cancel)
 	defer s.runs.unregister(runID)

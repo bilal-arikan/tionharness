@@ -134,7 +134,6 @@ export const providerApi = {
   listProviderKinds: async () =>
     (await req<ProviderKind[]>('/api/provider-kinds')).map(localizeProviderKind),
   listProviders: () => req<ProviderInstance[]>('/api/providers'),
-  getProvider: (id: string) => req<ProviderInstance>(`/api/providers/${encodeURIComponent(id)}`),
   upsertProvider: (input: UpsertProviderInput) =>
     req<ProviderInstance>('/api/providers', { method: 'PUT', body: JSON.stringify(input) }),
   deleteProvider: (id: string) =>

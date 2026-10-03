@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, type ButtonHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { render, query as q } from '@/test/render'
+import { describe, expect, it, vi } from 'vitest'
 import type { Agent, AgentOverrideKey, AgentPatch } from '@/types'
 import { currentLocale, setLocale } from '@/i18n'
 
@@ -22,28 +22,10 @@ vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [],
   thinkingOptionsForModel: (available: unknown) => available,
 }))
-vi.mock('@/shared/components', () => ({
-  Button: (props: ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />,
-  PromptEditor: ({
-    value,
-    onChange,
-    ...props
-  }: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange'> & {
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <textarea {...props} value={value} onChange={(event) => onChange(event.currentTarget.value)} />
-  ),
-}))
+vi.mock('@/shared/components', async () => import('@/test/formStubs'))
 
 import { AgentSettingsForm } from './AgentSettingsForm'
 
-const reactTestEnvironment = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT: boolean
-}
-reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
-
-const roots: Root[] = []
 const parent = {
   id: 'AGT1',
   name: 'Titler',
@@ -70,31 +52,16 @@ const child = {
 
 function renderForm(agent: Agent, extra: Record<string, unknown> = {}) {
   const onSave = vi.fn(async (_patch: AgentPatch) => {})
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  roots.push(root)
-  act(() =>
-    root.render(<AgentSettingsForm agent={agent} onSave={onSave} parent={parent} {...extra} />),
+  const { container } = render(
+    <AgentSettingsForm agent={agent} onSave={onSave} parent={parent} {...extra} />,
   )
   return { container, onSave }
-}
-
-function q<T extends Element>(container: HTMLElement, selector: string): T {
-  const element = container.querySelector<T>(selector)
-  if (!element) throw new Error(`Not found: ${selector}`)
-  return element
 }
 
 async function clickSave(container: HTMLElement) {
   const save = q<HTMLButtonElement>(container, '[data-testid="agent-save"]')
   await act(async () => save.click())
 }
-
-afterEach(() => {
-  for (const root of roots.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
-})
 
 describe('AgentSettingsForm inheritance', () => {
   it('marks overridden vs inherited fields on a derived agent', () => {

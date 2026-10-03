@@ -82,7 +82,7 @@ curl.exe -s -X POST $url -H "Content-Type: application/json" --data "@$tmp"
 `scripts\e2e-smoke.ps1` her iki deseni de kullanır (`Api-Post`/`Api-Put` → byte[]; `Curl-Raw`
 → UTF-8 temp dosya) — kopyalanacak referans.
 
-**Onarım:** Mevcut bozuk veri için `scripts\repair-encoding.ps1` (varsayılan dry-run; `-Apply`
+**Onarım:** Mevcut bozuk veri için `_Docs\arsiv\araclar\repair-encoding.ps1` (varsayılan dry-run; `-Apply`
 ile `.bak-encfix` yedeği alıp düzeltir). Yalnız CP1254 double-encoding'i **güvenle** tersine
 çevirir (geçerli-UTF-8 + lead-bayt `C2-C5/E2` kısıtı → temiz Türkçe harfler/sembollerde
 yanlış pozitif yok); knowledge düzeltmelerinde stale `embedding`'i null'lar (Go yüklemede

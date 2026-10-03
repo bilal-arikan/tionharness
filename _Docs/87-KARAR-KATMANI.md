@@ -1,6 +1,6 @@
 # 87 — Karar Katmanı (Decider), Karar Modelleri ve Karar Mercileri
 
-> **Özet (2026-09-22):** Uygulamanın belirli noktalarında metin üretmeyen, yalnız
+> **Özet (2026-10-03):** Uygulamanın belirli noktalarında metin üretmeyen, yalnız
 > tipli soruları (evet/hayır, birini seç, puanla) olasılıkla cevaplayan **karar
 > modelleri** kullanmasını sağlayan ayrı katman: `internal/decider`. **Karar
 > modelleri** sağlayıcı örnekleri gibi eklenip düzenlenir (kendi uç noktası +
@@ -9,9 +9,10 @@
 > üzerinden **herhangi bir yerel LLM** (Ollama, LM Studio, llama.cpp, vLLM).
 > **Karar mercileri** (`Authority`) kararı modele devreden noktalardır; kendi
 > paketlerinden kayıt olur ve her biri `off / shadow / on`, eşik, kendi modeli,
-> **yedek** ve **rakip** model alır. Dört merci bağlı (tool-risk, stall-judge,
-> flow-judge, phase-gate); yenileri için `Pick / Select / Triage` desenleri
-> hazır. Durum: **uygulandı (2026-09-22)**; karar sağlayıcıları Ayarlar →
+> **yedek** ve **rakip** model alır. On merci bağlıdır: tool-risk, stall-judge,
+> flow-judge, phase-gate ve [JEV iş akışlarındaki](92-JEV-IS-AKISLARI.md) altı
+> oturum/bağlam/işbirliği noktası. Ortak `Pick` yardımcısı ve merciye özel soru
+> kurucuları kullanılır. Durum: **uygulandı**; karar sağlayıcıları Ayarlar →
 > Sağlayıcılar, merciler Ayarlar → Karar Mercileri.
 
 ## 1. Neden ayrı bir katman
@@ -36,7 +37,7 @@
 | Karar mercii | `Authority`, `RegisterAuthority` | Kararı modele devreden nokta. Grup, desen, modlar, varsayılan eşik, `Explicit`, `FailClosed`. |
 | Merci ayarı | `AuthorityConfig` | `mode`, `threshold`, `model` (boş = varsayılan), `fallback`, `challenger`. |
 | Hub | `decider.Hub` | Uygulama çapında servis: model başına istemci önbelleği ve sağlık, fallback, challenger, ledger. |
-| Desen | `Pick`, `Hub.Select`, `Hub.Triage` | En sık karar biçimleri için hazır istek kurucu + yorumlayıcı. |
+| Desen | `Pick`, `Hub.Decide` ve merciye özel soru kurucuları | Ortak tek-seçim yorumlayıcısı; çoklu seçim/sınıflandırma girdisini ilgili çalışma noktası hazırlar. |
 
 ## 3. Backend'ler
 
@@ -202,6 +203,15 @@ etkilemez: yerel sunucu kapalıyken barındırılan yedek çalışmaya devam ede
 | `stall-judge` | coordination · gate | shadow, 0,70 | noul `stalled` (stall-judge prompt'unun karşılığı) | LLM yargıcına döner |
 | `flow-judge` | flows · pick | on (açık), 0,60 | choice `arm` / noul `holds` | Varsayılan dal; döngüde sınıra kadar |
 | `phase-gate` | flows · gate | on (açık, fail-closed), 0,80 | noul `holds` (kök oturumun son 40 mesajı) | **Kapı kapalı kalır** |
+| `session-setup` | session · select | off | İzinli skill ve araç adaylarına noul | Mevcut hazırlık/keşif yolu |
+| `model-router` | session · pick | off | Kullanılabilir model adaylarına choice | Ajanın/kullanıcının seçimi |
+| `clarification` | session · gate | off | İsteğe bağlı soruların zaten cevaplanıp cevaplanmadığı | Soru kullanıcıya gider |
+| `compact-retention` | context · triage | off | Bağlam parçalarına koru/özetle/çıkar choice | Mevcut compact girdisi |
+| `context-reminder` | context · select | off | Kayıtlı ilgili bağlam parçalarına noul | Yeni model hatırlatması eklenmez; kullanıcı pinleri korunur |
+| `worker-review` | collaboration · select | off | Worker sonucu için en fazla üç inceleme bakışı | Sonuç normal biçimde teslim edilir |
+
+Altı oturum/bağlam/işbirliği iş akışının tetikleyicileri, modları, bütçeleri ve
+CLI sınırları [92-JEV-IS-AKISLARI.md](92-JEV-IS-AKISLARI.md) içindedir.
 
 Ayrıntılar (değişmedi): tool-risk salt-okunur komutları sormaz, `on`'da riskli
 komutu onay istemine çevirir (`exec:decider`), gözetimsiz turu asla bloklamaz,
@@ -216,11 +226,14 @@ aynı kontrolü kullanır. flow-judge: dallanmada `matchMode: "judge"`, döngüd
 | gate | `Noul` + `Answer.Yes(th)` | Bir koşul sağlanıyor mu |
 | pick | `Choice` + `decider.Pick(resp, key, th)` | N seçenekten biri; eşik altında "emin değil" (eğilim yine döner) |
 | rate | `Score` + `Answer.Level()` | Sıralı ölçekte yer |
-| select | `hub.Select(ctx, merci, state, SelectSpec, []Candidate)` | Çok aday arasından ilgili olanlar: aday başına noul, istek başına ≤64 soru, parçalar paralel, en olası önce, `MaxK` |
-| triage | `hub.Triage(ctx, merci, TriageSpec, []Item)` | Listedeki her öğeye etiket: öğeler aynı state'te `[i000] …` olarak, öğe başına choice; bayt bütçesine (`ChunkBytes`) ve 64 soruya göre parçalanır |
+| select | Merciye özel `Request` + `Hub.Decide` | Aday başına noul; aday/seçim/bütçe sınırları iş akışında uygulanır. `internal/agent/decision_policy.go` içindeki `selectionRequest` ve `selectedVerdict` mevcut oturum akışlarını destekler. |
+| triage | Merciye özel choice soruları + `Hub.Decide` | Öğe başına koru/özetle/çıkar gibi etiket; kompakt akışının bağlam ve parça sınırları korunur. Genel amaçlı `Hub.Select`/`Hub.Triage` API'si yoktur. |
 
-Select/Triage bütün olarak başarısız olur (yarım cevapla hareket edilmez); her parça
-normal `Decide`'dan geçtiği için mod, yedek, rakip ve faturalama aynen geçerlidir.
+İstekler normal `Decide` yolundan geçtiği için mod, yedek, rakip ve faturalama
+aynı merkezden uygulanır. Protokol isteği en çok 64 soru içerir; mevcut iş akışları
+kendi daha dar aday ve kanıt bütçelerini ayrıca uygular. Kısmi/başarısız cevapta
+ne yapılacağı ilgili merciin deterministik geri dönüş sözleşmesidir; genel bir
+paralel parçalama servisi varmış gibi varsayılmaz.
 
 ## 7. Yeni karar mercii ekleme
 
@@ -234,21 +247,17 @@ normal `Decide`'dan geçtiği için mod, yedek, rakip ve faturalama aynen geçer
    (`FailClosed: true`).
 5. `frontend/src/i18n/locales/{en,tr}/decider.json` → `authority.<id>.*`.
 
-### 7.1 Taslaklar (henüz bağlı değil)
+### 7.1 Uygulanan fikirler ve kalan öneri
 
-- **Model yönlendirici** (`routing` · pick): tur başında isteği ve ajanın aday
-  model kademelerini (hızlı / dengeli / öncü, açıklamalarıyla) `Choice` olarak sor;
-  eşik altında ajanın varsayılan modeli. Gölgede: seçilen kademe ile gerçekten
-  kullanılanı karşılaştır. Dikkat: CLI oturumlarında tur ortasında model değişimi
-  ve prompt cache kaybı.
-- **Oturum/görev temizleyici** (`housekeeping` · triage): boşta kalan oturumları
-  (başlık, son mesaj özeti, yaş, durum) `Triage` ile `keep / archive / merge`
-  etiketle; `on`'da yalnız geri alınabilir işlemi (arşiv) uygula, diğerlerini öneri
-  olarak göster. Görevlerde tahta durumu değiştirmek yerine öneri üret.
-- **Bağlam seçici** (`context` · select): tur başında kullanıcı mesajı state,
-  ajanın skill/lazy tool/artefakt kataloğu aday; `Select` ile en olası `MaxK` tanesi
-  dinamik ek bloğa ("Bu istek için ilgili: …") girer (statik önbellekli prefix'e
-  asla). Gölgede: önerilen skill'in turda gerçekten kullanılıp kullanılmadığı.
+Model yönlendirme, başlangıç skill/araç seçimi, compact koruması ve bağlam
+hatırlatması artık kayıtlı mercilerdir; bunlar yeni taslak gibi ele alınmaz.
+Güncel sözleşmeleri [92-JEV-IS-AKISLARI.md](92-JEV-IS-AKISLARI.md) tutar.
+
+**Oturum/görev temizleyici** henüz öneridir: boşta kalan oturumlara
+`keep / archive / review` gibi etiketler veren merciye özel choice soruları
+hazırlanabilir. Deterministik aktif-oturum korumaları önce gelir; görevlerde
+durum değiştirmek yerine öneri üretmek tercih edilir. Bu belge böyle bir
+bakım işlemini uygulamaz veya yetkilendirmez.
 
 ## 8. Yeni backend ekleme
 

@@ -529,6 +529,7 @@ func (d *DB) load() error {
 		return err
 	}
 	for _, a := range agents {
+		a = normalizeAgentToolOverrides(a)
 		d.agents[a.ID] = a
 		d.markMutatedLocked()
 	}

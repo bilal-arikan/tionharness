@@ -107,7 +107,7 @@ type Runtime struct {
 	// on any path (chat/spawn/schedule/wake). The workspace manager wires the
 	// AutomationEngine (tag-triggered automations) and the CoordinationEngine
 	// (worker → coordinator <task-notification> feedback) here. Empty before wiring;
-	// guarded by turnHooksMu since AddTurnHook runs during boot while
+	// guarded by turnHooksMu since SetTurnHook runs during boot while
 	// FireTurnFinished may already be firing.
 	turnHooks   []func(context.Context, TurnFinished)
 	turnHooksMu sync.RWMutex
@@ -212,7 +212,7 @@ type Runtime struct {
 	treeTeardowns     map[string]map[string]bool // tree root -> branch roots being torn down
 	teardownTreeRoots map[string]string          // prepared session -> tree root
 
-	// workerRunFn, when non-nil, replaces the `go r.runWorker(...)` launch in
+	// workerRunFn, when non-nil, replaces the registered worker launch in
 	// dispatchWorkerTurn — a test seam so the queue's accept/refuse/deliver logic
 	// can be exercised without a live provider. Nil in production.
 	workerRunFn func(agent db.Agent, workerSessionID, prompt, coordSessionID string)
@@ -1321,9 +1321,7 @@ func (r *Runtime) runScheduleNow(ctx context.Context, id string) error {
 }
 
 // SetTurnHook wires a single callback invoked when an agent turn finishes,
-// replacing any hooks added so far. Kept for callers that want exactly one hook;
-// AddTurnHook is preferred when several observers (automations + coordination)
-// must all see turn completions.
+// replacing the current callback.
 func (r *Runtime) SetTurnHook(fn func(context.Context, TurnFinished)) {
 	r.turnHooksMu.Lock()
 	defer r.turnHooksMu.Unlock()
@@ -1332,18 +1330,6 @@ func (r *Runtime) SetTurnHook(fn func(context.Context, TurnFinished)) {
 		return
 	}
 	r.turnHooks = []func(context.Context, TurnFinished){fn}
-}
-
-// AddTurnHook appends a turn-completion observer. All hooks fire (each on its own
-// detached goroutine) for every finished turn, so the AutomationEngine and the
-// CoordinationEngine can both react without one shadowing the other.
-func (r *Runtime) AddTurnHook(fn func(context.Context, TurnFinished)) {
-	if fn == nil {
-		return
-	}
-	r.turnHooksMu.Lock()
-	defer r.turnHooksMu.Unlock()
-	r.turnHooks = append(r.turnHooks, fn)
 }
 
 // AddFailedTurnHook appends a FAILED-turn observer. Kept separate from the

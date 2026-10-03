@@ -8,6 +8,7 @@ import (
 )
 
 func (d *DB) persistAgentLocked(a Agent) error {
+	a = normalizeAgentToolOverrides(a)
 	d.agents[a.ID] = a
 	d.markMutatedLocked()
 	return atomicWriteJSON(d.dir(dirAgents, a.ID+".json"), a)
@@ -102,6 +103,7 @@ func (d *DB) createAgent(ctx context.Context, a Agent) (Agent, error) {
 	if a.ToolOverrides == "" {
 		a.ToolOverrides = "{}"
 	}
+	a = normalizeAgentToolOverrides(a)
 	if a.Skills == nil {
 		a.Skills = []string{}
 	}

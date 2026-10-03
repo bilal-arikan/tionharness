@@ -352,11 +352,6 @@ func (r *Registry) EagerNames(allow func(name string) bool) map[string]bool {
 	return out
 }
 
-// IsHidden reports whether a tool is in the HIDDEN tier: lazy AND folded out of
-// the per-turn catalog into the self-management skill pointer (not enumerated by
-// name). Distinct from a plain name-only tool, which stays listed by name.
-func (r *Registry) IsHidden(name string) bool { return r.hidden[name] }
-
 // AttachMCP records the MCP catalog and per-server configs so the registry can
 // advertise and dispatch namespaced MCP tools. Every MCP tool is marked lazy AND
 // name-only: external servers can expose hundreds of tools, so their schemas are

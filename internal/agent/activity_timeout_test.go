@@ -62,7 +62,7 @@ func TestSemanticProgressSurvivesPastLegacyHardLimit(t *testing.T) {
 
 func TestSemanticProgressNoProgressCancelsAtIdle(t *testing.T) {
 	const idle = 240 * time.Millisecond
-	ctx, stop := WithChatActivityTimeout(context.Background(), 0, idle)
+	ctx, stop := WithChatActivityTimeout(context.Background(), idle)
 	defer stop()
 	started := time.Now()
 	select {

@@ -1,36 +1,32 @@
 ---
 name: run-app
 description: >
-  Start TionHarness locally and open it in the browser to verify a change in the real app
-  (not only tests). Use for "/run-app", "uygulamayı başlat", "çalıştır ve bak", or when a
-  UI/API change needs a live check. Uses .claude/launch.json.
+  Bir değişikliği çalışan TionHarness API/UI üzerinde doğrulamak için yerel
+  sunucuyu ve tarayıcıyı açar. "/run-app", "uygulamayı başlat", "çalıştır ve bak"
+  veya canlı UI/API kontrolünde kullanılır. Başlatıcılar `.claude/launch.json` içindedir.
 ---
 
-# Run the app
+# Uygulamayı çalıştırma
 
-Four launch configurations exist in `.claude/launch.json`:
-
-| Name | What | URL |
+| Yapılandırma | İşlev | Adres |
 |---|---|---|
-| `tionharness` | Go server (`go run ./cmd/tionharness`), serves the embedded frontend, default data dir | http://127.0.0.1:8080 |
-| `frontend-dev` | Vite dev server for the React frontend (hot reload) | http://127.0.0.1:5173 |
-| `tionharness-scratch` | Go server on 8090 with a throwaway data dir (`%LOCALAPPDATA%\Temp\claude\th-scratch-data`) | http://127.0.0.1:8090 |
-| `tionharness-dev` | Go server on 8090 with the default data dir | http://127.0.0.1:8090 |
+| `tionharness` | Temiz derlemeli Go sunucusu, gömülü arayüz, varsayılan veri dizini | http://127.0.0.1:8090 |
+| `frontend-dev` | Vite geliştirme sunucusu; API proxy'si 8090'a bağlıdır | http://127.0.0.1:5173 |
+| `tionharness-scratch` | 8090'da, geçici ve ayrı veri dizinli Go sunucusu | http://127.0.0.1:8090 |
+| `tionharness-dev` | Yalnız geliştirme backend'i, varsayılan veri dizini | http://127.0.0.1:8090 |
 
-Steps:
+1. **API veya gömülü UI:** `preview_start` ile `tionharness` yapılandırmasını
+   başlatın. `scripts/serve.ps1` arayüzü ve Go binary'sini sıralı derler; ayrı
+   `go run` sarmalayıcısı kullanılmaz.
+2. **Arayüz geliştirme:** `tionharness-dev` ve `frontend-dev` yapılandırmalarını
+   başlatıp Vite adresini açın. Backend ve proxy aynı 8090 portunu kullanır.
+3. Veri dizini varsayılan `~/.tionharness` yoludur; `TIONHARNESS_DATA_DIR` değiştirir.
+   Kullanıcının çalışan örneği `instance.lock` tutuyorsa onu kapatmayın. Ayrı veri
+   dizini için `tionharness-scratch` kullanın; aynı 8090 portu doluysa onu da başlatmayın.
+4. Başlatıcılar port doluyken süreç öldürmeden çıkar (`-NoKillPort`). Çalışan sunucuyu
+   veya kullanıcı oturumlarını sırf doğrulama için kesmeyin. Binary'nin doğrudan
+   varsayılanı 8080'dir; bu geliştirme yapılandırmaları 8090'ı açıkça seçer.
+5. İlgili ekranı tarayıcı araçlarıyla veya API yanıtını `curl` ile kontrol edin.
+   Bearer auth isteğe bağlıdır; günlükleri `preview_logs` ile okuyun.
 
-1. **Backend only / API check:** `preview_start` with name `tionharness`. The embedded UI
-   comes from `internal/web/dist`; if it is missing or stale, build it first:
-   `cd frontend && npm run build` (output lands in `internal/web/dist`).
-2. **Frontend iteration:** start `tionharness` AND `frontend-dev`; open the Vite URL, it
-   proxies `/api` to the Go server.
-3. Data dir defaults to `~/.tionharness` (`TIONHARNESS_DATA_DIR` overrides). The user's
-   own instance may already hold `instance.lock` there — if the server refuses to start
-   because another instance is live, do NOT kill it; ask the user or use
-   `preview_start tionharness-scratch`, which runs with an isolated data dir.
-4. The listen address is `TIONHARNESS_ADDR` (default `127.0.0.1:8080`). The user's daily
-   instance runs on 8099; never assume it is free.
-5. Verify with `read_page`/`get_page_text` on the relevant screen, or `curl` an endpoint
-   (bearer auth is opt-in and off by default). Read server logs with `preview_logs`.
-
-Stop servers you started (`preview_stop`) before finishing.
+İş sonunda yalnız bu kontrol için başlattığınız sunucuları `preview_stop` ile kapatın.

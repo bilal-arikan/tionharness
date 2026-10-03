@@ -1272,15 +1272,8 @@ func writeLazyToolLine(b *strings.Builder, name, description string) {
 	fmt.Fprintf(b, "- `%s` — %s\n", name, description)
 }
 
-// WorkspaceToolCatalog returns the full, unfiltered tool catalog (every built-in
-// plus every enabled MCP server's tools) for the workspace tools screen, where
-// each tool's active/inactive state is toggled independently of any agent.
-func (r *Runtime) WorkspaceToolCatalog(ctx context.Context) []providers.ToolDef {
-	return r.buildRegistry(ctx, db.Agent{}).Defs(nil)
-}
-
-// WorkspaceToolCatalogWithState is WorkspaceToolCatalog plus, for each tool, its
-// effective visibility tier after all marks are applied — code defaults
+// WorkspaceToolCatalogWithState returns the full workspace tool catalog and its
+// effective visibility tiers after all marks are applied — code defaults
 // (self-management, MCP, etc.) AND the workspace per-tool overrides. The returned
 // map is tool name → one of tools.Visibility* ("full" | "summary" | "name-only" |
 // "hidden"); it drives the tools screen's tier selector and chips.
@@ -1294,7 +1287,7 @@ func (r *Runtime) WorkspaceToolCatalogWithState(ctx context.Context) ([]provider
 	return defs, vis
 }
 
-// ActiveToolCatalogWithState is ActiveToolCatalog plus each tool's
+// ActiveToolCatalogWithState returns workspace-active tools and each tool's
 // WORKSPACE-EFFECTIVE visibility tier — code defaults + the workspace override
 // map, with NO agent overrides applied (it builds against a zero agent).
 //
@@ -1313,16 +1306,6 @@ func (r *Runtime) ActiveToolCatalogWithState(ctx context.Context) ([]providers.T
 		vis[d.Name] = reg.VisibilityOf(d.Name)
 	}
 	return defs, vis
-}
-
-// ActiveToolCatalog returns the workspace-active tool catalog (full catalog
-// minus the workspace denylist) — the set of tools an agent may pick from.
-func (r *Runtime) ActiveToolCatalog(ctx context.Context) []providers.ToolDef {
-	disabled := r.workspaceDisabledSet(ctx)
-	if disabled == nil {
-		return r.buildRegistry(ctx, db.Agent{}).Defs(nil)
-	}
-	return r.buildRegistry(ctx, db.Agent{}).Defs(func(name string) bool { return !disabled[name] })
 }
 
 // capStepInput bounds a code-mode call's args for the nested trace card. The

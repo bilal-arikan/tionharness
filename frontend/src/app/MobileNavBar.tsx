@@ -1,8 +1,7 @@
 /* eslint-disable react-hooks/refs -- `drag` is the object returned by useDragScroll;
    reading drag.ref / drag.onMouseDown to spread onto JSX is a plain property read,
    not a ref *dereference* during render. The rule matches on the `.ref` name. */
-import { Boxes, Settings } from 'lucide-react'
-import { NAV } from './navItems'
+import { NAV, PINNED_NAV } from './navItems'
 import type { View } from './NavRail'
 import { useDragScroll } from '@/shared/hooks/useDragScroll'
 import { MobileWorkspaceButton } from './MobileWorkspaceButton'
@@ -27,13 +26,6 @@ interface Props {
   onCreateWorkspace: (data: NewWorkspaceData) => void
 }
 
-// The two pinned items that sit below the primary NAV list in the desktop rail.
-// Appended after NAV so the mobile bar exposes the exact same destinations.
-const PINNED: typeof NAV = [
-  { key: 'workspace', label: 'navigation.workspace', icon: Boxes },
-  { key: 'settings', label: 'navigation.settings', icon: Settings },
-]
-
 // MobileNavBar is the bottom navigation for portrait phones (`< md`). The desktop
 // vertical NavRail is hidden at this breakpoint; here every view lives in a single
 // horizontally-scrollable strip so all destinations stay reachable with a swipe —
@@ -52,7 +44,7 @@ export function MobileNavBar({
   onCreateWorkspace,
 }: Props) {
   const { t } = useTranslation()
-  const items = [...NAV, ...PINNED]
+  const items = [...NAV, ...PINNED_NAV]
   // Mouse click-and-drag panning (touch already scrolls natively).
   const drag = useDragScroll<HTMLDivElement>()
   return (
@@ -81,7 +73,7 @@ export function MobileNavBar({
         className="flex flex-1 cursor-grab gap-1 overflow-x-auto px-2 select-none active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item) => {
-          const label = item.labelKey ? t(item.labelKey) : t(item.label)
+          const label = t(item.labelKey)
           const Icon = item.icon
           const active = view === item.key
           const busy = busyViews?.has(item.key) ?? false

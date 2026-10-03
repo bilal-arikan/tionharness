@@ -357,23 +357,6 @@ func (r *Runtime) refreshPromptEpochLocked(ctx context.Context, sessionID, reaso
 	r.emitDebug(WithSessionID(ctx, sessionID), db.DebugEvent{Type: db.DebugEpoch, Name: reason, Detail: detail})
 }
 
-// PromptEpochStale reports whether the frozen snapshot for (session, agent) is
-// currently holding back live drift — consulted by dynamic-suffix builders that
-// run after the system/tool epoch calls (the headless path).
-func (r *Runtime) PromptEpochStale(sessionID, agentID string) bool {
-	if sessionID == "" || !r.PromptEpochEnabled() {
-		return false
-	}
-	r.epochMu.Lock()
-	defer r.epochMu.Unlock()
-	if m, ok := r.epochCache[sessionID]; ok {
-		if e := m[agentID]; e != nil {
-			return e.systemStale || e.toolsStale
-		}
-	}
-	return false
-}
-
 // noteEpochStaleLocked emits the one-time "stale" debug event on a fresh drift
 // and re-arms once the drift disappears (e.g. the change was reverted).
 func (r *Runtime) noteEpochStaleLocked(ctx context.Context, sessionID, agentID string, e *promptEpochEntry) {

@@ -1,37 +1,40 @@
 ---
 name: docs-update
 description: >
-  How to record a change in this repo's Turkish documentation: append a dated entry to
-  `_Docs/05-ILERLEME.md`, refresh the affected doc's top "Özet" block, keep the index in
-  `_Docs/00-GENEL-BAKIS.md` complete. Use after any feature/fix, for "/docs-update",
-  "dokümanı güncelle", or before a commit that changed behaviour.
+  Bu depodaki Türkçe dokümanları günceller: tarihli kaydı `_Docs/05-ILERLEME.md`
+  dosyasının başına ekler, ilgili dokümanın Özet bloğunu ve
+  `_Docs/00-GENEL-BAKIS.md` indeksini yeniler. Özellik/hata düzeltmesi sonrası,
+  "/docs-update", "dokümanı güncelle" veya davranış değiştiren commit öncesinde kullanılır.
 ---
 
-# Documentation update pattern
+# Doküman güncelleme düzeni
 
-Documents are Turkish; code and comments English. Numbered `_Docs/NN-*.md` docs should
-start with an H1 and, right below it, a blockquote `> **Özet (YYYY-MM-DD):** ...` (3–5 sentences: topic,
-status, key decisions, owning packages). Agents read the Özet first, so keep it true;
-add one when you touch a doc that lacks it.
+Dokümanlar Türkçe; kod ve kod yorumları İngilizcedir. Numaralı `_Docs/NN-*.md`
+dosyaları H1 başlığından sonra `> **Özet (YYYY-MM-DD):** ...` bloğu içerir.
+Özet 3–5 cümlede konuyu, mevcut durumu, önemli kararları ve ilgili paketleri açıklar.
+Değişen durum veya kararları gövdede ve özette birlikte düzeltin.
 
-Steps for a change:
-
-1. **Progress log.** Prepend a section to `_Docs/05-ILERLEME.md` right after the H1 and
-   its Özet block:
+1. **İlerleme kaydı:** yeni bölümü `_Docs/05-ILERLEME.md` içindeki H1, Özet ve
+   arşiv gezinmesinden sonra, mevcut tarihli kayıtların önüne ekleyin. En yeni
+   tarih üstte kalır; aynı gün içindeki kayıtların mevcut sırasını koruyun.
 
    ```markdown
-   ## <Kısa başlık> (YYYY-MM-DD) ✅
+   ## Kısa başlık (YYYY-MM-DD)
 
-   <Ne değişti, neden, hangi dosyalar, hangi testler; ölçüm varsa rakamla.>
+   Ne değişti, neden, ilgili dosyalar ve doğrulama sonuçları.
    ```
 
-2. **Topic doc.** Update the doc that owns the topic (find it via the index in
-   `_Docs/00-GENEL-BAKIS.md`). If the change alters its status or a key decision, edit
-   its Özet block too; do not leave a stale "plan" status on implemented work.
-3. **New doc?** Number it after the highest existing one (`NN-KONU.md`), add the Özet
-   block, and add a row to the index table in `00-GENEL-BAKIS.md`.
-4. **Rules that agents need every turn** go to `CLAUDE.md` (keep it small, ~5 KB);
-   reference material goes to `_Docs/80-AJAN-REFERANSI.md`.
-5. **Whitespace gate.** No trailing whitespace in `.md`/`.yml`; run `git diff --check`.
+2. **Konu dokümanı:** sahibi olan rehberi indeksten bulun; artık geçerli olmayan
+   plan/durum metnini güncelleyin. Geçmiş ölçümleri yeni davranışın kanıtı gibi sunmayın.
+3. **Yeni doküman:** mevcut numara ve konu ailesini kontrol edin. İlgisiz yeni konuya
+   en yüksek numaradan sonrakini verin; aynı konu ailesinin alt rehberinde mevcut
+   numara ve farklı dosya adı kullanılabilir. Dosyayı indeks tablosuna ekleyin.
+4. **Uzun günlük:** eski ayları `arsiv/05-ILERLEME-YYYY-MM.md` dosyalarına taşıyın.
+   Her tarihsel bölüm ve ilgili bağlantı korunur; ana günlük arşivlere bağlantı verir.
+   Tarihsiz tarihsel kayıtların içeriğine tahmini tarih eklemeyin.
+5. **Ajan kuralları:** her tur geçerli kısa kurallar `CLAUDE.md`'ye; ayrıntılı
+   referans `_Docs/80-AJAN-REFERANSI.md`'ye gider.
+6. **Son kontrol:** yerel bağlantıları ve tarih sırasını doğrulayın; `.md`/`.yml`
+   dosyalarında satır sonu boşluk bırakmayın ve `git diff --check` çalıştırın.
 
-Dates are absolute (`2026-09-03`), never "bugün"/"dün".
+Tarihler mutlak yazılır (`2026-10-03`); "bugün" ve "dün" kullanılmaz.

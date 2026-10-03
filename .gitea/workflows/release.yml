@@ -62,27 +62,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # --- gate: identical to ci.yml. A release must never ship a red build. ---
-
-      # internal/web/dist is gitignored but //go:embed all:dist needs the
-      # directory to exist to compile. build-release.sh replaces it later with
-      # the real frontend build.
-      - name: Placeholder for the embedded SPA
-        run: mkdir -p internal/web/dist && touch internal/web/dist/index.html
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./... -count=1 -race -timeout 900s
-
-      - name: Frontend install
-        working-directory: frontend
-        run: npm ci
-
-      - name: Frontend test
-        working-directory: frontend
-        run: npm test
+      # The shared gate installs frontend dependencies once; the builder reuses them.
+      - name: Release gate
+        run: bash scripts/ci.sh release
 
       # --- build ---------------------------------------------------------------
 
@@ -119,7 +101,7 @@ jobs:
             unset ARTIFACT_BASE
           fi
           echo "Feed base: $FEED_BASE"
-          scripts/build-release.sh "$VERSION"
+          bash scripts/build-release.sh --skip-install "$VERSION"
           ls -la "dist/release/$VERSION"
 
       # Cheap guard against publishing a feed the client cannot parse: the whole

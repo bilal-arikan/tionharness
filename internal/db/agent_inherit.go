@@ -400,15 +400,3 @@ func (d *DB) systemRoleTakenLocked(key, excludeID string) bool {
 	}
 	return false
 }
-
-// AgentChildren returns the live direct children of id (resolved), oldest first.
-func (d *DB) AgentChildren(id string) []Agent {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	kids := d.childrenLocked(id)
-	out := make([]Agent, 0, len(kids))
-	for _, k := range kids {
-		out = append(out, d.resolveAgentLocked(k))
-	}
-	return out
-}

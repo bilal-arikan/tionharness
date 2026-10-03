@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
@@ -89,21 +90,6 @@ type createTaskReq struct {
 	ArtifactIDs  []string `json:"artifactIds"`
 }
 
-// placeholderTitle derives an instant, single-line title from a card's content,
-// used until the async AI title lands (see handleCreateTask). First line only,
-// capped to a sensible length with an ellipsis — mirrors the frontend excerpt.
-func placeholderTitle(source string) string {
-	source = strings.TrimSpace(source)
-	if i := strings.IndexAny(source, "\r\n"); i >= 0 {
-		source = strings.TrimSpace(source[:i])
-	}
-	r := []rune(source)
-	if len(r) > 60 {
-		return strings.TrimSpace(string(r[:60])) + "…"
-	}
-	return source
-}
-
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	req, ok := bindJSON[createTaskReq](w, r)
 	if !ok {
@@ -140,7 +126,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	autoTitle := req.Title == "" && titleSource != ""
 	if autoTitle {
-		title = placeholderTitle(titleSource) // instant content excerpt
+		title = textutil.PlaceholderTaskTitle(titleSource) // instant content excerpt
 	}
 
 	wsp := ws(r)
