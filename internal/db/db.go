@@ -629,10 +629,10 @@ func (d *DB) load() error {
 		return err
 	}
 	for _, a := range automations {
-		if a.TriggerKind == TriggerCounterLegacy {
+		if retiredTriggerKind(a.TriggerKind) {
 			// Retired trigger kind: keep the file untouched on disk for the record
-			// but never surface the rule (see TriggerCounterLegacy).
-			slog.Warn("automation: skipping retired counter-kind rule", "component", "db", "id", a.ID, "name", a.Name)
+			// but never surface the rule (see TriggerCounterLegacy/TriggerTokenLegacy).
+			slog.Warn("automation: skipping retired trigger-kind rule", "component", "db", "id", a.ID, "name", a.Name, "kind", a.TriggerKind)
 			continue
 		}
 		d.automations[a.ID] = a

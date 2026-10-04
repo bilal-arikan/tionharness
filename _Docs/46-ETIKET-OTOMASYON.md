@@ -10,9 +10,9 @@ değişince, §2.5), (3) tur olaylarına göre **otomatik etiketleme** (§3).
 
 **Tetik türü (`Automation.TriggerKind`):** `""`/`"tag"` (varsayılan,
 geriye dönük uyumlu) = etiket tetikleyicili; `"board"` = pano tetikleyicili (2026-07-06);
-`"token"` = token-harcaması eşiği tetikleyicili (2026-08-03, §2.6); Rota türleri
-`"phase"` / `"trajectory_end"` (`_Docs/78`). `"counter"` (mesaj/tool sayacı, 2026-08-06)
-**2026-09-05'te tamamen kaldırıldı** (§2.7). Guardrail'ler
+Rota türleri `"phase"` / `"trajectory_end"` (`_Docs/78`); `"flow"` (`_Docs/93`).
+`"counter"` (mesaj/tool sayacı, 2026-08-06) **2026-09-05'te** (§2.7) ve `"token"`
+(token-harcaması eşiği, 2026-08-03) **2026-10-04'te** (§2.6) tamamen kaldırıldı. Guardrail'ler
 (MaxIterations/CooldownSec/ExpiresAt/Enabled), hedefleme (TargetAgentID **veya** FlowID)
 ve iterasyon defteri **tüm türler için ortaktır** (`guardsPass` paylaşılır).
 
@@ -325,80 +325,40 @@ MaxIterations (vars. 50) + Cooldown bunu sınırlar. Bildirim tipi yine `automat
 - `internal/db/store_task_hook_test.go` — hook create/move/no-op-move/update/delete olaylarında
   doğru `Op`/`From`/`To` ile ateşliyor.
 
-## 2.6 Token-Eşiği Tetikleyicili Otomasyonlar (2026-08-03)
+## 2.6 Token-Eşiği Tetikleyicili Otomasyonlar — KALDIRILDI (2026-10-04)
 
-Aynı `Automation` entity'si, `TriggerKind="token"` ile **kümülatif token harcaması**
-bir eşik katını geçince tetiklenir. Amaç: "belli token geçilince kendi kendine
-optimizasyon/temizlik/bakım çağır" — periyodik öz-bakım. Etiket/pano türleriyle
-**aynı** hedefleme (ajan **veya** flow) ve guardrail'leri paylaşır.
+2026-08-03'te eklenen `TriggerKind="token"` türü (bir oturumun ömür-boyu ya da
+workspace'in bugünkü kümülatif token harcaması bir `TokenThreshold` katını geçince
+ateşleme; `TokenScope`/`TokenThreshold`, `MinTokenThreshold`, `crossedMultiple`
+stateless geçiş tespiti, `tokenVars` prompt değişkenleri, "⚡ Token" şeridi)
+**ürünün her katmanından çıkarıldı**. Kalıcı olarak bilinmesi gerekenler:
 
-### Ek alanlar (yalnız `token` türünde anlamlı)
-| Alan | Anlam |
-|------|-------|
-| `TokenScope` | İzlenen kapsam: `session` (vars., boş=`session`) = bir oturumun **ömür-boyu** tokenı (`SessionUsage`); `workspace` = tüm workspace'in **bugünkü** toplamı (tüm ajan `Usage` satırları toplamı, gün-bazlı sıfırlanır). `db.ValidTokenScope`. |
-| `TokenThreshold` | Token **aralığı**: kümülatif her bu kadarın katını geçince ateşler (ör. 100000 → 100k, 200k, 300k…). En az `db.MinTokenThreshold` (1000). Token = `input+output+cacheRead+cacheWrite`. |
-
-### Semantik: "her-N" (tekrarlı), stateless geçiş tespiti
-Eşik bir kez geçilip üstünde kalacağından naif kontrol her turda tetiklerdi. Bunun
-yerine **her-N** modeli: `TokenThreshold` bir *aralık*tır. Geçiş, kayıt anında
-*önceki* vs *yeni* kümülatif toplamdan **stateless** hesaplanır —
-`crossedMultiple(prev, now, interval) = prev/interval < now/interval`. Böylece
-**per-scope defter (ledger) tutulmaz**; boundary tam olarak onu aşan tek çağrıda
-tespit edilir. Cooldown + MaxIterations + ExpiresAt sıklığı yine sınırlar.
-
-### Tetik: usage hook (tek huni `RecordUsage`)
-Her sağlayıcı çağrısının tokenı `agent/budget.go` `RecordUsage`'tan geçer (session
-+ gün rollup'ı buraya yazılır). Kayıttan sonra `Runtime.FireUsageRecorded` bir
-`UsageRecorded{SessionID, DeltaTokens, SessionNewTotal}` sinyalini **detached
-goroutine**'lerde dağıtır (turu bloklamaz). Workspace manager `autoEngine.OnUsageRecorded`'ı
-`rt.AddUsageHook` ile bağlar.
-- **Session kapsam:** `SessionNewTotal − DeltaTokens = prev`; oturum yoksa (detached
-  aux çağrı) atlanır.
-- **Workspace kapsam:** `db.WorkspaceTokensToday()` (tüm ajan bugünkü toplamı) yeni
-  toplam; `prev = yeni − DeltaTokens`. Yalnız bir workspace-kapsam kuralı varsa lazy hesaplanır.
-
-Ateşleme — **kalıcı bakım oturumu (2026-08-06):** token fire artık her seferinde
-yeni oturum **spawn ETMEZ**; render edilen promptu otomasyona ait **tek kalıcı
-oturuma** (`Kind="automation"`, `SourceID=otomasyon.ID`, `GetOrCreateSourceSession`)
-**history-aware** tur olarak teslim eder (`Runtime.deliverAutomationTurn`,
-`agent/automation_deliver.go`). Böylece her geçiş **önceki turdan devam eder** —
-cron schedule'ın stabil `schedule` oturumuyla aynı model (compaction büyümeyi
-sınırlar). Farklı tetikleyen oturumların hepsi aynı bakım defterine akar. Akış
-tabanlı (`FlowID`) kural yine `LaunchRun` ile çalışır (akış zaten kendi transkriptini
-biriktirir). Reuse yolu `LaunchRun`'un fren kapısını atladığından, otonom teslimden
-önce workspace autonomy-pause `e.rt.Paused()` ile elle kontrol edilir.
-- **Self-amplification guard:** bakım oturumu her fire'da token harcar; session-kapsam
-  kuralında bu upkeep tokenları oturumu bir sonraki eşik katına iter → kendini sıkı
-  döngüde yeniden tetikler (yalnız cooldown/maxIterations sınırlar). `OnUsageRecorded`
-  session-kapsam dalı bu yüzden `Kind=="automation"` oturumlara atfedilen geçişleri
-  **atlar** (bir bellek-içi lookup, lazy). Workspace kapsamı bilerek guard'lanmaz —
-  o tokenlar gerçek workspace harcamasıdır ve gün toplamına aittir.
-
-### Prompt değişkenleri (`tokenVars`, `agent/automation.go`)
-`{{tokens}}` (eşiği geçen kümülatif toplam) · `{{threshold}}` · `{{scope}}` ·
-`{{sessionId}}` (workspace kapsamında boş) · ortak `{{iteration}}` · `{{maxIterations}}` ·
-`{{automation}}` · `{{date}}` · `{{time}}` · `{{datetime}}`. `{{result}}` **yoktur**.
-
-### API / Araç / UI
-- **API:** `automationReq`'e `tokenScope`/`tokenThreshold` (pointer). Create'te token türü
-  `triggerTag` istemez; scope doğrulanır, threshold zorunlu + `db.ValidateTokenThreshold`.
-  Update'te `tokenThreshold` kısmi patch (pointer); token türüne dönen kural geçerli eşik taşımalı.
-- **Araçlar:** `create/update/list_automation`'a aynı alanlar (üç tetik türü artık `token` içerir).
-- **UI:** Otomasyon panosuna **4. şerit "⚡ Token"** (`AutomationBoard.tsx`, `COLUMN_ACCENT.token`).
-  `AutomationModal` token dalı: kapsam seçici + eşik girişi (`TokenTriggerFields`); kart rozeti
-  `⚡ oturum/workspace · her N token`. Olaylar `automation` tipiyle (başlık `⚡`, başarı→executions).
-
-### Test
-- `internal/agent/automation_test.go` — `crossedMultiple` (boundary matrisi), `tokenVars` (ikame).
-- `internal/db/automation_limits_test.go` — `ValidateTokenThreshold` (floor), `ValidTokenScope`.
+- `db.TriggerTokenLegacy = "token"` yalnız geriye dönük uyum içindir: diskte kalan eski
+  kayıtlar yüklemede atlanır (uyarı logu, `retiredTriggerKind`), dosya silinmez; eski
+  JSON'daki `tokenScope`/`tokenThreshold` alanları struct'ta olmadığından yok sayılır.
+  REST (`POST /api/automations`) ve ajan aracı (`create_automation`) türü hedef
+  kontrolünden **önce** "unknown triggerKind" ile reddeder; update yolu ve şablon
+  tohumlama (`seedTemplateAutomations`) da kabul etmez (`ValidateAutomationShape` /
+  `ValidTriggerKind`).
+- Yalnız bu türe hizmet eden usage hook zinciri kaldırıldı: `UsageRecorded`,
+  `Runtime.AddUsageHook`/`FireUsageRecorded`, `AutomationEngine.OnUsageRecorded`,
+  `fireToken`, `TriggerAutomationToken` (`automation:token`), `db.WorkspaceTokensToday`
+  ve `GET /api/automations/live-stats` (token şeridi başlığındaki "bugün N token" rozeti).
+  `RecordUsage` gün/oturum rollup'larını ve debug journal kaydını aynen yazar; genel
+  token kullanım takibi ve bütçeler etkilenmedi.
+- Kalıcı bakım oturumu (`Kind="automation"`, `deliverAutomationTurn`) **duruyor**:
+  artık yalnız `sessionMode:"continue"` seçen herhangi bir ajan-hedefli kural kullanır.
+- `EffectiveSessionMode` boş modu her tür için `spawn` çözer (eski token varsayılanı
+  `continue` gitti).
 
 ## 2.7 Sayaç (Mesaj/Tool) Tetikleyicili Otomasyonlar — KALDIRILDI (2026-09-05)
 
 2026-08-06'da eklenen `TriggerKind="counter"` türü (bir oturumun ya da workspace'in
 mesaj/tool sayacı bir aralık katını geçince ateşleme; `CounterMetric`/`CounterScope`/
 `CounterInterval`, `agent/automation_counter.go`, dayanıklı `activity-inbox`,
-`WorkspaceCounterTotal`, "Sayaç" şeridi) **ürünün her katmanından çıkarıldı**; token
-türü (§2.6) tempo/bakım ihtiyacını karşılıyor. Ayrıntılı döküm `05-ILERLEME.md`
+`WorkspaceCounterTotal`, "Sayaç" şeridi) **ürünün her katmanından çıkarıldı**
+(o dönem token türü — §2.6, o da 2026-10-04'te kaldırıldı — tempo/bakım ihtiyacını
+karşılıyordu). Ayrıntılı döküm `05-ILERLEME.md`
 (2026-09-05). Kalıcı olarak bilinmesi gerekenler:
 
 - `db.TriggerCounterLegacy = "counter"` yalnız geriye dönük uyum içindir: diskte kalan
@@ -408,9 +368,9 @@ türü (§2.6) tempo/bakım ihtiyacını karşılıyor. Ayrıntılı döküm `05
   workspace manager bunu yalnız `message_activity` canlı olayına (oturum listesi
   `UpdatedAt` tazeleme) köprüler. `Session.MessageCount`/`ToolCallCount` sayaçları da
   UI için yerinde.
-- `GET /api/automations/live-stats` artık yalnız `{tokensToday}` döner.
-- Aşağıdaki "Oturum modu" notundaki counter atıfları tarihseldir;
-  `EffectiveSessionMode` boş modu yalnız `token` için `continue` çözer.
+- `GET /api/automations/live-stats` 2026-10-04'te token türüyle birlikte kaldırıldı.
+- Aşağıdaki "Oturum modu" notundaki counter/token atıfları tarihseldir;
+  `EffectiveSessionMode` boş modu her tür için `spawn` çözer.
 
 ### Ortak kod (refactor 2026-08-06)
 Türler büyüdükçe biriken kopya-kod tek kaynağa toplandı (davranış değişmedi, testler koruyor):
@@ -419,25 +379,24 @@ Türler büyüdükçe biriken kopya-kod tek kaynağa toplandı (davranış deği
   ikon+suffix verir.
 - **`commonVars(a)`** — `*Vars` fonksiyonlarının ortak kuyruğu (`iteration`/`maxIterations`/
   `automation`/`date`/`time`/`datetime`, "∞" mantığı dahil) tek yerde; her tür kendi anahtarını ekler.
-- **`Automation.EffectiveTokenScope()`** (`db/models_automation.go`) — `scope=="" → session`
-  normalizasyonu accessor'da; dağınık fallback'ler kaldırıldı.
 - **Doğrulama tekilleştirme** — **dört yazma yolundaki** (REST + ajan aracı × create + update)
   tür-bazlı `Valid*` tekrarları kaldırıldı; format/aralık/hedef doğrulaması artık **yalnız**
   `db.ValidateAutomationShape`'te (yollar ayrışamaz). Create handler'larında kalan tek özel
-  kontrol: "zorunlu interval atlandı" (pointer nil). Update'te yalnız alan-atama + son shape freni.
+  kontrol: bilinmeyen/emekli tür erken reddi (`ValidTriggerKind`). Update'te yalnız alan-atama +
+  son shape freni.
 
 ### Oturum modu (`SessionMode`, 2026-08-06)
 Ajan-hedefli otomasyonlar artık **her tetikte yeni oturum mu / aynı kalıcı oturumu mu** kullanacaklarını
 seçebiliyor. Eskiden bu tür-başına sabitti (tag/board = yeni spawn, token/counter = kalıcı bakım thread'i);
 artık kullanıcı seçer, varsayılan eski davranışı korur.
 - **Alan:** `Automation.SessionMode` ∈ `spawn` | `continue` | `""`. `EffectiveSessionMode()` boşu
-  tür-başına çözer (token/counter → `continue`, diğerleri → `spawn`) → eski kayıtlar aynı çalışır.
+  `spawn` çözer (token/counter türleri varken onlar için `continue` idi; ikisi de kaldırıldı).
   `ValidSessionMode` + `ValidateAutomationShape` değeri doğrular.
 - **Dispatch (`dispatchFire`, `agent/automation.go`):** flow-backed → her zaman `LaunchRun` (flow kendi
   transcript'i); `continue` → `deliverAutomationTurn` (kalıcı per-otomasyon thread, **geçmiş-farkında**,
-  pause guard burada); `spawn` → `LaunchRun` + taze oturum + `SpawnOptions`. Dört fire yolu da bunu kullanır.
+  pause guard burada); `spawn` → `LaunchRun` + taze oturum + `SpawnOptions`. Tüm fire yolları bunu kullanır.
 - **`continue` semantiği:** ajan her tetikte önceki thread'i görür (cron benzeri). Spawn'a özel şeyler
-  (parent-tag temizliği, tag self-loop tohumu) `continue`'da **yok sayılır** — tıpkı token/counter'da olduğu gibi.
+  (parent-tag temizliği, tag self-loop tohumu) `continue`'da **yok sayılır**.
   Yalnız ajan-hedefli için anlamlı; flow'da yok sayılır.
 - **"Geçmişi oku" ayrı seçenek DEĞİL:** `continue` zaten geçmiş-farkında; ayrı bir toggle gereksiz olurdu.
 - **UI:** `AutomationModal`'da ajan hedefi seçiliyken "Oturum: Yeni / Aynı·sürdür" seçici; `AutomationCard`'da
@@ -578,12 +537,12 @@ değiştirip (veya bir alanı boşaltıp) `create`'in reddedeceği bir şekle so
 
 Çözüm: `db.ValidateAutomationShape(a)` (`automation_limits.go`) — birleştirilmiş
 (merged) otomasyon üzerinde tür-bazlı zorunlulukları uygular: tag→`triggerTag` zorunlu,
-token→geçerli scope+threshold, board→geçerli action; archive dışı her kural bir hedef
+board→geçerli action; archive dışı her kural bir hedef
 ister. **Dört yazma yolu** da (REST create+update, ajan `create_automation`+
 `update_automation`) DB'ye yazmadan hemen önce bunu çağırır → create ve update artık
-ayrışamaz. Alan-formatı denetimleri (`ValidBoardOp`/`ValidTokenScope`) anında geri-bildirim
-için çağrı yerlerinde kalır; bu, birleşik sonucun son freni. `RANGE` denetleyicileri
-(`maxIterations`, `tokenThreshold`) ayrı kalıp yanında çağrılır. Test:
+ayrışamaz. Alan-formatı denetimleri (`ValidBoardOp`) anında geri-bildirim
+için çağrı yerlerinde kalır; bu, birleşik sonucun son freni. `RANGE` denetleyicisi
+(`maxIterations`) ayrı kalıp yanında çağrılır. Test:
 `automation_limits_test.go` → `TestValidateAutomationShape` (tür-switch geçerli/geçersiz tablosu).
 
 **Seed'ler de aynı sözleşmeden geçer (2026-08-05):** `EnsureDefaultAutomations`
@@ -595,7 +554,7 @@ varken) backfill olur. `board-archive-done` hedef istemez, hemen tohumlanır. Te
 
 **UI inline doğrulama (`AutomationModal.tsx` + `ScheduleModal.tsx`):** zorunlu-alan
 ihlalleri artık ilk kaydetme denemesinden (`attempted`) sonra **alan altında inline**
-gösterilir (yalnız toast değil). AutomationModal: tag→triggerTag, token→eşik, spawn→hedef
+gösterilir (yalnız toast değil). AutomationModal: tag→triggerTag, spawn→hedef
 (arşiv board kuralında prompt/hedef aranmaz) → sunucunun `ValidateAutomationShape`'i
 istekten önce ayna. ScheduleModal: cron→ifade, hedef→ajan/akış, ajan modunda→prompt
 (akış girdisi opsiyonel). Ortak desen: hesaplanmış `*Error` string'leri + `attempted`

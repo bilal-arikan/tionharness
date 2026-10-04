@@ -4,7 +4,6 @@ import type {
   BoardColumnDef,
   BoardOp,
   FlowRuleStatus,
-  TokenScope,
   TrajEndStatus,
   TrajEvent,
 } from '@/types'
@@ -241,22 +240,6 @@ export const BOARD_ACTIONS: { value: BoardAction; label: string }[] = [
   },
 ]
 
-// Token-trigger scope options (label = Turkish UI text).
-export const TOKEN_SCOPES: { value: TokenScope; label: string }[] = [
-  {
-    value: 'session',
-    get label() {
-      return tr('meta.tokenScopes.session')
-    },
-  },
-  {
-    value: 'workspace',
-    get label() {
-      return tr('meta.tokenScopes.workspace')
-    },
-  },
-]
-
 // Tag-trigger prompt placeholders (kept in sync with agent/automation.go turnVars).
 export const PROMPT_VARS: { name: string; desc: string }[] = [
   'result',
@@ -304,33 +287,10 @@ export const BOARD_PROMPT_VARS: { name: string; desc: string }[] = [
   },
 }))
 
-// Token-trigger prompt placeholders (kept in sync with agent/automation.go tokenVars).
-export const TOKEN_PROMPT_VARS: { name: string; desc: string }[] = [
-  'tokens',
-  'threshold',
-  'scope',
-  'sessionId',
-  'iteration',
-  'maxIterations',
-  'automation',
-  'date',
-  'time',
-  'datetime',
-].map((name) => ({
-  name: `{{${name}}}`,
-  get desc() {
-    return tr(`meta.promptVars.token.${name}`)
-  },
-}))
-
 // Default prompt template for a fresh automation of each kind.
 export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
   tag: 'Devam et. Önceki sonuç:\n{{result}}',
   board: 'Bir kart taşındı: {{title}} ({{op}} → {{toLabel}}). Gereğini yap.',
-  token:
-    'Bu {{scope}} {{tokens}} token eşiğini ({{threshold}}) geçti. Kendi kendine bakım yap: ' +
-    'gereksiz artefaktları/oturumları temizle, bağlamı sıkıştır/özetle, optimizasyon fırsatlarını uygula. ' +
-    'Oturum: {{sessionId}}',
   phase:
     'Rota {{trajectoryId}} ({{recipe}}) "{{phase}}" fazını {{phaseState}} ile bitirdi. ' +
     'Fazlar: {{phases}}. Kök oturum {{rootSessionId}}. Bu fazın çıktısını gözden geçir ve gerekeni yap.',
@@ -371,7 +331,6 @@ export const COLUMN_ACCENT = {
   schedules: '#6b8e23',
   tag: '#8b5cf6',
   board: '#0ea5e9',
-  token: '#f59e0b',
   phase: '#a855f7',
   trajectory_end: '#ec4899',
   flow: '#14b8a6',
@@ -392,10 +351,3 @@ export const MAX_ITERATIONS_HARD_CAP = 500
 // internal/api/automations.go: the bound a new automation gets when the user does
 // not choose one.
 export const DEFAULT_MAX_ITERATIONS = 50
-
-// MIN_TOKEN_THRESHOLD mirrors db.MinTokenThreshold: the smallest interval a token
-// automation may set (server-authoritative; drift only nudges the form's `min`).
-export const MIN_TOKEN_THRESHOLD = 1000
-
-// DEFAULT_TOKEN_THRESHOLD is a sensible prefill for a new token automation.
-export const DEFAULT_TOKEN_THRESHOLD = 200000

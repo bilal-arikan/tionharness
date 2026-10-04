@@ -30,9 +30,11 @@ import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import {
   ArchiveViewBanner,
   ArchiveViewToggle,
+  FilterToggle,
   SelectionBar,
   SelectionBarButton,
   Skeleton,
+  useFilterDisclosure,
 } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
@@ -162,6 +164,7 @@ export function SessionsSidebar({
     const mode: ChipClickMode = e.ctrlKey || e.metaKey ? 'solo' : e.shiftKey ? 'invert' : 'toggle'
     onClickChip(key, mode)
   }
+  const [filtersOpen, toggleFilters] = useFilterDisclosure('sessions')
   const [query, setQuery] = useState('')
   // Cross-session message-content search (CG-16). The same box filters session
   // titles locally AND, when the query is long enough, full-text searches every
@@ -401,37 +404,46 @@ export function SessionsSidebar({
       </div>
 
       {/* Multi-select chips: every session kind plus the Worker and live scopes.
-          All start selected — unticking a chip hides that slice. */}
-      <div className="px-3 pb-1 text-[10px] text-[var(--color-text-dim)] opacity-70">
-        {t('sidebar.filters')}
+          All start selected — unticking a chip hides that slice. The strip folds
+          behind its toggle; the badge keeps unticked chips visible when folded. */}
+      <div className="px-3 pb-1">
+        <FilterToggle
+          open={filtersOpen}
+          onToggle={toggleFilters}
+          label={t('sidebar.filters')}
+          activeCount={chipsOff.length}
+          testId="session-filters-toggle"
+        />
       </div>
-      <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
-        {SESSION_LIST_CHIPS.map((f) => {
-          const on = chipSet.has(f.key)
-          const Icon = f.key === WORKER_CHIP ? Users : f.key === SUBAGENT_CHIP ? Sparkles : null
-          return (
-            <button
-              key={f.key}
-              onClick={(e) => clickChip(f.key, e)}
-              title={t('sidebar.filterTitle', {
-                label: f.label,
-                count: chipCounts.get(f.key) ?? 0,
-              })}
-              aria-pressed={on}
-              data-chip={f.key}
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
-                on
-                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-                  : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
-              }`}
-            >
-              {Icon && <Icon size={11} />}
-              {f.label}
-              <span className="opacity-60">{chipCounts.get(f.key) ?? 0}</span>
-            </button>
-          )
-        })}
-      </div>
+      {filtersOpen && (
+        <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
+          {SESSION_LIST_CHIPS.map((f) => {
+            const on = chipSet.has(f.key)
+            const Icon = f.key === WORKER_CHIP ? Users : f.key === SUBAGENT_CHIP ? Sparkles : null
+            return (
+              <button
+                key={f.key}
+                onClick={(e) => clickChip(f.key, e)}
+                title={t('sidebar.filterTitle', {
+                  label: f.label,
+                  count: chipCounts.get(f.key) ?? 0,
+                })}
+                aria-pressed={on}
+                data-chip={f.key}
+                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
+                  on
+                    ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                    : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
+                }`}
+              >
+                {Icon && <Icon size={11} />}
+                {f.label}
+                <span className="opacity-60">{chipCounts.get(f.key) ?? 0}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {loading && (

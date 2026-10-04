@@ -15,18 +15,6 @@ import (
 // user who leaves the field blank still gets a runaway brake.
 const defaultAutomationMaxIterations = 50
 
-// handleAutomationLiveStats returns the live workspace-wide metric that
-// workspace-scoped automations key on, so the automation screen can show "where
-// am I relative to the next fire" in the token lane header: today's cumulative
-// token spend. Cheap to compute — the same aggregate the engine reads on each
-// crossing.
-func (s *Server) handleAutomationLiveStats(w http.ResponseWriter, r *http.Request) {
-	database := ws(r).DB
-	writeJSON(w, http.StatusOK, map[string]int64{
-		"tokensToday": database.WorkspaceTokensToday(r.Context()),
-	})
-}
-
 func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 	autos, err := ws(r).DB.ListAutomations(r.Context())
 	if writeDBError(w, err, "") {
@@ -111,8 +99,6 @@ type automationReq struct {
 	BoardExclusive   *bool    `json:"boardExclusive"`
 	BoardAction      string   `json:"boardAction"`
 	BoardMoveToState string   `json:"boardMoveToState"`
-	TokenScope       string   `json:"tokenScope"`
-	TokenThreshold   *int     `json:"tokenThreshold"`
 	TrajPhase        string   `json:"trajPhase"`
 	TrajRecipe       string   `json:"trajRecipe"`
 	TrajEvent        string   `json:"trajEvent"`
@@ -149,22 +135,17 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	req.BoardToState = strings.TrimSpace(req.BoardToState)
 	req.BoardAction = strings.TrimSpace(req.BoardAction)
 	req.BoardMoveToState = strings.TrimSpace(req.BoardMoveToState)
-	req.TokenScope = strings.TrimSpace(req.TokenScope)
 	req.SessionMode = strings.TrimSpace(req.SessionMode)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
-	// Pointer→value extraction for the interval fields, and the one check the shape
-	// validator cannot express: "you omitted a required interval" (an absent field
-	// reads as 0, which db.ValidateAutomationShape would otherwise report as a range
-	// error). Every other per-kind rule — boardOp/action, scope, threshold/interval
-	// bounds, tag/prompt presence, target presence — is enforced ONCE by ValidateAutomationShape
-	// below, so it cannot drift from the agent-tool path.
-	tokenThreshold := 0
-	if req.TriggerKind == db.TriggerToken {
-		if req.TokenThreshold == nil {
-			writeError(w, http.StatusBadRequest, "tokenThreshold is required for token automations")
-			return
-		}
-		tokenThreshold = *req.TokenThreshold
+	// Reject an unknown (or retired, e.g. "token"/"counter") kind up front so the
+	// caller sees the real reason instead of a target-lookup error. Every per-kind
+	// rule — boardOp/action, tag/prompt presence, target presence — is enforced
+	// ONCE by ValidateAutomationShape below, so it cannot drift from the agent-tool
+	// path.
+	if !db.ValidTriggerKind(req.TriggerKind) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("%v: unknown triggerKind %q (%s)",
+			db.ErrAutomationShape, req.TriggerKind, strings.Join(db.TriggerKinds(), "|")))
+		return
 	}
 	ctx := r.Context()
 	// A board automation whose action is "archive" performs bookkeeping with no
@@ -231,8 +212,6 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		BoardExclusive:   boardExclusive,
 		BoardAction:      req.BoardAction,
 		BoardMoveToState: req.BoardMoveToState,
-		TokenScope:       req.TokenScope,
-		TokenThreshold:   tokenThreshold,
 		TrajPhase:        strings.TrimSpace(req.TrajPhase),
 		TrajRecipe:       strings.TrimSpace(req.TrajRecipe),
 		TrajEvent:        strings.TrimSpace(req.TrajEvent),
@@ -295,9 +274,6 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 			cur.BoardAction = strings.TrimSpace(req.BoardAction)
 			cur.BoardMoveToState = strings.TrimSpace(req.BoardMoveToState)
 		}
-		if k == db.TriggerToken {
-			cur.TokenScope = strings.TrimSpace(req.TokenScope)
-		}
 		if k == db.TriggerPhase || k == db.TriggerTrajectoryEnd {
 			cur.TrajPhase = strings.TrimSpace(req.TrajPhase)
 			cur.TrajRecipe = strings.TrimSpace(req.TrajRecipe)
@@ -311,11 +287,6 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 				cur.FlowMaxGrade = *req.FlowMaxGrade
 			}
 		}
-	}
-	// Interval fields are pointers: absent in a partial patch means "leave as
-	// stored"; ValidateAutomationShape validates whatever the merge ends up with.
-	if req.TokenThreshold != nil {
-		cur.TokenThreshold = *req.TokenThreshold
 	}
 	// Targeting: apply only when the request specifies a target, so partial
 	// updates (e.g. spawnTags-only) don't wipe it.

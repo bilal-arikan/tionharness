@@ -716,7 +716,6 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/generate-title", s.handleGenerateScheduleTitle)
 	// Tag-triggered automations (event-driven loops), surfaced in the Schedules UI.
-	mux.HandleFunc("GET /api/automations/live-stats", s.handleAutomationLiveStats)
 	mux.HandleFunc("GET /api/automations", s.handleListAutomations)
 	mux.HandleFunc("GET /api/automations/{id}", s.handleGetAutomation)
 	mux.HandleFunc("POST /api/automations", s.handleCreateAutomation)

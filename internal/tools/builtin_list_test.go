@@ -192,7 +192,7 @@ func TestListAutomationsFiltersAndPagination(t *testing.T) {
 	}
 	mk("TagRule", db.TriggerTag, true)
 	mk("BoardRule", db.TriggerBoard, false)
-	mk("TokenRule", db.TriggerToken, true)
+	mk("TagRule2", db.TriggerTag, true)
 	tool := NewListAutomationsTool(d, "actor-1")
 
 	out, err := tool.Call(ctx, json.RawMessage(`{"enabled":true}`))

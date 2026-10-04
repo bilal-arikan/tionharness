@@ -514,9 +514,6 @@ func (m *Manager) open(meta Meta) error {
 	// on the failing turn itself — a stuck session gets no more autonomous
 	// successes to fire from.
 	rt.AddFailedTurnHook(autoEngine.OnTurnFinished)
-	// Token-triggered automations: every recorded provider call signals cumulative
-	// spend so the engine can fire when a session/workspace crosses a threshold.
-	rt.AddUsageHook(autoEngine.OnUsageRecorded)
 	// Rota (F2): phase / trajectory_end automations and recipe watchers fire on
 	// trajectory transitions, delivered off-path on the trajectory work queue.
 	rt.SetTrajectoryTransitionHook(autoEngine.OnTrajectoryTransition)

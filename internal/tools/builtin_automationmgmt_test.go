@@ -62,3 +62,23 @@ func TestCreateTargetlessBoardMoveAutomation(t *testing.T) {
 		t.Fatalf("targetless move retained execution fields: agent=%q prompt=%q", move.TargetAgentID, move.PromptTemplate)
 	}
 }
+
+// TestCreateAutomationRejectsRetiredTokenKind: the token-spend trigger was removed
+// (2026-10-04); create_automation must refuse it as an unknown kind and persist
+// nothing, even with a valid target and prompt.
+func TestCreateAutomationRejectsRetiredTokenKind(t *testing.T) {
+	ctx := context.Background()
+	database := openTestDB(t)
+	tool := NewCreateAutomationTool(database, "actor-1")
+	agent, err := database.CreateAgent(ctx, db.Agent{Name: "Worker"})
+	if err != nil {
+		t.Fatalf("create target agent: %v", err)
+	}
+	_, err = tool.Call(ctx, json.RawMessage(`{"triggerKind":"token","targetAgentId":"`+agent.ID+`","promptTemplate":"run"}`))
+	if !errors.Is(err, db.ErrAutomationShape) || !strings.Contains(err.Error(), "unknown triggerKind") {
+		t.Fatalf("token kind error = %v, want ErrAutomationShape unknown triggerKind", err)
+	}
+	if autos, _ := database.ListAutomations(ctx); len(autos) != 0 {
+		t.Fatalf("rejected automation was persisted: %+v", autos)
+	}
+}

@@ -48,16 +48,14 @@ func NewCreateAutomationTool(database *db.DB, actorID string) CreateAutomationTo
 func (CreateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_automation",
-		Description: "Create an event-driven automation. Three trigger kinds: (a) triggerKind='tag' (default) — when a session " +
+		Description: "Create an event-driven automation. Two trigger kinds: (a) triggerKind='tag' (default) — when a session " +
 			"carrying triggerTag finishes a turn, its final reply is rendered into promptTemplate ({{result}}, {{title}}, " +
 			"{{tag}}, {{sessionId}}) and the target runs; (b) triggerKind='board' — when a kanban card changes (created/moved/" +
 			"updated/deleted), the target runs with the card context ({{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, " +
-			"{{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}); (c) triggerKind='token' — when cumulative token spend crosses each " +
-			"tokenThreshold multiple (tokenScope='session' watches one session's lifetime spend, 'workspace' the whole day's), " +
-			"the target runs with {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}} — good for self-maintenance/cleanup. " +
+			"{{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}). " +
 			"The target is an agent (targetAgentId → a NEW session is spawned; the agent's own evolving flow shapes the turn). " +
 			"For a tag automation the spawned session carries " +
-			"triggerTag by default (a self-continuing loop bounded by maxIterations); board and token automations do not self-loop. " +
+			"triggerTag by default (a self-continuing loop bounded by maxIterations); board automations do not self-loop. " +
 			"A board automation's boardAction='spawn' (default) makes the board drive EXECUTION (a card entering a column starts " +
 			"an agent); boardAction='archive' instead archives the card with NO LLM call (the cheap 'done → archive' cleanup, " +
 			"no target needed); boardAction='move' moves it to the explicit boardMoveToState with no LLM call.",
@@ -65,7 +63,7 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Optional display name"},
-				"triggerKind":{"type":"string","enum":["tag","board","token"],"description":"What fires the automation: 'tag' (default; session tag), 'board' (kanban card change), or 'token' (token-spend threshold crossing)"},
+				"triggerKind":{"type":"string","enum":["tag","board"],"description":"What fires the automation: 'tag' (default; session tag) or 'board' (kanban card change)"},
 				"triggerTag":{"type":"string","description":"[tag kind] The session tag that fires this automation when a tagged session's turn ends"},
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"],"description":"[board kind] Which card change fires it (default 'move')"},
 				"boardFromState":{"type":"string","description":"[board kind] Only fire when a card LEAVES this column (empty = any source)"},
@@ -74,11 +72,9 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"boardExclusive":{"type":"boolean","description":"[board kind] Claim sole ownership of a matching card change: only this automation fires and every other match is suppressed (default false). Among several exclusive matches the lowest boardPriority wins."},
 			"boardAction":{"type":"string","enum":["spawn","archive","move"],"description":"[board kind] What firing does: 'spawn' runs the target; 'archive' archives the card; 'move' moves it without an LLM call."},
 			"boardMoveToState":{"type":"string","description":"[board move action] Explicit destination column key. Required when boardAction='move'."},
-				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] What to watch: 'session' (default; one session's lifetime tokens) or 'workspace' (whole workspace's tokens today)"},
-				"tokenThreshold":{"type":"integer","description":"[token kind] Token INTERVAL; fires each time cumulative spend crosses another multiple (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache."},
-				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] Session strategy per fire: 'spawn' (fresh session each time — tag/board default) or 'continue' (one persistent per-automation thread that carries prior turns forward, history-aware — token default). Omit to use the per-kind default."},
+				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] Session strategy per fire: 'spawn' (fresh session each time — the default) or 'continue' (one persistent per-automation thread that carries prior turns forward, history-aware). Omit for the default."},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents)."},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session. Optional for board archive/move actions, which never call an LLM. Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session. Optional for board archive/move actions, which never call an LLM. Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
 				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (tag kind default: [triggerTag] → self-continuing loop). To stop the loop, set a DIFFERENT tag that no automation triggers on — an empty [] does NOT break the loop (it is re-defaulted to [triggerTag]). Ignored for board automations."},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling. Range 1-500; 0/unlimited is REJECTED (infinite-loop risk). Omit for the default 50."},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
@@ -105,8 +101,6 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardExclusive   *bool    `json:"boardExclusive"`
 		BoardAction      string   `json:"boardAction"`
 		BoardMoveToState string   `json:"boardMoveToState"`
-		TokenScope       string   `json:"tokenScope"`
-		TokenThreshold   *int     `json:"tokenThreshold"`
 		SessionMode      string   `json:"sessionMode"`
 		TargetAgentID    string   `json:"targetAgentId"`
 		PromptTemplate   string   `json:"promptTemplate"`
@@ -127,18 +121,13 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	in.BoardToState = strings.TrimSpace(in.BoardToState)
 	in.BoardAction = strings.TrimSpace(in.BoardAction)
 	in.BoardMoveToState = strings.TrimSpace(in.BoardMoveToState)
-	in.TokenScope = strings.TrimSpace(in.TokenScope)
 	in.TargetAgentID = strings.TrimSpace(in.TargetAgentID)
-	// Pointer→value extraction for the interval fields + the one check the shape
-	// validator cannot express ("required interval omitted"). Every other per-kind
+	// Reject an unknown (or retired, e.g. "token"/"counter") kind up front so the
+	// caller sees the real reason instead of a target-lookup error. Every per-kind
 	// rule is enforced once by db.ValidateAutomationShape below — the SAME validator
 	// the REST path runs, so the two entry points cannot drift.
-	tokenThreshold := 0
-	if in.TriggerKind == db.TriggerToken {
-		if in.TokenThreshold == nil {
-			return "", fmt.Errorf("tokenThreshold is required for token automations")
-		}
-		tokenThreshold = *in.TokenThreshold
+	if !db.ValidTriggerKind(in.TriggerKind) {
+		return "", fmt.Errorf("%w: unknown triggerKind %q (%s)", db.ErrAutomationShape, in.TriggerKind, strings.Join(db.TriggerKinds(), "|"))
 	}
 	// A board 'archive' automation needs no target (no LLM call). Otherwise an
 	// agent (targetAgentId) is the target.
@@ -199,8 +188,6 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardExclusive:   boardExclusive,
 		BoardAction:      in.BoardAction,
 		BoardMoveToState: in.BoardMoveToState,
-		TokenScope:       in.TokenScope,
-		TokenThreshold:   tokenThreshold,
 		SessionMode:      in.SessionMode,
 		TargetAgentID:    in.TargetAgentID,
 		PromptTemplate:   in.PromptTemplate,
@@ -235,13 +222,13 @@ func NewUpdateAutomationTool(database *db.DB, actorID string) UpdateAutomationTo
 func (UpdateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_automation",
-		Description: "Edit an automation (user- or agent-created). Pass the id and any field shown in the schema to change it (name, triggerKind, the tag/board/token trigger fields, targetAgentId, promptTemplate, spawnTags, sessionMode, maxIterations, cooldownSec, expiresAt, enabled).",
+		Description: "Edit an automation (user- or agent-created). Pass the id and any field shown in the schema to change it (name, triggerKind, the tag/board trigger fields, targetAgentId, promptTemplate, spawnTags, sessionMode, maxIterations, cooldownSec, expiresAt, enabled).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"id":{"type":"string","description":"The automation id (see list_automations)"},
 				"name":{"type":"string"},
-				"triggerKind":{"type":"string","enum":["tag","board","token"]},
+				"triggerKind":{"type":"string","enum":["tag","board"]},
 				"triggerTag":{"type":"string"},
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"]},
 				"boardFromState":{"type":"string","description":"[board kind] source-column filter (empty = any)"},
@@ -250,9 +237,7 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 				"boardExclusive":{"type":"boolean","description":"[board kind] only this automation fires for a matching change; all other matches are suppressed"},
 			"boardAction":{"type":"string","enum":["spawn","archive","move"],"description":"[board kind] 'spawn' runs the target; 'archive' archives the card; 'move' moves it without an LLM call"},
 			"boardMoveToState":{"type":"string","description":"[board move action] Explicit destination column key. Required when boardAction='move'."},
-				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] watch one session ('session') or the whole workspace/day ('workspace')"},
-				"tokenThreshold":{"type":"integer","description":"[token kind] token interval; fires each time cumulative spend crosses another multiple (min 1000)"},
-				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] 'spawn' (fresh session per fire) or 'continue' (persistent per-automation thread, history-aware). Omit for the per-kind default."},
+				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] 'spawn' (fresh session per fire) or 'continue' (persistent per-automation thread, history-aware). Omit for the default (spawn)."},
 				"targetAgentId":{"type":"string"},
 				"promptTemplate":{"type":"string"},
 				"spawnTags":{"type":"array","items":{"type":"string"}},
@@ -280,8 +265,6 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardExclusive   *bool     `json:"boardExclusive"`
 		BoardAction      *string   `json:"boardAction"`
 		BoardMoveToState *string   `json:"boardMoveToState"`
-		TokenScope       *string   `json:"tokenScope"`
-		TokenThreshold   *int      `json:"tokenThreshold"`
 		SessionMode      *string   `json:"sessionMode"`
 		TargetAgentID    *string   `json:"targetAgentId"`
 		PromptTemplate   *string   `json:"promptTemplate"`
@@ -334,12 +317,6 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	if in.BoardMoveToState != nil {
 		cur.BoardMoveToState = strings.TrimSpace(*in.BoardMoveToState)
-	}
-	if in.TokenScope != nil {
-		cur.TokenScope = strings.TrimSpace(*in.TokenScope)
-	}
-	if in.TokenThreshold != nil {
-		cur.TokenThreshold = *in.TokenThreshold
 	}
 	if in.SessionMode != nil {
 		cur.SessionMode = strings.TrimSpace(*in.SessionMode)
@@ -448,13 +425,13 @@ func (ListAutomationsTool) Def() providers.ToolDef {
 			"you can edit/delete any of them). Results are PAGINATED: pass limit (default 20, max 100) and offset " +
 			"to page; the reply reports total and hasMore, and you reach the next page with offset += limit. " +
 			"Live (non-archived) automations are returned by default; archived=true returns only archived automations, never mixed with live ones. Archived automations never fire until restored. " +
-			"Filters: enabled (true/false), triggerKind (tag|board|token), targetAgentId (exact). Sort: " +
+			"Filters: enabled (true/false), triggerKind (tag|board), targetAgentId (exact). Sort: " +
 			"updated_desc (default), updated_asc, created_desc, created_asc, name_asc, name_desc.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "enabled": { "type": "boolean", "description": "Only enabled (true) or disabled (false) automations." },
-    "triggerKind": { "type": "string", "enum": ["tag", "board", "token"], "description": "Only automations with this trigger kind." },
+    "triggerKind": { "type": "string", "enum": ["tag", "board"], "description": "Only automations with this trigger kind." },
     "targetAgentId": { "type": "string", "description": "Only automations targeting this agent." },
     "archived": { "type": "boolean", "description": "When true, return only archived automations. Omit or false for live ones." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
@@ -490,9 +467,9 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 
 	triggerKind := strings.TrimSpace(in.TriggerKind)
 	switch triggerKind {
-	case "", "tag", "board", "token":
+	case "", "tag", "board":
 	default:
-		return "", fmt.Errorf("triggerKind must be one of tag, board, token; got %q", triggerKind)
+		return "", fmt.Errorf("triggerKind must be one of tag, board; got %q", triggerKind)
 	}
 	target := strings.TrimSpace(in.TargetAgentID)
 	matches := make([]db.Automation, 0, len(autos))
@@ -546,8 +523,6 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 		BoardExclusive   bool   `json:"boardExclusive,omitempty"`
 		BoardAction      string `json:"boardAction,omitempty"`
 		BoardMoveToState string `json:"boardMoveToState,omitempty"`
-		TokenScope       string `json:"tokenScope,omitempty"`
-		TokenThreshold   int    `json:"tokenThreshold,omitempty"`
 		TargetAgentID    string `json:"targetAgentId"`
 		Enabled          bool   `json:"enabled"`
 		IterationCount   int    `json:"iterationCount"`
@@ -571,8 +546,6 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 			BoardExclusive:   a.BoardExclusive,
 			BoardAction:      a.BoardAction,
 			BoardMoveToState: a.BoardMoveToState,
-			TokenScope:       a.TokenScope,
-			TokenThreshold:   a.TokenThreshold,
 			TargetAgentID:    a.TargetAgentID,
 			Enabled:          a.Enabled,
 			IterationCount:   a.IterationCount,

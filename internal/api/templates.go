@@ -264,6 +264,14 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 // required for their advertised runtime behavior.
 func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.Workspace, autos []market.WorkspaceTemplateAutomation, agentIDs map[string]string) {
 	for _, ta := range autos {
+		// A template published before a trigger kind was retired (e.g. "token")
+		// may still carry it; the store would hide such a rule on the next load,
+		// so never seed it in the first place.
+		if !db.ValidTriggerKind(ta.TriggerKind) {
+			s.logger.Warn("seed template automation skipped: unknown trigger kind",
+				"workspace", wsNew.ID, "automation", ta.Name, "triggerKind", ta.TriggerKind)
+			continue
+		}
 		agentID := ""
 		if ta.AgentKey != "" {
 			id, ok := agentIDs[ta.AgentKey]
@@ -295,8 +303,6 @@ func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.W
 			BoardPriority:  ta.BoardPriority,
 			BoardExclusive: ta.BoardExclusive,
 			BoardAction:    ta.BoardAction,
-			TokenScope:     ta.TokenScope,
-			TokenThreshold: ta.TokenThreshold,
 			TargetAgentID:  agentID,
 			SessionMode:    ta.SessionMode,
 			PromptTemplate: ta.PromptTemplate,

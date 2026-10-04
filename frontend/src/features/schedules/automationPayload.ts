@@ -4,7 +4,6 @@ import type {
   BoardOp,
   FlowRuleStatus,
   SessionMode,
-  TokenScope,
   TrajEndStatus,
   TrajEvent,
 } from '@/types'
@@ -22,8 +21,6 @@ export interface AutomationPayloadInput {
   boardExclusive: boolean
   boardAction: BoardAction
   boardMoveToState: string
-  tokenScope: TokenScope
-  tokenThreshold: number
   trajPhase: string
   trajRecipe: string
   trajEvent: TrajEvent
@@ -53,23 +50,21 @@ export function buildAutomationPayload(input: AutomationPayloadInput) {
         boardAction: input.boardAction,
         boardMoveToState: input.boardMoveToState,
       }
-    : input.kind === 'token'
-      ? { tokenScope: input.tokenScope, tokenThreshold: input.tokenThreshold }
-      : input.kind === 'phase'
-        ? {
-            trajPhase: input.trajPhase.trim(),
-            trajRecipe: input.trajRecipe.trim(),
-            trajEvent: input.trajEvent,
-          }
-        : input.kind === 'trajectory_end'
-          ? { trajRecipe: input.trajRecipe.trim(), trajStatus: input.trajStatus }
-          : input.kind === 'flow'
-            ? {
-                flowAgentId: input.flowAgentId.trim(),
-                flowStatus: input.flowStatus,
-                flowMaxGrade: input.flowMaxGrade,
-              }
-            : { triggerTag: input.triggerTag.trim() }
+    : input.kind === 'phase'
+      ? {
+          trajPhase: input.trajPhase.trim(),
+          trajRecipe: input.trajRecipe.trim(),
+          trajEvent: input.trajEvent,
+        }
+      : input.kind === 'trajectory_end'
+        ? { trajRecipe: input.trajRecipe.trim(), trajStatus: input.trajStatus }
+        : input.kind === 'flow'
+          ? {
+              flowAgentId: input.flowAgentId.trim(),
+              flowStatus: input.flowStatus,
+              flowMaxGrade: input.flowMaxGrade,
+            }
+          : { triggerTag: input.triggerTag.trim() }
   const target = isTargetlessAction ? { targetAgentId: '' } : { targetAgentId: input.targetAgentId }
 
   return {

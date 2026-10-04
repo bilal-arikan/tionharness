@@ -1,7 +1,14 @@
 import { Search, Plug, Check, Ban } from 'lucide-react'
 import { VISIBILITY_TIERS, toolLabel } from './toolMeta'
 import { toolIcon } from '@/shared/lib/toolIcons'
-import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared/components'
+import {
+  SelectionBar,
+  SelectionBarButton,
+  ListPane,
+  PaneHeader,
+  FilterToggle,
+  useFilterDisclosure,
+} from '@/shared/components'
 import { useToolsPanelState } from './useToolsPanelState'
 import { VisibilityBadge } from './VisibilityControls'
 import { ToolDetail } from './ToolDetail'
@@ -91,6 +98,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
     selected,
     params,
   } = useToolsPanelState(onError, { group, onGroupChange })
+  const [filtersOpen, toggleFilters] = useFilterDisclosure('tools')
 
   return (
     <div className="flex h-full min-h-0 flex-1">
@@ -132,56 +140,67 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
           </div>
           {/* Filters: visibility tiers (multi-select) + enabled/disabled status. */}
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            {VISIBILITY_TIERS.map((tier) => {
-              const on = visFilter.has(tier.value)
-              return (
-                <button
-                  key={tier.value}
-                  data-testid="tools-filter-vis"
-                  data-tier={tier.value}
-                  data-on={on}
-                  onClick={() => toggleVisFilter(tier.value)}
-                  title={tr('panel.visibilityFilter', { label: tier.label })}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition"
-                  style={
-                    on
-                      ? {
-                          backgroundColor: `color-mix(in srgb, ${tier.color} 22%, transparent)`,
-                          color: tier.color,
-                        }
-                      : {
-                          backgroundColor: 'var(--color-surface-2)',
-                          color: 'var(--color-text-dim)',
-                        }
-                  }
-                >
-                  {tier.label}
-                </button>
-              )
-            })}
-            <span className="mx-0.5 h-3 w-px bg-[var(--color-border)]" />
-            {(['enabled', 'disabled'] as const).map((st) => {
-              const on = statusFilter === st
-              return (
-                <button
-                  key={st}
-                  data-testid="tools-filter-status"
-                  data-status={st}
-                  data-on={on}
-                  onClick={() => setStatusFilter((prev) => (prev === st ? 'all' : st))}
-                  title={st === 'enabled' ? tr('panel.showEnabled') : tr('panel.showDisabled')}
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition ${
-                    on
-                      ? st === 'enabled'
-                        ? 'bg-[color-mix(in_srgb,var(--color-success)_22%,transparent)] text-[var(--color-success)]'
-                        : 'bg-[var(--color-surface-2)] text-[var(--color-text)] ring-1 ring-inset ring-[var(--color-border)]'
-                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
-                  }`}
-                >
-                  {st === 'enabled' ? tr('status.enabled') : tr('status.disabledShort')}
-                </button>
-              )
-            })}
+            <FilterToggle
+              open={filtersOpen}
+              onToggle={toggleFilters}
+              activeCount={visFilter.size + (statusFilter === 'all' ? 0 : 1)}
+              className="mr-1"
+              testId="tools-filters-toggle"
+            />
+            {filtersOpen && (
+              <>
+                {VISIBILITY_TIERS.map((tier) => {
+                  const on = visFilter.has(tier.value)
+                  return (
+                    <button
+                      key={tier.value}
+                      data-testid="tools-filter-vis"
+                      data-tier={tier.value}
+                      data-on={on}
+                      onClick={() => toggleVisFilter(tier.value)}
+                      title={tr('panel.visibilityFilter', { label: tier.label })}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition"
+                      style={
+                        on
+                          ? {
+                              backgroundColor: `color-mix(in srgb, ${tier.color} 22%, transparent)`,
+                              color: tier.color,
+                            }
+                          : {
+                              backgroundColor: 'var(--color-surface-2)',
+                              color: 'var(--color-text-dim)',
+                            }
+                      }
+                    >
+                      {tier.label}
+                    </button>
+                  )
+                })}
+                <span className="mx-0.5 h-3 w-px bg-[var(--color-border)]" />
+                {(['enabled', 'disabled'] as const).map((st) => {
+                  const on = statusFilter === st
+                  return (
+                    <button
+                      key={st}
+                      data-testid="tools-filter-status"
+                      data-status={st}
+                      data-on={on}
+                      onClick={() => setStatusFilter((prev) => (prev === st ? 'all' : st))}
+                      title={st === 'enabled' ? tr('panel.showEnabled') : tr('panel.showDisabled')}
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition ${
+                        on
+                          ? st === 'enabled'
+                            ? 'bg-[color-mix(in_srgb,var(--color-success)_22%,transparent)] text-[var(--color-success)]'
+                            : 'bg-[var(--color-surface-2)] text-[var(--color-text)] ring-1 ring-inset ring-[var(--color-border)]'
+                          : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                      }`}
+                    >
+                      {st === 'enabled' ? tr('status.enabled') : tr('status.disabledShort')}
+                    </button>
+                  )
+                })}
+              </>
+            )}
             {filtersActive && (
               <button
                 data-testid="tools-filter-clear"

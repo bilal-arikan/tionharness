@@ -58,6 +58,13 @@
     "retry": "Tekrar dene",
     "title": "Bir şeyler ters gitti"
   },
+  "filters": {
+    "active_one": "{{count}} filtre etkin",
+    "active_other": "{{count}} filtre etkin",
+    "hide": "Filtreleri gizle",
+    "label": "Filtreler",
+    "show": "Filtreleri göster"
+  },
   "folderPicker": {
     "noSubfolders": "Alt klasör yok",
     "parent": "Üst klasör",

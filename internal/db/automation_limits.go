@@ -34,27 +34,7 @@ const (
 	// last-resort brake for data that predates the rule, not a limit anyone chose,
 	// so it should not stop a working setup earlier than an explicit maximum would.
 	AbsoluteIterationBackstop = 1000
-
-	// MinTokenThreshold is the smallest interval a token automation may set. A tiny
-	// interval would cross on nearly every call and fire in a tight loop (bounded
-	// only by cooldown/maxIterations); requiring at least this many tokens keeps a
-	// token trigger a meaningful "spend milestone" rather than a per-call hook.
-	MinTokenThreshold = 1000
 )
-
-// ErrTokenThresholdRange reports a tokenThreshold value below the accepted floor.
-var ErrTokenThresholdRange = errors.New("tokenThreshold out of range")
-
-// ValidateTokenThreshold rejects a token-automation interval that would fire too
-// often to be useful. Shared by the REST handlers and the agent tools (like
-// ValidateMaxIterations) so the two entry points cannot drift apart.
-func ValidateTokenThreshold(v int) error {
-	if v < MinTokenThreshold {
-		return fmt.Errorf("%w: en az %d olmalı (çok küçük bir aralık her çağrıda tetiklenir)",
-			ErrTokenThresholdRange, MinTokenThreshold)
-	}
-	return nil
-}
 
 // ErrMaxIterationsRange reports a maxIterations value outside the accepted range.
 var ErrMaxIterationsRange = errors.New("maxIterations out of range")
@@ -87,10 +67,9 @@ var ErrAutomationShape = errors.New("invalid automation")
 // drift. Without it, update could persist a state create rejects — a tag rule
 // with no triggerTag (silently never fires: TriggerTag=="" is skipped at fire
 // time) or a spawn rule with no target (fails only at fire time). The per-field
-// format checks (ValidBoardOp/ValidTokenScope) still run at the call sites for
-// immediate feedback; this is the final backstop on the merged result. The RANGE
-// validators (maxIterations, tokenThreshold) stay separate and are called
-// alongside this one.
+// format checks (ValidBoardOp) still run at the call sites for immediate
+// feedback; this is the final backstop on the merged result. The RANGE
+// validator (maxIterations) stays separate and is called alongside this one.
 func ValidateAutomationShape(a Automation) error {
 	spec, ok := triggerSpecFor(a.TriggerKind)
 	if !ok {

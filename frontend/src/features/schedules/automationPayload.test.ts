@@ -12,8 +12,6 @@ const baseInput: AutomationPayloadInput = {
   boardExclusive: true,
   boardAction: 'move',
   boardMoveToState: 'done',
-  tokenScope: 'session',
-  tokenThreshold: 1_000,
   trajPhase: '',
   trajRecipe: '',
   trajEvent: 'exit',
@@ -71,6 +69,6 @@ describe('buildAutomationPayload', () => {
       promptTemplate: 'Review {{result}}',
     })
     expect(body).not.toHaveProperty('triggerTag')
-    expect(body).not.toHaveProperty('tokenThreshold')
+    expect(body).not.toHaveProperty('boardAction')
   })
 })

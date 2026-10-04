@@ -20,7 +20,7 @@ const KIND_META: Record<string, { labelKey: string; icon: LucideIcon }> = {
   chat: { labelKey: 'kind.chat', icon: MessageSquare },
   task: { labelKey: 'kind.task', icon: LayoutGrid },
   schedule: { labelKey: 'kind.schedule', icon: Clock },
-  // One persistent maintenance thread per token automation (see internal/agent/
+  // One persistent maintenance thread per continue-mode automation (see internal/agent/
   // automation_deliver.go); every fire continues it instead of spawning fresh.
   automation: { labelKey: 'kind.automation', icon: Zap },
   // A one-shot automation fire (session mode != continue) still opens its own

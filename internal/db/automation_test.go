@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"os"
 	"testing"
 )
 
@@ -85,7 +86,7 @@ func TestAutomationLifecycle(t *testing.T) {
 
 // TestUpdateAutomationPersistsAllFields is the regression guard for the
 // field-by-field UpdateAutomation copy that silently dropped fields it forgot to
-// list: token scope/threshold and sessionMode round-tripped through create
+// list: the counter fields and sessionMode round-tripped through create
 // but were lost on update. UpdateAutomation now replaces the whole configuration,
 // so this test fails loudly if any config field stops persisting on update. It also
 // checks that the runtime bookkeeping (iteration count) is preserved across an edit.
@@ -97,9 +98,9 @@ func TestUpdateAutomationPersistsAllFields(t *testing.T) {
 	ctx := context.Background()
 
 	a, err := d.CreateAutomation(ctx, Automation{
-		TriggerKind:    TriggerToken,
-		TokenScope:     TokenScopeSession,
-		TokenThreshold: MinTokenThreshold,
+		TriggerKind:    TriggerBoard,
+		BoardToState:   "review",
+		BoardPriority:  1,
 		SessionMode:    SessionModeContinue,
 		TargetAgentID:  "AGT1",
 		PromptTemplate: "go",
@@ -115,8 +116,8 @@ func TestUpdateAutomationPersistsAllFields(t *testing.T) {
 	}
 
 	// Edit every config field the update paths can touch.
-	a.TokenScope = TokenScopeWorkspace
-	a.TokenThreshold = 42_000
+	a.BoardToState = "done"
+	a.BoardPriority = 5
 	a.SessionMode = SessionModeSpawn
 	a.MaxIterations = 7
 	a.PromptTemplate = "changed"
@@ -126,10 +127,10 @@ func TestUpdateAutomationPersistsAllFields(t *testing.T) {
 
 	got, _ := d.GetAutomation(ctx, a.ID)
 	switch {
-	case got.TokenScope != TokenScopeWorkspace:
-		t.Errorf("tokenScope not persisted: %q", got.TokenScope)
-	case got.TokenThreshold != 42_000:
-		t.Errorf("tokenThreshold not persisted: %d", got.TokenThreshold)
+	case got.BoardToState != "done":
+		t.Errorf("boardToState not persisted: %q", got.BoardToState)
+	case got.BoardPriority != 5:
+		t.Errorf("boardPriority not persisted: %d", got.BoardPriority)
 	case got.SessionMode != SessionModeSpawn:
 		t.Errorf("sessionMode not persisted: %q", got.SessionMode)
 	case got.MaxIterations != 7:
@@ -162,48 +163,41 @@ func TestSetSessionTagsNormalizes(t *testing.T) {
 	}
 }
 
-// TestAutomationTokenThresholdUpdate is a regression guard for a bug where
-// UpdateAutomation copied every field EXCEPT TokenScope/TokenThreshold, so
-// update_automation reported success while silently keeping the old threshold.
-func TestAutomationTokenThresholdUpdate(t *testing.T) {
+// TestRetiredTokenAutomationSkippedOnLoad pins the persistence contract for the
+// removed "token" trigger kind: a rule file written before the removal stays on
+// disk untouched but is never loaded, so it cannot surface in the UI, the API or
+// the engine.
+func TestRetiredTokenAutomationSkippedOnLoad(t *testing.T) {
 	d, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-
-	a, err := d.CreateAutomation(ctx, Automation{
-		TriggerKind:    TriggerToken,
-		TokenScope:     TokenScopeSession,
-		TokenThreshold: 120000,
-		TargetAgentID:  "AGT1",
-		PromptTemplate: "go: {{tokens}}",
-		Enabled:        true,
+	live, err := d.CreateAutomation(ctx, Automation{
+		TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: "AGT1",
+		PromptTemplate: "go", Enabled: true, MaxIterations: 3,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Double the threshold and switch scope — both must persist.
-	a.TokenThreshold = 240000
-	a.TokenScope = TokenScopeWorkspace
-	if err := d.UpdateAutomation(ctx, a); err != nil {
+	legacy := d.dir(dirAutomations, "AUT_LEGACY_TOKEN.json")
+	raw := `{"id":"AUT_LEGACY_TOKEN","name":"old","triggerKind":"token","tokenScope":"workspace","tokenThreshold":150000,"targetAgentId":"AGT1","promptTemplate":"go","enabled":true,"maxIterations":5}`
+	if err := os.WriteFile(legacy, []byte(raw), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := d.GetAutomation(ctx, a.ID)
-	if got.TokenThreshold != 240000 {
-		t.Fatalf("update did not persist TokenThreshold: got %d, want 240000", got.TokenThreshold)
-	}
-	if got.TokenScope != TokenScopeWorkspace {
-		t.Fatalf("update did not persist TokenScope: got %q, want %q", got.TokenScope, TokenScopeWorkspace)
-	}
 
-	// Survives a reload from disk.
 	d2, err := Open(d.root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := d2.GetAutomation(ctx, a.ID); got.TokenThreshold != 240000 {
-		t.Fatalf("TokenThreshold not persisted to disk: %d", got.TokenThreshold)
+	all, _ := d2.ListAutomations(ctx)
+	if len(all) != 1 || all[0].ID != live.ID {
+		t.Fatalf("retired token rule surfaced on load: %+v", all)
+	}
+	if _, err := d2.GetAutomation(ctx, "AUT_LEGACY_TOKEN"); err == nil {
+		t.Fatal("retired token rule must not be loadable by id")
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("retired rule file must stay on disk untouched: %v", err)
 	}
 }

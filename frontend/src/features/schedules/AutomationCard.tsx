@@ -2,7 +2,6 @@ import {
   RotateCcw,
   Pencil,
   LayoutGrid,
-  Zap,
   Archive,
   MoveRight,
   Waypoints,
@@ -19,12 +18,10 @@ import { CardAction } from './pickers'
 import { COLUMN_ACCENT, boardOpLabel } from './automationMeta'
 import { fmtTime, isPast } from './timeUtils'
 import { AutomationFires } from './AutomationFires'
-import { count } from '@/shared/lib/format'
 
 interface Props {
   automation: Automation
   isBoardKind: boolean
-  isTokenKind: boolean
   agents: Agent[]
   columns: BoardColumnDef[]
   onToggle: () => void
@@ -44,7 +41,6 @@ interface Props {
 export function AutomationCard({
   automation: a,
   isBoardKind,
-  isTokenKind,
   agents,
   columns,
   onToggle,
@@ -62,10 +58,9 @@ export function AutomationCard({
   const expired = isPast(a.expiresAt)
   const opLabel = boardOpLabel(a.boardOp)
   const isTargetlessRule = isBoardKind && (a.boardAction === 'archive' || a.boardAction === 'move')
-  // Effective session mode (agent-backed only): explicit value wins, else the
-  // per-kind default (token → continue).
+  // Effective session mode (agent-backed only): explicit value wins, else spawn.
   const kind = a.triggerKind ?? 'tag'
-  const effectiveMode = a.sessionMode ?? (kind === 'token' ? 'continue' : 'spawn')
+  const effectiveMode = a.sessionMode ?? 'spawn'
   const showContinue = !isTargetlessRule && effectiveMode === 'continue'
 
   return (
@@ -76,13 +71,11 @@ export function AutomationCard({
       style={{
         borderLeftColor: isBoardKind
           ? COLUMN_ACCENT.board
-          : isTokenKind
-            ? COLUMN_ACCENT.token
-            : kind === 'phase'
-              ? COLUMN_ACCENT.phase
-              : kind === 'trajectory_end'
-                ? COLUMN_ACCENT.trajectory_end
-                : COLUMN_ACCENT.tag,
+          : kind === 'phase'
+            ? COLUMN_ACCENT.phase
+            : kind === 'trajectory_end'
+              ? COLUMN_ACCENT.trajectory_end
+              : COLUMN_ACCENT.tag,
       }}
     >
       <div className="flex items-start gap-2">
@@ -151,17 +144,6 @@ export function AutomationCard({
                     <MoveRight size={10} /> {colLabel(a.boardMoveToState)}
                   </span>
                 )}
-              </span>
-            ) : isTokenKind ? (
-              <span
-                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title={t('automationCard.tokenTriggered')}
-              >
-                <Zap size={11} />
-                {t('automationCard.tokenSummary', {
-                  scope: a.tokenScope === 'workspace' ? t('common.workspace') : t('common.session'),
-                  count: count(a.tokenThreshold ?? 0),
-                })}
               </span>
             ) : kind === 'phase' ? (
               <span
@@ -329,10 +311,6 @@ export function AutomationCard({
       {isBoardKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
           {t('automationCard.boardNoLoop')}
-        </div>
-      ) : isTokenKind ? (
-        <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-          {t('automationCard.tokenNoLoop')}
         </div>
       ) : (
         <div className="mt-1">

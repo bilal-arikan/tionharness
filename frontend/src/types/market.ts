@@ -84,8 +84,6 @@ interface WorkspaceTemplateAutomation {
   boardPriority?: number
   boardExclusive?: boolean
   boardAction?: string
-  tokenScope?: string
-  tokenThreshold?: number
   counterMetric?: string
   counterScope?: string
   counterInterval?: number

@@ -106,15 +106,6 @@ func init() {
 			return a.BoardAction == BoardActionArchive || a.BoardAction == BoardActionMove
 		},
 	})
-	RegisterTrigger(TriggerSpec{
-		Kind: TriggerToken, Label: "Token",
-		Validate: func(a Automation) error {
-			if !ValidTokenScope(a.TokenScope) {
-				return fmt.Errorf("%w: invalid tokenScope %q (session|workspace)", ErrAutomationShape, a.TokenScope)
-			}
-			return ValidateTokenThreshold(a.TokenThreshold)
-		},
-	})
 }
 
 // validateCommonShape is the kind-independent tail of ValidateAutomationShape.

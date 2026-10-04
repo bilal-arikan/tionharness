@@ -22,19 +22,6 @@ type TurnFinished struct {
 	Output    string
 }
 
-// UsageRecorded is the signal a recorded provider call delivers to the automation
-// engine so a token-triggered automation can detect a threshold crossing: the
-// session the tokens were attributed to (may be empty for a detached aux call),
-// this call's token delta, and the session's NEW cumulative lifetime total after
-// the delta. The workspace-scope total is resolved by the engine from the DB (it
-// is not carried here, so a session-less call still drives workspace crossings).
-// Emitted from Runtime.RecordUsage via Runtime.FireUsageRecorded.
-type UsageRecorded struct {
-	SessionID       string
-	DeltaTokens     int64
-	SessionNewTotal int64
-}
-
 // AutomationEngine reacts to finished turns: when a finishing session carries a
 // tag some enabled Automation watches, it renders that automation's prompt (with
 // the finishing session's result substituted) and spawns a new session for the
@@ -74,8 +61,8 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 		return
 	}
 	for _, a := range autos {
-		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerToken || a.TriggerKind == db.TriggerFlow {
-			continue // board/token/flow automations react to their own events, not turns
+		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerFlow {
+			continue // board/flow automations react to their own events, not turns
 		}
 		if a.TriggerTag == "" || !containsTag(sess.Tags, a.TriggerTag) {
 			continue
@@ -113,96 +100,6 @@ func (e *AutomationEngine) OnBoardChange(ctx context.Context, ev db.BoardChangeE
 	}
 }
 
-// OnUsageRecorded is the usage hook (see Runtime.FireUsageRecorded). It fires
-// after every provider call's tokens are recorded and, for each enabled token
-// automation, checks whether this call pushed the watched cumulative total across
-// another TokenThreshold multiple. The crossing is detected statelessly from the
-// previous vs new total (new − delta = previous), so no per-scope ledger is kept.
-// Runs on its own detached goroutine (wired by the workspace manager) so token
-// recording is never blocked.
-//
-// Session-scoped rules watch the finishing session's lifetime total (needs a
-// session id); workspace-scoped rules watch the whole workspace's spend for the
-// day, resolved fresh from the DB. Guardrails (cooldown/maxIterations/expiry) are
-// shared with the tag and board paths and bound how often a crossing may fire.
-func (e *AutomationEngine) OnUsageRecorded(ctx context.Context, sig UsageRecorded) {
-	if sig.DeltaTokens <= 0 {
-		return // no token movement this call → no boundary can be crossed
-	}
-	autos, err := e.db.ListEnabledAutomations(ctx)
-	if err != nil {
-		e.logger.Warn("automation: list failed (token)", "session", sig.SessionID, "error", err)
-		return
-	}
-	// Resolve the workspace-day total once, lazily: only summed if some enabled
-	// automation actually watches the workspace scope.
-	var wsTotal int64 = -1
-	// Self-amplification guard: a token automation now delivers into its OWN
-	// persistent maintenance session (SessionKindAutomation), which spends tokens on
-	// every fire. For a session-scoped rule those upkeep tokens would push that same
-	// session across the next threshold multiple and re-fire it on a tight loop
-	// (bounded only by cooldown/maxIterations) — a self-sustaining loop the old
-	// fresh-session spawn never had. So skip session-scope crossings attributed to a
-	// maintenance session. Resolved lazily (one in-memory lookup) and only when a
-	// session-scoped rule is actually present. Workspace scope is intentionally NOT
-	// guarded: those tokens are real workspace spend and belong in the day total.
-	crossingIsMaint := false
-	maintResolved := false
-	isMaintSession := func() bool {
-		if !maintResolved {
-			maintResolved = true
-			if sig.SessionID != "" {
-				if s, err := e.db.GetSession(ctx, sig.SessionID); err == nil {
-					crossingIsMaint = s.Kind == SessionKindAutomation
-				}
-			}
-		}
-		return crossingIsMaint
-	}
-	for _, a := range autos {
-		if a.TriggerKind != db.TriggerToken || a.TokenThreshold <= 0 {
-			continue
-		}
-		interval := int64(a.TokenThreshold)
-		switch a.TokenScope {
-		case db.TokenScopeWorkspace:
-			if wsTotal < 0 {
-				wsTotal = e.db.WorkspaceTokensToday(ctx)
-			}
-			if crossedMultiple(wsTotal-sig.DeltaTokens, wsTotal, interval) {
-				e.fireToken(ctx, a, "", wsTotal)
-			}
-		default: // "" or TokenScopeSession
-			if sig.SessionID == "" {
-				continue // a session-scoped rule needs a session to attribute to
-			}
-			if isMaintSession() {
-				continue // don't let a maintenance session re-trigger its own rule
-			}
-			if crossedMultiple(sig.SessionNewTotal-sig.DeltaTokens, sig.SessionNewTotal, interval) {
-				e.fireToken(ctx, a, sig.SessionID, sig.SessionNewTotal)
-			}
-		}
-	}
-}
-
-// crossedMultiple reports whether the interval boundary between prev and now was
-// passed — i.e. now reached a higher multiple of interval than prev did. Both
-// totals are non-negative token counts; a non-positive interval never crosses.
-func crossedMultiple(prev, now, interval int64) bool {
-	if interval <= 0 || now <= prev {
-		return false
-	}
-	if prev < 0 {
-		prev = 0
-	}
-	return prev/interval < now/interval
-}
-
-// fireToken evaluates a token automation's shared guardrails and, if they pass,
-// spawns its target agent with the token context in the
-// prompt. sessionID is the crossing session for session scope (empty for
-// workspace scope); total is the cumulative token count that crossed the boundary.
 // dispatchFire runs an automation's rendered prompt against its target, choosing
 // the session strategy from EffectiveSessionMode. Three routes, checked in order:
 //   - continue    → reuse the persistent per-automation thread (deliverAutomationTurn,
@@ -212,7 +109,7 @@ func crossedMultiple(prev, now, interval int64) bool {
 //   - spawn        → LaunchRun spawns a FRESH session with the caller's SpawnOptions.
 //
 // Returns the fired session id and a driver label ("session"). Shared by
-// all four fire paths so the mode choice lives in one place.
+// every fire path so the mode choice lives in one place.
 func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, prompt string, trigger RunTrigger, spawn SpawnOptions) (sessionID, driver string, err error) {
 	// Lineage: whichever driver runs, the session it produces was started by THIS
 	// automation, tripped (for a session-scoped trigger) by the session the caller
@@ -269,32 +166,6 @@ func (e *AutomationEngine) notifyFired(ctx context.Context, a db.Automation, ses
 	})
 }
 
-func (e *AutomationEngine) fireToken(ctx context.Context, a db.Automation, sessionID string, total int64) {
-	if !e.guardsPass(ctx, a) {
-		return
-	}
-	prompt := renderAutomationPrompt(a.PromptTemplate, e.tokenVars(a, sessionID, total))
-	if strings.TrimSpace(prompt) == "" {
-		e.recordFailure(ctx, a, "rendered prompt is empty")
-		return
-	}
-	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationToken, SpawnOptions{
-		Title:     "⚡ " + automationLabel(a),
-		CreatedBy: "automation:" + a.ID,
-		Tags:      a.SpawnTags, // token rules do not self-loop; nil = no tag
-	})
-	if err != nil {
-		e.recordFailure(ctx, a, err.Error())
-		return
-	}
-	scope := a.EffectiveTokenScope()
-	suffix := " (token·" + scope + ")"
-	e.logger.Info("automation: fired (token)",
-		"automation", a.ID, "scope", scope, "total", total, "threshold", a.TokenThreshold,
-		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
-	e.notifyFired(ctx, a, firedSessionID, "⚡", suffix, prompt)
-}
-
 // commonVars are the placeholder values every trigger kind shares: the iteration
 // bookkeeping ({{iteration}}/{{maxIterations}}), the automation name, and the
 // current date/time. Each kind's *Vars function starts from these and layers its
@@ -313,17 +184,6 @@ func commonVars(a db.Automation) map[string]string {
 		"time":          now.Format("15:04"),
 		"datetime":      now.Format("2006-01-02 15:04"),
 	}
-}
-
-// tokenVars assembles the placeholder values for a token automation's prompt.
-// There is no session result, so {{result}} is absent (nothing is appended).
-func (e *AutomationEngine) tokenVars(a db.Automation, sessionID string, total int64) map[string]string {
-	v := commonVars(a)
-	v["tokens"] = strconv.FormatInt(total, 10)
-	v["threshold"] = strconv.Itoa(a.TokenThreshold)
-	v["scope"] = a.EffectiveTokenScope()
-	v["sessionId"] = sessionID // empty for workspace scope
-	return v
 }
 
 // boardMatches reports whether a board automation's op and column filters accept
@@ -597,7 +457,7 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 	// Dispatch by session mode: spawn a fresh session (default) or continue the
 	// persistent per-automation thread. In continue mode the spawn-only options
 	// (parent link, loop tags) are ignored — the maintenance thread carries no
-	// trigger tag, so the tag self-loop is not seeded (like token/counter).
+	// trigger tag, so the tag self-loop is not seeded.
 	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationTag, SpawnOptions{
 		Title:                    "🔁 " + automationLabel(a),
 		CreatedBy:                "automation:" + a.ID,
@@ -733,12 +593,6 @@ func automationTrigger(a db.Automation) string {
 			op = db.BoardOpMove
 		}
 		return "board:" + op
-	case db.TriggerToken:
-		scope := a.TokenScope
-		if scope == "" {
-			scope = db.TokenScopeSession
-		}
-		return "token:" + scope
 	case db.TriggerPhase:
 		phase := a.TrajPhase
 		if phase == "" {

@@ -46,7 +46,6 @@
   "triggerKinds": {
     "tag": "Tag",
     "board": "Board",
-    "token": "Token",
     "phase": "Trajectory phase",
     "trajectory_end": "Trajectory end",
     "flow": "Flow run"
@@ -54,7 +53,6 @@
   "automationKinds": {
     "tag": "tag automation",
     "board": "board automation",
-    "token": "token automation",
     "phase": "phase automation",
     "trajectory_end": "trajectory-end automation",
     "flow": "flow-run automation"
@@ -79,7 +77,6 @@
     "notFound": "automation not found"
   },
   "board": {
-    "liveMetricTitle": "The workspace's current value — the live metric watched by these rules",
     "runFailed": "Run failed: {{error}}",
     "confirmDeleteSchedule": "Delete this schedule?",
     "scheduleDeleted": "Schedule deleted",
@@ -87,7 +84,6 @@
     "automationArchived": "Automation archived",
     "confirmDeleteAutomation": "Delete this automation?",
     "automationDeleted": "Automation deleted",
-    "tokensToday": "{{count}} tokens today",
     "automationsLoading": "Loading automations…",
     "title": "Automation",
     "archiveTitle": "Automation — Archive",
@@ -119,12 +115,6 @@
       "add": "New board automation",
       "empty": "No board automations yet."
     },
-    "token": {
-      "title": "Token automations",
-      "description": "Runs maintenance or cleanup when session or workspace token usage crosses a threshold.",
-      "add": "New token automation",
-      "empty": "No token automations yet."
-    },
     "phase": {
       "title": "Trajectory phase automations",
       "description": "Runs when a declared trajectory phase ends or starts; recipe watchers can also bind it.",
@@ -148,7 +138,6 @@
     "event": "Event",
     "source": "Source",
     "target": "Target",
-    "scope": "Scope",
     "phase": "Phase",
     "endStatus": "End",
     "recipe": "Recipe",
@@ -166,10 +155,6 @@
       "priorityHint": "Fire order among automations watching the same card change. Lower numbers run first.",
       "exclusive": "Exclusive",
       "exclusiveHint": "This automation exclusively owns a matching card change and suppresses every other matching board automation."
-    },
-    "token": {
-      "threshold": "Threshold (token interval)",
-      "thresholdHint": "Fires whenever cumulative usage crosses another multiple of this interval (for example 100k, 200k). Tokens include input, output, and cache."
     },
     "trajectory": {
       "phaseHint": "Phase id from the recipe (plan, code, review…). Empty matches every phase.",
@@ -209,7 +194,6 @@
     "promptRequired": "Prompt is required",
     "expiryFuture": "Expiration must be in the future",
     "triggerTagRequired": "Trigger tag is required; an empty tag never fires",
-    "tokenThreshold": "Token threshold must be at least {{min}}",
     "moveTargetRequired": "Target column is required for a move",
     "targetFlowRequired": "Target flow is required",
     "targetAgentRequired": "Target agent is required",
@@ -245,9 +229,6 @@
     "boardTriggered": "Board card-triggered automation",
     "archivesCard": "Archives the card without an LLM call",
     "movesCard": "Moves the card to the target column without an LLM call",
-    "tokenTriggered": "Token-triggered automation — runs when cumulative usage crosses the threshold",
-    "everyTokens": "every {{count}} tokens",
-    "tokenSummary": "{{scope}} · every {{count}} tokens",
     "boardTransition": "({{from}} → {{to}})",
     "phaseSummary": "phase {{phase}} · {{event}}",
     "trajectoryEndSummary": "trajectory end · {{status}}",
@@ -272,7 +253,6 @@
     "cooldownSecondsValue": "Cooldown: {{seconds}}s",
     "last": "Last",
     "boardNoLoop": "Board-triggered — cannot loop itself (spawn tags are ignored).",
-    "tokenNoLoop": "Token-triggered — cannot loop itself (spawn tags are ignored).",
     "flowNoLoop": "Flow-based — cannot loop itself (spawn tags are ignored).",
     "spawnTags": "Spawn tags",
     "spawnTagsPlaceholder": "leave empty to break the loop",
@@ -402,10 +382,6 @@
       "archive": "Archive card (no LLM)",
       "move": "Move card to a column (no LLM)"
     },
-    "tokenScopes": {
-      "session": "Session (lifetime tokens for one session)",
-      "workspace": "Workspace (today's total tokens)"
-    },
     "promptVars": {
       "trajectory": {
         "trajectoryId": "Trajectory id (RTA…)",
@@ -450,18 +426,6 @@
         "tags": "Comma-separated card tags",
         "owner": "Assigned agent name; empty when unassigned",
         "priority": "Priority (critical/high/medium/low, possibly empty)",
-        "iteration": "One-based fire number",
-        "maxIterations": "Upper limit; zero means unlimited on legacy records",
-        "automation": "Automation name",
-        "date": "Current date",
-        "time": "Current time",
-        "datetime": "Current date and time"
-      },
-      "token": {
-        "tokens": "Cumulative token total that crossed the threshold",
-        "threshold": "Token interval (threshold)",
-        "scope": "Scope (session/workspace)",
-        "sessionId": "Session that caused the crossing; empty for workspace scope",
         "iteration": "One-based fire number",
         "maxIterations": "Upper limit; zero means unlimited on legacy records",
         "automation": "Automation name",

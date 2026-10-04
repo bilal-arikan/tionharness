@@ -269,7 +269,7 @@ type WorkspaceTemplateSchedule struct {
 // shared) are deliberately absent.
 type WorkspaceTemplateAutomation struct {
 	Name string `json:"name"`
-	// TriggerKind: "tag" | "board" | "token" ("" = tag).
+	// TriggerKind: "tag" | "board" | ... ("" = tag; see db.TriggerKinds).
 	TriggerKind string `json:"triggerKind,omitempty"`
 	TriggerTag  string `json:"triggerTag,omitempty"`
 
@@ -280,10 +280,6 @@ type WorkspaceTemplateAutomation struct {
 	BoardPriority  int    `json:"boardPriority,omitempty"`
 	BoardExclusive bool   `json:"boardExclusive,omitempty"`
 	BoardAction    string `json:"boardAction,omitempty"` // "spawn" | "archive" | "move"
-
-	// Token trigger (TriggerKind == "token").
-	TokenScope     string `json:"tokenScope,omitempty"`
-	TokenThreshold int    `json:"tokenThreshold,omitempty"`
 
 	// Target: an agent (by template key). A rule
 	// leaves AgentKey empty. An archive-action board rule needs neither.

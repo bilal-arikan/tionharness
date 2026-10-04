@@ -58,6 +58,13 @@
     "retry": "Try again",
     "title": "Something went wrong"
   },
+  "filters": {
+    "active_one": "{{count}} filter active",
+    "active_other": "{{count}} filters active",
+    "hide": "Hide filters",
+    "label": "Filters",
+    "show": "Show filters"
+  },
   "folderPicker": {
     "noSubfolders": "No subfolders",
     "parent": "Parent folder",

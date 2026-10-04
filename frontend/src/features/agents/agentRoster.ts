@@ -7,9 +7,9 @@ import type { Agent } from '@/types'
 const WORKER_KEY_PREFIX = 'subagent-'
 
 export interface SystemRosterGroups {
-  /** Built-in agents the app uses for its own jobs, plus their customisations. */
+  /** Workspace customisations of the agents the app uses for its own jobs. */
   services: Agent[]
-  /** Worker profiles, plus their customisations. */
+  /** Workspace customisations of the worker profiles. */
   workers: Agent[]
 }
 
@@ -20,21 +20,27 @@ export function isWorkerSystemAgent(agent: Agent): boolean {
   return (agent.systemKey ?? '').startsWith(WORKER_KEY_PREFIX)
 }
 
-/** Splits the system agents into roster sections. Within each section rows stay
- * GROUPED: every locked built-in is followed by the workspace customisations
- * bound to its role, so "which row serves this role" reads top-down. */
+/** True for a locked built-in system agent — the compiled registry rows the
+ * workspace roster leaves out (they stay reachable as inheritance parents and
+ * through deep links). */
+export function isBuiltinSystemAgent(agent: Agent): boolean {
+  return !!agent.system && !!agent.locked
+}
+
+/** Splits the workspace's system-role customisations (the agents that inherit
+ * from a built-in) into roster sections. The locked built-ins themselves are
+ * not listed; they only fix the order, so customisations of the same role stay
+ * adjacent in registry order. */
 export function groupSystemAgents(agents: Agent[]): SystemRosterGroups {
-  const builtins = agents.filter((a) => a.system && a.locked)
+  const builtins = agents.filter(isBuiltinSystemAgent)
   const custom = agents.filter((a) => a.system && !a.locked)
   const groups: SystemRosterGroups = { services: [], workers: [] }
   const bucket = (agent: Agent) => (isWorkerSystemAgent(agent) ? groups.workers : groups.services)
   const placed = new Set<string>()
   for (const b of builtins) {
-    const rows = bucket(b)
-    rows.push(b)
     for (const c of custom) {
-      if (c.systemKey === b.systemKey) {
-        rows.push(c)
+      if (c.systemKey === b.systemKey && !placed.has(c.id)) {
+        bucket(c).push(c)
         placed.add(c.id)
       }
     }

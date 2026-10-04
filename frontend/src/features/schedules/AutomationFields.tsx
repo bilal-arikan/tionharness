@@ -10,7 +10,6 @@ import type {
   BoardColumnDef,
   BoardOp,
   FlowRuleStatus,
-  TokenScope,
 } from '@/types'
 import {
   BOARD_ACTIONS,
@@ -21,10 +20,7 @@ import {
   TRAJ_END_STATUSES,
   TRAJ_EVENTS,
   TRAJ_PROMPT_VARS,
-  MIN_TOKEN_THRESHOLD,
   PROMPT_VARS,
-  TOKEN_PROMPT_VARS,
-  TOKEN_SCOPES,
 } from './automationMeta'
 import { inputCls } from './pickers'
 
@@ -156,53 +152,6 @@ export function BoardTriggerFields({
   )
 }
 
-// TokenTriggerFields renders the scope selector and the token interval for a
-// token-triggered automation. The automation fires each time the watched
-// cumulative total crosses another multiple of the interval.
-export function TokenTriggerFields({
-  scope,
-  threshold,
-  onChange,
-}: {
-  scope: TokenScope
-  threshold: number
-  onChange: (patch: { scope?: TokenScope; threshold?: number }) => void
-}) {
-  const { t } = useTranslation('schedules')
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-        {t('fields.scope')}
-        <select
-          value={scope}
-          onChange={(e) => onChange({ scope: e.target.value as TokenScope })}
-          className={selCls}
-        >
-          {TOKEN_SCOPES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label
-        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
-        title={t('fields.token.thresholdHint')}
-      >
-        {t('fields.token.threshold')}
-        <input
-          type="number"
-          min={MIN_TOKEN_THRESHOLD}
-          step={1000}
-          value={threshold}
-          onChange={(e) => onChange({ threshold: Number(e.target.value) || 0 })}
-          className={`${selCls} w-28`}
-        />
-      </label>
-    </div>
-  )
-}
-
 // PromptVarsField renders the prompt-template textarea plus the ℹ️ variable
 // picker popover, choosing the variable list by trigger kind.
 export function PromptVarsField({
@@ -219,13 +168,11 @@ export function PromptVarsField({
   const vars =
     kind === 'board'
       ? BOARD_PROMPT_VARS
-      : kind === 'token'
-        ? TOKEN_PROMPT_VARS
-        : kind === 'phase' || kind === 'trajectory_end'
-          ? TRAJ_PROMPT_VARS
-          : kind === 'flow'
-            ? FLOW_PROMPT_VARS
-            : PROMPT_VARS
+      : kind === 'phase' || kind === 'trajectory_end'
+        ? TRAJ_PROMPT_VARS
+        : kind === 'flow'
+          ? FLOW_PROMPT_VARS
+          : PROMPT_VARS
   return (
     <div className="relative">
       <div className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">

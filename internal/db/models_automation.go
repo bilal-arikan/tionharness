@@ -7,51 +7,31 @@ package db
 const (
 	TriggerTag   = "tag"   // fire when a session carrying TriggerTag ends a turn
 	TriggerBoard = "board" // fire when a board card changes (see BoardOp)
-	TriggerToken = "token" // fire when cumulative token spend crosses a TokenThreshold multiple
 )
 
-// TriggerCounterLegacy is the retired "counter" trigger kind (message/tool count
-// crossings, removed 2026-09-05). Files written before the removal may still
-// carry it; the store skips them on load so they never surface in the UI, the
-// API or the engine, and every write path rejects the kind as unknown.
-const TriggerCounterLegacy = "counter"
-
-// Token automation scopes. A token-triggered automation watches either a single
-// session's lifetime token spend (TokenScopeSession, the default) or the whole
-// workspace's spend for the current day (TokenScopeWorkspace). TokenScope == ""
-// is treated as TokenScopeSession.
+// Retired trigger kinds. Files written before a kind's removal may still carry
+// it; the store skips them on load so they never surface in the UI, the API or
+// the engine, and every write path rejects the kind as unknown.
+//   - TriggerCounterLegacy: message/tool count crossings (removed 2026-09-05).
+//   - TriggerTokenLegacy: cumulative token-spend threshold crossings (removed
+//     2026-10-04).
 const (
-	TokenScopeSession   = "session"
-	TokenScopeWorkspace = "workspace"
+	TriggerCounterLegacy = "counter"
+	TriggerTokenLegacy   = "token"
 )
 
-// ValidTokenScope reports whether scope is empty (defaults to session) or a known
-// token-automation scope.
-func ValidTokenScope(scope string) bool {
-	switch scope {
-	case "", TokenScopeSession, TokenScopeWorkspace:
-		return true
-	default:
-		return false
-	}
-}
-
-// EffectiveTokenScope resolves the stored TokenScope to a concrete scope, mapping
-// the empty default to session. Callers (prompt vars, fire notifications) should
-// use this instead of repeating the `== "" → session` fallback.
-func (a Automation) EffectiveTokenScope() string {
-	if a.TokenScope == "" {
-		return TokenScopeSession
-	}
-	return a.TokenScope
+// retiredTriggerKind reports whether k is a removed trigger kind whose stored
+// rules are skipped on load.
+func retiredTriggerKind(k string) bool {
+	return k == TriggerCounterLegacy || k == TriggerTokenLegacy
 }
 
 // Automation session modes. An agent-backed automation either spawns a FRESH
-// session on every fire (SessionModeSpawn — the tag/board default: each fire is
+// session on every fire (SessionModeSpawn — the default: each fire is
 // independent) or CONTINUES one persistent per-automation thread that carries its
-// earlier turns forward (SessionModeContinue — the token default: each
-// fire resumes where the last left off, cron-schedule style). SessionMode == "" is
-// resolved per trigger kind by EffectiveSessionMode.
+// earlier turns forward (SessionModeContinue — each fire resumes where the last
+// left off, cron-schedule style). SessionMode == "" is resolved by
+// EffectiveSessionMode.
 const (
 	SessionModeSpawn    = "spawn"
 	SessionModeContinue = "continue"
@@ -68,20 +48,13 @@ func ValidSessionMode(mode string) bool {
 }
 
 // EffectiveSessionMode resolves the stored SessionMode to a concrete mode. An
-// explicit value wins; empty falls back to the per-kind default that preserves the
-// original behavior — token continues its maintenance thread, everything
-// else spawns fresh. (Meaningful only for agent-backed rules; the fire path ignores
-// it for flow-backed ones.)
+// explicit value wins; empty falls back to spawning a fresh session. (Meaningful
+// only for agent-backed rules; the fire path ignores it for flow-backed ones.)
 func (a Automation) EffectiveSessionMode() string {
 	if a.SessionMode != "" {
 		return a.SessionMode
 	}
-	switch a.TriggerKind {
-	case TriggerToken:
-		return SessionModeContinue
-	default:
-		return SessionModeSpawn
-	}
+	return SessionModeSpawn
 }
 
 // Board operation filters for a board-triggered automation. BoardOp == "" is
@@ -150,22 +123,9 @@ type Automation struct {
 	Name string `json:"name"`
 	// TriggerKind selects what fires the automation: TriggerTag (default, "" is
 	// treated the same) watches a finishing session's tags; TriggerBoard watches
-	// board (kanban) card changes; TriggerToken watches cumulative token spend. The
-	// board fields apply only when TriggerKind == TriggerBoard; the token fields
-	// only when TriggerKind == TriggerToken.
+	// board (kanban) card changes. The board fields apply only when
+	// TriggerKind == TriggerBoard.
 	TriggerKind string `json:"triggerKind,omitempty"`
-	// TokenScope selects what a token automation watches: TokenScopeSession
-	// (default, "" is treated the same) = a single session's lifetime token spend;
-	// TokenScopeWorkspace = the whole workspace's spend for the current day. Ignored
-	// unless TriggerKind == TriggerToken.
-	TokenScope string `json:"tokenScope,omitempty"`
-	// TokenThreshold is the token INTERVAL for a token automation: it fires each
-	// time cumulative spend crosses another multiple of this value (e.g. 100000 →
-	// fires at 100k, 200k, 300k…). Crossing is detected statelessly from the
-	// previous vs new cumulative total at record time, so no per-scope ledger is
-	// needed. "Tokens" here means input+output+cacheRead+cacheWrite. Must be >=
-	// MinTokenThreshold. Ignored unless TriggerKind == TriggerToken.
-	TokenThreshold int `json:"tokenThreshold,omitempty"`
 	// Trajectory (Rota) trigger fields, F2. TrajPhase narrows a phase rule to
 	// one declared phase id ("" = every phase); TrajRecipe narrows phase and
 	// trajectory_end rules to trajectories seeded from that recipe slug ("" =
@@ -220,8 +180,7 @@ type Automation struct {
 	// SessionMode selects, for an AGENT-backed automation, whether each fire runs in
 	// a fresh session (SessionModeSpawn) or continues one persistent per-automation
 	// thread that carries prior turns forward (SessionModeContinue, history-aware).
-	// Empty resolves per kind via EffectiveSessionMode (tag/board → spawn, token →
-	// continue) so old rows keep their original behavior.
+	// Empty resolves to spawn via EffectiveSessionMode.
 	SessionMode string `json:"sessionMode,omitempty"`
 	// PromptTemplate is the prompt delivered to the spawned session. Placeholders:
 	// {{result}} (the finishing session's final reply), {{title}} (its title),

@@ -253,8 +253,6 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			BoardPriority:  a.BoardPriority,
 			BoardExclusive: a.BoardExclusive,
 			BoardAction:    a.BoardAction,
-			TokenScope:     a.TokenScope,
-			TokenThreshold: a.TokenThreshold,
 			AgentKey:       agentKey,
 			SessionMode:    a.SessionMode,
 			PromptTemplate: a.PromptTemplate,

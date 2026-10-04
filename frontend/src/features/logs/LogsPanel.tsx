@@ -5,7 +5,7 @@ import { api } from '@/api'
 import type { LogEntry } from '@/types'
 import { groupConsecutive } from './logGroup'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { PaneHeader } from '@/shared/components'
+import { FilterToggle, PaneHeader, useFilterDisclosure } from '@/shared/components'
 
 interface Props {
   onError: (msg: string) => void
@@ -108,6 +108,7 @@ export function LogsPanel({ onError }: Props) {
   const [qDebounced, setQDebounced] = useState('')
   const [component, setComponent] = useState('')
   const [range, setRange] = useState<string>('')
+  const [filtersOpen, toggleFilters] = useFilterDisclosure('logs')
   const [follow, setFollow] = useState(true)
   const [group, setGroup] = useState(true)
   // Count of live entries that arrived (matching the filters) while follow was
@@ -303,46 +304,56 @@ export function LogsPanel({ onError }: Props) {
       />
       {/* Filters (count / copy-path / open-folder moved to the title bar above). */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2">
-        <div className="flex items-center gap-1">
-          {LEVELS.map((l) => (
-            <button
-              key={l || 'all'}
-              onClick={() => setLevel(l)}
-              className={`rounded px-2 py-1 text-xs transition ${
-                level === l
-                  ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
-                  : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-              }`}
+        <FilterToggle
+          open={filtersOpen}
+          onToggle={toggleFilters}
+          activeCount={(level ? 1 : 0) + (component ? 1 : 0) + (range ? 1 : 0)}
+          testId="logs-filters-toggle"
+        />
+        {filtersOpen && (
+          <>
+            <div className="flex items-center gap-1">
+              {LEVELS.map((l) => (
+                <button
+                  key={l || 'all'}
+                  onClick={() => setLevel(l)}
+                  className={`rounded px-2 py-1 text-xs transition ${
+                    level === l
+                      ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {l ? l.charAt(0).toUpperCase() + l.slice(1) : t('filters.allLevels')}
+                </button>
+              ))}
+            </div>
+            <select
+              value={component}
+              onChange={(e) => setComponent(e.target.value)}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+              title={t('filters.componentHint')}
             >
-              {l ? l.charAt(0).toUpperCase() + l.slice(1) : t('filters.allLevels')}
-            </button>
-          ))}
-        </div>
-        <select
-          value={component}
-          onChange={(e) => setComponent(e.target.value)}
-          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
-          title={t('filters.componentHint')}
-        >
-          <option value="">{t('filters.allComponents')}</option>
-          {components.map((c) => (
-            <option key={c} value={c}>
-              {c === UI_TOAST_COMPONENT ? t('filters.uiNotifications', { component: c }) : c}
-            </option>
-          ))}
-        </select>
-        <select
-          value={range}
-          onChange={(e) => setRange(e.target.value)}
-          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
-          title={t('filters.rangeHint')}
-        >
-          {RANGES.map((r) => (
-            <option key={r.key} value={r.key}>
-              {t(`range.${r.labelKey}`)}
-            </option>
-          ))}
-        </select>
+              <option value="">{t('filters.allComponents')}</option>
+              {components.map((c) => (
+                <option key={c} value={c}>
+                  {c === UI_TOAST_COMPONENT ? t('filters.uiNotifications', { component: c }) : c}
+                </option>
+              ))}
+            </select>
+            <select
+              value={range}
+              onChange={(e) => setRange(e.target.value)}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+              title={t('filters.rangeHint')}
+            >
+              {RANGES.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {t(`range.${r.labelKey}`)}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}

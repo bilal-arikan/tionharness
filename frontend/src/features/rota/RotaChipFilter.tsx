@@ -11,6 +11,7 @@ import {
   WORKER_CHIP,
   type ChipClickMode,
 } from '@/features/sessions/sessionKindMeta'
+import { FilterToggle, useFilterDisclosure } from '@/shared/components'
 
 interface Props {
   chipSet: ReadonlySet<string>
@@ -23,6 +24,7 @@ interface Props {
 
 export function RotaChipFilter({ chipSet, counts, onClickChip, onReset, offCount }: Props) {
   const { t } = useTranslation('rota')
+  const [open, toggle] = useFilterDisclosure('rota')
   const click = (key: string, e: ReactMouseEvent) => {
     const mode: ChipClickMode = e.ctrlKey || e.metaKey ? 'solo' : e.shiftKey ? 'invert' : 'toggle'
     onClickChip(key, mode)
@@ -32,36 +34,44 @@ export function RotaChipFilter({ chipSet, counts, onClickChip, onReset, offCount
       className="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-4 py-1.5"
       data-testid="rota-chip-filter"
     >
-      {SESSION_CHIPS.map((f) => {
-        const on = chipSet.has(f.key)
-        const Icon =
-          f.key === WORKER_CHIP
-            ? Users
-            : f.key === ARCHIVED_CHIP
-              ? Archive
-              : f.key === SUBAGENT_CHIP
-                ? Sparkles
-                : null
-        return (
-          <button
-            key={f.key}
-            type="button"
-            onClick={(e) => click(f.key, e)}
-            title={t('chips.title', { label: f.label, count: counts.get(f.key) ?? 0 })}
-            aria-pressed={on}
-            data-chip={f.key}
-            className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] transition ${
-              on
-                ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-                : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
-            }`}
-          >
-            {Icon && <Icon size={11} />}
-            {f.label}
-            <span className="opacity-60">{counts.get(f.key) ?? 0}</span>
-          </button>
-        )
-      })}
+      <FilterToggle
+        open={open}
+        onToggle={toggle}
+        activeCount={offCount}
+        className="mr-1"
+        testId="rota-filters-toggle"
+      />
+      {open &&
+        SESSION_CHIPS.map((f) => {
+          const on = chipSet.has(f.key)
+          const Icon =
+            f.key === WORKER_CHIP
+              ? Users
+              : f.key === ARCHIVED_CHIP
+                ? Archive
+                : f.key === SUBAGENT_CHIP
+                  ? Sparkles
+                  : null
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={(e) => click(f.key, e)}
+              title={t('chips.title', { label: f.label, count: counts.get(f.key) ?? 0 })}
+              aria-pressed={on}
+              data-chip={f.key}
+              className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] transition ${
+                on
+                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                  : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
+              }`}
+            >
+              {Icon && <Icon size={11} />}
+              {f.label}
+              <span className="opacity-60">{counts.get(f.key) ?? 0}</span>
+            </button>
+          )
+        })}
       {offCount > 0 && (
         <button
           type="button"

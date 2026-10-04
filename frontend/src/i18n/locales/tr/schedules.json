@@ -46,7 +46,6 @@
   "triggerKinds": {
     "tag": "Etiket",
     "board": "Pano",
-    "token": "Token",
     "phase": "Rota fazı",
     "trajectory_end": "Rota sonu",
     "flow": "Akış koşusu"
@@ -54,7 +53,6 @@
   "automationKinds": {
     "tag": "etiket otomasyonu",
     "board": "pano otomasyonu",
-    "token": "token otomasyonu",
     "phase": "faz otomasyonu",
     "trajectory_end": "rota sonu otomasyonu",
     "flow": "akış koşusu otomasyonu"
@@ -79,7 +77,6 @@
     "notFound": "otomasyon bulunamadı"
   },
   "board": {
-    "liveMetricTitle": "Bu workspace’in şu anki değeri — kuralların izlediği canlı metrik",
     "runFailed": "Çalıştırma başarısız: {{error}}",
     "confirmDeleteSchedule": "Zamanlama silinsin mi?",
     "scheduleDeleted": "Zamanlama silindi",
@@ -87,7 +84,6 @@
     "automationArchived": "Otomasyon arşivlendi",
     "confirmDeleteAutomation": "Otomasyon silinsin mi?",
     "automationDeleted": "Otomasyon silindi",
-    "tokensToday": "bugün {{count}} token",
     "automationsLoading": "Otomasyonlar yükleniyor…",
     "title": "Otomasyon",
     "archiveTitle": "Otomasyon — Arşiv",
@@ -119,12 +115,6 @@
       "add": "Yeni pano otomasyonu",
       "empty": "Henüz pano otomasyonu yok."
     },
-    "token": {
-      "title": "Token otomasyonları",
-      "description": "Oturum veya workspace token harcaması eşiği geçince bakım ve temizlik için çalışır.",
-      "add": "Yeni token otomasyonu",
-      "empty": "Henüz token otomasyonu yok."
-    },
     "phase": {
       "title": "Rota fazı otomasyonları",
       "description": "Bir rotanın ilan edilmiş fazı bitince veya başlayınca çalışır; reçete izleyicileri de bağlayabilir.",
@@ -148,7 +138,6 @@
     "event": "Olay",
     "source": "Kaynak",
     "target": "Hedef",
-    "scope": "Kapsam",
     "phase": "Faz",
     "endStatus": "Bitiş",
     "recipe": "Reçete",
@@ -166,10 +155,6 @@
       "priorityHint": "Aynı kart değişimini yakalayan otomasyonlar arasındaki ateşleme sırası. Küçük olan önce çalışır.",
       "exclusive": "Tek sahip",
       "exclusiveHint": "Bu otomasyon eşleşen kart değişimini tek başına sahiplenir; aynı olaya uyan diğer pano otomasyonları bastırılır."
-    },
-    "token": {
-      "threshold": "Eşik (token aralığı)",
-      "thresholdHint": "Kümülatif harcama bu aralığın yeni bir katını geçtiğinde tetiklenir (ör. 100k, 200k). Token; giriş, çıkış ve cache toplamıdır."
     },
     "trajectory": {
       "phaseHint": "Reçetedeki faz kimliği (plan, code, review…). Boşsa her faz eşleşir.",
@@ -209,7 +194,6 @@
     "promptRequired": "Prompt zorunlu",
     "expiryFuture": "Son tarih gelecekte olmalı",
     "triggerTagRequired": "Tetikleyici etiket zorunlu; boş etiket hiç tetiklenmez",
-    "tokenThreshold": "Token eşiği en az {{min}} olmalı",
     "moveTargetRequired": "Taşıma hedef sütunu zorunlu",
     "targetFlowRequired": "Hedef akış zorunlu",
     "targetAgentRequired": "Hedef ajan zorunlu",
@@ -245,9 +229,6 @@
     "boardTriggered": "Pano kartı tetikleyicili otomasyon",
     "archivesCard": "Kartı LLM çağrısı olmadan arşivler",
     "movesCard": "Kartı LLM çağrısı olmadan hedef sütuna taşır",
-    "tokenTriggered": "Token tetikleyicili otomasyon — kümülatif harcama eşiği geçince çalışır",
-    "everyTokens": "her {{count}} token",
-    "tokenSummary": "{{scope}} · her {{count}} token",
     "boardTransition": "({{from}} → {{to}})",
     "phaseSummary": "faz {{phase}} · {{event}}",
     "trajectoryEndSummary": "rota sonu · {{status}}",
@@ -272,7 +253,6 @@
     "cooldownSecondsValue": "Bekleme: {{seconds}} sn",
     "last": "Son",
     "boardNoLoop": "Pano tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).",
-    "tokenNoLoop": "Token tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).",
     "flowNoLoop": "Akış tabanlı — kendini döngülemez (spawn etiketleri yok sayılır).",
     "spawnTags": "Spawn etiketleri",
     "spawnTagsPlaceholder": "döngüyü kırmak için boş bırak",
@@ -402,10 +382,6 @@
       "archive": "Kartı arşivle (LLM yok)",
       "move": "Kartı sütuna taşı (LLM yok)"
     },
-    "tokenScopes": {
-      "session": "Oturum (bir oturumun ömür boyu tokenı)",
-      "workspace": "Workspace (bugünkü toplam token)"
-    },
     "promptVars": {
       "trajectory": {
         "trajectoryId": "Rota kimliği (RTA…)",
@@ -450,18 +426,6 @@
         "tags": "Kartın virgülle ayrılmış etiketleri",
         "owner": "Atanan ajanın adı; atanmamışsa boş",
         "priority": "Öncelik (critical/high/medium/low, boş olabilir)",
-        "iteration": "Bir tabanlı ateşleme sıra numarası",
-        "maxIterations": "Üst sınır; eski kayıtlarda sıfır sınırsızdır",
-        "automation": "Otomasyonun adı",
-        "date": "Geçerli tarih",
-        "time": "Geçerli saat",
-        "datetime": "Geçerli tarih ve saat"
-      },
-      "token": {
-        "tokens": "Eşiği geçen kümülatif token toplamı",
-        "threshold": "Token aralığı (eşik)",
-        "scope": "Kapsam (session/workspace)",
-        "sessionId": "Geçişi tetikleyen oturum; workspace kapsamında boş",
         "iteration": "Bir tabanlı ateşleme sıra numarası",
         "maxIterations": "Üst sınır; eski kayıtlarda sıfır sınırsızdır",
         "automation": "Otomasyonun adı",

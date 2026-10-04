@@ -4,7 +4,7 @@ import { Archive, GitBranch, Plus, Search, X } from 'lucide-react'
 import { api } from '@/api'
 import type { ListNotesParams } from '@/api/notes'
 import { SIGNAL_NOTES } from '@/app/eventToRefreshSignals'
-import { EmptyState, toast } from '@/shared/components'
+import { EmptyState, FilterToggle, toast, useFilterDisclosure } from '@/shared/components'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import type { Note, NoteConfidence, NoteExpansion, NoteScope, NoteWrite } from '@/types'
@@ -193,6 +193,13 @@ export function NotesTab({ onError, selectedId, onSelectNote, onOpenSession }: P
   }
 
   const filtered = hasActiveNoteFilters(filter)
+  const [filtersOpen, toggleFilters] = useFilterDisclosure('notes')
+  const facetCount =
+    filter.kinds.length +
+    (filter.scope ? 1 : 0) +
+    (filter.confidence ? 1 : 0) +
+    (filter.showArchived ? 1 : 0) +
+    (filter.showSuperseded ? 1 : 0)
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -221,64 +228,74 @@ export function NotesTab({ onError, selectedId, onSelectNote, onOpenSession }: P
             </button>
           )}
         </div>
-        <div className="flex flex-wrap gap-1">
-          {NOTE_KINDS.map((k) => {
-            const on = filter.kinds.includes(k)
-            return (
-              <button
-                key={k}
-                type="button"
-                data-testid="notes-kind-chip"
-                data-kind={k}
-                data-active={on}
-                onClick={() => patch({ kinds: toggleKind(filter.kinds, k) })}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
-                  on
-                    ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
-                    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-                }`}
-              >
-                {t(`kind.${k}`)}
-              </button>
-            )
-          })}
-        </div>
-        <select
-          className={selectCls}
-          value={filter.scope}
-          onChange={(e) => patch({ scope: e.target.value as NoteScope | '' })}
-        >
-          <option value="">{t('filters.allScopes')}</option>
-          {NOTE_SCOPES.map((s) => (
-            <option key={s} value={s}>
-              {t(`scope.${s}`)}
-            </option>
-          ))}
-        </select>
-        <select
-          className={selectCls}
-          value={filter.confidence}
-          onChange={(e) => patch({ confidence: e.target.value as NoteConfidence | '' })}
-        >
-          <option value="">{t('filters.allConfidences')}</option>
-          {NOTE_CONFIDENCES.map((c) => (
-            <option key={c} value={c}>
-              {t(`confidence.${c}`)}
-            </option>
-          ))}
-        </select>
-        <FacetToggle
-          on={filter.showArchived}
-          onClick={() => patch({ showArchived: !filter.showArchived })}
-          icon={<Archive size={12} />}
-          label={t('filters.showArchived')}
+        <FilterToggle
+          open={filtersOpen}
+          onToggle={toggleFilters}
+          activeCount={facetCount}
+          testId="notes-filters-toggle"
         />
-        <FacetToggle
-          on={filter.showSuperseded}
-          onClick={() => patch({ showSuperseded: !filter.showSuperseded })}
-          icon={<GitBranch size={12} />}
-          label={t('filters.showSuperseded')}
-        />
+        {filtersOpen && (
+          <>
+            <div className="flex flex-wrap gap-1">
+              {NOTE_KINDS.map((k) => {
+                const on = filter.kinds.includes(k)
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    data-testid="notes-kind-chip"
+                    data-kind={k}
+                    data-active={on}
+                    onClick={() => patch({ kinds: toggleKind(filter.kinds, k) })}
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
+                      on
+                        ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                        : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                    }`}
+                  >
+                    {t(`kind.${k}`)}
+                  </button>
+                )
+              })}
+            </div>
+            <select
+              className={selectCls}
+              value={filter.scope}
+              onChange={(e) => patch({ scope: e.target.value as NoteScope | '' })}
+            >
+              <option value="">{t('filters.allScopes')}</option>
+              {NOTE_SCOPES.map((s) => (
+                <option key={s} value={s}>
+                  {t(`scope.${s}`)}
+                </option>
+              ))}
+            </select>
+            <select
+              className={selectCls}
+              value={filter.confidence}
+              onChange={(e) => patch({ confidence: e.target.value as NoteConfidence | '' })}
+            >
+              <option value="">{t('filters.allConfidences')}</option>
+              {NOTE_CONFIDENCES.map((c) => (
+                <option key={c} value={c}>
+                  {t(`confidence.${c}`)}
+                </option>
+              ))}
+            </select>
+            <FacetToggle
+              on={filter.showArchived}
+              onClick={() => patch({ showArchived: !filter.showArchived })}
+              icon={<Archive size={12} />}
+              label={t('filters.showArchived')}
+            />
+            <FacetToggle
+              on={filter.showSuperseded}
+              onClick={() => patch({ showSuperseded: !filter.showSuperseded })}
+              icon={<GitBranch size={12} />}
+              label={t('filters.showSuperseded')}
+            />
+          </>
+        )}
         {filtered && (
           <button
             type="button"

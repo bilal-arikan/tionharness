@@ -32,6 +32,7 @@ import {
 } from './boardViewTypes'
 import type { BoardViewState } from './useBoardView'
 import { compareText } from '@/shared/lib/intl'
+import { FilterToggle, useFilterDisclosure } from '@/shared/components'
 
 interface Props {
   view: BoardViewState
@@ -48,6 +49,7 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
   const { live, setFilter } = view
   const f = live.filter
   const searchRef = useRef<HTMLInputElement>(null)
+  const [facetsOpen, toggleFacets] = useFilterDisclosure('board')
 
   // "/" focuses search, the way every list-heavy tool does it. Ignored while the
   // user is already typing somewhere, so it cannot hijack a card title.
@@ -187,45 +189,55 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
 
       <span className="mx-0.5 h-4 w-px bg-[var(--color-border)]" />
 
-      <FacetDropdown
-        label={t('filters.priority')}
-        options={priorityOptions}
-        selected={f.priorities ?? []}
-        onChange={(v) => patch({ priorities: v as never })}
+      <FilterToggle
+        open={facetsOpen}
+        onToggle={toggleFacets}
+        activeCount={activeFacets - (f.text ? 1 : 0)}
+        testId="board-filters-toggle"
       />
-      <FacetDropdown
-        label={t('filters.tag')}
-        options={tagOptions}
-        selected={f.tags ?? []}
-        onChange={(v) => patch({ tags: v })}
-        emptyHint={t('filters.noTags')}
-      />
-      <FacetDropdown
-        label={t('filters.agent')}
-        options={agentOptions}
-        selected={f.agentIds ?? []}
-        onChange={(v) => patch({ agentIds: v })}
-      />
-      <FacetDropdown
-        label={t('filters.dependency')}
-        options={depOptions}
-        selected={f.dep ? [f.dep] : []}
-        onChange={(v) => patch({ dep: (v[0] ?? '') as BoardDepFilter })}
-        mode="single"
-      />
-      <FacetDropdown
-        label={t('filters.reviewLabel')}
-        options={reviewOptions}
-        selected={f.review ? [f.review] : []}
-        onChange={(v) => patch({ review: (v[0] ?? '') as BoardReviewFilter })}
-        mode="single"
-      />
-      <FacetDropdown
-        label={t('filters.column')}
-        options={columnOptions}
-        selected={f.columns ?? []}
-        onChange={(v) => patch({ columns: v })}
-      />
+      {facetsOpen && (
+        <>
+          <FacetDropdown
+            label={t('filters.priority')}
+            options={priorityOptions}
+            selected={f.priorities ?? []}
+            onChange={(v) => patch({ priorities: v as never })}
+          />
+          <FacetDropdown
+            label={t('filters.tag')}
+            options={tagOptions}
+            selected={f.tags ?? []}
+            onChange={(v) => patch({ tags: v })}
+            emptyHint={t('filters.noTags')}
+          />
+          <FacetDropdown
+            label={t('filters.agent')}
+            options={agentOptions}
+            selected={f.agentIds ?? []}
+            onChange={(v) => patch({ agentIds: v })}
+          />
+          <FacetDropdown
+            label={t('filters.dependency')}
+            options={depOptions}
+            selected={f.dep ? [f.dep] : []}
+            onChange={(v) => patch({ dep: (v[0] ?? '') as BoardDepFilter })}
+            mode="single"
+          />
+          <FacetDropdown
+            label={t('filters.reviewLabel')}
+            options={reviewOptions}
+            selected={f.review ? [f.review] : []}
+            onChange={(v) => patch({ review: (v[0] ?? '') as BoardReviewFilter })}
+            mode="single"
+          />
+          <FacetDropdown
+            label={t('filters.column')}
+            options={columnOptions}
+            selected={f.columns ?? []}
+            onChange={(v) => patch({ columns: v })}
+          />
+        </>
+      )}
 
       <span className="mx-0.5 h-4 w-px bg-[var(--color-border)]" />
 

@@ -97,9 +97,6 @@ func automationTrigger(a db.Automation) string {
 			parts = append(parts, "to:"+a.BoardToState)
 		}
 		return strings.Join(parts, " ")
-	case db.TriggerToken:
-		scope := a.EffectiveTokenScope()
-		return fmt.Sprintf("token (%s) her %d tok", scope, a.TokenThreshold)
 	default:
 		return "tag:" + orDash(a.TriggerTag)
 	}

@@ -96,10 +96,10 @@ export interface Schedule {
 // default), each completion re-fires the rule — a self-continuing loop bounded by
 // maxIterations / cooldownSec / enabled. Surfaced in the Schedules screen.
 // Automation trigger kind: 'tag' (a tagged session finishing a turn), 'board'
-// (a kanban card change), 'token' (cumulative token spend crossing a threshold),
-// or the Rota kinds 'phase' / 'trajectory_end'. '' from older files is treated
-// as 'tag'. (The 'counter' kind was retired 2026-09-05.)
-export type AutomationTriggerKind = 'tag' | 'board' | 'token' | 'phase' | 'trajectory_end' | 'flow'
+// (a kanban card change), or the Rota kinds 'phase' / 'trajectory_end'. '' from
+// older files is treated as 'tag'. (The 'counter' kind was retired 2026-09-05,
+// the 'token' kind 2026-10-04.)
+export type AutomationTriggerKind = 'tag' | 'board' | 'phase' | 'trajectory_end' | 'flow'
 // Flow-trigger outcome filter ('' = any finished run).
 export type FlowRuleStatus = '' | 'success' | 'failure'
 // Phase transition a phase automation watches (Rota F2).
@@ -108,12 +108,9 @@ export type TrajEvent = 'exit' | 'enter'
 export type TrajEndStatus = '' | 'done' | 'failed' | 'abandoned'
 // Board card operation a board automation reacts to.
 export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
-// Token automation scope: one session's lifetime spend, or the whole workspace's
-// spend for the current day. '' is treated as 'session'.
-export type TokenScope = 'session' | 'workspace'
 // Automation session strategy (agent-backed only): 'spawn' runs a fresh session
 // per fire; 'continue' reuses one persistent per-automation thread (history-aware).
-// '' resolves per kind (tag/board → spawn, token → continue).
+// '' resolves to 'spawn'.
 export type SessionMode = 'spawn' | 'continue'
 // What a board automation does when it fires: 'spawn' (default, '' is treated the
 // same) runs the target agent — the board drives execution; 'archive'
@@ -157,11 +154,6 @@ export interface Automation {
   boardAction?: BoardAction
   // Explicit destination for a targetless move action.
   boardMoveToState?: string
-  // Token-trigger fields (only meaningful when triggerKind === 'token').
-  tokenScope?: TokenScope // default 'session'
-  // Token interval: fires each time cumulative spend crosses another multiple
-  // (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache.
-  tokenThreshold?: number
   // Trajectory-trigger fields (Rota F2; triggerKind 'phase' | 'trajectory_end').
   // trajPhase narrows a phase rule to one phase id ('' = every phase);
   // trajRecipe narrows to trajectories seeded from that recipe slug ('' = any);

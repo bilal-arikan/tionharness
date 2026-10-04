@@ -17,7 +17,6 @@ const (
 	TriggerSchedule        RunTrigger = "schedule"
 	TriggerAutomationTag   RunTrigger = "automation:tag"
 	TriggerAutomationBoard RunTrigger = "automation:board"
-	TriggerAutomationToken RunTrigger = "automation:token"
 	// Rota (F2): a declared phase finished / was entered, a trajectory ended.
 	TriggerAutomationPhase         RunTrigger = "automation:phase"
 	TriggerAutomationTrajectoryEnd RunTrigger = "automation:trajectory_end"

@@ -12,7 +12,7 @@ import { AgentActivityPanel } from './AgentActivityPanel'
 import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 import { AgentBulkEditPanel } from './AgentBulkEditPanel'
 import { AgentLineageStripes } from './AgentLineageStripes'
-import { groupSystemAgents } from './agentRoster'
+import { groupSystemAgents, isBuiltinSystemAgent } from './agentRoster'
 import { api, getActiveWorkspace } from '@/api'
 import { useReferencedAgents } from '@/shared/hooks/useReferencedAgents'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
@@ -202,8 +202,16 @@ export function AgentsView({
     [agents, archivedAgents, showArchived],
   )
 
+  // The rows the roster lists: locked built-in system agents stay out of the
+  // workspace roster (only the customisations inheriting from them are shown).
+  // They remain selectable through deep links and as inheritance parents.
+  const rosterAgents = useMemo(
+    () => visibleAgents.filter((a) => !isBuiltinSystemAgent(a)),
+    [visibleAgents],
+  )
+
   // Keep a valid selection within the shown side: prefer the current one, else
-  // the default, else first.
+  // the default, else the first listed row.
   useEffect(() => {
     // A deep link may target an archived author outside either loaded roster.
     if (
@@ -213,11 +221,19 @@ export function AgentsView({
     )
       return
     if (selectedId && visibleAgents.some((a) => a.id === selectedId)) return
-    const defaultVisible = !!defaultAgentId && visibleAgents.some((a) => a.id === defaultAgentId)
-    const fallback = (defaultVisible ? defaultAgentId : null) ?? visibleAgents[0]?.id ?? null
+    const defaultVisible = !!defaultAgentId && rosterAgents.some((a) => a.id === defaultAgentId)
+    const fallback = (defaultVisible ? defaultAgentId : null) ?? rosterAgents[0]?.id ?? null
     if (fallback) select(fallback)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleAgents, defaultAgentId, selectedId, controlledId, agents, archivedAgents])
+  }, [
+    visibleAgents,
+    rosterAgents,
+    defaultAgentId,
+    selectedId,
+    controlledId,
+    agents,
+    archivedAgents,
+  ])
 
   const selected = [...archivedAgents, ...referencedAgents].find((a) => a.id === selectedId) ?? null
 
@@ -225,10 +241,9 @@ export function AgentsView({
   const sel = useMultiSelect()
   const byId = useMemo(() => indexAgents([...agents, ...archivedAgents]), [agents, archivedAgents])
   const regularAgents = useMemo(() => visibleAgents.filter((a) => !a.system), [visibleAgents])
-  // System section, split into services vs worker profiles and GROUPED: each
-  // locked built-in first, then the workspace customisations bound to its role
-  // (indented, with the lineage stripe), so "which row serves this role" reads
-  // top-down without a second column.
+  // System section: only the workspace customisations that inherit from a
+  // built-in, split into services vs worker profiles and kept in registry order
+  // so customisations of the same role stay adjacent.
   const systemGroups = useMemo(() => groupSystemAgents(visibleAgents), [visibleAgents])
   const orderedIds = useMemo(() => regularAgents.map((a) => a.id), [regularAgents])
   const bulkDelete = async () => {
@@ -549,7 +564,7 @@ export function AgentsView({
               {systemGroups.workers.map(rosterItem)}
             </>
           )}
-          {!showArchived && visibleAgents.length === 0 && (
+          {!showArchived && rosterAgents.length === 0 && (
             <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">{t('view.empty')}</p>
           )}
         </div>

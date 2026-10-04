@@ -42,6 +42,23 @@ func TestCreateAutomationPromptRequirements(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantError:  "promptTemplate is required",
 		},
+		{
+			// The token-spend trigger was removed (2026-10-04): it must be refused as
+			// an unknown kind, even with a valid target and prompt.
+			name: "retired token kind",
+			body: map[string]any{
+				"triggerKind": "token", "tokenThreshold": 100000,
+				"targetAgentId": agent.ID, "promptTemplate": "run",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantError:  "unknown triggerKind",
+		},
+		{
+			name:       "retired token kind without target",
+			body:       map[string]any{"triggerKind": "token", "promptTemplate": "run"},
+			wantStatus: http.StatusBadRequest,
+			wantError:  "unknown triggerKind",
+		},
 	}
 
 	for _, tc := range tests {

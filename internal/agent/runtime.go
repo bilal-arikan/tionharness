@@ -126,12 +126,6 @@ type Runtime struct {
 	// only the automation engine subscribes, so repair automations can react to
 	// the failing turn itself. Guarded by the same mutex.
 	failedTurnHooks []func(context.Context, TurnFinished)
-	// usageHooks fire (detached, non-blocking) after every provider call's tokens
-	// are recorded (see FireUsageRecorded), carrying the session's new cumulative
-	// total and this call's delta so a token-triggered automation can detect a
-	// threshold crossing. The workspace manager wires the AutomationEngine here.
-	// Guarded by the same mutex.
-	usageHooks []func(context.Context, UsageRecorded)
 	// flowRunHooks fire (detached) after a flow run finished and was graded
 	// (see FireFlowRunFinished); the automation engine's flow-kind rules
 	// subscribe. Guarded by the same mutex.
@@ -1412,39 +1406,6 @@ func (r *Runtime) FireTurnFinished(sessionID, agentID, output string) {
 			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
 			defer cancel()
 			fn(ctx, tf)
-		}()
-	}
-}
-
-// AddUsageHook appends a usage-recorded observer, invoked (detached) after each
-// provider call's tokens are folded into the session/day rollups. Wired by the
-// workspace manager so token-triggered automations can watch cumulative spend.
-func (r *Runtime) AddUsageHook(fn func(context.Context, UsageRecorded)) {
-	if fn == nil {
-		return
-	}
-	r.turnHooksMu.Lock()
-	defer r.turnHooksMu.Unlock()
-	r.usageHooks = append(r.usageHooks, fn)
-}
-
-// FireUsageRecorded dispatches a usage-recorded signal to every wired usage hook,
-// each on its own DETACHED goroutine so a hook never blocks the recording turn.
-// No-op when no hook is wired. Carries the session id, this call's token delta,
-// and the session's new cumulative total (0 for a detached call with no session);
-// the workspace-scope total is resolved by the engine from the DB.
-func (r *Runtime) FireUsageRecorded(u UsageRecorded) {
-	r.turnHooksMu.RLock()
-	hooks := r.usageHooks
-	r.turnHooksMu.RUnlock()
-	if len(hooks) == 0 {
-		return
-	}
-	for _, fn := range hooks {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
-			defer cancel()
-			fn(ctx, u)
 		}()
 	}
 }

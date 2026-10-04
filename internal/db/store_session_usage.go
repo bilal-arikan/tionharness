@@ -31,9 +31,9 @@ type SessionUsage struct {
 	ByModel       map[string]KindStat `json:"byModel,omitempty"`
 }
 
-// TotalTokens is a session's lifetime token count as a token automation counts
-// it: input+output+cacheRead+cacheWrite. Kept here so the "what counts as a
-// token" definition lives next to the rollup and matches WorkspaceTokensToday.
+// TotalTokens is a session's lifetime token count: input+output+cacheRead+
+// cacheWrite. Kept here so the "what counts as a token" definition lives next to
+// the rollup.
 func (u SessionUsage) TotalTokens() int64 {
 	return int64(u.InputTokens) + int64(u.OutputTokens) +
 		int64(u.CacheReadTokens) + int64(u.CacheWriteTokens)

@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
-import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Workflow, Zap } from 'lucide-react'
+import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Workflow } from 'lucide-react'
 import { api } from '@/api'
-import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_AUTOMATIONS, SIGNAL_SCHEDULES } from '@/app/eventToRefreshSignals'
 import type { Agent, Automation, AutomationTriggerKind, BoardColumnDef, Schedule } from '@/types'
 import { ArchiveViewToggle, PaneHeader, toast } from '@/shared/components'
-import { tokens } from '@/shared/lib/format'
 import { ArchivedAutomationsList } from './ArchivedAutomationsList'
 import { AutomationCard } from './AutomationCard'
 import { AutomationModal } from './AutomationModal'
@@ -17,9 +15,6 @@ import { COLUMN_ACCENT, DEFAULT_COLUMNS } from './automationMeta'
 import { ScheduleCard } from './ScheduleCard'
 import { ScheduleModal } from './ScheduleModal'
 import { CuratorPanel } from './CuratorPanel'
-
-// Backstop refresh for the lane-header metrics; visibility-gated.
-const LIVE_STATS_POLL_MS = 15000
 
 interface Props {
   agents: Agent[]
@@ -52,11 +47,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
 
   const [loadingSchedules, setLoadingSchedules] = useState(true)
   const [loadingAutomations, setLoadingAutomations] = useState(true)
-
-  // Live workspace metric shown in the token lane header so the user can see how
-  // close the workspace is to the next fire (and calibrate thresholds). null
-  // until first fetch. Polled while the screen is open.
-  const [liveStats, setLiveStats] = useState<{ tokensToday: number } | null>(null)
 
   const [editor, setEditor] = useState<Editor | null>(null)
   // Id of the schedule currently being run manually (disables its Run button).
@@ -101,29 +91,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   useEffect(() => reloadSchedules(), [reloadSchedules, schedulesTick])
 
   useEffect(() => reloadAutomations(), [reloadAutomations, automationsTick])
-
-  // Live workspace metrics for the lane headers: fetch on mount, then refresh on
-  // an interval while the screen is open AND this window is visible. Silent on
-  // failure — a stale/absent stat must never break the board.
-  const loadLiveStats = useCallback(
-    () =>
-      api
-        .getAutomationLiveStats()
-        .then(setLiveStats)
-        .catch(() => {}),
-    [],
-  )
-  useEffect(() => {
-    let alive = true
-    api
-      .getAutomationLiveStats()
-      .then((s) => alive && setLiveStats(s))
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [])
-  useVisiblePoll(loadLiveStats, LIVE_STATS_POLL_MS, [loadLiveStats])
 
   // When a deep-link target is present and loaded, scroll it into view and flash
   // a highlight ring that fades after a moment. Keyed on the target's presence,
@@ -312,14 +279,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       addLabel: t('lanes.board.add'),
       emptyLabel: t('lanes.board.empty'),
     },
-    token: {
-      title: t('lanes.token.title'),
-      icon: Zap,
-      accent: COLUMN_ACCENT.token,
-      description: t('lanes.token.description'),
-      addLabel: t('lanes.token.add'),
-      emptyLabel: t('lanes.token.empty'),
-    },
     phase: {
       title: t('lanes.phase.title'),
       icon: Waypoints,
@@ -346,17 +305,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     },
   }
 
-  // Live lane stat: shown only for the token lane when it actually holds a
-  // workspace-scoped rule — the metric that rule keys on. Session-scoped rules vary
-  // per session and have no single workspace-level value, so no stat for them.
-  const laneStat = (kind: AutomationTriggerKind): React.ReactNode => {
-    if (!liveStats) return undefined
-    if (kind === 'token' && byKind('token').some((a) => a.tokenScope === 'workspace')) {
-      return <span>{t('board.tokensToday', { count: tokens(liveStats.tokensToday) })}</span>
-    }
-    return undefined
-  }
-
   const renderAutomationLane = (kind: AutomationTriggerKind) => {
     const items = byKind(kind)
     const meta = laneMeta[kind]
@@ -368,7 +316,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         accent={meta.accent}
         count={items.length}
         description={meta.description}
-        stat={laneStat(kind)}
         onAdd={() => setEditor({ lane: kind, editing: null })}
         addLabel={meta.addLabel}
         loading={loadingAutomations}
@@ -380,7 +327,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
             key={a.id}
             automation={a}
             isBoardKind={kind === 'board'}
-            isTokenKind={kind === 'token'}
             agents={agents}
             columns={columns}
             onToggle={() => toggleAutomation(a)}
@@ -505,7 +451,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
 
         {renderAutomationLane('tag')}
         {renderAutomationLane('board')}
-        {renderAutomationLane('token')}
         {renderAutomationLane('phase')}
         {renderAutomationLane('trajectory_end')}
         {renderAutomationLane('flow')}

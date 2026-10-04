@@ -13,40 +13,37 @@ import (
 )
 
 // ErrEmptyAutomationPrompt guards deliverAutomationTurn against an empty rendered
-// prompt. The token/board fire paths already reject an empty prompt before
+// prompt. The tag/board fire paths already reject an empty prompt before
 // dispatch, so this is a defensive backstop rather than the primary check.
 var ErrEmptyAutomationPrompt = errors.New("automation prompt is empty")
 
 // SessionKindAutomation is the Kind of an automation's persistent maintenance
-// session — the token-triggered analog of a cron schedule's stable "schedule"
+// session — the automation analog of a cron schedule's stable "schedule"
 // thread. One such session per automation (keyed by its id via
 // GetOrCreateSourceSession), so consecutive fires continue the SAME conversation
-// instead of each spawning a fresh session. Its tokens are deliberately excluded
-// from session-scoped token-crossing detection (see OnUsageRecorded) so a
-// session-scoped rule cannot re-trigger itself on the spend of its own upkeep turn.
+// instead of each spawning a fresh session.
 const SessionKindAutomation = "automation"
 
 // SessionKindAutomationRun is the Kind of a ONE-SHOT session an automation spawns
-// when its session mode is NOT "continue" (fireToken/fireBoard/fireTag
-// dispatching through LaunchRun's spawn path instead of deliverAutomationTurn).
-// Distinct from SessionKindAutomation (the persistent maintenance thread) so the
-// self-amplification guard in OnUsageRecorded — which excludes ONLY the
-// maintenance session's own upkeep tokens from session-scoped crossings — does not
-// also swallow a fresh spawn's legitimate token crossing. Both kinds share the
-// sidebar's "Otomasyon" grouping (see frontend's kindChipKey) so a one-shot
-// automation fire is not miscategorized under "Spawn".
+// when its session mode is NOT "continue" (fireBoard/fireTag and the other fire
+// paths dispatching through LaunchRun's spawn path instead of
+// deliverAutomationTurn). Distinct from SessionKindAutomation (the persistent
+// maintenance thread). Both kinds share the sidebar's "Otomasyon" grouping (see
+// frontend's kindChipKey) so a one-shot automation fire is not miscategorized
+// under "Spawn".
 const SessionKindAutomationRun = "automation-run"
 
 // deliverAutomationTurn delivers an automation's rendered prompt into its
 // persistent per-automation session as a fresh, history-aware turn — the
-// continuity that makes a token automation behave like a cron schedule: each fire
-// picks up where the last one left off rather than starting from a blank session.
+// continuity that makes a continue-mode automation behave like a cron schedule:
+// each fire picks up where the last one left off rather than starting from a
+// blank session.
 //
 // It mirrors the scheduler's deliverPrompt lifecycle (per-session turn slot,
 // history-aware invoke, watchdog + single-shot idle-resume, reply/error record,
 // bounded auto-continue) but keys the session by (kind "automation", sourceId =
 // automation id) and runs the history-aware runSessionTurn so the agent sees the
-// whole prior thread. Only the session/agent driver uses this; flow-backed token
+// whole prior thread. Only the session/agent driver uses this; flow-backed
 // automations keep running through LaunchRun (a flow already accumulates its own
 // per-flow transcript). Returns the reused session's id (for delivery bookkeeping)
 // and any invoke error.

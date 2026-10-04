@@ -48,32 +48,7 @@ func TestValidateMaxIterations(t *testing.T) {
 	}
 }
 
-// TestValidateTokenThreshold locks the floor for a token automation's interval.
-// A tiny interval would cross on nearly every call and fire in a tight loop, so
-// the same validator guards both the REST handler and the agent tool.
-func TestValidateTokenThreshold(t *testing.T) {
-	for _, v := range []int{0, 1, MinTokenThreshold - 1, -100} {
-		err := ValidateTokenThreshold(v)
-		if err == nil {
-			t.Errorf("tokenThreshold=%d must be rejected (below floor %d)", v, MinTokenThreshold)
-			continue
-		}
-		if !errors.Is(err, ErrTokenThresholdRange) {
-			t.Errorf("tokenThreshold=%d must wrap ErrTokenThresholdRange, got %v", v, err)
-		}
-	}
-	for _, v := range []int{MinTokenThreshold, 100_000, 5_000_000} {
-		if err := ValidateTokenThreshold(v); err != nil {
-			t.Errorf("tokenThreshold=%d must be accepted, got %v", v, err)
-		}
-	}
-	// The message must name the floor so the user knows the minimum.
-	if err := ValidateTokenThreshold(1); !strings.Contains(err.Error(), strconv.Itoa(MinTokenThreshold)) {
-		t.Errorf("the floor message must state the floor, got %q", err)
-	}
-}
-
-// TestValidSessionMode pins the accepted mode set (empty resolves per kind).
+// TestValidSessionMode pins the accepted mode set (empty resolves to spawn).
 func TestValidSessionMode(t *testing.T) {
 	for _, m := range []string{"", SessionModeSpawn, SessionModeContinue} {
 		if !ValidSessionMode(m) {
@@ -87,18 +62,16 @@ func TestValidSessionMode(t *testing.T) {
 	}
 }
 
-// TestEffectiveSessionMode locks the per-kind default resolution: an explicit mode
-// always wins; empty falls back to continue for token (the maintenance
-// thread) and spawn for everything else — preserving pre-field behavior.
+// TestEffectiveSessionMode locks the default resolution: an explicit mode always
+// wins; empty falls back to spawn for every kind.
 func TestEffectiveSessionMode(t *testing.T) {
 	cases := []struct {
 		kind, stored, want string
 	}{
 		{TriggerTag, "", SessionModeSpawn},
 		{TriggerBoard, "", SessionModeSpawn},
-		{TriggerToken, "", SessionModeContinue},
 		{"", "", SessionModeSpawn},                             // legacy empty kind → tag → spawn
-		{TriggerToken, SessionModeSpawn, SessionModeSpawn},     // explicit overrides default
+		{TriggerBoard, SessionModeSpawn, SessionModeSpawn},     // explicit spawn kept
 		{TriggerTag, SessionModeContinue, SessionModeContinue}, // explicit overrides default
 	}
 	for _, c := range cases {
@@ -109,22 +82,8 @@ func TestEffectiveSessionMode(t *testing.T) {
 	}
 }
 
-// TestValidTokenScope pins the accepted scope set (empty defaults to session).
-func TestValidTokenScope(t *testing.T) {
-	for _, s := range []string{"", TokenScopeSession, TokenScopeWorkspace} {
-		if !ValidTokenScope(s) {
-			t.Errorf("scope %q must be valid", s)
-		}
-	}
-	for _, s := range []string{"daily", "agent", "bogus"} {
-		if ValidTokenScope(s) {
-			t.Errorf("scope %q must be invalid", s)
-		}
-	}
-}
-
 // TestValidateAutomationShape locks the create/update-shared contract. The bug it
-// closes: update_automation re-validated only the token threshold, so an agent
+// closes: update_automation re-validated only one range field, so an agent
 // could switch a rule's kind (or clear a field) into a state create rejects — a
 // tag rule with no triggerTag (silently never fires) or a spawn rule with no
 // target (fails only at fire time). Both write paths now run this.
@@ -138,10 +97,8 @@ func TestValidateAutomationShape(t *testing.T) {
 		{TriggerKind: TriggerBoard, BoardAction: BoardActionMove, BoardToState: "review", BoardMoveToState: "done"},
 		{TriggerKind: TriggerBoard, BoardAction: "", TargetAgentID: agent, PromptTemplate: "run"}, // "" == spawn
 		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, TargetAgentID: "AGT1", PromptTemplate: "run"},
-		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: agent, PromptTemplate: "run"},
-		{TriggerKind: TriggerToken, TokenScope: TokenScopeWorkspace, TokenThreshold: 100_000, TargetAgentID: "AGT1", PromptTemplate: "run"},
 		{TriggerKind: TriggerTag, TriggerTag: "loop", SessionMode: SessionModeContinue, TargetAgentID: agent, PromptTemplate: "run"},
-		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, SessionMode: SessionModeSpawn, TargetAgentID: agent, PromptTemplate: "run"},
+		{TriggerKind: TriggerBoard, SessionMode: SessionModeSpawn, TargetAgentID: agent, PromptTemplate: "run"},
 	}
 	for i, a := range valid {
 		if err := ValidateAutomationShape(a); err != nil {
@@ -159,15 +116,12 @@ func TestValidateAutomationShape(t *testing.T) {
 		{"board spawn without target", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn}},
 		{"board spawn without prompt", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, TargetAgentID: agent}},
 		{"tag without prompt", Automation{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: agent}},
-		{"token without prompt", Automation{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: agent}},
 		{"board move without destination", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionMove}},
 		{"board move with wildcard destination filter self-triggers", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionMove, BoardMoveToState: "done"}},
 		{"board move to matched destination self-triggers", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionMove, BoardToState: "done", BoardMoveToState: "done"}},
 		{"board bad action", Automation{TriggerKind: TriggerBoard, BoardAction: "bogus", TargetAgentID: agent}},
-		{"token without threshold", Automation{TriggerKind: TriggerToken, TargetAgentID: agent}},
-		{"token bad scope", Automation{TriggerKind: TriggerToken, TokenScope: "daily", TokenThreshold: 100_000, TargetAgentID: agent}},
-		{"token valid threshold but no target", Automation{TriggerKind: TriggerToken, TokenThreshold: 100_000}},
 		{"retired counter kind is unknown", Automation{TriggerKind: TriggerCounterLegacy, TargetAgentID: agent, PromptTemplate: "run"}},
+		{"retired token kind is unknown", Automation{TriggerKind: TriggerTokenLegacy, TargetAgentID: agent, PromptTemplate: "run"}},
 		{"bad sessionMode", Automation{TriggerKind: TriggerTag, TriggerTag: "loop", SessionMode: "reuse", TargetAgentID: agent}},
 	}
 	for _, tc := range rejected {
@@ -181,7 +135,6 @@ func TestValidateAutomationShapePromptRequirements(t *testing.T) {
 	tests := []Automation{
 		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, TargetAgentID: "AGT1"},
 		{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: "AGT1"},
-		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: "AGT1"},
 	}
 	for _, automation := range tests {
 		err := ValidateAutomationShape(automation)

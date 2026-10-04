@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LayoutGrid, Repeat, Sparkles, Workflow, X, Zap } from 'lucide-react'
+import { LayoutGrid, Repeat, Sparkles, Workflow, X } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -11,7 +11,6 @@ import type {
   BoardOp,
   FlowRuleStatus,
   SessionMode,
-  TokenScope,
   TrajEndStatus,
   TrajEvent,
 } from '@/types'
@@ -21,9 +20,7 @@ import {
   COLUMN_ACCENT,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_PROMPT,
-  DEFAULT_TOKEN_THRESHOLD,
   MAX_ITERATIONS_HARD_CAP,
-  MIN_TOKEN_THRESHOLD,
   STUCK_TEMPLATE,
 } from './automationMeta'
 import {
@@ -31,7 +28,6 @@ import {
   FlowTriggerFields,
   TrajectoryTriggerFields,
   PromptVarsField,
-  TokenTriggerFields,
 } from './AutomationFields'
 import { FieldError } from './FieldError'
 import { useFieldErrors } from './useFieldErrors'
@@ -67,7 +63,6 @@ export function AutomationModal({
 }: Props) {
   const { t } = useTranslation('schedules')
   const isBoardKind = kind === 'board'
-  const isTokenKind = kind === 'token'
   const isTrajKind = kind === 'phase' || kind === 'trajectory_end'
   const isFlowKind = kind === 'flow'
 
@@ -80,10 +75,6 @@ export function AutomationModal({
   const [boardExclusive, setBoardExclusive] = useState(editing?.boardExclusive ?? false)
   const [boardAction, setBoardAction] = useState<BoardAction>(editing?.boardAction ?? 'spawn')
   const [boardMoveToState, setBoardMoveToState] = useState(editing?.boardMoveToState ?? '')
-  const [tokenScope, setTokenScope] = useState<TokenScope>(editing?.tokenScope ?? 'session')
-  const [tokenThreshold, setTokenThreshold] = useState(
-    editing?.tokenThreshold ?? DEFAULT_TOKEN_THRESHOLD,
-  )
   const [trajPhase, setTrajPhase] = useState(editing?.trajPhase ?? '')
   const [trajRecipe, setTrajRecipe] = useState(editing?.trajRecipe ?? '')
   const [trajEvent, setTrajEvent] = useState<TrajEvent>(editing?.trajEvent ?? 'exit')
@@ -92,11 +83,8 @@ export function AutomationModal({
   const [flowStatus, setFlowStatus] = useState<FlowRuleStatus>(editing?.flowStatus ?? '')
   const [flowMaxGrade, setFlowMaxGrade] = useState(editing?.flowMaxGrade ?? 0)
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
-  // Session strategy: default matches the backend's per-kind default so a new rule
-  // starts where the user expects (token continues a thread; others spawn).
-  const [sessionMode, setSessionMode] = useState<SessionMode>(
-    editing?.sessionMode ?? (isTokenKind ? 'continue' : 'spawn'),
-  )
+  // Session strategy: default matches the backend's default (spawn a fresh session).
+  const [sessionMode, setSessionMode] = useState<SessionMode>(editing?.sessionMode ?? 'spawn')
   const [promptTemplate, setPromptTemplate] = useState(
     editing?.promptTemplate ?? DEFAULT_PROMPT[kind],
   )
@@ -116,10 +104,6 @@ export function AutomationModal({
   // the blocking priority; useFieldErrors gates each behind a submit attempt.
   const { markAttempted, firstError, errorFor } = useFieldErrors({
     tag: kind === 'tag' && !triggerTag.trim() ? t('validation.triggerTagRequired') : '',
-    token:
-      isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD
-        ? t('validation.tokenThreshold', { min: MIN_TOKEN_THRESHOLD })
-        : '',
     moveTarget:
       isBoardKind && boardAction === 'move' && !boardMoveToState
         ? t('validation.moveTargetRequired')
@@ -165,8 +149,6 @@ export function AutomationModal({
       boardExclusive,
       boardAction,
       boardMoveToState,
-      tokenScope,
-      tokenThreshold,
       trajPhase,
       trajRecipe,
       trajEvent,
@@ -207,15 +189,9 @@ export function AutomationModal({
       title={t(editing ? 'automationModal.editTitle' : 'automationModal.newTitle', {
         kind: kindLabel,
       })}
-      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : isFlowKind ? Workflow : Repeat}
+      icon={isBoardKind ? LayoutGrid : isFlowKind ? Workflow : Repeat}
       accent={
-        isBoardKind
-          ? COLUMN_ACCENT.board
-          : isTokenKind
-            ? COLUMN_ACCENT.token
-            : isFlowKind
-              ? COLUMN_ACCENT.flow
-              : COLUMN_ACCENT.tag
+        isBoardKind ? COLUMN_ACCENT.board : isFlowKind ? COLUMN_ACCENT.flow : COLUMN_ACCENT.tag
       }
       submitLabel={editing ? t('common.save') : t('automationModal.add')}
       onSubmit={submit}
@@ -279,15 +255,6 @@ export function AutomationModal({
               if (p.action !== undefined) setBoardAction(p.action)
             }}
           />
-        ) : isTokenKind ? (
-          <TokenTriggerFields
-            scope={tokenScope}
-            threshold={tokenThreshold}
-            onChange={(p) => {
-              if (p.scope !== undefined) setTokenScope(p.scope)
-              if (p.threshold !== undefined) setTokenThreshold(p.threshold)
-            }}
-          />
         ) : isFlowKind ? (
           <FlowTriggerFields
             agents={agents}
@@ -323,7 +290,6 @@ export function AutomationModal({
           />
         )}
         <FieldError message={errorFor('tag')} />
-        <FieldError message={errorFor('token')} />
       </Field>
 
       {isTargetlessAction ? (

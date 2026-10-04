@@ -12,7 +12,7 @@ import (
 // the behaviour the old switch had, kind by kind, and rejects an unknown kind.
 func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 	kinds := TriggerKinds()
-	for _, k := range []string{TriggerTag, TriggerBoard, TriggerToken} {
+	for _, k := range []string{TriggerTag, TriggerBoard} {
 		found := false
 		for _, r := range kinds {
 			if r == k {
@@ -38,8 +38,8 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 		{"board move must not self-trigger", func(a *Automation) {
 			a.TriggerKind, a.BoardAction, a.BoardMoveToState, a.BoardToState = TriggerBoard, BoardActionMove, "done", "done"
 		}, "must differ"},
-		{"token threshold floor", func(a *Automation) { a.TriggerKind, a.TokenScope, a.TokenThreshold = TriggerToken, "session", 10 }, "threshold"},
 		{"retired counter kind", func(a *Automation) { a.TriggerKind = TriggerCounterLegacy }, "unknown triggerKind"},
+		{"retired token kind", func(a *Automation) { a.TriggerKind = TriggerTokenLegacy }, "unknown triggerKind"},
 		{"unknown kind", func(a *Automation) { a.TriggerKind = "teleport"; a.TriggerTag = "x" }, "unknown triggerKind"},
 		// Rota (F2) kinds: registered like the others, with their own filters.
 		{"phase rule ok", func(a *Automation) { a.TriggerKind, a.TrajPhase = TriggerPhase, "code" }, ""},
