@@ -115,14 +115,6 @@
     "failedRuns": "Failed runs",
     "needsReview": "needs review"
   },
-  "workspaceSummary": {
-    "title": "Workspace summary",
-    "heading": "◱ Workspace summary",
-    "descriptionBefore": "the same text agents receive through",
-    "descriptionAfter": "and shown here verbatim",
-    "tokenEstimateHint": "Approximate token cost (characters/4)",
-    "meta": "~{{tokens}} tok · as of {{time}}"
-  },
   "trends": {
     "openedSessions": "Opened sessions",
     "flowRuns": "Flow runs",

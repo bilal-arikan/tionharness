@@ -535,21 +535,27 @@ push etmek **prompt cache'i her turda kırar** → [57](57-PROMPT-EPOCH.md) çal
 
 Kural: push edilen şey **küçük ve stabil** olmalı. Değişkenlik varsa pull'a düşür.
 
-## UI: aynı view, iki tüketici
+## UI: aynı view, tek yüzey
 
 Kritik tasarım tercihi: **ajanın gördüğü özetin birebir aynısı kullanıcıya da
 gösterilir.** Böylece view yanlış/eksikse kullanıcı fark eder — doğrulanabilirlik
 bedava gelir. Ayrı bir "insan özeti" üretilmez.
 
-### 1. `◱ Özet` düğmesi (her büyük ekranda)
+### 1. Tek yer: Harita (Explorer) yan paneli
 
-Chat header'ı, Akışlar ▸ Koşular, RunView ve Görevler (board) ekranlarında küçük
-bir **`◱ Özet`** butonu. Tıklayınca sağdan `ViewPanel` sheet'i açılır.
+Ham projeksiyon **yalnız Harita ekranında** görünür: seçilen düğümün `ViewPanel`'i
+sağ panelde açılır ([68](68-OZET-HARITASI.md)). 2026-10-04'e kadar Görevler
+panosunda, Panel ekranındaki eylem kuyruğu satırlarında ve workspace özeti
+bloğunda (`◱ Özet` düğmesi, `ViewButton`), Rota yan panelinde ve Oturum bilgisi
+panelinin katlanır "Özet" bölümünde de aynı DSL gösteriliyordu. Bu kopyalar
+kaldırıldı: projeksiyon bir **gezinme** aracıdır ve haritanın dışında her ekrana
+ikinci bir "ajan ne görüyor" bloğu eklemek ekranları kalabalıklaştırıyor, aynı
+veriyi beş yerden çekiyordu. `ViewButton` bileşeni ve `view.json` `button.*`
+anahtarları silindi; `/api/dashboard` yanıtından `summary` alanı çıkarıldı.
 
-> **Neden "Bağlam" değil:** chat header'ında **zaten bir "Bağlam" butonu var** ve
-> o tamamen başka bir şey yapar — sonraki turun **ham prompt'unu** önizler
-> (`onOpenContextPreview`). Aynı araç çubuğunda iki "Bağlam" düğmesi, biraz daha
-> soluk bir kelimeden çok daha kötü olurdu.
+> **Neden "Bağlam" değil:** chat header'ında **bir "Bağlam" butonu var** ve o
+> tamamen başka bir şey yapar — sonraki turun **ham prompt'unu** önizler
+> (`onOpenContextPreview`). Harita panelinin başlığı "Özet" olarak kalır.
 
 ### 2. `ViewPanel` (`frontend/src/features/view/`)
 
@@ -580,24 +586,25 @@ Sol navigasyonda **Panel** (`LayoutDashboard`, en üstte). Tek `GET /api/dashboa
 sayabilmek için indirmesi, bu katmanın önlemek için var olduğu maliyetin ta kendisi
 olurdu.
 
-Ekranın kurgusu tek bir fikre dayanır: üstteki metin bloğu **workspace
-projeksiyonunun ta kendisi** — `get_view{kind:"workspace"}` ile birebir aynı
-baytlar. Altındaki grafikler aynı gerçeklerin çizilmiş hâli, **ikinci bir bağımsız
-hesap değil**. İkisi çelişirse bu, kullanıcının görebildiği bir bug'dır.
+Ekranın kurgusu tek bir fikre dayanır: sayaçlar **workspace projeksiyonunun
+kendi ilk geçişinden** (`view.CountWorkspace`) gelir, grafikler aynı gerçeklerin
+çizilmiş hâlidir; **ikinci bir bağımsız hesap yoktur**. Ham projeksiyon metni
+2026-10-04'e kadar bu ekranın üstünde de gösteriliyordu; artık yalnız Harita yan
+panelinde görünür ve `/api/dashboard` yanıtı `summary` alanı taşımaz.
 
-> **Bu iddia iki kere yanlıştı; 2026-08-10'da kapatıldı ve teste bağlandı.**
+> **"Aynı kaynak" iddiası iki kere yanlıştı; 2026-08-10'da kapatıldı.**
 >
 > 1. **Baytlar aynı değildi.** `dashboard.go` projektörü `WithName`/`WithSources`
->    olmadan kuruyordu: Panel `WORKSPACE`, ViewPanel `WORKSPACE "TionHarnessRepo"`
->    basıyordu. Artık ikisi de `s.viewProjector(r)` üzerinden geçiyor.
+>    olmadan kuruyordu. Artık her yüzey `s.viewProjector(r)` üzerinden geçer.
 > 2. **Stat kutuları ikinci bir sayımdı.** `dashboardCounters` aynı
->    oturum/kart/koşu dilimlerini kendi döngüsüyle sayıyordu — projeksiyonu
->    render eden çağrının hemen yanında. Silindi; sayılar `Projector.Workspace`
->    ile **tek yüklemeden** gelir (metin + sayaçlar aynı `in`, aynı `Now`).
+>    oturum/kart/koşu dilimlerini kendi döngüsüyle sayıyordu. Silindi; sayılar
+>    `Projector.Workspace` ile **tek yüklemeden** gelir.
 >
-> Regresyon: `api/dashboard_test.go` →
-> `TestDashboardSummaryMatchesWorkspaceView` (canlı saat olan `asOf` hariç
-> bayt-eşitlik) + `TestDashboardCountersComeFromTheProjection`.
+> Regresyon: `api/dashboard_test.go` → `TestDashboardCountersComeFromTheProjection`.
+> Rota kaydı: `api/routes_test.go` → `TestRouteTableServesFrontendAPIPaths`
+> (2026-10-04: akış rotaları yeniden yazılırken `/api/views/*` ve `/api/dashboard*`
+> kayıtları `registerFlowRoutes` ile birlikte silinmişti; istekler SPA HTML'ine
+> düşüyordu. Kayıtlar `registerViewRoutes`'a, `views.go` içine taşındı).
 
 | Bölüm | İçerik |
 |-------|--------|
@@ -664,7 +671,7 @@ sürece geri açılmaz.
 ### API
 
 ```
-GET /api/dashboard?days=14                          → sayaçlar + seriler + workspace projeksiyonu
+GET /api/dashboard?days=14                          → sayaçlar + seriler (projeksiyon metni yok)
 GET /api/dashboard/commit-activity?weeks=52         → günlük commit sayıları (git log) + isGitRepo
 GET /api/views/{kind}/{id}?level=card   → View (JSON zarf, Body ham DSL)
 GET /api/views/workspace?level=tiny

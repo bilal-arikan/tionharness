@@ -5,8 +5,6 @@
 // applies to agents (_Docs/66) — a dashboard that downloads the whole workspace
 // to count it defeats its own purpose.
 
-import type { ViewHandle } from './view'
-
 export interface DaySeriesPoint {
   day: string // YYYY-MM-DD
   value: number
@@ -42,16 +40,6 @@ export interface DashboardCounters {
   runsRunning: number
   runsWaiting: number
   runsFailed: number
-}
-
-// The workspace projection, byte-identical to what an agent receives from
-// get_view{kind:"workspace"}.
-interface DashboardSummary {
-  text: string
-  tokens: number
-  elided: number
-  elidedUnit?: string
-  handles: ViewHandle[] | null
 }
 
 // A daily USD series — the float sibling of DaySeriesPoint.
@@ -114,7 +102,6 @@ export interface OutcomeBlock {
 
 export interface Dashboard {
   asOf: string
-  summary: DashboardSummary
   counters: DashboardCounters
   sessionsByDay: DaySeriesPoint[]
   runsByDay: DaySeriesPoint[]

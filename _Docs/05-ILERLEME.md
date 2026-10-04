@@ -9,6 +9,36 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Harita rotaları geri bağlandı, projeksiyon kopyaları kaldırıldı (2026-10-04)
+
+- Hata: `f9ab586b` akış rotalarını `flows.go`'ya taşırken eski `registerFlowRoutes`
+  içindeki `GET /api/views/{graph,{kind}/{id},…/children,…/neighborhood}` ve
+  `GET /api/dashboard{,/commit-activity}` kayıtları silinmişti; istekler SPA
+  catch-all'ına düşüp HTML dönüyordu, Harita ve Panel ekranları açılmıyordu.
+  Kayıtlar `internal/api/views.go` → `registerViewRoutes`'a alındı; `Routes()`
+  mux kurulumu `routeTable()` olarak ayrıldı ve `routes_test.go` frontend'in
+  çağırdığı `/api` yollarının API kalıbına çözüldüğünü sabitler.
+- Ham projeksiyon artık yalnız Harita yan panelinde: Görevler panosu başlığındaki
+  `◱ Özet`, Panel eylem kuyruğu satırlarındaki `◱`, Panel'deki "Çalışma alanı
+  özeti" bloğu, Rota yan panelindeki `ViewPanel` ve Oturum bilgisi panelinin
+  katlanır "Özet" bölümü kaldırıldı. `ViewButton.tsx`, `view.json` `button.*`,
+  `dashboard.json` `workspaceSummary.*`, `sessions.json` `detail.summary` silindi;
+  Rota yan paneli seçimi kapatan bir `✕` (`panel.clearSelection`) ve seçimdeyken de
+  etkinlik şeridini gösterir. `/api/dashboard` yanıtından `summary` alanı çıkarıldı
+  (`TestDashboardSummaryMatchesWorkspaceView` kaldırıldı). Doküman: [66](66-VIEW-KATMANI.md).
+- UI taramasında bulunan ek hata: `dashboard` görünümü `url.ts` `VIEWS` tablosunda
+  yoktu; `#/w/WS/dashboard` derin bağlantısı ve sayfa yenileme sohbete düşüyordu.
+  Eklendi; `url.test.ts` artık `VIEW_METADATA`'daki her görünümün derin bağlantısını
+  sabitler.
+- İkinci ek hata: `api.viewProjector` not deposunu (`ViewSources.Notes`) geçmiyordu;
+  harita boş bir Notlar kovası çiziyor, `GET /api/views/note/{id}` "notes store
+  unavailable" dönüyordu (ajanın `get_view`'ı notları listeliyordu). `rt.Notes()`
+  bağlandı; `views_notes_test.go` gerçek rota tablosu üzerinden not projeksiyonunu ve
+  harita düğümünü sabitler. Bu test üçüncü hatayı da açığa çıkardı: `structuralCache.children`
+  `note` türünü tanımıyordu, tek bir not olan workspace'te tüm harita yürüyüşü
+  "children unsupported" ile 500 dönüyordu; artık `noteChildren` (düzeltme ardılı +
+  wikilink kenarları) üzerinden çözülür.
+
 ## Workspace farkındalığı ve hafıza notları (2026-10-04)
 
 - Yeni `internal/notes`: Markdown + frontmatter not deposu (`store/notes/`), erişim

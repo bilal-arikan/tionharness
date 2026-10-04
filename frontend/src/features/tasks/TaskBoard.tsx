@@ -17,7 +17,6 @@ import type {
 import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
 import { fileURL } from '@/shared/lib/attachments'
 import { pickCardImage } from './cardImage'
-import { ViewButton } from '@/features/view/ViewButton'
 import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
 import {
@@ -631,9 +630,6 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
           title={showArchived ? t('board.archiveTitle') : t('board.title')}
           right={
             <>
-              {/* The board's projection — the same bytes an agent gets from
-                  get_view{kind:'board'}: column histogram + the signals. */}
-              <ViewButton target={{ kind: 'board', id: 'board' }} />
               <ArchiveViewToggle
                 testId="task-board-archived-toggle"
                 active={showArchived}

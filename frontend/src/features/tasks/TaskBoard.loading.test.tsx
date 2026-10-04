@@ -10,7 +10,6 @@ const api = vi.hoisted(() => ({
   getWorkspaceSettings: vi.fn(),
 }))
 vi.mock('@/api', () => ({ api, getActiveWorkspace: () => 'WS5' }))
-vi.mock('@/features/view/ViewButton', () => ({ ViewButton: () => null }))
 vi.mock('./TaskFormModal', () => ({ TaskFormModal: () => null }))
 vi.mock('./BoardColumnEditor', () => ({ BoardColumnEditor: () => null }))
 let root: Root

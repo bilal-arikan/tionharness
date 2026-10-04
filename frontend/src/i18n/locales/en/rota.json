@@ -140,7 +140,8 @@
     "openInChat": "Open in Chat",
     "rootSessionTitle": "Root session connected to this lane: {{session}}",
     "rootSession": "Root session",
-    "openTrajectory": "Open trajectory"
+    "openTrajectory": "Open trajectory",
+    "clearSelection": "Clear selection"
   },
   "canvas": {
     "ariaLabel": "Rota timeline",

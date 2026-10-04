@@ -371,7 +371,6 @@
     "sizeValue_one": "{{size}} · {{count}} dosya",
     "sizeValue_other": "{{size}} · {{count}} dosya",
     "started": "Başlama",
-    "summary": "Özet",
     "tags": "Etiketler",
     "tagsPlaceholder": "Etiket ekle (otomasyon tetikleyicisi olabilir)…",
     "title": "Oturum bilgisi",

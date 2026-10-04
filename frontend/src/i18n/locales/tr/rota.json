@@ -140,7 +140,8 @@
     "openInChat": "Sohbette aç",
     "rootSessionTitle": "Bu şeridin bağlı olduğu kök oturum: {{session}}",
     "rootSession": "Asıl oturum",
-    "openTrajectory": "Rotayı aç"
+    "openTrajectory": "Rotayı aç",
+    "clearSelection": "Seçimi kaldır"
   },
   "canvas": {
     "ariaLabel": "Rota zaman çizelgesi",

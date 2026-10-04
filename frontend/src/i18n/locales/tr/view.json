@@ -1,8 +1,5 @@
 {
   "title": "Özet",
-  "button": {
-    "hint": "Bu ekranın ajana verilen kompakt özeti (get_view ile aynı çıktı)"
-  },
   "back": "Geri",
   "close": "Kapat",
   "refresh": "Yenile",

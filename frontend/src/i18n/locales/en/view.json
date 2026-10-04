@@ -1,8 +1,5 @@
 {
   "title": "Summary",
-  "button": {
-    "hint": "The compact summary given to the agent for this screen (the same output as get_view)"
-  },
   "back": "Back",
   "close": "Close",
   "refresh": "Refresh",

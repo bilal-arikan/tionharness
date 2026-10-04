@@ -1,7 +1,7 @@
 package api
 
 // handleDashboard is the workspace overview screen's single data call: the
-// counters, the chart series and the workspace PROJECTION text, in one response.
+// counters and the chart series, in one response.
 //
 //	GET /api/dashboard?days=14
 //
@@ -10,10 +10,11 @@ package api
 //   - The series are aggregated HERE, not in the browser. The client would
 //     otherwise download every session, task and flow run just to count them —
 //     which is the exact cost the projection layer exists to avoid (_Docs/66).
-//   - The `summary` field is the workspace view rendered by internal/view, i.e.
-//     byte-identical to what an agent gets from get_view{kind:"workspace"}. The
-//     dashboard shows the agent's own summary rather than a prettier parallel
-//     one, so a wrong projection is visible to the user.
+//   - The counters are the workspace projection's own first pass
+//     (view.CountWorkspace), not a second tally: the stat tiles and the summary
+//     an agent reads through get_view{kind:"workspace"} can therefore never
+//     disagree. The projection text itself is no longer part of this payload —
+//     the Explorer screen is the one place the UI shows it (2026-10-04).
 
 import (
 	"cmp"
@@ -79,28 +80,18 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	cost, costByDay := dashboardCost(ctx, wsp.DB, days, now)
 
-	// The workspace projection: the same text an agent reads, from the same
-	// fully-wired projector every other surface uses (so the header carries the
-	// workspace name here too, and this block stays byte-identical to
-	// GET /api/views/workspace). The counters come out of the SAME load — the
-	// stat tiles and the summary text can therefore never disagree. A failure is
-	// reported rather than swallowed: a dashboard with a blank summary looks like
-	// an idle workspace.
-	v, counts, err := s.viewProjector(r).Workspace(ctx, view.LevelCard)
+	// The counters come from the same fully-wired projector every other surface
+	// uses (tools.ViewProjector), from the pass that renders the workspace card
+	// for get_view. A failure is reported rather than swallowed: a dashboard with
+	// zeroed tiles looks like an idle workspace.
+	_, counts, err := s.viewProjector(r).Workspace(ctx, view.LevelCard)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"asOf": now,
-		"summary": map[string]any{
-			"text":       v.Text(),
-			"tokens":     v.Tokens,
-			"elided":     v.Elided,
-			"elidedUnit": v.ElidedUnit,
-			"handles":    v.Handles,
-		},
+		"asOf":           now,
 		"counters":       counts,
 		"sessionsByDay":  sessionsByDay(sessions, days, now),
 		"runsByDay":      runsByDay(runs, days, now),

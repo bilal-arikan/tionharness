@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -32,10 +31,9 @@ func dashboardFixture(t *testing.T) *db.DB {
 	return database
 }
 
-// TestDashboardReturnsSeriesAndProjection pins the shape the overview screen
-// depends on: counters, a full-width day series, categorical breakdowns and the
-// workspace projection text.
-func TestDashboardReturnsSeriesAndProjection(t *testing.T) {
+// TestDashboardReturnsSeries pins the shape the overview screen depends on:
+// counters, a full-width day series and the categorical breakdowns.
+func TestDashboardReturnsSeries(t *testing.T) {
 	database := dashboardFixture(t)
 
 	rec := serveFlowRuns((&Server{}).handleDashboard, database, "/api/dashboard?days=7", nil)
@@ -59,15 +57,6 @@ func TestDashboardReturnsSeriesAndProjection(t *testing.T) {
 	series, _ := got["sessionsByDay"].([]any)
 	if len(series) != 7 {
 		t.Errorf("sessionsByDay has %d buckets, want 7 (quiet days must still appear)", len(series))
-	}
-
-	summary, _ := got["summary"].(map[string]any)
-	text, _ := summary["text"].(string)
-	if !strings.Contains(text, "WORKSPACE") {
-		t.Errorf("workspace projection missing from summary:\n%s", text)
-	}
-	if n, _ := summary["tokens"].(float64); n <= 0 {
-		t.Errorf("summary token estimate not reported: %v", summary["tokens"])
 	}
 }
 
@@ -126,49 +115,6 @@ func TestBucketByDayIgnoresOutOfWindowStamps(t *testing.T) {
 	}
 	if points[len(points)-1].Value != 1 {
 		t.Errorf("today's bucket = %d, want 1", points[len(points)-1].Value)
-	}
-}
-
-// TestDashboardSummaryMatchesWorkspaceView pins the claim _Docs/66 makes about
-// the Panel screen: its summary block is not a prettier parallel rendering, it
-// is byte-for-byte the workspace projection an agent reads. The two used to be
-// built by differently-configured projectors — one carried the workspace name,
-// the other did not — so the documented invariant was quietly false.
-func TestDashboardSummaryMatchesWorkspaceView(t *testing.T) {
-	database := dashboardFixture(t)
-	srv := &Server{}
-
-	dash := serveFlowRuns(srv.handleDashboard, database, "/api/dashboard?days=7", nil)
-	if dash.Code != http.StatusOK {
-		t.Fatalf("dashboard status %d: %s", dash.Code, dash.Body.String())
-	}
-	view := serveFlowRuns(srv.handleGetView, database,
-		"/api/views/workspace/workspace?level=card",
-		map[string]string{"kind": "workspace", "id": "workspace"})
-	if view.Code != http.StatusOK {
-		t.Fatalf("view status %d: %s", view.Code, view.Body.String())
-	}
-
-	summary, _ := decodeView(t, dash.Body.Bytes())["summary"].(map[string]any)
-	if summary == nil {
-		t.Fatalf("no summary in %s", dash.Body.String())
-	}
-	got, _ := summary["text"].(string)
-	want, _ := decodeView(t, view.Body.Bytes())["text"].(string)
-
-	// asOf is a live clock and legitimately differs between the two calls; every
-	// other byte must match.
-	strip := func(s string) string {
-		if i := strings.Index(s, " · asOf "); i >= 0 {
-			if nl := strings.Index(s[i:], "\n"); nl >= 0 {
-				return s[:i] + s[i+nl:]
-			}
-			return s[:i]
-		}
-		return s
-	}
-	if strip(got) != strip(want) {
-		t.Errorf("dashboard summary and get_view{workspace} drifted apart:\n dashboard: %q\n get_view:  %q", got, want)
 	}
 }
 

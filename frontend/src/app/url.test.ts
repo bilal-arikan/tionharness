@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildRoute, parseRoute, routeIdForView } from './url'
+import { VIEW_METADATA } from './viewMetadata'
 
 describe('navigation reshuffle compatibility', () => {
   it('routes legacy logs bookmarks to Workspace logs', () => {
@@ -75,5 +76,16 @@ describe('explorer focus deep-link contract', () => {
         explorerNode: null,
       }),
     ).toBeNull()
+  })
+})
+
+describe('view table coverage', () => {
+  // Every screen the nav rail can open must survive a reload / a pasted link.
+  // 'dashboard' was reachable from the rail but absent from the URL table, so
+  // #/w/WS5/dashboard silently landed on chat (2026-10-04).
+  it('parses a deep link for every navigable view', () => {
+    for (const { key } of VIEW_METADATA) {
+      expect(parseRoute(`#/w/WS5/${key}`).view, key).toBe(key)
+    }
   })
 })

@@ -383,6 +383,24 @@ func (s *Server) SetBackupManager(b *backup.Manager) {
 // split into per-domain helpers (each lives beside its handlers) so the route
 // table stays readable as the surface grows.
 func (s *Server) Routes() http.Handler {
+	mux := s.routeTable()
+
+	// withRecover sits inside withRequestLog so a recovered panic's 500 is also
+	// reflected in the access log, and outside withWorkspace so a panic in any
+	// workspace-scoped handler is caught. apiAuth sits inside withCORS (a
+	// preflight must still answer without a token) but outside everything else,
+	// so an unauthenticated request never reaches a handler or a workspace. It is
+	// a no-op unless a token is configured (auth.go).
+	return withCORS(s.withRequestLog(apiAuth(s.authToken,
+		s.withRecover(s.withWorkspace(mux)))))
+}
+
+// routeTable builds the bare mux: every API route plus the SPA catch-all, without
+// the middleware chain. Separate from Routes so routes_test.go can ask the mux
+// which pattern a frontend path resolves to — a route that silently falls
+// through to the SPA (HTML served as JSON) is exactly the regression that
+// middleware would hide behind a 200.
+func (s *Server) routeTable() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", s.handleHealth)
@@ -402,6 +420,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerHookRoutes(mux)
 	s.registerNoteRoutes(mux)
 	s.registerFlowRoutes(mux)
+	s.registerViewRoutes(mux)
 	s.registerExecutionRoutes(mux)
 	s.registerArtifactRoutes(mux)
 	s.registerSkillRoutes(mux)
@@ -418,15 +437,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
 	s.registerWebRoutes(mux)
-
-	// withRecover sits inside withRequestLog so a recovered panic's 500 is also
-	// reflected in the access log, and outside withWorkspace so a panic in any
-	// workspace-scoped handler is caught. apiAuth sits inside withCORS (a
-	// preflight must still answer without a token) but outside everything else,
-	// so an unauthenticated request never reaches a handler or a workspace. It is
-	// a no-op unless a token is configured (auth.go).
-	return withCORS(s.withRequestLog(apiAuth(s.authToken,
-		s.withRecover(s.withWorkspace(mux)))))
+	return mux
 }
 
 // registerWebRoutes mounts the embedded frontend SPA at the catch-all "/" route.

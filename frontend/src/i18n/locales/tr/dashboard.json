@@ -115,14 +115,6 @@
     "failedRuns": "Başarısız koşu",
     "needsReview": "incelenmeli"
   },
-  "workspaceSummary": {
-    "title": "Çalışma alanı özeti",
-    "heading": "◱ Çalışma alanı özeti",
-    "descriptionBefore": "ajanların",
-    "descriptionAfter": "ile aldığı metnin aynısı",
-    "tokenEstimateHint": "Yaklaşık token maliyeti (karakter/4)",
-    "meta": "~{{tokens}} tok · zamanı {{time}}"
-  },
   "trends": {
     "openedSessions": "Açılan oturum",
     "flowRuns": "Akış koşusu",

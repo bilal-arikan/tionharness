@@ -1,19 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Trash2,
-  Archive,
-  ArchiveRestore,
-  Bug,
-  ChevronDown,
-  ChevronRight,
-  Pin,
-  PinOff,
-} from 'lucide-react'
+import { Trash2, Archive, ArchiveRestore, Bug, Pin, PinOff } from 'lucide-react'
 import { api } from '@/api'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { SessionInfo, SessionUsageDetail } from '@/types'
-import { ViewPanel } from '@/features/view/ViewPanel'
 import { Badge, KeyValueRow as Row, TagEditor } from '@/shared/components'
 import { ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
@@ -108,18 +98,6 @@ export function SessionDetailPanel({
   // Manual-refresh nonce: bumped by the refresh button (and after a title
   // regeneration) to re-fetch without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
-  // "Özet" (session projection) collapse — persisted, defaults open. The DSL block
-  // can get tall, so let it fold away like the coordinator section used to.
-  const [summaryOpen, setSummaryOpen] = useState(
-    () => localStorage.getItem('tionharness.sessionSummaryOpen') !== '0',
-  )
-  const toggleSummary = () =>
-    setSummaryOpen((v) => {
-      const next = !v
-      localStorage.setItem('tionharness.sessionSummaryOpen', next ? '1' : '0')
-      return next
-    })
-
   // Every refetch trigger re-arms the spinner; the fetch lands via callbacks.
   useKeyedReset(`${sessionId}|${refreshKey}|${localRefresh}`, () => setLoading(true))
   useEffect(() => {
@@ -314,12 +292,6 @@ export function SessionDetailPanel({
 
   // Context window figures (/context-style): used vs. the compaction threshold,
   // with the leftover shown as free space.
-  // Stable projection target: an inline object literal would change identity on
-  // every render, and the embedded ViewPanel refetches get_view whenever `target`
-  // changes — so while the 1s timer/3s poll re-renders this panel, the projection
-  // would refetch every tick. Memoize on sessionId so it only reloads on switch.
-  const summaryTarget = useMemo(() => ({ kind: 'session' as const, id: sessionId }), [sessionId])
-
   const ctxWindow = info ? info.contextWindow || info.contextTokens || 1 : 1
   const ctxUsed = info ? info.contextTokens : 0
   const ctxFree = Math.max(0, ctxWindow - ctxUsed)
@@ -421,29 +393,6 @@ export function SessionDetailPanel({
                 }}
                 placeholder={t('detail.tagsPlaceholder')}
               />
-            </section>
-
-            {/* Session projection ("Özet"): the same compact get_view output an
-              agent receives. Moved here from the chat header's old ◱ Özet drawer;
-              coordination now has its own "Coord" side sheet in the header. */}
-            <section>
-              <button
-                onClick={toggleSummary}
-                aria-expanded={summaryOpen}
-                className="mb-2 flex w-full items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:text-[var(--color-accent)] hover:opacity-100"
-              >
-                {summaryOpen ? (
-                  <ChevronDown size={12} className="shrink-0" />
-                ) : (
-                  <ChevronRight size={12} className="shrink-0" />
-                )}
-                <span>{t('detail.summary')}</span>
-              </button>
-              {summaryOpen && (
-                <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                  <ViewPanel embedded target={summaryTarget} />
-                </div>
-              )}
             </section>
 
             {/* Meta */}

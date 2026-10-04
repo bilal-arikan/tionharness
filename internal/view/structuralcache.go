@@ -180,6 +180,12 @@ func (c *structuralCache) children(ctx context.Context, ref Ref) ([]Handle, erro
 			return nil, err
 		}
 		return budgetChildren(in), nil
+	case KindNote:
+		// The correction successor + wikilinks: the same edges Children follows,
+		// so the map shows the note graph an agent's expand walks. The walker's
+		// seen-set absorbs link cycles. Missing here, the whole-map walk failed
+		// with "children unsupported" as soon as the workspace had one note.
+		return c.p.noteChildren(ref.ID)
 	case KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		return nil, nil

@@ -1,12 +1,10 @@
 import { AlertTriangle, CalendarClock, GitBranch, KanbanSquare, MessageSquare } from 'lucide-react'
-import type { ActionItem, ViewRef } from '@/types'
-import { ViewButton } from '@/features/view/ViewButton'
+import type { ActionItem } from '@/types'
 import { useTranslation } from 'react-i18next'
 
-// ActionQueue is the "what needs a human" list — the clickable sibling of the
-// workspace projection's signal lines. Each row routes to the session, run, card
-// or schedule it names, so the overview is a starting point for action, not just
-// a readout. Danger rows (failed/stuck) sort ahead of warn rows (waiting/aging);
+// ActionQueue is the "what needs a human" list. Each row routes to the session,
+// run, card or schedule it names, so the overview is a starting point for
+// action, not just a readout. Danger rows (failed/stuck) sort ahead of warn rows (waiting/aging);
 // the backend already ordered them, oldest-first within a severity.
 //
 // onNavigate receives the row's kind + id; the parent maps that to a screen. An
@@ -18,24 +16,6 @@ const KIND_ICON = {
   card: KanbanSquare,
   schedule: CalendarClock,
 } as const
-
-// refFor maps an action to the projection it drills into (get_view). Every kind
-// now resolves: a card points at the single-card board sub-view, a schedule at
-// the schedule projection. Returns null only for a future kind with no view.
-function refFor(a: ActionItem): ViewRef | null {
-  switch (a.kind) {
-    case 'session':
-      return { kind: 'session', id: a.id }
-    case 'run':
-      return { kind: 'flowrun', id: a.id }
-    case 'card':
-      return { kind: 'board', id: 'board', sub: a.id }
-    case 'schedule':
-      return { kind: 'schedule', id: a.id }
-    default:
-      return null
-  }
-}
 
 export function ActionQueue({
   items: rawItems,
@@ -72,11 +52,10 @@ export function ActionQueue({
           {items.map((a, i) => {
             const Icon = KIND_ICON[a.kind] ?? AlertTriangle
             const danger = a.severity === 'danger'
-            const ref = refFor(a)
             return (
               <li
                 key={`${a.kind}-${a.id}-${i}`}
-                className="flex items-center gap-1 rounded-md border border-transparent pr-1 transition hover:border-[var(--color-border)] hover:bg-[var(--color-bg)]"
+                className="flex items-center rounded-md border border-transparent transition hover:border-[var(--color-border)] hover:bg-[var(--color-bg)]"
               >
                 {/* Label click → the full screen that owns the entity. */}
                 <button
@@ -115,9 +94,6 @@ export function ActionQueue({
                     </span>
                   )}
                 </button>
-                {/* ◱ → peek the agent-identical projection in a side drawer,
-                    without leaving the dashboard. */}
-                {ref && <ViewButton target={ref} compact className="!px-1.5" />}
               </li>
             )
           })}

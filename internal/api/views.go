@@ -29,6 +29,10 @@ func (s *Server) viewProjector(r *http.Request) *view.Projector {
 		src.Skills = rt.Skills()
 		// Explorer live layer: which sessions are executing right now.
 		src.Running = s.liveSessions(ws(r)).RunningSet()
+		// Memory notes: the Notlar category and the note leaves. Without this the
+		// map drew an empty bucket and GET /api/views/note/{id} answered "notes
+		// store unavailable" while the agent's own get_view listed the notes.
+		src.Notes = rt.Notes()
 	}
 	return tools.ViewProjector(ws(r).DB, ws(r).Name, src)
 }
@@ -174,4 +178,27 @@ func (s *Server) handleGetViewGraph(w http.ResponseWriter, r *http.Request) {
 		graph.Meta = map[string]view.GraphMeta{}
 	}
 	writeJSON(w, http.StatusOK, graph)
+}
+
+// registerViewRoutes mounts the projection layer and the dashboard that is built
+// on it. These used to be registered inside registerFlowRoutes; when the flows
+// surface was rebuilt (2026-10-03) that function was replaced wholesale and the
+// view + dashboard lines went with it, so GET /api/views/graph fell through to the
+// SPA catch-all and the Explorer screen loaded HTML as JSON. They live here, next
+// to their handlers, and routes_test.go pins every /api path the frontend calls.
+func (s *Server) registerViewRoutes(mux *http.ServeMux) {
+	// Whole-workspace structural map for the Explorer network (_Docs/68).
+	// Registered before the {kind}/{id} pattern only for readability; "graph" is
+	// a literal segment and never collides with a two-segment ref.
+	mux.HandleFunc("GET /api/views/graph", s.handleGetViewGraph)
+	// One projection: the same bytes the agent gets from get_view (_Docs/66).
+	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
+	// Explorer map drill-down: the structural child handles of a node.
+	mux.HandleFunc("GET /api/views/{kind}/{id}/children", s.handleGetViewChildren)
+	// Explorer focus graph: complete direct parents + children, uncapped.
+	mux.HandleFunc("GET /api/views/{kind}/{id}/neighborhood", s.handleGetViewNeighborhood)
+
+	// Workspace overview: counters + chart series in one call (_Docs/66).
+	mux.HandleFunc("GET /api/dashboard", s.handleDashboard)
+	mux.HandleFunc("GET /api/dashboard/commit-activity", s.handleDashboardCommitActivity)
 }

@@ -371,7 +371,6 @@
     "sizeValue_one": "{{size}} · {{count}} file",
     "sizeValue_other": "{{size}} · {{count}} files",
     "started": "Started",
-    "summary": "Summary",
     "tags": "Tags",
     "tagsPlaceholder": "Add a tag (it may trigger an automation)…",
     "title": "Session information",

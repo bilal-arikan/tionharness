@@ -15,6 +15,7 @@
 import type { View } from './NavRail'
 
 const VIEWS: View[] = [
+  'dashboard',
   'chat',
   'agents',
   'rota',

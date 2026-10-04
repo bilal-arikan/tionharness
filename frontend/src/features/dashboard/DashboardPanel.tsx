@@ -10,11 +10,8 @@ import { ActionQueue } from './ActionQueue'
 import { OutcomeSummary } from './OutcomeSummary'
 import { CostRankBars, DayBars, StackedBar, RankBars } from './charts'
 import { fmtUsd } from './chartFormat'
-import { ViewButton } from '@/features/view/ViewButton'
-import { formatTime } from '@/shared/lib/intl'
 import { CommitHeatmap } from './CommitHeatmap'
 import { useTranslation } from 'react-i18next'
-import { count } from '@/shared/lib/format'
 
 const RANGES = [7, 14, 30, 90]
 
@@ -28,12 +25,10 @@ export interface DashboardNav {
 // DashboardPanel is the workspace overview: how much is running, how much is
 // stuck, and the trend behind those numbers.
 //
-// The screen is built around ONE idea: the text block at the top is the
-// workspace PROJECTION — byte-identical to what an agent gets from
-// get_view{kind:"workspace"} (_Docs/66). The charts below it are the same facts
-// drawn; they are not a second, independently-computed truth. If the summary and
-// a chart ever disagree, that is a bug the user can see, which is exactly why
-// the raw projection is shown verbatim instead of being prettified away.
+// The counters come out of the same projector pass an agent's
+// get_view{kind:"workspace"} runs (_Docs/66), so the tiles and the agent's own
+// summary can never disagree. The raw projection text itself is shown only on
+// the Explorer screen; this screen draws the facts.
 export function DashboardPanel({
   onError,
   nav,
@@ -161,40 +156,6 @@ export function DashboardPanel({
 
             {/* Git activity owns its request and state; the dashboard range does not filter it. */}
             <CommitHeatmap />
-
-            {/* The projection: the agent's own summary, shown raw. */}
-            <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-              <div className="mb-2 flex flex-wrap items-baseline gap-2">
-                <span className="text-sm font-medium">{t('workspaceSummary.heading')}</span>
-                <span className="text-[11px] text-[var(--color-text-dim)]">
-                  {t('workspaceSummary.descriptionBefore')} <code>get_view</code>{' '}
-                  {t('workspaceSummary.descriptionAfter')}
-                </span>
-                <span
-                  className="ml-auto text-[11px] text-[var(--color-text-dim)]"
-                  title={t('workspaceSummary.tokenEstimateHint')}
-                >
-                  {t('workspaceSummary.meta', {
-                    tokens: count(data.summary.tokens),
-                    time: formatTime(new Date(data.asOf), { timeStyle: 'medium' }),
-                  })}
-                </span>
-              </div>
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
-                {data.summary.text}
-              </pre>
-              {data.summary.handles && data.summary.handles.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[var(--color-border)] pt-2">
-                  {data.summary.handles.map((h, i) => (
-                    <ViewButton
-                      key={`${h.ref.kind}-${h.ref.id}-${i}`}
-                      target={h.ref}
-                      label={h.label}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
 
             {/* Item 3: every trend carries its period-over-period delta. */}
             <div className="grid gap-4 lg:grid-cols-2">

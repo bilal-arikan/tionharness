@@ -1,4 +1,4 @@
-// Rota (trajectory) view — F0, projection only (_Docs/77 brief §11 F0).
+// Rota (trajectory) view — F0, read-only (_Docs/77 brief §11 F0).
 // Workspace root zoom level: every recently active session is a lane on a
 // time axis (git-graph metaphor), workers hang under their coordinator with
 // spawn/report edges, automation fires and stall halts mark the lanes, armed
@@ -6,10 +6,9 @@
 // (workspace stream + REST seed); nothing here writes.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MessageSquare, Waypoints } from 'lucide-react'
+import { MessageSquare, Waypoints, X } from 'lucide-react'
 import { api } from '@/api'
 import { EmptyState } from '@/shared/components'
-import { ViewPanel } from '@/features/view/ViewPanel'
 import { useLanes, connectLanes, seedLanes, resetLanes } from '@/shared/lib/laneStore'
 import { trajectoryForRoot } from '@/shared/lib/laneModel'
 import { seedLiveness, seedSessions, seedTrajectories } from '@/shared/lib/laneReducer'
@@ -335,8 +334,14 @@ export function RotaPanel({
         <aside className="hidden w-80 shrink-0 flex-col overflow-auto border-l border-[var(--color-border)] md:flex">
           {selected ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              {selected.kind === 'session' && (
-                <div className="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-3 py-1.5">
+              <div className="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-3 py-1.5">
+                <span
+                  className="truncate font-mono text-[11px] text-[var(--color-text-dim)]"
+                  title={selected.id}
+                >
+                  {selected.id}
+                </span>
+                {selected.kind === 'session' && (
                   <button
                     type="button"
                     onClick={() => onOpenSession?.(selected.id)}
@@ -346,20 +351,31 @@ export function RotaPanel({
                     <MessageSquare size={13} />
                     {t('panel.openInChat')}
                   </button>
-                  {rootIsOther && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenSession?.(selectedRoot)}
-                      className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-                      title={t('panel.rootSessionTitle', {
-                        session: rootTitle || selectedRoot,
-                      })}
-                    >
-                      ↰ {t('panel.rootSession')}
-                    </button>
-                  )}
-                </div>
-              )}
+                )}
+                {rootIsOther && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenSession?.(selectedRoot)}
+                    className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                    title={t('panel.rootSessionTitle', {
+                      session: rootTitle || selectedRoot,
+                    })}
+                  >
+                    ↰ {t('panel.rootSession')}
+                  </button>
+                )}
+                {/* The selection used to close through the projection panel's X;
+                    the canvas has no deselect gesture, so the panel keeps one. */}
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="ml-auto rounded p-0.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                  title={t('panel.clearSelection')}
+                  aria-label={t('panel.clearSelection')}
+                >
+                  <X size={13} />
+                </button>
+              </div>
               {selectedTrajectory && selectedTrajectory.trajectoryId !== trajectoryId && (
                 <button
                   type="button"
@@ -377,14 +393,7 @@ export function RotaPanel({
                   })}
                 </button>
               )}
-              <ViewPanel
-                key={`${selected.kind}:${selected.id}`}
-                target={{ kind: selected.kind, id: selected.id }}
-                embedded
-                hideHandles
-                fillHeight
-                onClose={() => setSelected(null)}
-              />
+              <RotaActivity lanes={lanes} onOpenTrajectory={onTrajectory} />
             </div>
           ) : (
             <RotaActivity lanes={lanes} onOpenTrajectory={onTrajectory} />
