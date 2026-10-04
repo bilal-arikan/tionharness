@@ -224,9 +224,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.LessonReflect != nil {
 		next.LessonReflect = *p.LessonReflect
 	}
-	if p.LessonMaxAgeDays != nil {
-		next.LessonMaxAgeDays = *p.LessonMaxAgeDays
-	}
 	applyInt(&next.MaxOutputTokens, p.MaxOutputTokens)
 
 	if p.AutoTitleEnabled != nil {

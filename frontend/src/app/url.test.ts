@@ -51,6 +51,9 @@ describe('explorer focus deep-link contract', () => {
     expect(routeIdForView('board', base)).toBeNull()
     expect(routeIdForView('tools', { ...base, toolsGroup: 'files' })).toBe('files')
     expect(routeIdForView('tools', { ...base, toolsGroup: 'mcp:linear' })).toBe('mcp:linear')
+    expect(routeIdForView('notes', { ...base, noteId: 'NOTE12' })).toBe('NOTE12')
+    expect(routeIdForView('notes', base)).toBeNull()
+    expect(parseRoute('#/w/WS1/notes/NOTE12')).toMatchObject({ view: 'notes', id: 'NOTE12' })
     expect(buildRoute({ workspaceId: 'WS1', view: 'board', id: 'T1' })).toContain('/board/T1')
     expect(parseRoute('#/w/WS1/tools/mcp%3Alinear')).toMatchObject({
       view: 'tools',

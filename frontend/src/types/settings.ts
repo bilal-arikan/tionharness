@@ -92,8 +92,7 @@ export interface AppSettings {
   guardNoProgressWarn: number // identical successful idempotent repeats → warn (0 = default 2)
   guardNoProgressBlock: number // identical successful idempotent repeats → block, hard stop only (0 = default 5)
   stuckTurnThreshold: number // consecutive bad turns before "stuck" tag + autonomous suspension (0 = off)
-  lessonReflect: boolean // distill failed turns into stored lessons injected into future turns
-  lessonMaxAgeDays: number // prune a lesson not recurring within N days (0 = built-in default)
+  lessonReflect: boolean // distill failed turns into lesson notes served to future turns
 
   autoTitleEnabled: boolean
 

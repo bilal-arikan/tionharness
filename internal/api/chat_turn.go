@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -24,9 +25,10 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 
 // composeTurnRequest builds the provider request for one chat turn. The system
 // prompt is split into a STATIC prefix (user profile + persona + workspace
-// instructions) that stays stable across turns so prompt caching remains
-// effective, and a DYNAMIC suffix (recalled memory + running summary + existing
-// artifacts) that changes every turn and is kept outside the cached prefix.
+// instructions + the session briefing) that stays stable across turns so prompt
+// caching remains effective, and a DYNAMIC suffix (clock, identity, recap,
+// checklist, artifacts, pulse — composed and metered by the awareness layer,
+// _Docs/94) that changes every turn and is kept outside the cached prefix.
 //
 // Shared by both the blocking (chat.go) and streaming (chat_stream.go) handlers.
 // toolRecap (may be "") is the <recent_tool_activity> block rendered from the
@@ -34,6 +36,13 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // the history messages themselves stay byte-stable for the rolling cache
 // breakpoint (see recentToolActivityBlock).
 func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool, toolRecap, feedbackRecap, lifecycleContext string) providers.Request {
+	// The session briefing is frozen into the static prefix (_Docs/94). It is
+	// recomposed exactly where the prompt epoch adopts live state anyway: the
+	// first turn and a compaction fold. Elsewhere it ships byte-stable, so the
+	// drift check never sees it as a change.
+	if freshSession || prep.Compacted {
+		wsp.Runtime.InvalidateBrief(session.ID)
+	}
 	// The static prefix is served through the prompt epoch (frozen snapshot,
 	// promptepoch.go): the builder below composes it from LIVE state, but between
 	// adopt points the frozen session-start bytes ship instead, so mid-session
@@ -51,114 +60,94 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// detection, and side effects must run regardless of whether the snapshot serves).
 	wsp.Runtime.EnsureCodebaseIndexed(ctx, session.WorkingDir)
 	wsp.Runtime.EnsureZvecGrepIndexed(ctx, session.WorkingDir)
-	// Wall-clock awareness: a single date/time line so the agent always knows
-	// "now" without a tool round-trip (there is no get_current_time tool). Volatile
-	// by nature, so it leads the dynamic suffix and never invalidates the cache.
-	dynamic := dateTimeContextBlock()
-	// Session + workspace identity (the external agent project session_state parity): which session
-	// and workspace the agent runs in, plus its permission mode so it knows what it
-	// may do (read-only vs. auto) instead of attempting an edit that will be denied.
-	// Volatile side because the mode can change mid-session (Shift+Tab).
-	dynamic = strings.TrimSpace(dynamic + "\n\n" + sessionStateBlock(session, agentRow, wsp.ID, wsp.Name, wsp.DataDir))
-	// Recap of recent turns' tool I/O ("what did you just run / what did it
-	// return"). Volatile by design: injecting it here instead of into the history
-	// messages keeps those messages byte-stable for the rolling cache breakpoint.
-	if strings.TrimSpace(toolRecap) != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + toolRecap)
+
+	// The VOLATILE suffix is a list of sections the awareness layer fits to the
+	// turn budget and meters (_Docs/94): pinned sections (identity, clock, the
+	// environment, hook context) never degrade; the rest carry a pointer form
+	// and degrade in priority order when a turn would otherwise run over.
+	pin := func(key, text string) awareness.Section {
+		return awareness.Section{Key: key, Text: text, Priority: awareness.PriorityPinned, Volatile: true}
 	}
-	// The user's 👍/👎 on earlier replies — what landed and what did not. Volatile
-	// for the same reason as the recap above: ratings change independently of the
-	// turns they annotate, so they must never rewrite a cached history message.
+	var lead []awareness.Section
+	// Context injected by SessionStart / UserPromptSubmit lifecycle hooks (e.g. a
+	// caveman-style "respond terse" ruleset). Leads the suffix so a style
+	// directive is read before the rest of the volatile context.
+	if lc := strings.TrimSpace(lifecycleContext); lc != "" {
+		lead = append(lead, pin("hooks", lc))
+	}
+	// Wall-clock awareness: a single date/time line so the agent always knows
+	// "now" without a tool round-trip (there is no get_current_time tool).
+	lead = append(lead, pin("clock", dateTimeContextBlock()))
+	// Session + workspace identity (session_state parity): which session and
+	// workspace the agent runs in, plus its permission mode so it knows what it
+	// may do (read-only vs. auto) instead of attempting an edit that will be
+	// denied. Volatile because the mode can change mid-session (Shift+Tab).
+	lead = append(lead, pin("session", sessionStateBlock(session, agentRow, wsp.ID, wsp.Name, wsp.DataDir)))
+	// Recap of recent turns' tool I/O ("what did you just run / what did it
+	// return"). Injected here instead of into the history messages so those stay
+	// byte-stable for the rolling cache breakpoint. The single most droppable
+	// section: the transcript still holds every line of it.
+	if strings.TrimSpace(toolRecap) != "" {
+		lead = append(lead, awareness.Section{Key: "tool-recap", Text: toolRecap, Priority: 7, Volatile: true,
+			Pointer: "<recent_tool_activity>omitted to fit the context budget; the transcript above holds every call and result</recent_tool_activity>"})
+	}
+	// The user's 👍/👎 on earlier replies — what landed and what did not.
 	if strings.TrimSpace(feedbackRecap) != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + feedbackRecap)
+		lead = append(lead, awareness.Section{Key: "feedback", Text: feedbackRecap, Priority: 6, Volatile: true})
 	}
 	// Tell the agent its working directory (cwd) + git branch, so it knows where
 	// its file/shell tools operate. The session override wins; else the workspace
-	// default. Kept in the dynamic suffix because the branch can change.
+	// default. Volatile because the branch can change.
 	cwd := strings.TrimSpace(session.WorkingDir)
 	if cwd == "" {
 		cwd = wsp.Runtime.WorkspaceDefaultDir()
 	}
 	if wb := workdirContextBlock(cwd); wb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + wb)
+		lead = append(lead, pin("workdir", wb))
 	}
 	// Machine-environment marker (OS/arch/native shell) so the agent writes shell
 	// commands in the right syntax without guessing. Shares ONE source with the
-	// headless path (agent.autonomousSystemPrompt). Volatile side, never cached.
-	dynamic = strings.TrimSpace(dynamic + "\n\n" + agent.EnvironmentContextBlock())
+	// headless path (agent.autonomousSystemPrompt).
+	lead = append(lead, pin("environment", agent.EnvironmentContextBlock()))
 	// Shell-execution capability, single-sourced: when the gate is on + a shell
 	// backs it + THIS agent's tool filter offers it, this advertises the registered
 	// Bash/PowerShell tools; otherwise it states shell is disabled and gives the
-	// dead-tool rule so a bare `PowerShell` call (which hits "not enabled in this
-	// context") is not looped on. Volatile side: the gate can toggle mid-session.
-	// agentRow is passed because the allowlist is per-agent, not per-workspace.
+	// dead-tool rule so a bare `PowerShell` call is not looped on.
 	if sh := wsp.Runtime.ShellToolsContextBlock(ctx, agentRow, false); sh != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + sh)
+		lead = append(lead, pin("shell", sh))
 	}
 	// Coordination scratchpad (M2/M3): a shared folder the coordinator and ALL its
-	// workers can read/write, for durable cross-worker knowledge that shouldn't ride
-	// in every prompt. Injected for a coordinator session and for its workers so
-	// they converge on the SAME absolute path.
+	// workers can read/write, injected for both so they converge on the SAME path.
 	if sb := coordinationScratchpadBlock(wsp, session); sb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
+		lead = append(lead, pin("scratchpad", sb))
 	}
 	// Coordinator situation snapshot: live fleet state, the spawnable agent roster
-	// with each agent's write capability, and the board. The headless path already
-	// pushed the fleet half (autonomousDynamicSuffix); an INTERACTIVE coordinator
-	// got none of it and re-read all three with tool calls every single turn.
+	// with each agent's write capability, and the board — authoritative and
+	// refreshed every turn, so the coordinator never re-reads it with tool calls.
 	if cb := wsp.Runtime.CoordinatorSituationBlock(ctx, session); cb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + cb)
+		lead = append(lead, awareness.Section{Key: "situation", Text: cb, Priority: 1, Volatile: true,
+			Pointer: "## Coordinator situation\nThe fleet/board snapshot was omitted to fit the context budget; list_workers and get_view board carry it."})
 	}
+	// Prompt-epoch drift notice: the frozen snapshot is holding back a live
+	// change. A compact diff of WHAT changed on the volatile side, so telling the
+	// agent about the drift never causes the very cache bust the snapshot exists
+	// to prevent. Empty when in sync. Trails the awareness sections so it is the
+	// last thing before the meter.
+	var trail []awareness.Section
+	if note := wsp.Runtime.PromptEpochContextNote(session.ID, agentRow.ID); note != "" {
+		trail = append(trail, pin("epoch", note))
+	}
+	// The awareness layer appends the live checklist (or the resumed progress
+	// file), the session's artifacts and the de-duplicated workspace pulse, fits
+	// the whole suffix to the turn budget and closes with the meter.
+	dynamic := wsp.Runtime.TurnBlock(ctx, session, agentRow, freshSession, lead, trail...).Text
+
 	// The rolling compaction summary is NOT folded into the volatile dynamic here
 	// anymore (P2, _Docs/50): it is stable between two folds, so it travels in
 	// req.Summary and cache-capable providers place it as a synthetic head message
 	// INSIDE the cached prefix (a cache READ turn-to-turn) instead of re-shipping it
 	// every turn. Providers without caching fold it back into the system prompt.
 	summary := conversationSummaryBlock(prep.Summary)
-	// Surface the session's existing artifacts so the agent revises them
-	// (update_artifact by id) instead of creating duplicates.
-	if ab := artifactsContextBlock(ctx, wsp.DB, session.ID); ab != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + ab)
-	}
-	// Failure lessons (hata→ders döngüsü): the newest distilled lessons from
-	// past failed turns, workspace-wide, so known failure shapes are not
-	// repeated. Volatile side (the set accrues over time), never cached.
-	if lb := wsp.Runtime.LessonsContextBlock(ctx, agentRow.ID); lb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + lb)
-	}
-	// Surface the active todo checklist so the agent keeps tracking it even after
-	// the original todo_write message scrolls out of context / is compacted away.
-	// On a fresh session it falls back to the durable progress file from a previous
-	// session (persistent-progress / claude-progress convention), keyed to the cwd.
-	if tb := todoContextBlock(ctx, wsp.DB, session.ID, wsp.Runtime.ProgressDir(session.ID), s.tun.ProgressResume()); tb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + tb)
-	}
-	// Cross-session awareness: a short summary of the workspace's recent PAST
-	// sessions (active/live sessions are NOT auto-sent — the agent lists them on
-	// demand via list_sessions, which pages through ALL of them). Always on;
-	// injected only on a session's first turn (its "start").
-	if freshSession {
-		if sb := sessionsContextBlock(ctx, wsp.DB, session.ID); sb != "" {
-			dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
-		}
-	}
-
-	// Context injected by SessionStart / UserPromptSubmit lifecycle hooks (e.g. a
-	// caveman-style "respond terse" ruleset). Volatile per turn, so it rides the
-	// dynamic suffix and never invalidates the cached static prefix. Leads the
-	// suffix so a style directive is read before the rest of the volatile context.
-	if lc := strings.TrimSpace(lifecycleContext); lc != "" {
-		dynamic = strings.TrimSpace(lc + "\n\n" + dynamic)
-	}
-
-	// Prompt-epoch drift notice: the frozen snapshot is holding back a live
-	// change. A compact diff of WHAT changed (persona/instructions/skills/tools)
-	// on the VOLATILE side, so telling the agent about the drift never causes the
-	// very cache bust the snapshot exists to prevent. Empty when in sync; falls
-	// back to the generic one-liner when the diff could not be itemised.
-	if note := wsp.Runtime.PromptEpochContextNote(session.ID, agentRow.ID); note != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + note)
-	}
 
 	return providers.Request{
 		Model:         agentRow.Model,
@@ -328,6 +317,14 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 	// Shares ONE source with the headless path (agent.autonomousSystemPrompt).
 	if cb := wsp.Runtime.CapabilityContext(ctx, agentRow, strings.TrimSpace(session.WorkingDir)); cb != "" {
 		system = strings.TrimSpace(system + "\n\n" + cb)
+	}
+	// Session briefing (_Docs/94): what the workspace looks like, the notes that
+	// reach this session, recently finished work, open loops. Composed on the
+	// session's first turn and frozen with the rest of the prefix; recomposed on a
+	// compaction fold (composeTurnRequest invalidates it there). Shares ONE source
+	// with the headless path (agent.autonomousSystemPrompt).
+	if bb := wsp.Runtime.BriefBlock(ctx, session, agentRow); bb != "" {
+		system = strings.TrimSpace(system + "\n\n" + bb)
 	}
 	return system
 }

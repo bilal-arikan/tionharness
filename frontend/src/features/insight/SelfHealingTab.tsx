@@ -11,11 +11,11 @@ interface Props {
   onError: (msg: string) => void
 }
 
-// LessonsTab hosts the full self-healing surface (loop-protection guardrails +
-// stuck-session threshold + failure→lesson reflection + the stored lessons),
-// moved here from Settings ▸ Context so all self-improvement lives in the Insight
-// cockpit. It edits the app-global settings directly (draft + Save).
-export function LessonsTab({ onError }: Props) {
+// SelfHealingTab hosts the loop-protection guardrails, the stuck-session
+// threshold and the failure→lesson reflection switch. The distilled lessons
+// themselves are workspace memory notes now (kind: lesson) and live on the Notes
+// screen; this tab only edits the app-global settings (draft + Save).
+export function SelfHealingTab({ onError }: Props) {
   const { t } = useTranslation('insight')
   const [draft, setDraft] = useState<AppSettings | null>(null)
   const [original, setOriginal] = useState<AppSettings | null>(null)
@@ -56,7 +56,6 @@ export function LessonsTab({ onError }: Props) {
         guardNoProgressBlock: draft.guardNoProgressBlock,
         stuckTurnThreshold: draft.stuckTurnThreshold,
         lessonReflect: draft.lessonReflect,
-        lessonMaxAgeDays: draft.lessonMaxAgeDays,
       })
       setDraft(updated)
       setOriginal(updated)
@@ -79,7 +78,7 @@ export function LessonsTab({ onError }: Props) {
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
               <ShieldCheck size={14} />
             </span>
-            {t('lessons.title')}
+            {t('selfHealing.title')}
           </h3>
           <div className="flex items-center gap-3">
             {numberValidity.hasInvalid && (
@@ -89,7 +88,7 @@ export function LessonsTab({ onError }: Props) {
             )}
             <button
               onClick={save}
-              data-testid="lessons-save"
+              data-testid="self-healing-save"
               disabled={!dirty || saving || numberValidity.hasInvalid}
               title={numberValidity.hasInvalid ? t('validation.invalidNumber') : undefined}
               className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)] disabled:opacity-50"
@@ -100,66 +99,67 @@ export function LessonsTab({ onError }: Props) {
         </div>
 
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-          {t('lessons.descriptionBefore')} <code>56-SELF-HEALING</code>
-          {t('lessons.descriptionMiddle')} <code>stuck</code> {t('lessons.descriptionAfter')}
+          {t('selfHealing.descriptionBefore')} <code>56-SELF-HEALING</code>
+          {t('selfHealing.descriptionMiddle')} <code>stuck</code>{' '}
+          {t('selfHealing.descriptionAfter')}
         </div>
 
         <Toggle
-          label={t('lessons.guardWarnings')}
-          hint={t('lessons.guardWarningsHint')}
+          label={t('selfHealing.guardWarnings')}
+          hint={t('selfHealing.guardWarningsHint')}
           checked={draft.toolGuardWarnings}
           onChange={(v) => set('toolGuardWarnings', v)}
         />
         <Toggle
-          label={t('lessons.hardStop')}
-          hint={t('lessons.hardStopHint')}
+          label={t('selfHealing.hardStop')}
+          hint={t('selfHealing.hardStopHint')}
           checked={draft.toolGuardHardStop}
           onChange={(v) => set('toolGuardHardStop', v)}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <NumberField
-            label={t('lessons.exactWarn')}
-            hint={t('lessons.exactWarnHint')}
+            label={t('selfHealing.exactWarn')}
+            hint={t('selfHealing.exactWarnHint')}
             min={0}
             max={50}
             value={draft.guardExactWarn}
             onChange={(v) => set('guardExactWarn', v)}
           />
           <NumberField
-            label={t('lessons.exactBlock')}
-            hint={t('lessons.exactBlockHint')}
+            label={t('selfHealing.exactBlock')}
+            hint={t('selfHealing.exactBlockHint')}
             min={0}
             max={50}
             value={draft.guardExactBlock}
             onChange={(v) => set('guardExactBlock', v)}
           />
           <NumberField
-            label={t('lessons.sameToolWarn')}
-            hint={t('lessons.sameToolWarnHint')}
+            label={t('selfHealing.sameToolWarn')}
+            hint={t('selfHealing.sameToolWarnHint')}
             min={0}
             max={50}
             value={draft.guardSameToolWarn}
             onChange={(v) => set('guardSameToolWarn', v)}
           />
           <NumberField
-            label={t('lessons.sameToolHalt')}
-            hint={t('lessons.sameToolHaltHint')}
+            label={t('selfHealing.sameToolHalt')}
+            hint={t('selfHealing.sameToolHaltHint')}
             min={0}
             max={50}
             value={draft.guardSameToolHalt}
             onChange={(v) => set('guardSameToolHalt', v)}
           />
           <NumberField
-            label={t('lessons.noProgressWarn')}
-            hint={t('lessons.noProgressWarnHint')}
+            label={t('selfHealing.noProgressWarn')}
+            hint={t('selfHealing.noProgressWarnHint')}
             min={0}
             max={50}
             value={draft.guardNoProgressWarn}
             onChange={(v) => set('guardNoProgressWarn', v)}
           />
           <NumberField
-            label={t('lessons.noProgressBlock')}
-            hint={t('lessons.noProgressBlockHint')}
+            label={t('selfHealing.noProgressBlock')}
+            hint={t('selfHealing.noProgressBlockHint')}
             min={0}
             max={50}
             value={draft.guardNoProgressBlock}
@@ -167,26 +167,18 @@ export function LessonsTab({ onError }: Props) {
           />
         </div>
         <NumberField
-          label={t('lessons.stuckThreshold')}
-          hint={t('lessons.stuckThresholdHint')}
+          label={t('selfHealing.stuckThreshold')}
+          hint={t('selfHealing.stuckThresholdHint')}
           min={0}
           max={20}
           value={draft.stuckTurnThreshold}
           onChange={(v) => set('stuckTurnThreshold', v)}
         />
         <Toggle
-          label={t('lessons.reflect')}
-          hint={t('lessons.reflectHint')}
+          label={t('selfHealing.reflect')}
+          hint={t('selfHealing.reflectHint')}
           checked={draft.lessonReflect}
           onChange={(v) => set('lessonReflect', v)}
-        />
-        <NumberField
-          label={t('lessons.maxAge')}
-          hint={t('lessons.maxAgeHint')}
-          min={0}
-          max={365}
-          value={draft.lessonMaxAgeDays}
-          onChange={(v) => set('lessonMaxAgeDays', v)}
         />
       </div>
     </NumberValidityProvider>

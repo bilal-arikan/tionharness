@@ -84,10 +84,11 @@ var defaultToolTiers = map[string]string{
 	// apply_patch — the batch (multi-hunk/multi-file) sibling of Edit. Edit stays
 	// eager, so single edits are unaffected; the batch path is pulled on demand.
 	"apply_patch": VisibilityNameOnly,
-	// Self-healing lessons — read/prune the auto-collected failure lessons. The
-	// newest few already ride the context, so these are for deliberate inspection.
-	"read_lessons":  VisibilityNameOnly,
-	"delete_lesson": VisibilityNameOnly,
+	// Workspace memory — the briefing inlines the notes that reach a session and
+	// note_search finds the rest; reading one in full or filing a correction is
+	// the rarer, deliberate act.
+	"note_expand":  VisibilityNameOnly,
+	"note_correct": VisibilityNameOnly,
 	// Insight (retrospective scanning) — self-descriptive names, used in a small
 	// minority of turns; the model pulls a schema when it actually scans/triages.
 	"insight_scan":          VisibilityNameOnly,

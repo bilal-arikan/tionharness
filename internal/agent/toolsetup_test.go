@@ -35,9 +35,8 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	// every erroring test pay a provider round-trip and left the subprocess holding
 	// the temp dir open past cleanup (Windows then fails RemoveAll).
 	//
-	// The setting itself stays ON — it also gates read_lessons/delete_lesson
-	// registration (toolsetup.go), which the tier-parity golden tables expect.
-	// Only the background dispatch is suppressed, below, once the runtime exists.
+	// The setting itself stays ON; only the background dispatch is suppressed,
+	// below, once the runtime exists.
 	// A lesson test that wants the real pass calls rt.reflectLessons directly,
 	// which does not consult this switch.
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))

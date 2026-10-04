@@ -126,11 +126,11 @@ func TestChildrenWorkspaceIsElevenNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
-	if len(hs) != 10 {
-		t.Fatalf("workspace children = %d, want 10: %+v", len(hs), hs)
+	if len(hs) != 11 {
+		t.Fatalf("workspace children = %d, want 11: %+v", len(hs), hs)
 	}
-	// The map's shape is fixed: six group nodes plus board/logs/budget/tools.
-	want := map[Kind]int{KindCategory: 6, KindBoard: 1, KindLogs: 1, KindBudget: 1, KindTools: 1}
+	// The map's shape is fixed: seven group nodes plus board/logs/budget/tools.
+	want := map[Kind]int{KindCategory: 7, KindBoard: 1, KindLogs: 1, KindBudget: 1, KindTools: 1}
 	got := kindsOf(hs)
 	for k, n := range want {
 		if got[k] != n {
@@ -299,7 +299,7 @@ func TestNeighborhoodRootLeafMultiParentCycleSelfLoopAndNoCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("root neighborhood: %v", err)
 	}
-	if len(root.Parents) != 0 || len(root.Children) != 10 {
+	if len(root.Parents) != 0 || len(root.Children) != 11 {
 		t.Fatalf("root neighborhood parents=%d children=%d", len(root.Parents), len(root.Children))
 	}
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/notes"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
@@ -38,6 +39,7 @@ type structuralCache struct {
 	automations cachedList[db.Automation]
 	skills      cachedList[skills.Skill]
 	findings    cachedList[InsightFinding]
+	notes       cachedList[notes.Note]
 }
 
 // cachedList memoises one list read, including its error, so a failing source
@@ -134,6 +136,15 @@ func (c *structuralCache) allFindings() ([]InsightFinding, error) {
 	})
 }
 
+func (c *structuralCache) allNotes() ([]notes.Note, error) {
+	return c.notes.get(func() ([]notes.Note, error) {
+		if c.p.sources.Notes == nil {
+			return nil, fmt.Errorf("view: category notes: notes store unavailable")
+		}
+		return c.p.sources.Notes.ListNotes(), nil
+	})
+}
+
 // children is Children against the snapshot, without the legacy per-node
 // presentation cap.
 func (c *structuralCache) children(ctx context.Context, ref Ref) ([]Handle, error) {
@@ -217,6 +228,12 @@ func (c *structuralCache) categoryMembers(ctx context.Context, id string) ([]Han
 			return nil, err
 		}
 		return insightHandleList(findings), nil
+	case CategoryNotes:
+		ns, err := c.allNotes()
+		if err != nil {
+			return nil, err
+		}
+		return noteHandleList(ns), nil
 	}
 	if key, found := cutColumnPrefix(id); found {
 		tasks, err := c.activeTasks(ctx)
@@ -297,10 +314,10 @@ func (c *structuralCache) nodes(ctx context.Context) ([]Handle, error) {
 	for _, node := range rootChildren {
 		children, err := c.children(ctx, node.Ref)
 		if err != nil {
-			// Skills and insights are optional projector sources. Their absence
+			// Skills, insights and notes are optional projector sources. Their absence
 			// must not prevent resolving an unrelated focus node.
 			if node.Ref.Kind == KindCategory &&
-				(node.Ref.ID == CategorySkills || node.Ref.ID == CategoryInsights) {
+				(node.Ref.ID == CategorySkills || node.Ref.ID == CategoryInsights || node.Ref.ID == CategoryNotes) {
 				continue
 			}
 			return nil, err

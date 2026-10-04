@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -60,36 +59,6 @@ const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
 	"Writing a file does NOT create an artifact. When you produce a deliverable the user should keep (a document/dataset/report/standalone code file), register it DELIBERATELY by calling create_artifact (or the artifacts API) — do not assume a plain file write will surface it. Ordinary edits to project source files stay out of the Artifacts screen. " +
 	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block). " +
 	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionharness-deliverables` skill before producing the deliverable."
-
-// artifactsContextBlock builds a system-prompt section listing the artifacts a
-// session already has, so the agent can revise them with update_artifact (by id)
-// instead of creating duplicates. Returns "" when the session has none. Kept in
-// the dynamic (uncached) part of the prompt since it changes as artifacts grow.
-func artifactsContextBlock(ctx context.Context, database *db.DB, sessionID string) string {
-	if sessionID == "" {
-		return ""
-	}
-	arts, err := database.ListArtifacts(ctx, sessionID)
-	if err != nil || len(arts) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("## Artifacts in this session\n")
-	b.WriteString("You have already created these artifacts. To revise one, call update_artifact with its id and sourcePath for an updated file on disk, or content for an inline body. Do not read and resend an entire file just to synchronize its artifact. Create a new artifact only for new content.\n")
-	const max = 30
-	for i, a := range arts {
-		if i >= max {
-			fmt.Fprintf(&b, "- … and %d more\n", len(arts)-max)
-			break
-		}
-		fmt.Fprintf(&b, "- id=%s · %q · kind=%s", a.ID, a.Title, a.Kind)
-		if a.Language != "" {
-			b.WriteString("/" + a.Language)
-		}
-		b.WriteString("\n")
-	}
-	return strings.TrimSpace(b.String())
-}
 
 // artifactSink adapts a workspace DB into a tools.ArtifactSink for one chat
 // turn, stamping every artifact with its origin session and creating agent.

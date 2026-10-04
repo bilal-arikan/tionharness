@@ -22,6 +22,7 @@ export const SIGNAL_SCHEDULES = 'schedules' // SchedulesPanel
 export const SIGNAL_AUTOMATIONS = 'automations' // AutomationBoard
 export const SIGNAL_ARTIFACTS = 'artifacts' // Artifact views
 export const SIGNAL_SKILLS = 'skills' // SkillsPanel catalog + selected detail
+export const SIGNAL_NOTES = 'notes' // Notes screen (memory notes + awareness digests)
 export const SIGNAL_WORKSPACE_ACTIVITY = 'workspace-activity' // cross-workspace live-run flags (switcher pulse)
 
 // signalsForEvent returns the set of signal keys that should bump for the
@@ -81,6 +82,12 @@ export function signalsForEvent(e: AppEvent): string[] {
       return [SIGNAL_ARTIFACTS]
     case 'skills':
       return [SIGNAL_SKILLS]
+    case 'notes':
+    case 'awareness_digest':
+      // A note was written / corrected / archived / deleted, or a session's
+      // end-of-turn digest changed: the Notes screen re-fetches its lists, and
+      // the map gains/loses a note leaf.
+      return [SIGNAL_NOTES, SIGNAL_EXPLORER]
     default:
       // settings / workspaces / navigate / session_step (routed through the
       // separate `step` SSE channel) don't drive panel refreshes.

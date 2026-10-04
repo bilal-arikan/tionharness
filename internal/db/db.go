@@ -180,10 +180,6 @@ type DB struct {
 	// detached old run must not overwrite or remove a newer run's recovery state.
 	inflightMu sync.Mutex
 
-	// lessonsMu guards the workspace-wide lessons.jsonl sidecar (failure
-	// lessons, self-healing) — independent of mu for the same reason as debugMu.
-	lessonsMu sync.Mutex
-
 	// transcriptMus holds one mutex per session, serialising writes to that
 	// session's messages.jsonl so the file write no longer needs the global lock.
 	// See transcript_lock.go for the mandatory lock order (transcript then mu).
@@ -221,7 +217,7 @@ type DB struct {
 	// its lock; under mu that put every concurrent agent's unrelated session reads
 	// and writes behind one agent's usage write. Nothing outside store_usage.go
 	// and store_session_usage.go touches these maps, so the split is total —
-	// mirroring what debugMu/lessonsMu already do for their own journals.
+	// mirroring what debugMu already does for its own journal.
 	usageMu sync.RWMutex
 
 	// loadPhases records how long each boot phase took, so a slow Open can be

@@ -361,7 +361,7 @@ export const STUCK_TEMPLATE = {
     '1. Read its debug journal (read_session_debug with session_id {{sessionId}}) and recent ' +
     'messages (conversation_search) to find the failing tool calls and the root cause.\n' +
     '2. Fix the underlying problem if it is fixable (wrong path/config, missing file, bad state). ' +
-    'Check read_lessons for known failure shapes first.\n' +
+    'Check note_search for known failure shapes first.\n' +
     '3. Report what you found and what you changed. Do NOT retry the same failing calls blindly.\n' +
     'When you finish successfully, the stuck tag and counter are cleared automatically.',
 }

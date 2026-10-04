@@ -62,7 +62,8 @@
     "skill": "Skill",
     "insight": "İçgörü",
     "logs": "Günlükler",
-    "trajectory": "Rota"
+    "trajectory": "Rota",
+    "note": "Not"
   },
   "role": {
     "boardColumn": "Pano sütunu",
@@ -91,7 +92,8 @@
     "artifacts": "Artifact'lar",
     "automations": "Otomasyonlar",
     "skills": "Skill'ler",
-    "insights": "İçgörüler"
+    "insights": "İçgörüler",
+    "notes": "Notlar"
   },
   "boardColumn": {
     "todo": "Yapılacak",
@@ -124,6 +126,7 @@
     "board": "Pano",
     "budget": "Bütçe",
     "tools": "Araçlar",
-    "rota": "Rota"
+    "rota": "Rota",
+    "notes": "Notlar"
   }
 }

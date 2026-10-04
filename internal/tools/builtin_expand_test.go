@@ -32,16 +32,15 @@ func callExpand(t *testing.T, database *db.DB, input string) (string, error) {
 	return NewExpandTool(database).Call(context.Background(), json.RawMessage(input))
 }
 
-func TestExpandWorkspaceListsTenBuckets(t *testing.T) {
+func TestExpandWorkspaceListsElevenBuckets(t *testing.T) {
 	out, err := callExpand(t, expandDB(t), `{"kind":"workspace","id":"workspace"}`)
 	if err != nil {
 		t.Fatalf("expand: %v", err)
 	}
-	// Ten buckets since the orchestration flows left (_Docs/93): sessions,
-	// board, agents, schedules, automations, artifacts, memory, lessons,
-	// budget, logs.
-	if !strings.Contains(out, "CHILDREN of workspace:workspace") || !strings.Contains(out, "· 10") {
-		t.Errorf("workspace should expand into 10 buckets:\n%s", out)
+	// Eleven buckets: sessions, board, agents, artifacts, automations, skills,
+	// insights, notes (_Docs/94), logs, budget, tools.
+	if !strings.Contains(out, "CHILDREN of workspace:workspace") || !strings.Contains(out, "· 11") {
+		t.Errorf("workspace should expand into 11 buckets:\n%s", out)
 	}
 	// The category buckets are themselves expandable; the hint must steer to expand.
 	for _, want := range []string{`expand{kind:"category",id:"sessions"}`, `expand{kind:"board",id:"board"}`, `expand{kind:"budget"`, `get_view{kind:"logs"`} {
@@ -71,7 +70,7 @@ func TestExpandSingletonIdDefaulting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expand: %v", err)
 	}
-	if !strings.Contains(out, "· 10") {
+	if !strings.Contains(out, "· 11") {
 		t.Errorf("empty workspace id should default to the singleton:\n%s", out)
 	}
 }

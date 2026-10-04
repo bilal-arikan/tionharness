@@ -6,7 +6,8 @@
 //   - workspaceId scopes the request to an isolated backend database.
 //   - view is one of the NavRail views.
 //   - entityId is meaningful per view: chat→sessionId, agents→agentId,
-//     artifacts→artifactId, schedules→scheduleId, settings→category key.
+//     artifacts→artifactId, notes→noteId, schedules→scheduleId,
+//     settings→category key.
 //     Other views ignore it.
 //   - the query carries sub-state that cannot claim the single entity slot —
 //     chat already spends it on the sessionId, so its list tabs ride here
@@ -28,6 +29,7 @@ const VIEWS: View[] = [
   'budget',
   'prompts',
   'insights',
+  'notes',
   'workspace',
   'settings',
 ]
@@ -142,6 +144,7 @@ export function routeIdForView(
     sessionId: string | null
     agentId: string | null
     artifactId: string | null
+    noteId?: string | null
     scheduleId: string | null
     settingsCat: string | null
     workspaceTab: string | null
@@ -166,6 +169,9 @@ export function routeIdForView(
       return state.agentId
     case 'artifacts':
       return state.artifactId
+    case 'notes':
+      // #/w/{ws}/notes/{noteId} opens the Notes screen on that note.
+      return state.noteId ?? null
     case 'schedules':
       return state.scheduleId
     case 'settings':

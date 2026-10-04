@@ -71,15 +71,20 @@ func TestBridgeableDefsIncludesFullSelfManaged(t *testing.T) {
 	}
 }
 
-func TestBridgeableDefsIncludesGetViewEagerExtra(t *testing.T) {
+func TestBridgeableDefsIncludesEagerExtras(t *testing.T) {
 	reg := NewRegistry(
 		stubTool{name: "get_view", desc: "read projections"},
+		stubTool{name: "remember", desc: "write a memory note"},
+		stubTool{name: "record_work", desc: "file a work note"},
+		stubTool{name: "note_search", desc: "search memory notes"},
 		stubTool{name: "todo_write", desc: "eager behavioral"},
 	)
 
+	// The eager memory tools ride the bridge like get_view: the CLI has no native
+	// equivalent, and the session briefing names them (_Docs/94).
 	got := names(reg.BridgeableDefsFiltered(nil, false))
-	if !eq(got, []string{"get_view"}) {
-		t.Fatalf("eager bridge extras = %v, want [get_view]", got)
+	if !eq(got, []string{"get_view", "note_search", "record_work", "remember"}) {
+		t.Fatalf("eager bridge extras = %v, want get_view + the memory tools", got)
 	}
 }
 

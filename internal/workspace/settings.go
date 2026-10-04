@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -146,6 +147,11 @@ type WSSettings struct {
 	// without overwriting each other.
 	BoardViews []db.BoardViewDef `json:"boardViews,omitempty"`
 
+	// Awareness configures the session briefing / per-turn pulse / end-of-turn
+	// digest layer (internal/awareness, _Docs/94): budgets, counts, thresholds.
+	// Zero numeric fields fall back to the shipped defaults.
+	Awareness awareness.Settings `json:"awareness"`
+
 	// IgnoredRecommendations holds the keys of post-create advisory cards
 	// (WorkspaceRecommendations) the user dismissed for this workspace, so they are
 	// not re-offered. Purely UI state — no runtime effect. Manageable (review +
@@ -163,6 +169,7 @@ func defaultWSSettings() WSSettings {
 		ZvecGrepEnabled:       true,
 		PromptEpochEnabled:    true,
 		CodexPluginsEnabled:   true,
+		Awareness:             awareness.DefaultSettings(),
 	}
 }
 
@@ -198,6 +205,10 @@ type WSSettingsPatch struct {
 	CodexPlugins        *[]string              `json:"codexPlugins"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
+
+	// Awareness replaces the whole awareness settings block (the client sends the
+	// full form, like BoardColumns).
+	Awareness *awareness.Settings `json:"awareness"`
 
 	// BoardViews replaces the whole saved-view list (add/rename/delete are all
 	// expressed as a full rewrite, matching how BoardColumns is edited).
@@ -306,6 +317,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetCodexPlugins(w.codexPluginSpecLocked())
 		w.Runtime.SetShellCompression(s.ShellOutputCompression)
 		w.Runtime.SetShellCommandRewrite(s.ShellCommandRewrite)
+		w.Runtime.SetAwarenessSettings(s.Awareness)
 	}
 }
 
@@ -413,6 +425,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.TerseMode != nil {
 		ws.settings.cur.TerseMode = *patch.TerseMode
 	}
+	if patch.Awareness != nil {
+		ws.settings.cur.Awareness = patch.Awareness.Normalized()
+	}
 	if patch.DefaultWorkingDir != nil {
 		ws.settings.cur.DefaultWorkingDir = *patch.DefaultWorkingDir
 	}
@@ -475,6 +490,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	codexPlugins := ws.codexPluginSpecLocked()
 	shellCompression := ws.settings.cur.ShellOutputCompression
 	shellRewrite := ws.settings.cur.ShellCommandRewrite
+	awareSettings := ws.settings.cur.Awareness
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -505,6 +521,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetCodexPlugins(codexPlugins)
 		ws.Runtime.SetShellCompression(shellCompression)
 		ws.Runtime.SetShellCommandRewrite(shellRewrite)
+		ws.Runtime.SetAwarenessSettings(awareSettings)
 	}
 	return ws, nil
 }

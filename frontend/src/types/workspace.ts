@@ -1,6 +1,7 @@
 // Workspace identity, per-workspace settings and workspace-wide tool config.
 
 import type { TaskPriority } from './task'
+import type { AwarenessSettings } from './note'
 
 // A single kanban column definition: key is stored on tasks, label is shown,
 // color is an optional hex accent for the column header.
@@ -161,6 +162,9 @@ export interface WorkspaceSettings {
   boardViews: BoardViewDef[]
   // Keys of post-create advisory cards the user dismissed for this workspace.
   ignoredRecommendations: string[]
+  // Session briefing / per-turn pulse / end-of-turn digest layer (_Docs/94).
+  // Patched as a whole object.
+  awareness: AwarenessSettings
   createdAt: number
   agentCount: number
   sessionCount: number
@@ -194,6 +198,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'boardColumns'
     | 'boardViews'
     | 'ignoredRecommendations'
+    | 'awareness'
   >
 >
 

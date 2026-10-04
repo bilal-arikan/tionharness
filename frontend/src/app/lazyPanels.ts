@@ -58,6 +58,11 @@ export const InsightPanel = lazy(() =>
   import('@/features/insight/InsightPanel').then((m) => ({ default: m.InsightPanel })),
 )
 
+// Workspace memory + awareness (notes, digests, what-the-agent-saw).
+export const NotesPanel = lazy(() =>
+  import('@/features/notes/NotesPanel').then((m) => ({ default: m.NotesPanel })),
+)
+
 export const SettingsPanel = lazy(() =>
   import('@/features/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 )

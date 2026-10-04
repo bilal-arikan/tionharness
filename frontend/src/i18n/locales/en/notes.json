@@ -1,0 +1,204 @@
+{
+  "title": "Notes",
+  "tabs": {
+    "notes": "Notes",
+    "digests": "Digests",
+    "context": "Context"
+  },
+  "stats": {
+    "active": "Active",
+    "private": "Private",
+    "retired": "Superseded",
+    "archived": "Archived"
+  },
+  "kind": {
+    "lesson": "Lesson",
+    "decision": "Decision",
+    "work": "Work",
+    "gotcha": "Gotcha",
+    "pattern": "Pattern",
+    "profile": "Profile",
+    "reference": "Reference"
+  },
+  "scope": {
+    "agent": "Agent",
+    "project": "Project",
+    "workspace": "Workspace"
+  },
+  "confidence": {
+    "verified": "Verified",
+    "inferred": "Inferred",
+    "unverified": "Unverified"
+  },
+  "source": {
+    "agent": "agent",
+    "work": "record_work",
+    "user": "you",
+    "lesson-extractor": "lesson extractor",
+    "insight": "insight",
+    "correction": "correction"
+  },
+  "filters": {
+    "searchPlaceholder": "Search notes…",
+    "allScopes": "All scopes",
+    "allConfidences": "All confidence levels",
+    "showArchived": "Archived",
+    "showSuperseded": "Superseded",
+    "clear": "Clear"
+  },
+  "list": {
+    "loading": "Loading notes…",
+    "empty": "No notes yet.",
+    "emptyHint": "Agents file lessons, decisions and work records here as they go; you can add your own with New note.",
+    "noMatch": "No notes match the filter.",
+    "count_one": "{{count}} note",
+    "count_other": "{{count}} notes",
+    "seen_one": "seen {{count}}×",
+    "seen_other": "seen {{count}}×",
+    "superseded": "superseded",
+    "archived": "archived",
+    "private": "private"
+  },
+  "actions": {
+    "new": "New note",
+    "edit": "Edit",
+    "correct": "Correct",
+    "correctTitle": "Write a replacement; this note is kept and marked superseded",
+    "archive": "Archive",
+    "restore": "Restore",
+    "delete": "Delete",
+    "deleteTitle": "Permanently delete (refused when the note is linked or in a correction chain — archive it instead)",
+    "openSession": "Open session"
+  },
+  "confirm": {
+    "delete": "Permanently delete the note \"{{title}}\"? Archiving keeps it out of the way without losing it."
+  },
+  "toast": {
+    "created": "Note created",
+    "updated": "Note updated",
+    "corrected": "Correction written — the old note is now superseded",
+    "archived": "Note archived",
+    "restored": "Note restored",
+    "deleted": "Note deleted"
+  },
+  "detail": {
+    "selectPrompt": "Select a note to read it.",
+    "scope": "Scope",
+    "confidence": "Confidence",
+    "verification": "Verified by",
+    "created": "Created",
+    "updated": "Updated",
+    "source": "Source",
+    "sourceAgent": "Written by agent",
+    "sourceSession": "Source session",
+    "occurrences": "Occurrences",
+    "signature": "Signature",
+    "supersedes": "Supersedes",
+    "supersededBy": "This note was superseded by",
+    "tags": "Tags",
+    "links": "Links",
+    "backlinks": "Backlinks",
+    "noLinks": "This note links to no other note.",
+    "noBacklinks": "No note links here.",
+    "unresolved": "A [[wikilink]] that matches no note id or title",
+    "unresolvedBadge": "unresolved",
+    "chain": "Correction chain"
+  },
+  "form": {
+    "title": {
+      "create": "New note",
+      "edit": "Edit note",
+      "correct": "Correct note"
+    },
+    "submit": {
+      "create": "Create",
+      "edit": "Save",
+      "correct": "Write correction"
+    },
+    "correctHint": "A correction never overwrites: the new note replaces this one and the old text stays readable next to it, marked superseded.",
+    "kind": "Kind",
+    "scope": "Scope",
+    "confidence": "Confidence",
+    "agents": "Agents",
+    "agentsPlaceholder": "agent ids, comma-separated",
+    "projects": "Project roots",
+    "projectsPlaceholder": "one absolute path per line",
+    "verification": "How was it verified?",
+    "verificationPlaceholder": "e.g. reproduced on main, ran the test suite",
+    "noteTitle": "Title",
+    "body": "Body (Markdown, [[Title]] links other notes)",
+    "bodyPlaceholder": "What should a future session know?",
+    "tags": "Tags",
+    "private": "Private",
+    "privateHint": "never served to an agent",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "errors": {
+      "title": "A title is required.",
+      "body": "The body cannot be empty.",
+      "agents": "An agent-scoped note must name at least one agent.",
+      "projects": "A project-scoped note must name at least one project root.",
+      "verification": "Say how a verified note was checked."
+    }
+  },
+  "digests": {
+    "loading": "Loading digests…",
+    "empty": "No digests yet.",
+    "emptyHint": "A digest is written when a session's turn ends and the awareness layer is enabled.",
+    "selectPrompt": "Select a digest to read it.",
+    "notFound": "No digest recorded for this session yet.",
+    "errors_one": "{{count}} error",
+    "errors_other": "{{count}} errors",
+    "openLoops_one": "{{count}} open loop",
+    "openLoops_other": "{{count}} open loops",
+    "suggestNote": "note suggested",
+    "openLoopsTitle": "Open loops",
+    "yes": "yes",
+    "facts": {
+      "messages": "Messages",
+      "toolCalls": "Tool calls",
+      "toolCallsWithErrors": "{{calls}} ({{errors}} failed)",
+      "duration": "Duration",
+      "todo": "Checklist",
+      "todoValue": "{{done}}/{{total}} done · {{inProgress}} in progress",
+      "children": "Child sessions",
+      "childrenWithFailed": "{{count}} ({{failed}} failed)",
+      "stuckTurns": "Stuck turns",
+      "waitingAsk": "Waiting on a question",
+      "lastError": "Last error"
+    }
+  },
+  "context": {
+    "session": "Session",
+    "pickSession": "Pick a session…",
+    "refresh": "Refresh",
+    "selectPrompt": "Pick a session to see what its agent was told.",
+    "selectHint": "The brief it started with, the last per-turn block and the last pulse line.",
+    "loading": "Loading…",
+    "turns": "Turns served",
+    "digestState": "Digest",
+    "digestWritten": "written",
+    "digestNone": "none yet",
+    "lastPulse": "Last pulse",
+    "noPulse": "no pulse yet",
+    "brief": "Session brief",
+    "lastTurn": "Last turn block",
+    "noBrief": "No brief was composed for this session (new sessions receive one at start).",
+    "noTurn": "No per-turn block has been served yet.",
+    "bytesOfBudget": "{{bytes}} / {{budget}} bytes",
+    "bytesUnlimited": "{{bytes}} bytes (no ceiling)",
+    "cut": "cut",
+    "section": "Section",
+    "bytes": "Bytes",
+    "state": "State",
+    "priority": "Priority",
+    "states": {
+      "full": "full",
+      "pointer": "pointer",
+      "dropped": "dropped",
+      "cut": "cut"
+    },
+    "degraded": "Degraded to a pointer: {{keys}}",
+    "dropped": "Dropped: {{keys}}"
+  }
+}

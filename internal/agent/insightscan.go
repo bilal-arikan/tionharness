@@ -10,6 +10,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/notes"
 )
 
 // ErrInsightScanBusy is returned when a scan is requested while one is already
@@ -193,7 +194,7 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 
 	// Lessons-mining synergy: promote fresh findings from the lessons-mining lens
 	// into the runtime lessons store so future turns carry them. Only THIS run's
-	// produced findings are fed (not the whole store) — AddLesson dedupes by
+	// produced findings are fed (not the whole store) — the notes store dedupes by
 	// signature, so a recurring lesson bumps its Count instead of duplicating.
 	r.promoteMinedLessons(res.Produced)
 
@@ -283,11 +284,19 @@ func (r *Runtime) promoteMinedLessons(produced []insight.Finding) {
 		if len(f.EvidenceSessionIDs) > 0 {
 			sess = f.EvidenceSessionIDs[0]
 		}
-		if _, err := r.db.AddLesson(db.Lesson{
-			SessionID: sess,
-			Signature: f.Signature,
-			Text:      text,
-			Time:      f.LastSeen,
+		if r.notes == nil {
+			continue
+		}
+		if _, err := r.notes.Put(notes.Note{
+			Kind:          notes.KindLesson,
+			Title:         lessonTitle(f.Title),
+			Body:          text,
+			Scope:         notes.ScopeWorkspace,
+			Confidence:    notes.ConfidenceInferred,
+			Source:        notes.SourceInsight,
+			SourceSession: sess,
+			Signature:     f.Signature,
+			Tags:          []string{"insight"},
 		}); err != nil {
 			r.logger.Warn("insight lesson promote failed", "sig", f.Signature, "error", err)
 		}

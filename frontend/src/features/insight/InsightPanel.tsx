@@ -5,7 +5,6 @@ import {
   Play,
   Bug,
   ShieldCheck,
-  GraduationCap,
   ScanSearch,
   Boxes,
   History,
@@ -23,8 +22,7 @@ import { LensList } from './LensList'
 import { FleetTab } from './FleetTab'
 import { RunsTab } from './RunsTab'
 import { SettingsTab } from './SettingsTab'
-import { LessonsTab } from './LessonsTab'
-import { LessonsList } from '@/features/settings/LessonsList'
+import { SelfHealingTab } from './SelfHealingTab'
 import { persistAnalysisAgentSelection, withDefaultAnalysisAgent } from './insightAgentSelection'
 
 interface Props {
@@ -37,13 +35,13 @@ interface Props {
   onTabChange?: (t: string) => void
 }
 
-type Tab = 'findings' | 'lessons' | 'saved-lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
+type Tab = 'findings' | 'self-healing' | 'lenses' | 'fleet' | 'runs' | 'settings'
 
-// Left-rail sub-pages (Settings-style vertical nav), each with an icon.
+// Left-rail sub-pages (Settings-style vertical nav), each with an icon. The
+// distilled lessons themselves live on the Notes screen (kind: lesson).
 const TABS: { key: Tab; icon: LucideIcon }[] = [
   { key: 'findings', icon: Bug },
-  { key: 'lessons', icon: ShieldCheck },
-  { key: 'saved-lessons', icon: GraduationCap },
+  { key: 'self-healing', icon: ShieldCheck },
   { key: 'lenses', icon: ScanSearch },
   { key: 'fleet', icon: Boxes },
   { key: 'runs', icon: History },
@@ -275,8 +273,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
               onError={onError}
             />
           )}
-          {tab === 'lessons' && <LessonsTab onError={onError} />}
-          {tab === 'saved-lessons' && <LessonsList fill />}
+          {tab === 'self-healing' && <SelfHealingTab onError={onError} />}
           {tab === 'fleet' && <FleetTab onError={onError} />}
           {tab === 'runs' && <RunsTab onError={onError} />}
           {tab === 'settings' && (

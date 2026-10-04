@@ -34,6 +34,7 @@ import {
   BudgetPanel,
   DashboardPanel,
   InsightPanel,
+  NotesPanel,
   SettingsPanel,
   WorkspaceView,
   PromptsView,
@@ -566,6 +567,7 @@ export default function App() {
     activeSessionId: ctl.activeSessionId,
     activeAgentId: ctl.activeAgentId,
     artifactTarget: links.artifactTarget,
+    noteTarget: links.noteTarget,
     scheduleTarget: links.scheduleTarget,
     settingsCat: links.settingsCat,
     workspaceTab: links.workspaceTab,
@@ -580,6 +582,7 @@ export default function App() {
     selectSession: ctl.selectSession,
     focusAgent: ctl.focusAgent,
     setArtifactTarget: links.setArtifactTarget,
+    setNoteTarget: links.setNoteTarget,
     setScheduleTarget: links.setScheduleTarget,
     setSettingsCat: links.setSettingsCat,
     setWorkspaceTab: links.setWorkspaceTab,
@@ -907,6 +910,17 @@ export default function App() {
               onError={setError}
               tab={links.insightTab}
               onTabChange={links.setInsightTab}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+            />
+          )}
+          {view === 'notes' && (
+            <NotesPanel
+              onError={setError}
+              selectedId={links.noteTarget}
+              onSelectNote={links.setNoteTarget}
               onOpenSession={(sid) => {
                 setView('chat')
                 ctl.selectSession(sid)

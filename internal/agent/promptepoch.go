@@ -354,6 +354,10 @@ func (r *Runtime) refreshPromptEpochLocked(ctx context.Context, sessionID, reaso
 		delete(r.epochCache, sessionID)
 	}
 	_ = r.db.ClearPromptEpoch(sessionID)
+	// The session briefing is part of the frozen prefix (_Docs/94): every adopt
+	// point that re-freezes the prefix from live state recomposes the brief too,
+	// or the next snapshot would freeze a stale briefing beside fresh everything.
+	r.InvalidateBrief(sessionID)
 	r.emitDebug(WithSessionID(ctx, sessionID), db.DebugEvent{Type: db.DebugEpoch, Name: reason, Detail: detail})
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/notes"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -252,15 +253,9 @@ func (a *insightAnalyzer) knownSigsFor(lenses []insight.Lens) []string {
 		sigs = append(sigs, sig)
 	}
 	for _, lens := range lenses {
-		if lens.ID == lessonsMiningLensID && a.rt != nil && a.rt.db != nil {
-			lessons, err := a.rt.db.ListLessons(knownSigCount)
-			if err != nil {
-				a.rt.logger.Warn("insight analyzer: known lesson signatures unavailable", "error", err)
-			}
-			for _, l := range lessons {
-				if strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) {
-					add(l.Signature)
-				}
+		if lens.ID == lessonsMiningLensID && a.rt != nil && a.rt.notes != nil {
+			for _, l := range a.rt.notes.List(notes.Filter{Kinds: []notes.Kind{notes.KindLesson}, SignaturePrefix: lessonInsightSignaturePrefix, IncludeRetired: true}) {
+				add(l.Signature)
 			}
 		}
 		if a.findings == nil {

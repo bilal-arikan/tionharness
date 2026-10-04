@@ -73,6 +73,7 @@ const KIND_KEY: Record<ViewKind, string> = {
   insight: 'insight',
   logs: 'logs',
   trajectory: 'trajectory',
+  note: 'note',
 }
 
 function kindLabel(kind: ViewKind): string {
@@ -89,6 +90,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   automations: '#f97316',
   skills: '#eab308',
   insights: '#ec4899',
+  notes: '#8b5cf6',
 }
 const BOARD_COLUMN_COLOR: Record<string, string> = {
   todo: '#64748b',
@@ -111,6 +113,7 @@ const KIND_COLOR: Partial<Record<ViewKind, string>> = {
   skill: '#eab308',
   insight: '#ec4899',
   trajectory: '#a855f7',
+  note: '#8b5cf6',
 }
 
 // Sub-node roles: a ref's `sub` selects one slice of a hub node. The map gives
@@ -288,6 +291,8 @@ function shapeFor(ref: ViewRef, depth: number): Node['shape'] {
       return 'square'
     case 'insight':
       return 'hexagon'
+    case 'note':
+      return 'ellipse'
     case 'category':
       return 'dot'
     default:

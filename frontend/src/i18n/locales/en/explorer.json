@@ -62,7 +62,8 @@
     "skill": "Skill",
     "insight": "Insight",
     "logs": "Logs",
-    "trajectory": "Rota"
+    "trajectory": "Rota",
+    "note": "Note"
   },
   "role": {
     "boardColumn": "Board column",
@@ -91,7 +92,8 @@
     "artifacts": "Artifacts",
     "automations": "Automations",
     "skills": "Skills",
-    "insights": "Insights"
+    "insights": "Insights",
+    "notes": "Notes"
   },
   "boardColumn": {
     "todo": "To do",
@@ -124,6 +126,7 @@
     "board": "Board",
     "budget": "Budget",
     "tools": "Tools",
-    "rota": "Rota"
+    "rota": "Rota",
+    "notes": "Notes"
   }
 }

@@ -643,8 +643,10 @@ artifact'i — eski `RenderAppFixReport` render'ı çağrısız kaldığı için
       prefilter) + `lessons-mining` (workspace-opt, `requiresAny:[error]`). `//go:embed` ile seed.
 - [x] `minCount` inline-map prefilter parse'ı (`parseMinCount`) — flat frontmatter'ın string
       bıraktığı `{ tool: 12 }` formunu sinyal→eşik map'ine çevirir; prefilter enforce eder.
-- [x] `lessons-mining` → **lessons store besleme sinerjisi**: `ScanResult.Produced` (bu taramada
-      üretilen bulgular) → `RunInsightScan.promoteMinedLessons` → `db.AddLesson` (imza-dedupe,
+- [x] `lessons-mining` → **hafıza notu besleme sinerjisi** (2026-10-04'ten beri hedef
+      `internal/notes`, `kind: lesson`, `source: insight`; [94](94-FARKINDALIK-VE-NOTLAR.md)):
+      `ScanResult.Produced` (bu taramada
+      üretilen bulgular) → `RunInsightScan.promoteMinedLessons` → `notes.Store.Put` (imza-dedupe,
       Count++). Sadece taze bulgular beslenir (tüm store re-feed edilmez).
 - [x] Bulgu panosu occurrence göstergesi (`×N`) + status rozeti zaten mevcut.
 
@@ -736,7 +738,7 @@ Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim ta
       atılmış, oturum id'si gibi değişken token'lardan arındırılmış imza) ile eşleştirir.
 - [x] **Bilinen imza ipucu tüm lenslerde** (`insightanalyzer.go` `knownSigsFor`): lens'in kendi bulgu
       imzaları + aynı channel'ın imzaları prompt'a girer, böylece analizci her koşuda yeni slug uydurmaz.
-      `lessons-mining` ayrıca lessons store imzalarını alır.
+      `lessons-mining` ayrıca hafıza notlarındaki `lesson:` imzalarını alır.
 - [x] **Parse normalizasyonu** (`insightanalyzer.go`): `severity` şemadaki `low|med|high` kümesine
       indirgenir ("medium"/"critical" → `med`/`high`); bir oturuma işaret eden `filePointer`
       ("SESSION SES…") ölü link üretmemesi için boşaltılır.

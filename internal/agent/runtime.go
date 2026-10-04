@@ -16,12 +16,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/market"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/mcp/repair"
+	"github.com/bilal-arikan/tionharness/internal/notes"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
 	"github.com/bilal-arikan/tionharness/internal/skills"
@@ -78,6 +80,15 @@ type Runtime struct {
 	// skills resolves reusable skill instruction sets (global/workspace/project
 	// tiers) and backs the use_skill tool + the Available Skills prompt block.
 	skills *skills.Store
+
+	// notes is the workspace memory store (<store>/notes) and aware the
+	// awareness service over it (_Docs/94). Both nil when the store failed to
+	// open; every call site degrades to "no memory, no brief" rather than failing.
+	notes *notes.Store
+	aware *awareness.Service
+	// awareSettings holds the workspace's live awareness settings (defaults when
+	// unset), read by the service through a closure.
+	awareSettings awareSettingsPtr
 
 	// market is the in-app marketplace: a file-based registry of shareable packs
 	// (skill/agent/provider/flow) that can be browsed, installed and published.
@@ -359,9 +370,7 @@ type Runtime struct {
 	// skipLessonDispatch suppresses the post-turn hata→ders reflection. Test seam
 	// only: fixture turns almost always end in a provider error, and the real pass
 	// launches a claude-cli subprocess that writes a claude-home under the test's
-	// TempDir and holds it open past cleanup. Clearing the LessonReflect tunable
-	// instead would also unregister read_lessons/delete_lesson, which the
-	// tier-parity goldens assert on — so the setting stays on and only the
+	// TempDir and holds it open past cleanup. The setting stays on and only the
 	// dispatch is skipped. Always false in production.
 	skipLessonDispatch bool
 
@@ -773,6 +782,21 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		turns:       turnqueue.New(func() int64 { return time.Now().Unix() }),
 		coordCtx:    coordCtx,
 		coordCancel: coordCancel,
+	}
+	// Workspace memory + awareness (_Docs/94). The notes dir sits next to the
+	// entity store; a failure to open it is logged and leaves both nil.
+	if database != nil {
+		if ns, err := notes.Open(filepath.Join(database.Root(), "notes")); err != nil {
+			if logger != nil {
+				logger.Warn("notes store unavailable; memory and briefing disabled", "error", err)
+			}
+		} else {
+			r.notes = ns
+			if q := ns.Quarantined(); len(q) > 0 && logger != nil {
+				logger.Warn("notes store skipped unreadable files", "files", q)
+			}
+			r.aware = awareness.New(database, database.Root(), r.awarenessSettings, logger)
+		}
 	}
 	r.skills.SetChangeHandler(func() {
 		r.publish(events.Event{

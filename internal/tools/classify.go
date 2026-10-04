@@ -27,9 +27,9 @@ var toolRisk = map[string]Risk{
 	"get_session_info":     RiskRead,
 	// Read-only: fans out codebase-memory search_code across the workspace store.
 	"codebase_workspace_search": RiskRead,
-	// Read-only: lists the workspace's auto-collected failure lessons
-	// (delete_lesson stays at the default write tier — it mutates the store).
-	"read_lessons": RiskRead,
+	// Read-only memory lookups (remember / record_work / note_correct stay at
+	// the default write tier — they mutate the notes store).
+	"note_search": RiskRead, "note_expand": RiskRead,
 
 	// Core file/shell built-ins share claude-cli's tool names (Read/Write/Edit/
 	// LS/Glob/Grep/Bash), so native and CLI agents — and the CLI permission-prompt

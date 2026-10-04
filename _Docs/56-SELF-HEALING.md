@@ -227,6 +227,14 @@ tutabilir; bu durumda `cmd.Wait` hiç dönmez ve tur "boş cevap" gibi görünü
   sink `OnEvent` ile aynı desende yukarıdan enjekte edilir, import döngüsü yok.
 
 ### Faz F — Hata→ders döngüsü (lesson reflect, 2026-07-07)
+
+> **Güncelleme (2026-10-04):** `lessons.jsonl` deposu, `LessonsContextBlock` ve
+> `read_lessons`/`delete_lesson` kaldırıldı. Reflector artık workspace hafızasına
+> `kind: lesson`, `scope: workspace`, `confidence: inferred` bir **not** yazar
+> (`internal/notes`; imza tekilleştirmesi `occurrences` sayar). Dersler oturum
+> brifinginde "erişen notlar" bölümüyle ulaşır, `note_search` ile bulunur,
+> `note_correct` ile düzeltilir. Ayrıntı [94](94-FARKINDALIK-VE-NOTLAR.md). Aşağısı
+> tarihsel kayıttır.
 external-context-agent `background_review`'un TionHarness uyarlaması (memory alt sistemi
 kaldırıldığı için hedef store dar-kapsamlı yeni bir sidecar):
 

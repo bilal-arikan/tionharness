@@ -1,8 +1,8 @@
 // Per-workspace category: identity (icon), stats, instructions,
 // provider/model overrides, autonomy pause and the delete danger zone. The
 // publish/export-as-template flow now lives in its own "Dışa Aktar" sub-tab.
-import type { WorkspaceSettings } from '@/types'
-import { Field, Toggle, inputCls, type WsSet } from './primitives'
+import type { AwarenessSettings, WorkspaceSettings } from '@/types'
+import { Field, NumberField, Toggle, inputCls, type WsSet } from './primitives'
 import { CodexPluginsSection } from './CodexPluginsSection'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { formatDate } from '@/shared/lib/intl'
@@ -17,6 +17,11 @@ interface Props {
 
 export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
   const { t } = useTranslation('settings')
+  // The awareness block is one object on the wire; edit it field by field but
+  // write it back whole.
+  const aw = ws.awareness
+  const setAw = <K extends keyof AwarenessSettings>(key: K, val: AwarenessSettings[K]) =>
+    setWsField('awareness', { ...aw, [key]: val })
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
@@ -120,6 +125,80 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         checked={ws.promptEpochEnabled}
         onChange={(v) => setWsField('promptEpochEnabled', v)}
       />
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        {t('workspace.awarenessTitle')}
+      </div>
+      <Toggle
+        label={t('workspace.awarenessLabel')}
+        hint={t('workspace.awarenessHint')}
+        checked={aw.enabled}
+        onChange={(v) => setAw('enabled', v)}
+      />
+      {aw.enabled && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <NumberField
+            label={t('workspace.awarenessBriefBudget')}
+            hint={t('workspace.awarenessBriefBudgetHint')}
+            min={0}
+            value={aw.briefBudgetBytes}
+            onChange={(v) => setAw('briefBudgetBytes', v)}
+          />
+          <NumberField
+            label={t('workspace.awarenessTurnBudget')}
+            hint={t('workspace.awarenessTurnBudgetHint')}
+            min={0}
+            value={aw.turnBudgetBytes}
+            onChange={(v) => setAw('turnBudgetBytes', v)}
+          />
+          <NumberField
+            label={t('workspace.awarenessPulseBudget')}
+            hint={t('workspace.awarenessPulseBudgetHint')}
+            min={0}
+            value={aw.pulseBudgetBytes}
+            onChange={(v) => setAw('pulseBudgetBytes', v)}
+          />
+          <NumberField
+            label={t('workspace.awarenessDigestBudget')}
+            hint={t('workspace.awarenessDigestBudgetHint')}
+            min={0}
+            value={aw.digestBudgetBytes}
+            onChange={(v) => setAw('digestBudgetBytes', v)}
+          />
+          <NumberField
+            label={t('workspace.awarenessRecentSessions')}
+            hint={t('workspace.awarenessRecentSessionsHint')}
+            min={0}
+            max={50}
+            value={aw.recentSessions}
+            onChange={(v) => setAw('recentSessions', v)}
+          />
+          <NumberField
+            label={t('workspace.awarenessRecentDigests')}
+            hint={t('workspace.awarenessRecentDigestsHint')}
+            min={0}
+            max={50}
+            value={aw.recentDigests}
+            onChange={(v) => setAw('recentDigests', v)}
+          />
+          <NumberField
+            label={t('workspace.awarenessNoteCount')}
+            hint={t('workspace.awarenessNoteCountHint')}
+            min={0}
+            max={50}
+            value={aw.noteCount}
+            onChange={(v) => setAw('noteCount', v)}
+          />
+          <NumberField
+            label={t('workspace.awarenessStaleCardDays')}
+            hint={t('workspace.awarenessStaleCardDaysHint')}
+            min={0}
+            max={365}
+            value={aw.staleCardDays}
+            onChange={(v) => setAw('staleCardDays', v)}
+          />
+        </div>
+      )}
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         {t('workspace.sqzTitle')}

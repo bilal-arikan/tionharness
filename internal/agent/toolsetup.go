@@ -347,7 +347,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// WithSources is what keeps the agent's projections identical to the ones the
 	// Explorer map renders: without it the skill / insight / logs nodes would
 	// report their source as unavailable to the agent while the UI showed them.
-	viewSources := tools.ViewSources{Skills: r.skills, Logs: r.logs}
+	viewSources := tools.ViewSources{Skills: r.skills, Logs: r.logs, Notes: r.notes}
 	builtins = append(builtins, tools.NewGetViewTool(r.db).WithSources(r.wsName, viewSources))
 
 	// expand: the structural drill-down companion to get_view (_Docs/68). Lists a
@@ -355,12 +355,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// over the workspace tree cheaply and get_view only the branch that matters.
 	builtins = append(builtins, tools.NewExpandTool(r.db).WithSources(r.wsName, viewSources))
 
-	// read_lessons / delete_lesson: the agent inspects and prunes the workspace's
-	// auto-collected failure lessons (self-healing). The newest few already ride
-	// its context; these tools expose the full set + ids. Gated by the same
-	// setting that produces lessons — with the loop off there is nothing to read.
-	if r.tun != nil && r.tun.LessonReflect() {
-		builtins = append(builtins, tools.NewReadLessonsTool(r.db), tools.NewDeleteLessonTool(r.db))
+	// Workspace memory (_Docs/94): remember / record_work write notes, note_search
+	// / note_expand read them, note_correct supersedes one. Always offered when the
+	// notes store opened; the briefing names them, so they ship eager except the
+	// two rarer ones (tierdefaults.go demotes note_expand / note_correct).
+	if r.notes != nil {
+		builtins = append(builtins, tools.NewNotesTools(notesBridge{r}, agent.ID)...)
 	}
 
 	// insight_scan / insight_list_findings: trigger a retrospective scan and review

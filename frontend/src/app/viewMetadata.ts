@@ -15,6 +15,7 @@ import {
   Wallet,
   FileText,
   Lightbulb,
+  NotebookPen,
   Boxes,
   Settings,
 } from 'lucide-react'
@@ -95,6 +96,13 @@ const VIEWS = [
     primary: true,
     headerless: true,
     titleOrder: 13,
+  },
+  {
+    key: 'notes',
+    labelKey: 'navigation.notes',
+    icon: NotebookPen,
+    primary: true,
+    headerless: true,
   },
   {
     key: 'workspace',

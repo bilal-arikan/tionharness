@@ -15,6 +15,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/insight"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/notes"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 	"github.com/bilal-arikan/tionharness/internal/view"
 )
@@ -35,6 +36,9 @@ type ViewSources struct {
 	// for the Explorer map's live layer. Nil = nothing live / not known. A plain
 	// map on purpose: a nil interface value would be a non-nil interface.
 	Running map[string]bool
+	// Notes is the workspace memory store behind the Notlar category and the
+	// note leaves (nil = unavailable).
+	Notes *notes.Store
 }
 
 // ViewProjector builds the projection resolver for a workspace with every
@@ -53,6 +57,9 @@ func ViewProjector(database *db.DB, wsName string, src ViewSources) *view.Projec
 	s.ToolGroups = builtinToolGroups{}
 	if src.Running != nil {
 		s.Live = view.RunningSet(src.Running)
+	}
+	if src.Notes != nil {
+		s.Notes = viewNotesSource{src.Notes}
 	}
 	// The findings sidecar lives next to the workspace store. A store that will
 	// not open degrades the insight nodes to "unavailable" — it must not take the
@@ -80,6 +87,21 @@ func (builtinToolGroups) ToolGroups() []view.ToolGroup {
 	}
 	return out
 }
+
+// viewNotesSource adapts *notes.Store to view.NotesSource. The map serves the
+// active set only (no archived, retired or private notes), exactly what an
+// agent's get_view may see.
+type viewNotesSource struct{ store *notes.Store }
+
+func (v viewNotesSource) ListNotes() []notes.Note { return v.store.List(notes.Filter{}) }
+func (v viewNotesSource) GetNote(id string) (notes.Note, bool) {
+	n, ok := v.store.Get(id)
+	if !ok || n.Private {
+		return notes.Note{}, false
+	}
+	return n, true
+}
+func (v viewNotesSource) ExpandNote(id string) (notes.Expansion, error) { return v.store.Expand(id) }
 
 // viewFindingsSource adapts *insight.FindingStore to view.FindingsSource.
 type viewFindingsSource struct{ store *insight.FindingStore }

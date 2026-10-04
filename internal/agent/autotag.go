@@ -56,6 +56,10 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	// tagging — see lessons.go). Placed here because this is the one funnel
 	// every turn-completion path (chat/spawn/schedule/wake/auto-continue) hits.
 	r.maybeReflectLessons(ctx, sessionID, steps, turnErr)
+	// Awareness digest (_Docs/94): the LLM-free end-of-turn record of what this
+	// session did, for the next session's brief and the Notes screen. Same
+	// funnel, same fail-quiet discipline.
+	r.RecordDigest(ctx, sessionID)
 
 	var add []string
 

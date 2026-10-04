@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"net/http"
 	"time"
 
@@ -88,6 +89,10 @@ type workspaceSettingsDTO struct {
 	// workspace (always non-nil so the client can render an empty list cleanly).
 	IgnoredRecommendations []string `json:"ignoredRecommendations"`
 
+	// Awareness is the session briefing / pulse / digest configuration
+	// (_Docs/94), normalized so zero fields read as their defaults.
+	Awareness awareness.Settings `json:"awareness"`
+
 	AgentCount   int `json:"agentCount"`
 	SessionCount int `json:"sessionCount"`
 	TaskCount    int `json:"taskCount"`
@@ -124,6 +129,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 		ZvecGrepEnabled:       s.ZvecGrepEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,
+		Awareness:             s.Awareness.Normalized(),
 
 		CodexPluginsEnabled: s.CodexPluginsEnabled,
 		// Non-nil for a clean empty array in JSON (nil marshals to null).

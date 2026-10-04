@@ -57,6 +57,12 @@ const (
 	// TypeSkills signals that the resolved skill catalog changed. It refreshes the
 	// open Skills screen and lights its unread nav dot, but never raises a toast.
 	TypeSkills = "skills"
+	// TypeAwarenessDigest signals that a session's end-of-turn digest changed
+	// (internal/awareness). Refreshes the Notes screen's digest list; no toast.
+	TypeAwarenessDigest = "awareness_digest"
+	// TypeNotes signals that the workspace memory (internal/notes) changed: a note
+	// was written, corrected, archived or deleted. Refreshes the Notes screen.
+	TypeNotes = "notes"
 	// TypeSessionStep carries one live turn-step frame (Event.Step).
 	TypeSessionStep = "session_step"
 	// TypeSessionUserMessage carries one runtime-injected user-role message

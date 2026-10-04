@@ -24,6 +24,8 @@ export type ViewKind =
   | 'logs'
   // Trajectory ("Rota"): reached from a root session's children (_Docs/77 R9).
   | 'trajectory'
+  // Workspace memory note, a category-member leaf under category:notes (_Docs/94).
+  | 'note'
 
 // Budget tiers. tiny is one dense line (safe to push into a prompt suffix), card
 // is the default, full adds per-item detail.
@@ -144,6 +146,7 @@ const VIEW_KINDS: ViewKind[] = [
   'trajectory',
   'insight',
   'logs',
+  'note',
 ]
 
 // parseRef is refToString's inverse: "category:col:in_progress" → {kind, id},

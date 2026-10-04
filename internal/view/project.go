@@ -84,6 +84,8 @@ type Sources struct {
 	ToolGroups ToolGroupsSource
 	// Live reports the sessions executing right now (Explorer live layer).
 	Live LiveSource
+	// Notes is the workspace memory (internal/notes) behind the Notlar category.
+	Notes NotesSource
 }
 
 // SkillsSource enumerates and resolves the workspace skill catalog.
@@ -263,6 +265,12 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level) (View, er
 			return View{}, err
 		}
 		return ProjectInsight(InsightInput{Finding: f}, level)
+	case KindNote:
+		in, err := p.loadNote(ref.ID)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectNote(in, level)
 	case KindLogs:
 		return ProjectLogs(LogsInput{Entries: p.logEntries()}, level)
 	default:

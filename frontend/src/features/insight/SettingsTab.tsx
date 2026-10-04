@@ -23,7 +23,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
   const [saving, setSaving] = useState(false)
   const [deep, setDeep] = useState(false)
   const [resetting, setResetting] = useState(false)
-  // Same boundary as LessonsTab: this tab renders the numeric fields and the
+  // Same boundary as SelfHealingTab: this tab renders the numeric fields and the
   // Save button, so it owns the validity set and gates Save on it.
   const numberValidity = useNumberValidity()
 

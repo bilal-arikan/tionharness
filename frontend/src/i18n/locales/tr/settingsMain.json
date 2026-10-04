@@ -381,13 +381,6 @@
     "creating": "Oluşturuluyor…",
     "submit": "Ajan oluştur"
   },
-  "lessons": {
-    "deleted": "Ders silindi",
-    "title": "Kayıtlı dersler",
-    "empty": "Henüz ders yok. Kötü biten bir turdan sonra burada görünür. En yeni beş ders her turun bağlamına otomatik eklenir.",
-    "seen": "{{count}}× görüldü",
-    "deleteTitle": "Dersi sil (bir daha bağlama eklenmez)"
-  },
   "auth": {
     "loginFailed": "Giriş tamamlanamadı",
     "loggedIn": "Giriş yapılmış.",

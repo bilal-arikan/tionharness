@@ -154,5 +154,5 @@ func (p *Projector) graphChildren(ctx context.Context, cache *structuralCache, r
 // backed by an optional projector source. Their absence is a configuration
 // state, not a broken workspace.
 func optionalSourceMissing(ref Ref) bool {
-	return ref.Kind == KindCategory && (ref.ID == CategorySkills || ref.ID == CategoryInsights)
+	return ref.Kind == KindCategory && (ref.ID == CategorySkills || ref.ID == CategoryInsights || ref.ID == CategoryNotes)
 }

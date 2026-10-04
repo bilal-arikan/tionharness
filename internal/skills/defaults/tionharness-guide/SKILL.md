@@ -43,6 +43,12 @@ workspaces never leaks content between them.
   via `paths:`) to save context — discover them with `skill_search <keywords>`. A
   skill may also ship **bundled files** (templates, references); loading it lists
   them so you can `read` them when the task needs them.
+- **Memory notes** — the workspace's durable memory (`notes/` next to the store):
+  lessons, decisions, work records, gotchas, profiles, each with a declared reach
+  (workspace / agent / project), a confidence tag and a correction chain. The notes
+  that reach you ride your session briefing; `note_search` / `note_expand` read the
+  rest, `remember` / `record_work` write, `note_correct` fixes without erasing. See
+  the `tionharness-notes` skill.
 - **MCP servers** — external tool providers attached per workspace.
 - **Secrets** — an encrypted per-workspace vault, managed via the `secret` tool
   (`action: list|get|set|delete`; load-on-demand — activate it when a task needs a
@@ -52,7 +58,13 @@ workspaces never leaks content between them.
 
 1. A **static prefix** (cached): the agent's soul/identity, the tool catalog and
    the **Available Skills** block (skill slugs + summaries only).
-2. A **dynamic suffix**: cross-session context and the current clock, when enabled.
+2. A **session briefing** (frozen for the session, recomposed after a compaction):
+   the workspace card, open loops, the notes that reach you, recent session digests
+   and the other sessions — closing with a **context meter** that names what was
+   degraded to a pointer.
+3. A **dynamic suffix** (every turn, budgeted and metered): the clock, session
+   identity, recent tool activity, your checklist, the session's artifacts and the
+   workspace **pulse** when it changed.
 
 Skills keep the context lean: only summaries sit in the prompt; you pull a full
 body with `use_skill` exactly when a task matches it. If a task seems to need a

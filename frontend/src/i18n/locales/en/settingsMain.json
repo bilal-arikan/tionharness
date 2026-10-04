@@ -381,13 +381,6 @@
     "creating": "Creating…",
     "submit": "Create agent"
   },
-  "lessons": {
-    "deleted": "Lesson deleted",
-    "title": "Saved lessons",
-    "empty": "No lessons yet. They appear here after an unsuccessful turn. The five newest lessons are automatically injected into each turn's context.",
-    "seen": "Seen {{count}}×",
-    "deleteTitle": "Delete lesson (it will no longer be injected)"
-  },
   "auth": {
     "loginFailed": "Login could not be completed",
     "loggedIn": "Logged in.",

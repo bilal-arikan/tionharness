@@ -1,7 +1,7 @@
 ---
 id: lessons-mining
 name: "Lessons Mining"
-description: "Distil durable, reusable lessons from failed sessions to feed the lessons store."
+description: "Distil durable, reusable lessons from failed sessions to feed the workspace memory."
 channel: workspace-opt
 enabled: true
 model: claude-cli
@@ -38,5 +38,6 @@ known problem stores the same lesson twice and both copies then look like one-of
 Name the problem, not the occurrence: `lesson:crlf-shebang` covers every CRLF-shebang failure,
 while `lesson:crlf-shebang-breaks-deploy-script` invites a new slug for the next script.
 
-Findings from this lens are additionally promoted into the runtime **lessons store** so future
-turns carry them. Only emit lessons that are genuinely reusable; skip session-specific noise.
+Findings from this lens are additionally promoted into the workspace **memory** as `lesson`
+notes, so future sessions receive them in their briefing. Only emit lessons that are genuinely
+reusable; skip session-specific noise.

@@ -73,6 +73,10 @@ const (
 	// root session's children; its own children are the bound sessions / flow
 	// runs / automations (_Docs/77 R9).
 	KindTrajectory Kind = "trajectory"
+	// KindNote projects one memory note (internal/notes): claim, confidence,
+	// reach and correction state. Map leaf for the Notlar category; its children
+	// are the notes it links to and its correction (_Docs/94).
+	KindNote Kind = "note"
 	// KindWorkers is a coordinator's live fleet. Unlike the others it is not
 	// resolvable through Projector: its input is runtime state, not store state,
 	// so the caller builds WorkersInput and calls ProjectWorkers directly. It is

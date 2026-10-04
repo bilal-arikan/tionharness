@@ -2,8 +2,7 @@
   "title": "İçgörü",
   "tabs": {
     "findings": "Bulgular",
-    "lessons": "Öz-iyileşme",
-    "saved-lessons": "Dersler",
+    "self-healing": "Öz-iyileşme",
     "lenses": "Lensler",
     "fleet": "Fleet",
     "runs": "Geçmiş",
@@ -150,7 +149,7 @@
     "deepResetConfirm": "TÜM içgörü verisi ve ledger silinecek. Sonraki tarama tüm oturumları sıfırdan tarar; düzeltilmiş sorunlar bile eski oturumlardan geri gelebilir. Emin misin?",
     "resetConfirm": "Tüm bulgular, tarama geçmişi ve workspace-opt aksiyon dokümanı silinecek. Ledger korunur; eski oturumlar yeniden taranmaz. Emin misin?"
   },
-  "lessons": {
+  "selfHealing": {
     "title": "Öz-iyileşme (döngü koruması ve ders çıkarma)",
     "descriptionBefore": "Kendi kendini onaran oturum akışları (",
     "descriptionMiddle": "): araç döngüsü tur içinde tekrar eden hataları izler (aynı çağrı 2 hatada, aynı araç 3 ardışık hatada uyarılır); devre kesici açıksa 5 tekrarda çağrı bloklanır, 8 ardışık hatada tur kontrollü durdurulur. Üst üste kötü biten oturumlar",
@@ -174,8 +173,6 @@
     "stuckThreshold": "Stuck oturum eşiği",
     "stuckThresholdHint": "Üst üste bu kadar tur kötü biten (tur hatası veya guardrail halt) oturum 'stuck' etiketi alır ve OTONOM turları reddedilir; temiz bir tur sayacı sıfırlar, etiketi kaldırmak da sıfırlar. 0 = kapalı.",
     "reflect": "Hatalardan ders çıkar (lesson reflect)",
-    "reflectHint": "Kötü biten turdan arka planda kısa bir ders damıtılır ve workspace-geneli lessons.jsonl'e yazılır; en yeni 5 ders her turun dinamik bağlamına enjekte edilir. Aynı hata şekli tekrarında mevcut ders güncellenir, kopyalar yığılmaz.",
-    "maxAge": "Ders ömrü (gün)",
-    "maxAgeHint": "Bir dersin hata şekli bu kadar gün içinde tekrar etmezse bayat sayılıp budanır. Düşük değer daha hızlı unutur. 0 = yerleşik varsayılan (2 gün)."
+    "reflectHint": "Kötü biten turdan arka planda kısa bir ders damıtılır ve workspace hafızasına not olarak (tür: ders, Notlar ekranı) yazılır. Eşleşen notlar farkındalık katmanı üzerinden sonraki turlara sunulur. Aynı hata şekli tekrarında mevcut notun görülme sayısı artar, kopyalar yığılmaz."
   }
 }

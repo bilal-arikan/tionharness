@@ -146,8 +146,8 @@ func TestGetViewChildrenWalksTheMap(t *testing.T) {
 	}
 	got := decodeView(t, rec.Body.Bytes())
 	children, _ := got["children"].([]any)
-	if len(children) != 10 {
-		t.Fatalf("workspace children = %d, want 10:\n%s", len(children), rec.Body.String())
+	if len(children) != 11 {
+		t.Fatalf("workspace children = %d, want 11:\n%s", len(children), rec.Body.String())
 	}
 
 	rec = serveFlowRuns((&Server{}).handleGetViewChildren, database,

@@ -21,6 +21,7 @@ export interface AppNavigationParams {
   activeSessionId: string | null
   activeAgentId: string | null
   artifactTarget: string | null
+  noteTarget: string | null
   scheduleTarget: string | null
   settingsCat: string | null
   workspaceTab: string | null
@@ -35,6 +36,7 @@ export interface AppNavigationParams {
   selectSession: (id: string, messageId?: string) => void
   focusAgent: (id: string) => void
   setArtifactTarget: (id: string | null) => void
+  setNoteTarget: (id: string | null) => void
   setScheduleTarget: (id: string | null) => void
   setSettingsCat: (id: string | null) => void
   setWorkspaceTab: (id: string | null) => void
@@ -54,6 +56,7 @@ export function useAppNavigation(p: AppNavigationParams) {
     selectSession,
     focusAgent,
     setArtifactTarget,
+    setNoteTarget,
     setScheduleTarget,
     setSettingsCat,
     setWorkspaceTab,
@@ -83,6 +86,8 @@ export function useAppNavigation(p: AppNavigationParams) {
         if (r.id) focusAgent(r.id)
       } else if (r.view === 'artifacts') {
         setArtifactTarget(r.id)
+      } else if (r.view === 'notes') {
+        setNoteTarget(r.id)
       } else if (r.view === 'schedules') {
         setScheduleTarget(r.id)
       } else if (r.view === 'settings') {
@@ -110,6 +115,7 @@ export function useAppNavigation(p: AppNavigationParams) {
       selectSession,
       focusAgent,
       setArtifactTarget,
+      setNoteTarget,
       setScheduleTarget,
       setSettingsCat,
       setWorkspaceTab,
@@ -130,6 +136,7 @@ export function useAppNavigation(p: AppNavigationParams) {
       sessionId: p.activeSessionId,
       agentId: p.activeAgentId,
       artifactId: p.artifactTarget,
+      noteId: p.noteTarget,
       scheduleId: p.scheduleTarget,
       settingsCat: p.settingsCat,
       workspaceTab: p.workspaceTab,

@@ -8,9 +8,15 @@ import (
 )
 
 // bridgeEager names eager built-ins that claude-cli does not provide natively
-// and therefore must be advertised through the Interaction MCP bridge.
+// and therefore must be advertised through the Interaction MCP bridge. The
+// three eager memory tools (_Docs/94) belong here for the same reason get_view
+// does: the briefing names them, and a CLI agent that cannot reach them is
+// told about a memory it cannot write to.
 var bridgeEager = map[string]bool{
-	"get_view": true,
+	"get_view":    true,
+	"remember":    true,
+	"record_work": true,
+	"note_search": true,
 }
 
 // bridge_filter.go — POC: optional hidden-tier exclusion for the claude-cli

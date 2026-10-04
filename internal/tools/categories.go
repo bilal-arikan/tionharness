@@ -120,7 +120,8 @@ var builtinCategory = map[string]string{
 	// Retrospective self-improvement: scan findings and the error→lesson store.
 	"insight_scan": CategoryDiagnostics, "insight_list_findings": CategoryDiagnostics,
 	"insight_apply_finding": CategoryDiagnostics,
-	"read_lessons":          CategoryDiagnostics, "delete_lesson": CategoryDiagnostics,
+	"remember":              CategoryDiagnostics, "record_work": CategoryDiagnostics, "note_search": CategoryDiagnostics,
+	"note_expand": CategoryDiagnostics, "note_correct": CategoryDiagnostics,
 	// Search-index lifecycle: inspecting and repairing the substrate the code
 	// search tools read from is a diagnostic act, not a config change.
 	"search_index": CategoryDiagnostics,

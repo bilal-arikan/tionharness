@@ -131,6 +131,8 @@ export function WorkspaceView({
         promptEpochEnabled: ws.promptEpochEnabled,
         shellOutputCompression: ws.shellOutputCompression,
         shellCommandRewrite: ws.shellCommandRewrite,
+        // The awareness block is replaced as a whole (the backend normalizes it).
+        awareness: ws.awareness,
       })
       setWs(updated)
       setWsOrig(updated)

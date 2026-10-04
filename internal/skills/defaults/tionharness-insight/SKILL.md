@@ -27,7 +27,8 @@ the user decides what to act on.** Never mass-apply findings on your own.
 
 Findings are **advisory**: applying one is a human/agent decision, not an automatic
 mutation. `lessons-mining` findings are the exception — they are promoted into the
-lessons store automatically and ride future turns.
+workspace memory automatically as `lesson` notes (see the `tionharness-notes` skill)
+and reach future sessions through their briefing.
 
 ## The workflow
 

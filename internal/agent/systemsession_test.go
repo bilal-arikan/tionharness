@@ -12,6 +12,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/notes"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -88,10 +89,7 @@ func createSystemSessionTestFixture(t *testing.T, system bool) (*Runtime, *syste
 func TestSystemAgentSessionDoesNotProduceLesson(t *testing.T) {
 	rt, provider, session := createSystemSessionTestFixture(t, true)
 	rt.reflectLessons(context.Background(), session.ID, []lessonEvidence{{tool: "Bash", errs: "exit status 1"}}, "")
-	lessons, err := rt.db.ListLessons(0)
-	if err != nil {
-		t.Fatalf("list lessons: %v", err)
-	}
+	lessons := rt.notes.List(notes.Filter{})
 	if len(lessons) != 0 || provider.callCount() != 0 {
 		t.Fatalf("system session produced lesson/provider call: lessons=%d calls=%d", len(lessons), provider.callCount())
 	}
@@ -100,10 +98,7 @@ func TestSystemAgentSessionDoesNotProduceLesson(t *testing.T) {
 func TestNormalAgentSessionProducesLesson(t *testing.T) {
 	rt, provider, session := createSystemSessionTestFixture(t, false)
 	rt.reflectLessons(context.Background(), session.ID, []lessonEvidence{{tool: "Bash", errs: "exit status 1"}}, "")
-	lessons, err := rt.db.ListLessons(0)
-	if err != nil {
-		t.Fatalf("list lessons: %v", err)
-	}
+	lessons := rt.notes.List(notes.Filter{})
 	if len(lessons) != 1 || provider.callCount() != 1 {
 		t.Fatalf("normal session lesson/provider calls: lessons=%d calls=%d", len(lessons), provider.callCount())
 	}

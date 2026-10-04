@@ -126,7 +126,7 @@ var settingsPatchGoldenFields = []string{
 	"toolGuardWarnings", "toolGuardHardStop",
 	"guardExactWarn", "guardExactBlock", "guardSameToolWarn", "guardSameToolHalt",
 	"guardNoProgressWarn", "guardNoProgressBlock", "stuckTurnThreshold",
-	"lessonReflect", "lessonMaxAgeDays", "maxOutputTokens",
+	"lessonReflect", "maxOutputTokens",
 	"autoTitleEnabled",
 	"enableShell", "enableCliHooks", "enableCodeMode",
 	"claudeResume", "claudePersistentSession", "claudeSysPromptFile",

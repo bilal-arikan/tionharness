@@ -23,7 +23,7 @@ var focusableViews = map[string]bool{
 	"chat": true, "executions": true, "agents": true, "explorer": true,
 	"board": true, "schedules": true, "flows": true,
 	"artifacts": true, "skills": true, "market": true, "budget": true,
-	"prompts": true, "workspace": true, "settings": true,
+	"prompts": true, "notes": true, "workspace": true, "settings": true,
 }
 
 // FocusViewTool lets an agent drive the user's UI to a specific view (and
@@ -48,7 +48,7 @@ func (FocusViewTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "view": { "type": "string", "enum": ["chat","executions","agents","explorer","board","schedules","flows","artifacts","skills","market","budget","prompts","workspace","settings"], "description": "The screen to open." },
+    "view": { "type": "string", "enum": ["chat","executions","agents","explorer","board","schedules","flows","artifacts","skills","market","budget","prompts","notes","workspace","settings"], "description": "The screen to open." },
     "sessionId": { "type": "string", "description": "Optional session to select (chat/executions views). Defaults to the current session." },
     "agentId": { "type": "string", "description": "Optional agent to select (agents view). Defaults to the responding agent." }
   },

@@ -16,6 +16,7 @@ describe('screenForRef', () => {
     expect(screenForRef(ref('automation', 'AUT1'))).toMatchObject({ view: 'schedules', id: 'AUT1' })
     expect(screenForRef(ref('schedule', 'SCH1'))).toMatchObject({ view: 'schedules', id: 'SCH1' })
     expect(screenForRef(ref('trajectory', 'RTA1'))).toMatchObject({ view: 'rota', id: 'RTA1' })
+    expect(screenForRef(ref('note', 'NOTE1'))).toMatchObject({ view: 'notes', id: 'NOTE1' })
   })
 
   it('sends hubs, groups and leaves without a deep link to the screen itself', () => {
@@ -25,6 +26,7 @@ describe('screenForRef', () => {
     })
     expect(screenForRef(ref('category', 'sessions'))).toMatchObject({ view: 'chat', id: null })
     expect(screenForRef(ref('category', 'flows'))).toMatchObject({ view: 'flows' })
+    expect(screenForRef(ref('category', 'notes'))).toMatchObject({ view: 'notes', id: null })
     expect(screenForRef(ref('category', 'col:done'))).toMatchObject({ view: 'board' })
     expect(screenForRef(ref('category', 'skind:chat'))).toMatchObject({ view: 'chat', id: null })
     expect(screenForRef(ref('board', 'board'))).toMatchObject({ view: 'board', id: null })

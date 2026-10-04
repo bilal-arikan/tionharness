@@ -88,6 +88,12 @@ func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 			return nil, err
 		}
 		return capHandles(hs, categoryTopN), nil
+	case KindNote:
+		hs, err := p.noteChildren(ref.ID)
+		if err != nil {
+			return nil, err
+		}
+		return capHandles(hs, categoryTopN), nil
 	case KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		// Leaves in the map: their breakdown is rendered inline by Project, so
@@ -143,7 +149,7 @@ func (p *Projector) Neighborhood(ctx context.Context, focus Ref) (Neighborhood, 
 		candidateChildren, childErr := cache.children(ctx, candidate.Ref)
 		if childErr != nil {
 			if candidate.Ref.Kind == KindCategory &&
-				(candidate.Ref.ID == CategorySkills || candidate.Ref.ID == CategoryInsights) {
+				(candidate.Ref.ID == CategorySkills || candidate.Ref.ID == CategoryInsights || candidate.Ref.ID == CategoryNotes) {
 				continue
 			}
 			return Neighborhood{}, childErr
@@ -235,6 +241,7 @@ func workspaceChildren() []Handle {
 		{Label: "Otomasyonlar", Ref: Ref{Kind: KindCategory, ID: CategoryAutomations}, Level: LevelCard},
 		{Label: "Skill'ler", Ref: Ref{Kind: KindCategory, ID: CategorySkills}, Level: LevelCard},
 		{Label: "İçgörüler", Ref: Ref{Kind: KindCategory, ID: CategoryInsights}, Level: LevelCard},
+		{Label: "Notlar", Ref: Ref{Kind: KindCategory, ID: CategoryNotes}, Level: LevelCard},
 		{Label: "Günlükler", Ref: Ref{Kind: KindLogs, ID: LogsRefID}, Level: LevelCard},
 		{Label: "Bütçe", Ref: Ref{Kind: KindBudget, ID: BudgetRefID}, Level: LevelCard},
 		{Label: "Araçlar", Ref: Ref{Kind: KindTools, ID: ToolsRefID}, Level: LevelCard},

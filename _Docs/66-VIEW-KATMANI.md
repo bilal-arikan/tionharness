@@ -848,6 +848,15 @@ node, hata + handle, waiting, elision, özel sütun sıralaması,
 boş pano, coordination soyağacı, boş girdi reddi) ve `internal/api/views_test.go`
 (üç kind uçtan uca + 400/404).
 
+## Göç 4 (2026-10-04): dinamik suffix tek bütçeye bağlandı
+
+[94-FARKINDALIK-VE-NOTLAR](94-FARKINDALIK-VE-NOTLAR.md) `composeTurnRequest`'in on iki
+ad-hoc bloğunu `awareness.Section` listesine çevirdi: ortak bütçe, öncelik sırasıyla
+işaretçiye düşürme ve her turun sonunda sayaç. Workspace kartı artık oturum başı
+brifingin bir bölümü olarak `view.ProjectWorkspace` üzerinden gidiyor (aynı bayt,
+Panel ile birebir). "Göç sırası" sorusu böylece kapandı: coordinator worker-state bloğu
+bir bölüm (p1, işaretçili), handoff ve insight kendi yerlerinde.
+
 ## Açık sorular (kalanlar)
 
 - DSL grameri nerede versiyonlansın — bugün kod içinde; `internal/prompts` benzeri

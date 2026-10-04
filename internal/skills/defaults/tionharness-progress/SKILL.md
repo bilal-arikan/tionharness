@@ -54,6 +54,14 @@ Example call:
 }
 ```
 
+## Layer 1b — `record_work` (what happened, for the next session)
+
+At a natural stopping point, `record_work` files a **work note** in the workspace
+memory: what changed, decisions and rejected alternatives, what was learned, what is
+still open, how it was verified. The next session's briefing lists it under
+"recently finished work" and `note_search` finds it later. A lesson that would help a
+different project is a `remember` as well. See the `tionharness-notes` skill.
+
 ## Layer 2 — a human-readable `PROGRESS.md` (you maintain it)
 
 For work a human will also read or that lives in a git repo, keep a short

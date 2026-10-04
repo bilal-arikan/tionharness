@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -205,6 +206,16 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 		if cb := r.CapabilityContext(ctx, a, cwd); cb != "" {
 			out = strings.TrimSpace(out + "\n\n" + cb)
 		}
+		// Session briefing (_Docs/94): frozen per session, so it is as
+		// drift-proof as the rest of the prefix. Shares ONE source with the chat
+		// path (api.buildStaticPrefix).
+		if sid := SessionIDFrom(ctx); sid != "" {
+			if sess, err := r.db.GetSession(ctx, sid); err == nil {
+				if bb := r.BriefBlock(ctx, sess, a); bb != "" {
+					out = strings.TrimSpace(out + "\n\n" + bb)
+				}
+			}
+		}
 		// Boot/verification sequence (Anthropic long-running-agent harness discipline):
 		// a headless turn starts with a fresh context, so nudge it through the fixed
 		// orient → recall → select-one → verify-baseline → work → close-the-loop routine
@@ -253,20 +264,17 @@ func DateTimeContextBlock() string {
 // (its allow/denylist decides whether Bash/PowerShell are offered at all), so it
 // cannot be derived from the session id alone.
 func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) string {
-	out := DateTimeContextBlock()
-	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
-	// every headless turn so a fresh context does not repeat known failures.
-	// The turn's own agent (resolved via the stamped session) ranks first.
-	agentID, isCoordinator := "", false
+	// The turn's own agent (resolved via the stamped session) selects the
+	// coordinator-only sections; the session itself feeds the awareness layer.
+	var sess db.Session
 	sid := SessionIDFrom(ctx)
 	if sid != "" {
-		if sess, err := r.db.GetSession(ctx, sid); err == nil {
-			agentID = sess.AgentID
-			isCoordinator = sess.IsCoordinator()
+		if s, err := r.db.GetSession(ctx, sid); err == nil {
+			sess = s
 		}
 	}
-	if lb := r.LessonsContextBlock(ctx, agentID); lb != "" {
-		out += "\n\n" + lb
+	lead := []awareness.Section{
+		{Key: "clock", Text: DateTimeContextBlock(), Priority: awareness.PriorityPinned, Volatile: true},
 	}
 	// Working-directory context: the chat path injects workdirContextBlock, but a
 	// headless turn had none — so an autonomous worker learned its root and the
@@ -275,7 +283,7 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) s
 	// brake is on. Volatile (the brake is a toggamble tunable) → dynamic suffix.
 	confined := r.tun != nil && r.tun.AutonomousConfine()
 	if wb := r.workdirConfineBlock(ctx, confined); wb != "" {
-		out += "\n\n" + wb
+		lead = append(lead, awareness.Section{Key: "workdir", Text: wb, Priority: awareness.PriorityPinned, Volatile: true})
 	}
 	// Shell-execution capability, single-sourced with the chat path: advertises
 	// the registered Bash/PowerShell tools when the gate is on + a shell backs it,
@@ -283,15 +291,15 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) s
 	// dynamic suffix, since the gate can toggle mid-session. The confined flag keeps
 	// its "confined/not confined" clause consistent with the block above.
 	if sh := r.ShellToolsContextBlock(ctx, agent, confined); sh != "" {
-		out += "\n\n" + sh
+		lead = append(lead, awareness.Section{Key: "shell", Text: sh, Priority: awareness.PriorityPinned, Volatile: true})
 	}
 	// Prompt-epoch drift notice (mirrors the chat path): the frozen snapshot is
 	// holding back a live change — a compact diff on the volatile side. The suffix
 	// runs after autonomousSystemPrompt in request composition, so the diff (set by
 	// EpochStaticSystem) is fresh for this turn.
 	if sid != "" {
-		if note := r.PromptEpochContextNote(sid, agentID); note != "" {
-			out += "\n\n" + note
+		if note := r.PromptEpochContextNote(sid, agent.ID); note != "" {
+			lead = append(lead, awareness.Section{Key: "epoch", Text: note, Priority: awareness.PriorityPinned, Volatile: true})
 		}
 	}
 	// Coordinator turns get an authoritative live SITUATION block — fleet state,
@@ -300,12 +308,16 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) s
 	// stall) and does not spend two or three tool calls a turn re-reading state
 	// that is already here. Coordinator-only, reusing the session loaded above —
 	// which includes a mid-level node, whose block also reports its own subtree.
-	if sid != "" && isCoordinator {
+	if sid != "" && sess.IsCoordinator() {
 		if wb := r.coordinatorSituationBlock(ctx, sid); wb != "" {
-			out += "\n\n" + wb
+			lead = append(lead, awareness.Section{Key: "situation", Text: wb, Priority: 1, Volatile: true,
+				Pointer: "## Coordinator situation\nThe fleet/board snapshot was omitted to fit the context budget; list_workers and get_view board carry it."})
 		}
 	}
-	return out
+	// The awareness layer appends the checklist, the session's artifacts and the
+	// de-duplicated workspace pulse, fits everything to the turn budget and
+	// closes with the meter (_Docs/94).
+	return r.TurnBlock(ctx, sess, agent, false, lead).Text
 }
 
 // workdirConfineBlock renders the headless turn's working-directory context: its

@@ -7,34 +7,23 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/notes"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // Hata→ders döngüsü (self-healing, external-context-agent background_review analogue).
 // After a turn that ended badly, a background reflection call distills the
-// failure into ONE short, generalizable lesson and persists it to the
-// workspace-wide lessons store. Future turns (chat + headless) read the newest
-// lessons back as a dynamic-context block, so the same failure shape is not
-// repeated across sessions. The memory subsystem was removed (2026-07-05);
-// lessons are its narrow, failure-focused successor.
+// failure into ONE short, generalizable lesson and files it as a workspace
+// memory note (internal/notes, kind "lesson"). The session briefing serves the
+// notes that reach a session, so the same failure shape is not repeated across
+// sessions; note_search finds the rest (_Docs/94).
 
-// lessonsInjectCount bounds how many newest lessons ride each turn's dynamic
-// context (a few high-signal lines, not a log dump).
-const lessonsInjectCount = 5
-
-// Lesson trust is derived at selection time; it is deliberately not persisted.
-// Recurring reflector lessons lose trust, while insight lessons keep Count
-// neutral because their Count measures repeated lens findings, not failed advice.
-const (
-	lessonTrustBase              = 1.0
-	lessonTrustRepeatPenalty     = 0.10
-	lessonTrustFreshBonus        = 0.05
-	lessonTrustFreshAge          = 6 * time.Hour
-	lessonInsightSignaturePrefix = "lesson:"
-)
+// lessonInsightSignaturePrefix marks lessons promoted from the insight scanner
+// (lessons-mining lens) so the analyzer can tell them from reflector lessons.
+const lessonInsightSignaturePrefix = "lesson:"
 
 // lessonEvidenceMax bounds how many failing steps feed one reflection prompt.
 const lessonEvidenceMax = 3
@@ -60,9 +49,8 @@ func (r *Runtime) maybeReflectLessons(ctx context.Context, sessionID string, ste
 	if r == nil || r.db == nil || !r.tun.LessonReflect() || sessionID == "" {
 		return
 	}
-	// Test fixtures suppress only the dispatch, not the setting: LessonReflect also
-	// gates read_lessons/delete_lesson registration, which the tier-parity goldens
-	// assert on. Always false in production.
+	// Test fixtures suppress only the dispatch, not the setting (the reflection
+	// launches a real background provider call). Always false in production.
 	if r.skipLessonDispatch {
 		return
 	}
@@ -188,20 +176,54 @@ func (r *Runtime) reflectLessons(ctx context.Context, sessionID string, evidence
 	if len(evidence) > 0 {
 		tool = evidence[0].tool
 	}
-	lesson, err := r.db.AddLesson(db.Lesson{
-		Time:      time.Now().Unix(),
-		AgentID:   agent.ID,
-		SessionID: sessionID,
-		Tool:      tool,
-		Signature: lessonSignature(tool, evidence, turnLevel),
-		Text:      text,
+	if r.notes == nil {
+		r.logger.Warn("lesson not persisted: notes store unavailable", "session", sessionID)
+		return
+	}
+	// The lesson lands in the workspace memory (_Docs/94) as a workspace-scoped
+	// inferred note; its failure-shape signature dedupes repeats (Occurrences++).
+	var tags []string
+	if tool != "" {
+		tags = []string{tool}
+	}
+	note, err := r.notes.Put(notes.Note{
+		Kind:          notes.KindLesson,
+		Title:         lessonTitle(text),
+		Body:          text,
+		Scope:         notes.ScopeWorkspace,
+		Confidence:    notes.ConfidenceInferred,
+		Source:        notes.SourceLessonExtractor,
+		SourceSession: sessionID,
+		SourceAgent:   agent.ID,
+		Signature:     lessonSignature(tool, evidence, turnLevel),
+		Tags:          tags,
 	})
 	if err != nil {
 		r.logger.Warn("lesson persist failed", "session", sessionID, "error", err)
 		return
 	}
-	r.logger.Info("lesson recorded", "session", sessionID, "tool", tool, "count", lesson.Count)
+	r.logger.Info("lesson recorded", "session", sessionID, "tool", tool, "note", note.ID, "count", note.Occurrences)
 	r.emitDebug(ctx, db.DebugEvent{Type: db.DebugLesson, AgentID: agent.ID, Name: tool, Detail: truncateRunes(text, 200)})
+	r.publish(events.Event{Type: events.TypeNotes, Level: "info", Title: "Yeni ders notu", Body: note.Title, Target: map[string]string{"view": "notes", "noteId": note.ID}})
+}
+
+// lessonTitle derives a note title from the reflector's text: its first
+// sentence, cut at a word boundary to a searchable length (no ellipsis — a
+// title is a wikilink target and a search key, not a teaser).
+func lessonTitle(text string) string {
+	t := strings.Trim(notes.FirstSentence(text, 0), ".!? ")
+	const maxRunes = 90
+	if r := []rune(t); len(r) > maxRunes {
+		cut := string(r[:maxRunes])
+		if i := strings.LastIndex(cut, " "); i > maxRunes/2 {
+			cut = cut[:i]
+		}
+		t = strings.TrimRight(cut, " ,;:-")
+	}
+	if t == "" {
+		t = "Lesson from a failed turn"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(t, "[", "("), "]", ")")
 }
 
 // cleanLessonText normalizes the reflector's reply: a model may open with
@@ -259,90 +281,3 @@ func normalizeErrSig(s string) string {
 
 // digitRunRe matches runs of digits for signature normalization.
 var digitRunRe = regexp.MustCompile(`\d+`)
-
-// LessonsContextBlock renders the newest stored lessons as a dynamic-context
-// block for chat + headless turns ("" when there are none or the feature is
-// off). Lessons learned by THIS agent rank first (its own failure history is
-// the most relevant), then the rest of the workspace's. Within each group,
-// derived trust ranks lessons first and recency breaks equal scores. agentID
-// may be "" (no prioritization). Volatile by nature
-// (lessons accrue over time), so it must ride SystemDynamic — never the
-// cached static prefix.
-func (r *Runtime) LessonsContextBlock(ctx context.Context, agentID string) string {
-	if r == nil || r.db == nil || !r.tun.LessonReflect() {
-		return ""
-	}
-	// Overfetch so same-agent lessons beyond the newest-N window can still be
-	// promoted into the injected set.
-	all, err := r.db.ListLessons(lessonsInjectCount * 10)
-	if err != nil || len(all) == 0 {
-		return ""
-	}
-	matching := make([]db.Lesson, 0, len(all))
-	remaining := make([]db.Lesson, 0, len(all))
-	if agentID != "" {
-		for _, l := range all {
-			if l.AgentID == agentID {
-				matching = append(matching, l)
-			} else {
-				remaining = append(remaining, l)
-			}
-		}
-	} else {
-		remaining = append(remaining, all...)
-	}
-	now := time.Now().Unix()
-	sortLessonsByTrust(matching, now)
-	sortLessonsByTrust(remaining, now)
-	lessons := make([]db.Lesson, 0, lessonsInjectCount)
-	lessons = appendLessonsUpTo(lessons, matching, lessonsInjectCount)
-	lessons = appendLessonsUpTo(lessons, remaining, lessonsInjectCount)
-	var b strings.Builder
-	b.WriteString("## Lessons from past failures (auto-collected)\n")
-	b.WriteString("Earlier turns failed in these ways; apply the lessons instead of repeating them:\n")
-	for _, l := range lessons {
-		line := strings.Join(strings.Fields(l.Text), " ")
-		if l.Tool != "" {
-			fmt.Fprintf(&b, "- [%s] %s", l.Tool, line)
-		} else {
-			fmt.Fprintf(&b, "- %s", line)
-		}
-		if l.Count > 1 {
-			fmt.Fprintf(&b, " (seen %d times)", l.Count)
-		}
-		b.WriteString("\n")
-	}
-	return strings.TrimSpace(b.String())
-}
-
-func lessonTrust(l db.Lesson, now int64) float64 {
-	score := lessonTrustBase
-	if !strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) && l.Count > 1 {
-		score -= float64(l.Count-1) * lessonTrustRepeatPenalty
-	}
-	if age := now - l.Time; age >= 0 && age <= int64(lessonTrustFreshAge/time.Second) {
-		score += lessonTrustFreshBonus
-	}
-	return score
-}
-
-// sortLessonsByTrust is stable, preserving ListLessons' recency order when
-// scores tie. The candidate set is bounded by the small overfetch above.
-func sortLessonsByTrust(lessons []db.Lesson, now int64) {
-	for i := 1; i < len(lessons); i++ {
-		for j := i; j > 0 && lessonTrust(lessons[j], now) > lessonTrust(lessons[j-1], now); j-- {
-			lessons[j], lessons[j-1] = lessons[j-1], lessons[j]
-		}
-	}
-}
-
-func appendLessonsUpTo(dst, src []db.Lesson, limit int) []db.Lesson {
-	remaining := limit - len(dst)
-	if remaining <= 0 {
-		return dst
-	}
-	if len(src) > remaining {
-		src = src[:remaining]
-	}
-	return append(dst, src...)
-}

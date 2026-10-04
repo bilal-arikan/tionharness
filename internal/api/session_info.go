@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -690,12 +691,39 @@ func (s *Server) systemFillersOpts(ctx context.Context, wsp *workspace.Workspace
 		})
 	}
 
-	// Session artifact context block (dynamic suffix).
-	if ab := artifactsContextBlock(ctx, wsp.DB, session.ID); strings.TrimSpace(ab) != "" {
-		out = append(out, contextFiller{Label: "Artifactlar", Role: "artifacts", Tokens: conversation.EstimateText(ab), Count: 1})
+	// The awareness layer's own per-turn sections (checklist, artifacts, pulse)
+	// as the LAST turn actually shipped them, read from the composition it kept
+	// (_Docs/94) — so the meter reports what the model saw, not a re-derivation.
+	if aw := wsp.Runtime.Awareness(); aw != nil {
+		if seen := aw.Seen(session.ID); seen.LastTurn != nil {
+			for _, sec := range seen.LastTurn.Sections {
+				switch sec.Key {
+				case "todo", "artifacts", "pulse":
+				default:
+					continue
+				}
+				if sec.State == awareness.StateDropped {
+					continue
+				}
+				out = append(out, contextFiller{Label: awarenessSectionLabel(sec.Key), Role: "awareness-" + sec.Key, Tokens: (sec.Bytes + 3) / 4, Count: 1})
+			}
+		}
 	}
 
 	return out
+}
+
+// awarenessSectionLabel names an awareness section for the context panel.
+func awarenessSectionLabel(key string) string {
+	switch key {
+	case "todo":
+		return "Yapılacaklar listesi"
+	case "artifacts":
+		return "Artifactlar"
+	case "pulse":
+		return "Workspace nabzı"
+	}
+	return key
 }
 
 // contextOverheadTokens estimates the non-message context shipped every turn —

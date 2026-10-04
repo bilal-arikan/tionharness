@@ -22,6 +22,7 @@ const CATEGORY_VIEW: Record<string, View> = {
   automations: 'schedules',
   skills: 'skills',
   insights: 'insights',
+  notes: 'notes',
 }
 
 function target(view: View, id: string | null = null): ExplorerTarget {
@@ -62,6 +63,8 @@ export function screenForRef(ref: ViewRef): ExplorerTarget | null {
       return target('skills')
     case 'insight':
       return target('insights')
+    case 'note':
+      return target('notes', ref.id)
     case 'budget':
       return target('budget')
     case 'tools':

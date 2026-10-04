@@ -532,6 +532,7 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	// SessionEnd lifecycle hook (Claude Code parity): fire BEFORE the delete so a
 	// cleanup hook can still read the session's files. Fire-and-forget audit.
 	wsp.Runtime.RunLifecycleHooks(r.Context(), id, db.HookSessionEnd, agent.LifecycleExtras{Trigger: "delete"})
+	wsp.Runtime.ForgetAwareness(id)
 	var deleteErr error
 	if s.deleteSession != nil {
 		deleteErr = s.deleteSession(r.Context(), wsp, id)

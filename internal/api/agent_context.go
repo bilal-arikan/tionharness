@@ -149,17 +149,13 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// buildAgentDynamicPrompt simulates the per-turn dynamic suffix for a fresh
-// agent: the cross-session block (always on). Mirrors the
-// message-independent half of composeTurnRequest's dynamic assembly; session-
-// scoped parts (summary/artifacts/todos) are intentionally excluded (no live
-// session).
+// buildAgentDynamicPrompt previews what a FRESH session of this agent would be
+// briefed with (_Docs/94): the workspace card, open loops, the notes that reach
+// the agent, recently finished work and the other sessions. Composed on the
+// fly, never cached — a preview must not freeze a brief for a session that does
+// not exist yet. Session-scoped parts (summary/artifacts/todos) are excluded.
 func buildAgentDynamicPrompt(ctx context.Context, wsp *workspace.Workspace, agent db.Agent, message string) string {
-	var dynamic string
-	if sb := sessionsContextBlock(ctx, wsp.DB, ""); sb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
-	}
-	return strings.TrimSpace(dynamic)
+	return strings.TrimSpace(wsp.Runtime.BriefPreview(ctx, agent))
 }
 
 // buildAgentStaticPrompt returns the STATIC prefix an agent starts a fresh turn

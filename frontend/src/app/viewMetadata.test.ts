@@ -20,6 +20,7 @@ describe('navigation destinations', () => {
       'budget',
       'prompts',
       'insights',
+      'notes',
     ])
     expect(PINNED_NAV.map((item) => item.key)).toEqual(['workspace', 'settings'])
     const destinations = [...NAV, ...PINNED_NAV].map((item) => item.key)
@@ -44,6 +45,7 @@ describe('navigation destinations', () => {
       'prompts',
       'insights',
       'market',
+      'notes',
       'workspace',
       'settings',
     ])

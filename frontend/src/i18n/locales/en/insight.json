@@ -2,8 +2,7 @@
   "title": "Insight",
   "tabs": {
     "findings": "Findings",
-    "lessons": "Self-healing",
-    "saved-lessons": "Lessons",
+    "self-healing": "Self-healing",
     "lenses": "Lenses",
     "fleet": "Fleet",
     "runs": "History",
@@ -163,7 +162,7 @@
     "deepResetConfirm": "ALL insight data and the ledger will be deleted. The next scan will process every session from scratch, so even fixed issues may return from old sessions. Are you sure?",
     "resetConfirm": "All findings, scan history, and the workspace-opt action document will be deleted. The ledger is preserved, so old sessions will not be rescanned. Are you sure?"
   },
-  "lessons": {
+  "selfHealing": {
     "title": "Self-healing (loop protection and lesson extraction)",
     "descriptionBefore": "Self-healing session flows (",
     "descriptionMiddle": "): the tool loop tracks repeated failures within a turn (warn after 2 identical call failures and 3 consecutive failures from the same tool); when the circuit breaker is enabled, it blocks the fifth repeat and stops the turn after 8 consecutive failures. Sessions with consecutive bad turns receive the",
@@ -187,8 +186,6 @@
     "stuckThreshold": "Stuck session threshold",
     "stuckThresholdHint": "A session with this many consecutive bad turns (turn error / guardrail halt) receives the 'stuck' label and autonomous turns are rejected. A clean turn resets the counter; removing the label does too. 0 disables it.",
     "reflect": "Extract lessons from failures (lesson reflect)",
-    "reflectHint": "Distills a short lesson in the background from a bad turn and writes it to workspace-wide lessons.jsonl. The five newest lessons are injected into each turn's dynamic context. A repeated failure pattern updates its existing lesson instead of accumulating copies.",
-    "maxAge": "Lesson lifetime (days)",
-    "maxAgeHint": "A lesson is considered stale and pruned if its failure pattern does not recur within this many days. Lower values forget faster. 0 uses the built-in default of 2 days."
+    "reflectHint": "Distills a short lesson in the background from a bad turn and files it as a workspace memory note (kind: lesson, see the Notes screen). Matching notes are served to later turns through the awareness layer. A repeated failure pattern bumps the existing note's occurrence count instead of accumulating copies."
   }
 }

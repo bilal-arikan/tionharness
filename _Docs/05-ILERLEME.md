@@ -9,6 +9,37 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Workspace farkındalığı ve hafıza notları (2026-10-04)
+
+- Yeni `internal/notes`: Markdown + frontmatter not deposu (`store/notes/`), erişim
+  (`workspace|agent|project`), güven, supersede zinciri, imza tekilleştirme, lexical arama,
+  wikilink/backlink, arşiv; silme yalnız kullanıcıya. Yeni `internal/awareness`: üretici
+  arayüzü, bütçe + sayaç + işaretçiye düşürme (`Compose`), oturum başına dondurulan
+  **brifing**, nabız dedupe'lu **tur** bileşimi, LLM'siz **kapanış özeti** (`digest.json`,
+  `awareness/digests.json`). Tasarım ve sözleşme: [94](94-FARKINDALIK-VE-NOTLAR.md).
+- `composeTurnRequest` ve `autonomousDynamicSuffix` artık bölümleri `Runtime.TurnBlock`'a
+  verir; brifing `buildStaticPrefix` / `autonomousSystemPrompt` ile statik öneğe girer,
+  ilk tur ve compaction'da yenilenir. `sessionsContextBlock`, `todoContextBlock`,
+  `artifactsContextBlock`, `LessonsContextBlock` kaldırıldı.
+- Dersler nota taşındı: `lessons.jsonl`, `read_lessons`/`delete_lesson`, `/api/lessons`,
+  `lessonMaxAgeDays` kaldırıldı; ders çıkarıcı ve insight `lessons-mining` `lesson` notu
+  yazar. Yeni araçlar `remember`, `record_work`, `note_search` (eager), `note_expand`,
+  `note_correct` (name-only). `get_view` `note` türü ve Explorer `Notlar` kovası.
+- Dört karar mercii (gölge): `brief-relevance`, `pulse-urgency`, `wrap-up-memory`,
+  `note-supersede`. Workspace ayarlarına `awareness` bölümü; REST `/api/notes*`,
+  `/api/awareness/*`, `/api/sessions/{id}/{digest,awareness}`; olaylar `notes`,
+  `awareness_digest`; `focus_view` `notes`. Skill `tionharness-notes`; guide, insight,
+  progress ve autonomous-ops skill'leri güncellendi. `scripts/depcheck.sh` iki yeni leaf.
+- Testler: `internal/notes`, `internal/awareness`, `internal/tools/builtin_notes_test.go`,
+  `internal/agent/awareness_test.go`, `internal/api/{notes,awareness_delivery}_test.go`
+  (teslimat kapısı: gerçek `/api/chat` ucu, kayıt eden sağlayıcı).
+- Canlı test bulguları ve düzeltmeleri: eager hafıza araçları CLI köprüsüne
+  (`tools.bridgeEager`) eklendi (claude-cli/codex-cli ajanları `remember`/`record_work`/
+  `note_search`'ü göremiyordu); `/refresh-context` ve eşik tetikli epoch yenilemesi
+  brifingi de yeniler; boş `expand` komşulukları `[]` döner (Notlar detay sayfası
+  `null.length` ile çöküyordu); ders notu başlığı üç nokta yerine sözcük sınırında
+  kesilir. Senaryo listesi [94 §8](94-FARKINDALIK-VE-NOTLAR.md).
+
 ## JEV karar mekanizmaları ve akış ↔ otomasyon bağlantısı (2026-10-04)
 
 - `internal/flow`: `route.mode = criteria` (`criteria[]`, `pass`/`fail` kolları, adım

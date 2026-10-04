@@ -262,6 +262,9 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
   `progressResume` on, a fresh session already gets this injected.
 - `list_tasks` — the append-only Kanban board is the workspace's feature/work ledger.
   Treat task notes as the canonical "what's left" record.
+- Your **session briefing** already lists the memory notes that reach you and the
+  recent session digests; `note_search <topic>` finds decisions, lessons and gotchas
+  recorded before. Say what came back (or that nothing is recorded) before you build.
 
 ### Step 2 — Select ONE task
 - Pick the **single highest-priority unfinished item**: the lowest-numbered `todo`

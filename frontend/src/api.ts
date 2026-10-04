@@ -12,7 +12,7 @@ import { uploadsApi } from './api/uploads'
 import { taskApi } from './api/tasks'
 import { mcpApi } from './api/mcp'
 import { hookApi } from './api/hooks'
-import { lessonApi } from './api/lessons'
+import { noteApi } from './api/notes'
 import { insightApi } from './api/insights'
 import { flowApi } from './api/flows'
 import { executionApi } from './api/executions'
@@ -44,7 +44,7 @@ export const api = {
   ...taskApi,
   ...mcpApi,
   ...hookApi,
-  ...lessonApi,
+  ...noteApi,
   ...insightApi,
   ...flowApi,
   ...executionApi,

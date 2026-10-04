@@ -39,8 +39,7 @@ vi.mock('@/shared/components/agents/AgentIdentity', () => ({
 vi.mock('./FindingsTab', () => ({ FindingsTab: () => null }))
 vi.mock('./FleetTab', () => ({ FleetTab: () => null }))
 vi.mock('./RunsTab', () => ({ RunsTab: () => null }))
-vi.mock('./LessonsTab', () => ({ LessonsTab: () => null }))
-vi.mock('@/features/settings/LessonsList', () => ({ LessonsList: () => null }))
+vi.mock('./SelfHealingTab', () => ({ SelfHealingTab: () => null }))
 vi.mock('./LensList', () => ({
   LensList: ({ onScanLens }: { onScanLens: (id: string) => void }) =>
     createElement('button', { onClick: () => onScanLens('LENS1') }, 'scan-one-lens'),

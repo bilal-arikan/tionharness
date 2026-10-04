@@ -75,6 +75,12 @@ export function useDeepLinks(setView: (v: View) => void) {
     [setView],
   )
 
+  // Note deep-link target: #/w/{ws}/notes/{noteId} pre-selects that note on the
+  // Notes screen (set from the map's "open in screen" and the URL).
+  const [noteTarget, setNoteTarget] = useState<string | null>(
+    INITIAL_ROUTE.view === 'notes' ? INITIAL_ROUTE.id : null,
+  )
+
   // Secrets moved under Settings as a sub-category: open the Settings screen
   // focused on the Secrets ("Sırlar") category.
   const openSecrets = useCallback(() => {
@@ -108,6 +114,8 @@ export function useDeepLinks(setView: (v: View) => void) {
     setPreviewArtifactId,
     openArtifact,
     openArtifactFull,
+    noteTarget,
+    setNoteTarget,
     openSecrets,
   }
 }

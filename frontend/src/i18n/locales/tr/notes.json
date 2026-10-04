@@ -1,0 +1,204 @@
+{
+  "title": "Notlar",
+  "tabs": {
+    "notes": "Notlar",
+    "digests": "Özetler",
+    "context": "Bağlam"
+  },
+  "stats": {
+    "active": "Etkin",
+    "private": "Özel",
+    "retired": "Yerine geçilen",
+    "archived": "Arşiv"
+  },
+  "kind": {
+    "lesson": "Ders",
+    "decision": "Karar",
+    "work": "İş",
+    "gotcha": "Tuzak",
+    "pattern": "Örüntü",
+    "profile": "Profil",
+    "reference": "Referans"
+  },
+  "scope": {
+    "agent": "Ajan",
+    "project": "Proje",
+    "workspace": "Workspace"
+  },
+  "confidence": {
+    "verified": "Doğrulanmış",
+    "inferred": "Çıkarım",
+    "unverified": "Doğrulanmamış"
+  },
+  "source": {
+    "agent": "ajan",
+    "work": "record_work",
+    "user": "sen",
+    "lesson-extractor": "ders çıkarıcı",
+    "insight": "içgörü",
+    "correction": "düzeltme"
+  },
+  "filters": {
+    "searchPlaceholder": "Not ara…",
+    "allScopes": "Tüm kapsamlar",
+    "allConfidences": "Tüm güven düzeyleri",
+    "showArchived": "Arşiv",
+    "showSuperseded": "Yerine geçilenler",
+    "clear": "Temizle"
+  },
+  "list": {
+    "loading": "Notlar yükleniyor…",
+    "empty": "Henüz not yok.",
+    "emptyHint": "Ajanlar çalışırken ders, karar ve iş kayıtlarını buraya yazar; Yeni not ile kendin de ekleyebilirsin.",
+    "noMatch": "Filtreyle eşleşen not yok.",
+    "count_one": "{{count}} not",
+    "count_other": "{{count}} not",
+    "seen_one": "{{count}}× görüldü",
+    "seen_other": "{{count}}× görüldü",
+    "superseded": "yerine geçildi",
+    "archived": "arşiv",
+    "private": "özel"
+  },
+  "actions": {
+    "new": "Yeni not",
+    "edit": "Düzenle",
+    "correct": "Düzelt",
+    "correctTitle": "Yerine yeni bir not yaz; bu not saklanır ve yerine geçildi olarak işaretlenir",
+    "archive": "Arşivle",
+    "restore": "Geri al",
+    "delete": "Sil",
+    "deleteTitle": "Kalıcı olarak sil (bağlantılı ya da düzeltme zincirindeki not reddedilir — onun yerine arşivle)",
+    "openSession": "Oturumu aç"
+  },
+  "confirm": {
+    "delete": "\"{{title}}\" notu kalıcı olarak silinsin mi? Arşivlemek notu kaybetmeden kenara alır."
+  },
+  "toast": {
+    "created": "Not oluşturuldu",
+    "updated": "Not güncellendi",
+    "corrected": "Düzeltme yazıldı — eski not artık yerine geçilmiş durumda",
+    "archived": "Not arşivlendi",
+    "restored": "Not geri alındı",
+    "deleted": "Not silindi"
+  },
+  "detail": {
+    "selectPrompt": "Okumak için bir not seç.",
+    "scope": "Kapsam",
+    "confidence": "Güven",
+    "verification": "Doğrulama yöntemi",
+    "created": "Oluşturma",
+    "updated": "Güncelleme",
+    "source": "Kaynak",
+    "sourceAgent": "Yazan ajan",
+    "sourceSession": "Kaynak oturum",
+    "occurrences": "Tekrar",
+    "signature": "İmza",
+    "supersedes": "Yerine geçtiği not",
+    "supersededBy": "Bu notun yerine geçen not:",
+    "tags": "Etiketler",
+    "links": "Bağlantılar",
+    "backlinks": "Geri bağlantılar",
+    "noLinks": "Bu not başka bir nota bağlanmıyor.",
+    "noBacklinks": "Buraya bağlanan not yok.",
+    "unresolved": "Hiçbir not kimliği ya da başlığıyla eşleşmeyen [[wikilink]]",
+    "unresolvedBadge": "çözülmedi",
+    "chain": "Düzeltme zinciri"
+  },
+  "form": {
+    "title": {
+      "create": "Yeni not",
+      "edit": "Notu düzenle",
+      "correct": "Notu düzelt"
+    },
+    "submit": {
+      "create": "Oluştur",
+      "edit": "Kaydet",
+      "correct": "Düzeltmeyi yaz"
+    },
+    "correctHint": "Düzeltme üzerine yazmaz: yeni not bunun yerine geçer, eski metin yanında okunur kalır ve yerine geçildi olarak işaretlenir.",
+    "kind": "Tür",
+    "scope": "Kapsam",
+    "confidence": "Güven",
+    "agents": "Ajanlar",
+    "agentsPlaceholder": "ajan kimlikleri, virgülle ayrılmış",
+    "projects": "Proje kökleri",
+    "projectsPlaceholder": "her satıra bir mutlak yol",
+    "verification": "Nasıl doğrulandı?",
+    "verificationPlaceholder": "ör. main üzerinde yeniden üretildi, test takımı koşuldu",
+    "noteTitle": "Başlık",
+    "body": "Gövde (Markdown, [[Başlık]] başka nota bağlar)",
+    "bodyPlaceholder": "Gelecekteki bir oturum neyi bilmeli?",
+    "tags": "Etiketler",
+    "private": "Özel",
+    "privateHint": "ajanlara hiç sunulmaz",
+    "cancel": "İptal",
+    "saving": "Kaydediliyor…",
+    "errors": {
+      "title": "Başlık zorunlu.",
+      "body": "Gövde boş olamaz.",
+      "agents": "Ajan kapsamlı bir not en az bir ajan adlandırmalı.",
+      "projects": "Proje kapsamlı bir not en az bir proje kökü adlandırmalı.",
+      "verification": "Doğrulanmış bir notun nasıl kontrol edildiğini yaz."
+    }
+  },
+  "digests": {
+    "loading": "Özetler yükleniyor…",
+    "empty": "Henüz özet yok.",
+    "emptyHint": "Farkındalık katmanı açıkken bir oturumun turu bitince özet yazılır.",
+    "selectPrompt": "Okumak için bir özet seç.",
+    "notFound": "Bu oturum için henüz özet kaydedilmedi.",
+    "errors_one": "{{count}} hata",
+    "errors_other": "{{count}} hata",
+    "openLoops_one": "{{count}} açık uç",
+    "openLoops_other": "{{count}} açık uç",
+    "suggestNote": "not önerildi",
+    "openLoopsTitle": "Açık uçlar",
+    "yes": "evet",
+    "facts": {
+      "messages": "Mesaj",
+      "toolCalls": "Araç çağrısı",
+      "toolCallsWithErrors": "{{calls}} ({{errors}} hatalı)",
+      "duration": "Süre",
+      "todo": "Kontrol listesi",
+      "todoValue": "{{done}}/{{total}} bitti · {{inProgress}} sürüyor",
+      "children": "Alt oturum",
+      "childrenWithFailed": "{{count}} ({{failed}} başarısız)",
+      "stuckTurns": "Takılan tur",
+      "waitingAsk": "Soru bekliyor",
+      "lastError": "Son hata"
+    }
+  },
+  "context": {
+    "session": "Oturum",
+    "pickSession": "Bir oturum seç…",
+    "refresh": "Yenile",
+    "selectPrompt": "Ajanına ne söylendiğini görmek için bir oturum seç.",
+    "selectHint": "Başladığı brif, son tur bloğu ve son nabız satırı.",
+    "loading": "Yükleniyor…",
+    "turns": "Sunulan tur",
+    "digestState": "Özet",
+    "digestWritten": "yazıldı",
+    "digestNone": "henüz yok",
+    "lastPulse": "Son nabız",
+    "noPulse": "henüz nabız yok",
+    "brief": "Oturum brifi",
+    "lastTurn": "Son tur bloğu",
+    "noBrief": "Bu oturum için brif oluşturulmadı (yeni oturumlar başlangıçta bir brif alır).",
+    "noTurn": "Henüz tur bloğu sunulmadı.",
+    "bytesOfBudget": "{{bytes}} / {{budget}} bayt",
+    "bytesUnlimited": "{{bytes}} bayt (tavan yok)",
+    "cut": "kesildi",
+    "section": "Bölüm",
+    "bytes": "Bayt",
+    "state": "Durum",
+    "priority": "Öncelik",
+    "states": {
+      "full": "tam",
+      "pointer": "işaretçi",
+      "dropped": "düşürüldü",
+      "cut": "kesildi"
+    },
+    "degraded": "İşaretçiye indirildi: {{keys}}",
+    "dropped": "Düşürüldü: {{keys}}"
+  }
+}

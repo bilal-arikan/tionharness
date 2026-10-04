@@ -344,7 +344,6 @@ func (s *Server) applySettings() {
 	s.tun.SetToolGuardThresholds(cur.GuardExactWarn, cur.GuardExactBlock, cur.GuardSameToolWarn, cur.GuardSameToolHalt, cur.GuardNoProgressWarn, cur.GuardNoProgressBlck)
 	s.tun.SetStuckTurnThreshold(cur.StuckTurnThreshold)
 	s.tun.SetLessonReflect(cur.LessonReflect)
-	db.SetLessonMaxAgeDays(cur.LessonMaxAgeDays)
 	s.tun.SetLanguage(languageName(cur.Language))
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	if s.backups != nil {
@@ -401,6 +400,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerUsageRoutes(mux)
 	s.registerMCPRoutes(mux)
 	s.registerHookRoutes(mux)
+	s.registerNoteRoutes(mux)
 	s.registerFlowRoutes(mux)
 	s.registerExecutionRoutes(mux)
 	s.registerArtifactRoutes(mux)
@@ -761,10 +761,8 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 }
 
 // registerHookRoutes registers PreToolUse/PostToolUse hooks (Phase P4) plus the
-// failure-lesson store endpoints (self-healing, read + prune).
+// retrospective insight endpoints.
 func (s *Server) registerHookRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/lessons", s.handleListLessons)
-	mux.HandleFunc("DELETE /api/lessons/{id}", s.handleDeleteLesson)
 	// Retrospective session scanning (Insight, _Docs/60).
 	mux.HandleFunc("GET /api/insight/lenses", s.handleListInsightLenses)
 	mux.HandleFunc("POST /api/insight/scan", s.handleInsightScan)

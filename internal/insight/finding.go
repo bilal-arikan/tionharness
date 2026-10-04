@@ -5,8 +5,8 @@
 // user can apply inside the workspace).
 //
 // This file holds the canonical Finding model and its file-backed, signature-
-// deduplicated store — the fleet-wide sibling of db.Lesson (internal/db/
-// store_lessons.go): a repeat of the same shape bumps a counter instead of
+// deduplicated store — the fleet-wide sibling of a signature-deduped lesson
+// note (internal/notes): a repeat of the same shape bumps a counter instead of
 // piling up duplicate rows.
 package insight
 

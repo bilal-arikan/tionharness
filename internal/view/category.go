@@ -19,6 +19,7 @@ const (
 	CategoryAutomations = "automations"
 	CategorySkills      = "skills"
 	CategoryInsights    = "insights"
+	CategoryNotes       = "notes"
 	// categoryColumnPrefix marks a board-column category: ID = "col:in_progress".
 	categoryColumnPrefix = "col:"
 	// categorySessionKindPrefix marks a session-kind group under the sessions
@@ -131,6 +132,8 @@ func categoryMeta(id string) (label, unit string, ok bool) {
 		return "SKILL'LAR", "skill", true
 	case CategoryInsights:
 		return "İÇGÖRÜLER", "bulgu", true
+	case CategoryNotes:
+		return "NOTLAR", "not", true
 	}
 	if key, found := strings.CutPrefix(id, categoryColumnPrefix); found && key != "" {
 		return "SÜTUN:" + key, "kart", true
