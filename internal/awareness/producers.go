@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/notes"
@@ -137,84 +136,7 @@ func (o openLoops) Produce(ctx context.Context, in Input) (Section, error) {
 // collectOpenLoops is shared by the brief section, the pulse and the digest.
 // It returns the itemised lines and a one-line count summary.
 func collectOpenLoops(ctx context.Context, in Input) (lines []string, counts string) {
-	now := in.now()
-	const shown = 5
-	var parts []string
-
-	if asks, err := in.Store.ListWaitingSessionAsks(ctx); err == nil && len(asks) > 0 {
-		var ids []string
-		for _, a := range asks {
-			if a.SessionID == in.Session.ID {
-				continue
-			}
-			ids = append(ids, a.SessionID)
-		}
-		if len(ids) > 0 {
-			lines = append(lines, fmt.Sprintf("%d session(s) waiting for a human answer: %s", len(ids), joinCapped(ids, shown)))
-			parts = append(parts, fmt.Sprintf("%d waiting", len(ids)))
-		}
-	}
-	if sessions, err := in.Store.ListSessions(ctx, ""); err == nil {
-		var stuck, blocked []string
-		for _, s := range sessions {
-			if s.ID == in.Session.ID || s.State == "archived" {
-				continue
-			}
-			if s.StuckTurns > 0 || hasTag(s.Tags, "stuck") {
-				stuck = append(stuck, s.ID)
-			}
-			if hasTag(s.Tags, "blocked") {
-				blocked = append(blocked, s.ID)
-			}
-		}
-		if len(stuck) > 0 {
-			lines = append(lines, fmt.Sprintf("%d stuck session(s): %s", len(stuck), joinCapped(stuck, shown)))
-			parts = append(parts, fmt.Sprintf("%d stuck", len(stuck)))
-		}
-		if len(blocked) > 0 {
-			lines = append(lines, fmt.Sprintf("%d blocked coordinator(s): %s", len(blocked), joinCapped(blocked, shown)))
-			parts = append(parts, fmt.Sprintf("%d blocked", len(blocked)))
-		}
-	}
-	if runs, err := in.Store.ListFlowRuns(ctx, "", 0); err == nil {
-		failed := 0
-		cutoff := now.Add(-24 * time.Hour).Unix()
-		for _, r := range runs {
-			if r.Status == "failed" && r.UpdatedAt >= cutoff {
-				failed++
-			}
-		}
-		if failed > 0 {
-			lines = append(lines, fmt.Sprintf("%d flow run(s) failed in the last 24h", failed))
-			parts = append(parts, fmt.Sprintf("%d failed runs", failed))
-		}
-	}
-	if tasks, err := in.Store.ListTasks(ctx); err == nil {
-		staleAfter := time.Duration(in.Settings.StaleCardDays) * 24 * time.Hour
-		var stale, failed []string
-		for _, t := range tasks {
-			if t.Archived {
-				continue
-			}
-			switch t.BoardState {
-			case db.BoardInProgress:
-				if t.UpdatedAt > 0 && now.Sub(time.Unix(t.UpdatedAt, 0)) > staleAfter {
-					stale = append(stale, t.ID+" "+clip(t.Title, 40))
-				}
-			case db.BoardFailed:
-				failed = append(failed, t.ID+" "+clip(t.Title, 40))
-			}
-		}
-		if len(stale) > 0 {
-			lines = append(lines, fmt.Sprintf("%d card(s) in progress for over %dd: %s", len(stale), in.Settings.StaleCardDays, joinCapped(stale, shown)))
-			parts = append(parts, fmt.Sprintf("%d stale cards", len(stale)))
-		}
-		if len(failed) > 0 {
-			lines = append(lines, fmt.Sprintf("%d failed card(s): %s", len(failed), joinCapped(failed, shown)))
-			parts = append(parts, fmt.Sprintf("%d failed cards", len(failed)))
-		}
-	}
-	return lines, strings.Join(parts, " · ")
+	return renderOpenLoops(CollectOpenLoops(ctx, in.Store, in.Settings, in.now(), in.Session.ID), in.Settings.StaleCardDays)
 }
 
 type resumedProgress struct{}

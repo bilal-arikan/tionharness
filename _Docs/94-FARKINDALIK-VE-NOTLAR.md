@@ -192,7 +192,24 @@ ikinci turda `System` byte-aynı, nabız yok, sayaç var; dijest yazılmış;
 `internal/api/{todos,sessions_context}.go`, `artifactsContextBlock`, frontend ders
 sekmeleri. `lessonReflect` anahtarı kaldı: ders çıkarıcı artık not yazar.
 
-## 10. Açık işler
+## 10. Dikkat katmanı: harita için aynı gerçekler (2026-10-04)
+
+Açık döngü taraması artık yapılandırılmış: `awareness.CollectOpenLoops(ctx, store,
+settings, now, exclude)` → `OpenLoops{WaitingAsks, Stuck, Blocked, FailedRuns,
+StaleCards, FailedCards}`; brifingin açık döngü bölümü ve nabız satırı
+`renderOpenLoops` ile bundan metin üretir (çıktı değişmedi). İkinci tüketici
+`api/views_attention.go`: aynı kimlikleri harita ref'lerine (`session:ID`,
+`board:board#TSK`) çevirip `GraphAttention{Level, Reasons, At}` ve
+`GraphStatus{Running, Waiting, Stuck, FailedCards, FailedRuns, Stale, NotesToday,
+LastDigestAt}` üretir. Araç hataları özet indeksinden gelir (`Errors > 0`, koşmayan
+oturum → notice). Böylece ajanın nabzı "2 stuck" derken harita başka iki oturumu
+işaretleyemez. Koşu durumu karşılaştırması `db.FlowFailure` ("failure") ile
+yapılır; eski tarama "failed" dizesine bakıyordu ve hiç eşleşmiyordu, ikisi de
+kabul edilir. Etkileşimli `ask_user` soruları `SessionAsk` tablosuna düşmediğinden
+API katmanı `interactionStore.pendingSessions` ile aynı "waiting-ask" işaretine
+katar ve `interaction` olayıyla haritayı uyarır. Harita tarafı: [68 §7.2](68-OZET-HARITASI.md).
+
+## 11. Açık işler
 
 - Semantik not araması (zvec-grep ile `store/notes` indeksi) ve L2 anlatı (dijest'e
   "neden" paragrafı; sayı üretmeden).

@@ -160,6 +160,13 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         void refreshEventTranscript(d, sid)
       }
     }
+    // The panels that draw sessions (executions feed, the map) refresh through
+    // the signal table like every other entity. This branch used to return
+    // before the shared bump below, so a session created, deleted, re-tagged
+    // or archived elsewhere never reached the map (2026-10-04).
+    if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
+      bumpSignalsForEvent(e)
+    }
     return
   }
   // Badge any non-active workspace that produced activity (incl. completed
@@ -312,7 +319,8 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     e.type === 'chat' ||
     e.type === 'skills' ||
     e.type === 'notes' ||
-    e.type === 'awareness_digest'
+    e.type === 'awareness_digest' ||
+    e.type === 'interaction'
   )
     return
   // A worker START is UI plumbing (roster/banner refresh), not an outcome worth

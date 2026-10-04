@@ -79,6 +79,12 @@ const (
 	TypeFlowNode = "flow_node"
 	// TypeLog carries one captured log record for the live Logs tail (Event.Log).
 	TypeLog = "log"
+	// TypeInteraction signals that a human-in-the-loop prompt (ask_user /
+	// permission / plan approval) opened or closed on a session. Payload-free
+	// control signal: the Explorer map re-reads GET /api/views/graph/live so the
+	// "waiting for you" ring and counter follow the prompt; never a toast (the
+	// session stream's interaction card already notifies).
+	TypeInteraction = "interaction"
 	// TypeProcess signals that a tracked native process changed state — started,
 	// was asked to stop, or finished (internal/procwatch). Deliberately
 	// PAYLOAD-FREE: the process panel re-reads GET /api/workspace/processes when

@@ -215,3 +215,45 @@ describe('filter persistence helpers', () => {
     expect(toggleValue(['a'], 'b')).toEqual(['a', 'b'])
   })
 })
+
+describe('attention facet', () => {
+  const card = r('board', 'board', 'TSK1')
+  const board = r('board', 'board')
+  const withAttention: ViewGraphResult = {
+    nodes: [...graph.nodes, { label: 'Pano', ref: board }, { label: 'TSK1 broken', ref: card }],
+    edges: [...graph.edges, { source: root, target: board }, { source: board, target: card }],
+    attention: {
+      'session:SES1': { level: 'danger', reasons: ['stuck'] },
+      'board:board#TSK1': { level: 'danger', reasons: ['failed-card'] },
+    },
+  }
+
+  it('keeps only the sessions and cards that need a look, and the structure around them', () => {
+    const live = augmentLive(withAttention)
+    const out = applyExplorerFilter(
+      live.graph,
+      { ...emptyExplorerFilter(), attention: ['stuck'] },
+      live.liveState,
+      ROOT,
+    )
+    const keys = out.nodes.map(
+      (h) => `${h.ref.kind}:${h.ref.id}${h.ref.sub ? '#' + h.ref.sub : ''}`,
+    )
+    expect(keys).toContain('session:SES1')
+    expect(keys).not.toContain('session:SES2')
+    expect(keys).not.toContain('board:board#TSK1')
+    expect(keys).toContain('category:sessions')
+    expect(keys).toContain('board:board')
+  })
+
+  it('round-trips the facet and drops unknown values', () => {
+    const parsed = parseExplorerFilter(
+      serializeExplorerFilter({
+        ...emptyExplorerFilter(),
+        attention: ['failed', 'bogus'] as string[],
+      }),
+    )
+    expect(parsed.attention).toEqual(['failed'])
+    expect(countActiveExplorerFacets(parsed)).toBe(1)
+  })
+})

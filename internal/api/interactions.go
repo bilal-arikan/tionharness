@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
@@ -65,6 +66,32 @@ func (st *interactionStore) get(wsID, sessionID, id string) *pendingInteraction 
 	return nil
 }
 
+// pendingSessions lists the sessions of one workspace with an open prompt:
+// session id -> the kind of its oldest-registered open interaction. The map's
+// attention layer reads it, because an interactive ask_user never reaches the
+// durable SessionAsk table the open-loop scan knows (that table is the headless
+// path): without this a chat turn parked on a question showed no "waiting for
+// you" ring. Nil-safe for a bare Server in tests.
+func (st *interactionStore) pendingSessions(wsID string) map[string]string {
+	if st == nil {
+		return nil
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	out := map[string]string{}
+	for _, m := range st.bySession {
+		for _, pi := range m {
+			if pi.wsID != wsID || pi.state.Load() != 0 {
+				continue
+			}
+			if _, seen := out[pi.sessionID]; !seen {
+				out[pi.sessionID] = pi.kind
+			}
+		}
+	}
+	return out
+}
+
 func (st *interactionStore) remove(wsID, sessionID, id string) {
 	key := scopeKey(wsID, sessionID)
 	st.mu.Lock()
@@ -96,7 +123,27 @@ func (s *Server) openInteraction(wsID, sessionID, kind string, payload map[strin
 	payload["id"] = pi.id
 	payload["kind"] = kind
 	s.publishHub(wsID, sessionID, sessionhub.KindInteractionOpen, payload, false)
+	s.emitInteraction(wsID, sessionID, "open", kind)
 	return pi
+}
+
+// emitInteraction mirrors a prompt opening / closing onto the global event
+// feed as a payload-free control signal (events.TypeInteraction), so surfaces
+// that are not subscribed to this session's hub — the Explorer map — learn
+// that a human is (no longer) needed here. Best-effort and nil-safe.
+func (s *Server) emitInteraction(wsID, sessionID, op, kind string) {
+	if s.workspaces == nil {
+		return
+	}
+	wsp, err := s.workspaces.Get(wsID)
+	if err != nil || wsp == nil || wsp.Runtime == nil {
+		return
+	}
+	wsp.Runtime.Emit(events.Event{
+		Type:   events.TypeInteraction,
+		Level:  "info",
+		Target: map[string]string{"sessionId": sessionID, "op": op, "kind": kind},
+	})
 }
 
 // resolveInteraction is the compare-and-swap answer path. It succeeds for the
@@ -121,6 +168,7 @@ func (s *Server) resolveInteraction(wsID, sessionID, id, answer, by string) bool
 		"answer":     answer,
 		"resolvedBy": by,
 	}, false)
+	s.emitInteraction(wsID, sessionID, "resolve", pi.kind)
 	return true
 }
 
@@ -213,6 +261,7 @@ func (s *Server) cancelInteraction(pi *pendingInteraction, reason string) {
 		"cancelled": true,
 		"reason":    reason,
 	}, false)
+	s.emitInteraction(pi.wsID, pi.sessionID, "cancel", pi.kind)
 }
 
 type interactionAnswerReq struct {

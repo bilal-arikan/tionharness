@@ -1,5 +1,13 @@
 import type { Edge, Node } from 'vis-network'
-import type { ViewGraphLive, ViewGraphResult, ViewHandle, ViewKind, ViewRef } from '@/types'
+import type {
+  ViewAttentionLevel,
+  ViewGraphAttention,
+  ViewGraphLive,
+  ViewGraphResult,
+  ViewHandle,
+  ViewKind,
+  ViewRef,
+} from '@/types'
 import { refToString } from '@/types'
 import { CATEGORY_LABELS } from '@/features/tools/toolMeta'
 import { agentAvatarDataUrl, initialsAscii } from '@/features/network/agentAvatar'
@@ -25,6 +33,7 @@ export interface ExplorerTheme {
   textDim: string
   accent: string
   warning: string
+  danger: string
 }
 
 const THEME_FALLBACK: ExplorerTheme = {
@@ -36,6 +45,7 @@ const THEME_FALLBACK: ExplorerTheme = {
   textDim: '#94a3b8',
   accent: '#38bdf8',
   warning: '#f59e0b',
+  danger: '#ef4444',
 }
 
 // resolveExplorerTheme reads the app's CSS tokens. Falls back per token instead
@@ -54,6 +64,7 @@ export function resolveExplorerTheme(): ExplorerTheme {
     textDim: read('--color-text-dim', THEME_FALLBACK.textDim),
     accent: read('--color-accent', THEME_FALLBACK.accent),
     warning: read('--color-warning', THEME_FALLBACK.warning),
+    danger: read('--color-danger', THEME_FALLBACK.danger),
   }
 }
 
@@ -312,6 +323,39 @@ export interface ExplorerVisOptions {
   // Folded nodes and how many children each hides: drawn with a "+N" badge.
   collapsed?: ReadonlySet<string>
   childCounts?: ReadonlyMap<string, number>
+  // Attention layer (explorerAttention): a ring per level on the nodes a human
+  // should look at, and the spotlight set — nodes whose ring or glow just
+  // changed get a wide halo for a few seconds.
+  attention?: ReadonlyMap<string, ViewGraphAttention>
+  flashing?: ReadonlySet<string>
+}
+
+// Ring of a node that needs attention. Danger (stuck, failed) is the strongest:
+// thick border + wide shadow in the danger hue; warn (waiting for a human,
+// blocked, stale) the same in the warning hue; notice (tool errors in the last
+// digest) only a dashed border, so it reads as "worth a glance", not an alarm.
+function attentionRing(
+  level: ViewAttentionLevel,
+  theme: ExplorerTheme,
+): { border: string; borderWidth: number; shadow?: Node['shadow']; dashes: boolean } {
+  switch (level) {
+    case 'danger':
+      return {
+        border: theme.danger,
+        borderWidth: 3.5,
+        shadow: { enabled: true, color: theme.danger, size: 22, x: 0, y: 0 },
+        dashes: false,
+      }
+    case 'warn':
+      return {
+        border: theme.warning,
+        borderWidth: 3,
+        shadow: { enabled: true, color: theme.warning, size: 16, x: 0, y: 0 },
+        dashes: false,
+      }
+    default:
+      return { border: theme.textDim, borderWidth: 2.5, dashes: true }
+  }
 }
 
 // Glow of a live session: a wide, tinted shadow plus a thick border in the
@@ -388,6 +432,16 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
       : liveEntry
         ? liveGlow(liveEntry.state, liveEntry.agent.color, opts.theme)
         : null
+    // Attention ring + spotlight. The ring outranks the live glow on the border
+    // (a stuck session that is also running must read as stuck); the spotlight
+    // outranks both on the shadow for its few seconds.
+    const attention = opts.attention?.get(key)
+    const ring = attention ? attentionRing(attention.level, opts.theme) : null
+    const flash = opts.flashing?.has(key) ?? false
+    const haloColor = ring?.border ?? glow?.border ?? color
+    const shadow = flash
+      ? { enabled: true, color: haloColor, size: 44, x: 0, y: 0 }
+      : (ring?.shadow ?? glow?.shadow)
     const avatar = liveEntry
       ? agentAvatarDataUrl(
           liveEntry.agent.emoji?.trim() ||
@@ -422,6 +476,12 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
         ...(liveEntry
           ? [i18next.t('tooltip.session', { ns: 'explorer', id: liveEntry.session.id })]
           : []),
+        ...(attention
+          ? attention.reasons.map(
+              (reason) =>
+                `⚑ ${i18next.t(`tooltip.attention.${reason}`, { ns: 'explorer', defaultValue: reason })}`,
+            )
+          : []),
         ...(handle.ref.kind === 'session'
           ? [`↗ ${i18next.t('tooltip.doubleClickChat', { ns: 'explorer' })}`]
           : []),
@@ -430,12 +490,20 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
       size: liveEntry ? 18 : size,
       mass: liveEntry ? 0.5 : mass,
       opacity: matches ? 1 : 0.15,
-      borderWidth: selected ? 4 : glow ? glow.borderWidth : depth <= 1 ? 2 : 1.5,
-      ...(glow ? { shadow: glow.shadow } : {}),
+      borderWidth: selected
+        ? 4
+        : ring
+          ? ring.borderWidth
+          : glow
+            ? glow.borderWidth
+            : depth <= 1
+              ? 2
+              : 1.5,
+      ...(shadow ? { shadow } : {}),
       ...(avatar ? { image: avatar, brokenImage: avatar } : {}),
       color: {
         background,
-        border: selected ? opts.theme.text : glow ? glow.border : color,
+        border: selected ? opts.theme.text : ring ? ring.border : glow ? glow.border : color,
         highlight: { background, border: opts.theme.text },
         hover: { background, border: opts.theme.text },
       },
@@ -448,7 +516,10 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
       },
       ...(boxed
         ? {
-            shapeProperties: { borderRadius: 6, borderDashes: dashedBox ? [4, 3] : false },
+            shapeProperties: {
+              borderRadius: 6,
+              borderDashes: dashedBox || ring?.dashes ? [4, 3] : false,
+            },
             margin: { top: 5, bottom: 5, left: 9, right: 9 },
           }
         : {}),

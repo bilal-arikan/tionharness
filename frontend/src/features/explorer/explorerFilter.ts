@@ -1,6 +1,7 @@
 import type { ViewGraphResult } from '@/types'
 import { refToString } from '@/types'
 import { i18next } from '@/i18n'
+import { attentionMatches, bearsAttention, isAttentionFacet } from './explorerAttention'
 
 // Explorer filtering — the Network screen's facets carried over to the map:
 // group layers (hide a whole bucket subtree), live-only, session kind, owning
@@ -15,6 +16,9 @@ export interface ExplorerFilter {
   kinds: string[] // session kinds: chat | task | worker | …
   agentIds: string[]
   tags: string[]
+  // Attention facets from the status strip (explorerAttention.ATTENTION_FACETS):
+  // keep only the sessions / cards that need a look for one of these reasons.
+  attention: string[]
 }
 
 export const EXPLORER_FILTER_KEY = 'tionharness.explorerFilter'
@@ -40,6 +44,7 @@ export const emptyExplorerFilter = (): ExplorerFilter => ({
   kinds: [],
   agentIds: [],
   tags: [],
+  attention: [],
 })
 
 function stringList(value: unknown): string[] {
@@ -62,6 +67,7 @@ export function parseExplorerFilter(raw: string | null | undefined): ExplorerFil
     kinds: stringList(obj.kinds),
     agentIds: stringList(obj.agentIds),
     tags: stringList(obj.tags),
+    attention: stringList(obj.attention).filter(isAttentionFacet),
   }
 }
 
@@ -75,7 +81,8 @@ export function countActiveExplorerFacets(f: ExplorerFilter): number {
     (f.liveOnly ? 1 : 0) +
     (f.kinds.length > 0 ? 1 : 0) +
     (f.agentIds.length > 0 ? 1 : 0) +
-    (f.tags.length > 0 ? 1 : 0)
+    (f.tags.length > 0 ? 1 : 0) +
+    (f.attention.length > 0 ? 1 : 0)
   )
 }
 
@@ -84,8 +91,9 @@ export function toggleValue(list: string[], value: string): string[] {
 }
 
 // applyExplorerFilter drops the nodes the facets exclude, then keeps only what
-// the root still reaches. Sessions are the facet-bearing kind; every other node
-// is only ever removed as a hidden bucket or as an orphan.
+// the root still reaches. Sessions are the facet-bearing kind (cards too, for
+// the attention facets); every other node is only ever removed as a hidden
+// bucket or as an orphan.
 export function applyExplorerFilter(
   graph: ViewGraphResult,
   filter: ExplorerFilter,
@@ -97,9 +105,17 @@ export function applyExplorerFilter(
 ): ViewGraphResult {
   const hidden = new Set(filter.hiddenBuckets)
   const meta = graph.meta ?? {}
-  const keep = (key: string, kind: string): boolean => {
+  const attention = graph.attention ?? {}
+  const keep = (key: string, ref: ViewGraphResult['nodes'][number]['ref']): boolean => {
     if (hidden.has(key)) return false
-    if (kind !== 'session') return true
+    if (
+      filter.attention.length > 0 &&
+      bearsAttention(ref) &&
+      !attentionMatches(attention[key], filter.attention)
+    ) {
+      return false
+    }
+    if (ref.kind !== 'session') return true
     const m = meta[key] ?? {}
     if (filter.liveOnly && !liveState.has(key)) return false
     if (filter.kinds.length > 0 && !filter.kinds.includes(m.kind ?? '')) return false
@@ -113,7 +129,7 @@ export function applyExplorerFilter(
   const allowed = new Set<string>()
   for (const handle of graph.nodes) {
     const key = refToString(handle.ref)
-    if (keep(key, handle.ref.kind)) allowed.add(key)
+    if (keep(key, handle.ref)) allowed.add(key)
   }
   const children = new Map<string, string[]>()
   for (const edge of graph.edges) {

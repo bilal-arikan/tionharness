@@ -10,6 +10,7 @@ import {
   explorerFacets,
   type ExplorerFilter,
 } from './explorerFilter'
+import { changedKeys, mergeLive, pruneFlashes } from './explorerAttention'
 import { augmentLive, panelRefFor } from './explorerLive'
 import { seedLayout } from './explorerSeed'
 import {
@@ -39,10 +40,12 @@ interface Options {
 }
 
 // useExplorerGraph owns the Explorer network's data: one whole-map fetch
-// (GET /api/views/graph), the live layer derived from it, the filter, the
-// selected node, and the camera focus request the canvas honours. Selection ==
-// focus here: a single click both opens the node in the side panel and glides
-// the camera to it.
+// (GET /api/views/graph), the light live re-pull (GET /api/views/graph/live:
+// glows, attention rings and the status strip, nodes untouched), the live
+// layer derived from it, the filter, the selected node, the spotlight set, and
+// the camera focus request the canvas honours. Selection == focus here: a
+// single click both opens the node in the side panel and glides the camera to
+// it.
 export function useExplorerGraph({
   onError,
   search,
@@ -63,7 +66,27 @@ export function useExplorerGraph({
   }))
   const [themeVersion, setThemeVersion] = useState(0)
   const requestRef = useRef<AbortController | null>(null)
+  const liveRequestRef = useRef<AbortController | null>(null)
   const sequenceRef = useRef(0)
+  // The last landed payload, for diffing a new one against it (the spotlight)
+  // and for laying a live re-pull over it. Written only in callbacks.
+  const graphRef = useRef<ViewGraphResult | null>(null)
+  // Spotlight: node key -> when its ring or glow last changed.
+  const [flashes, setFlashes] = useState<Map<string, number>>(() => new Map())
+
+  // landGraph commits a payload and spotlights what changed since the last one.
+  const landGraph = useCallback((next: ViewGraphResult) => {
+    const changed = changedKeys(graphRef.current, next)
+    graphRef.current = next
+    setGraph(next)
+    if (changed.length === 0) return
+    setFlashes((current) => {
+      const merged = new Map(current)
+      const now = Date.now()
+      for (const key of changed) merged.set(key, now)
+      return merged
+    })
+  }, [])
 
   const load = useCallback(() => {
     requestRef.current?.abort()
@@ -75,7 +98,7 @@ export function useExplorerGraph({
       .viewGraph(controller.signal)
       .then((result) => {
         if (sequenceRef.current !== sequence) return
-        setGraph(result)
+        landGraph(result)
         setError(undefined)
       })
       .catch((err: unknown) => {
@@ -87,14 +110,50 @@ export function useExplorerGraph({
       .finally(() => {
         if (sequenceRef.current === sequence) setLoading(false)
       })
-  }, [onError])
+  }, [onError, landGraph])
+
+  // refreshLive re-pulls the volatile layers only. Nothing to lay it over until
+  // the first whole-map fetch landed. A failed pull keeps the last layer: the
+  // next event or the next full refresh repairs it, and a toast per transient
+  // error would be noise on a screen that updates on every turn.
+  const refreshLive = useCallback(() => {
+    if (!graphRef.current) return
+    liveRequestRef.current?.abort()
+    const controller = new AbortController()
+    liveRequestRef.current = controller
+    api
+      .viewGraphLive(controller.signal)
+      .then((live) => {
+        if (controller.signal.aborted) return
+        const current = graphRef.current
+        if (!current) return
+        landGraph(mergeLive(current, live))
+      })
+      .catch(() => {})
+  }, [landGraph])
 
   useEffect(() => {
     // The fetch is the effect; its loading flag is set synchronously on purpose.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
-    return () => requestRef.current?.abort()
+    return () => {
+      requestRef.current?.abort()
+      liveRequestRef.current?.abort()
+    }
   }, [load])
+
+  // The spotlight fades on its own: while anything is lit, prune once a second.
+  const spotlightOn = flashes.size > 0
+  useEffect(() => {
+    if (!spotlightOn) return
+    const timer = window.setInterval(
+      () => setFlashes((current) => pruneFlashes(current, Date.now())),
+      1000,
+    )
+    return () => window.clearInterval(timer)
+  }, [spotlightOn])
+  const flashing = useMemo(() => new Set(flashes.keys()), [flashes])
+  const attention = useMemo(() => new Map(Object.entries(graph?.attention ?? {})), [graph])
 
   // URL navigation (back/forward, a pasted link) is external state: mirror it
   // into selection + focus. An unparsable ref falls back to the root and reports.
@@ -201,8 +260,21 @@ export function useExplorerGraph({
       liveAgents: live.liveAgents,
       collapsed,
       childCounts: counts,
+      attention,
+      flashing,
     })
-  }, [visible, layout, live, selectedKey, search, themeVersion, collapsed, counts])
+  }, [
+    visible,
+    layout,
+    live,
+    selectedKey,
+    search,
+    themeVersion,
+    collapsed,
+    counts,
+    attention,
+    flashing,
+  ])
   const canonicalNodeIds = useMemo(
     () => (live ? live.graph.nodes.map((handle) => refToString(handle.ref)) : []),
     [live],
@@ -215,6 +287,10 @@ export function useExplorerGraph({
     facets,
     buckets,
     liveCount: live?.liveState.size ?? 0,
+    // Attention layer: the status strip's counters and the per-node rings.
+    status: graph?.status ?? null,
+    attention,
+    flashing,
     // How many children the selected node has on the full map (0 = leaf).
     selectedChildCount: counts.get(selectedKey) ?? 0,
     nodes,
@@ -234,5 +310,6 @@ export function useExplorerGraph({
     selectKey,
     fallbackToRoot,
     refresh: load,
+    refreshLive,
   }
 }

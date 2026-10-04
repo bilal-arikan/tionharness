@@ -110,11 +110,37 @@ export interface ViewGraphLive {
 }
 
 // ViewGraphMeta is a session's facet data for the map's filters.
-interface ViewGraphMeta {
+export interface ViewGraphMeta {
   kind?: string
   agentId?: string
   tags?: string[]
   archived?: boolean
+}
+
+// ViewGraphAttention marks a node a human should look at: the strongest level
+// among its reasons (danger > warn > notice) and the reason codes themselves
+// (waiting-ask, stuck, blocked, failed-card, stale-card, tool-errors). Derived
+// on the backend from the awareness open-loop scan, so the map and the agent's
+// pulse agree on what is stuck, waiting or failed.
+export type ViewAttentionLevel = 'danger' | 'warn' | 'notice'
+export interface ViewGraphAttention {
+  level: ViewAttentionLevel
+  reasons: string[]
+  at?: number
+}
+
+// ViewGraphStatus is the status strip above the map: the counters a user reads
+// before reading any node.
+export interface ViewGraphStatus {
+  at: number
+  running: number
+  waiting: number
+  stuck: number
+  failedCards: number
+  failedRuns: number
+  stale: number
+  notesToday: number
+  lastDigestAt?: number
 }
 
 export interface ViewGraphResult {
@@ -123,6 +149,19 @@ export interface ViewGraphResult {
   live?: ViewGraphLive[]
   // Keyed by refToString of the session.
   meta?: Record<string, ViewGraphMeta>
+  // Keyed by refToString of the node (sessions and board cards today).
+  attention?: Record<string, ViewGraphAttention>
+  status?: ViewGraphStatus | null
+}
+
+// ViewGraphLiveResult is the map's volatile half alone (GET /api/views/graph/live):
+// re-pulled on state events so the node/edge set, and with it the physics,
+// stays put while rings, glows and the status strip update.
+export interface ViewGraphLiveResult {
+  live: ViewGraphLive[]
+  meta: Record<string, ViewGraphMeta>
+  attention: Record<string, ViewGraphAttention>
+  status: ViewGraphStatus | null
 }
 
 // refToString spells a ref the way handles and the get_view tool do.

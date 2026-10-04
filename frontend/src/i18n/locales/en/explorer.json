@@ -108,7 +108,15 @@
     "running": "running",
     "awaitingWorkers": "waiting for workers",
     "session": "session: {{id}}",
-    "doubleClickChat": "double-click to open chat"
+    "doubleClickChat": "double-click to open chat",
+    "attention": {
+      "waiting-ask": "waiting for your answer",
+      "stuck": "stuck",
+      "blocked": "coordinator blocked",
+      "failed-card": "card in the failed column",
+      "stale-card": "card has not moved for a while",
+      "tool-errors": "tool errors in the last digest"
+    }
   },
   "edge": {
     "selfLoop": "{{source}} loops to itself",
@@ -128,5 +136,28 @@
     "tools": "Tools",
     "rota": "Rota",
     "notes": "Notes"
+  },
+  "status": {
+    "label": "Status strip",
+    "running": "running",
+    "waiting": "waiting for you",
+    "stuck": "stuck",
+    "failed": "failed cards",
+    "stale": "stale cards",
+    "failedRuns_one": "+{{count}} failed run (24h)",
+    "failedRuns_other": "+{{count}} failed runs (24h)",
+    "notesToday_one": "{{count}} note today",
+    "notesToday_other": "{{count}} notes today",
+    "noDigest": "no digest yet",
+    "age": {
+      "now": "last digest just now",
+      "minutes_one": "last digest {{count}} min ago",
+      "minutes_other": "last digest {{count}} min ago",
+      "hours_one": "last digest {{count}} hr ago",
+      "hours_other": "last digest {{count}} hr ago",
+      "days_one": "last digest {{count}} day ago",
+      "days_other": "last digest {{count}} days ago"
+    },
+    "filterHint": "Narrow the map to these nodes"
   }
 }

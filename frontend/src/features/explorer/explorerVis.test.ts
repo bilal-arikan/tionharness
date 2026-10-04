@@ -26,6 +26,7 @@ const theme: ExplorerTheme = {
   textDim: '#aaa',
   accent: '#0af',
   warning: '#fa0',
+  danger: '#ef4444',
 }
 
 beforeEach(async () => {

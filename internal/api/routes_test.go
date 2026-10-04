@@ -25,6 +25,7 @@ func TestRouteTableServesFrontendAPIPaths(t *testing.T) {
 	paths := []string{
 		// Explorer map + the projection side panel (features/explorer, features/view).
 		"/api/views/graph",
+		"/api/views/graph/live",
 		"/api/views/workspace/workspace",
 		"/api/views/session/SES1/children",
 		"/api/views/session/SES1/neighborhood",

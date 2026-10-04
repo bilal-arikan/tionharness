@@ -9,6 +9,33 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Harita canlı durum katmanı: olay → delta, dikkat halkaları, durum şeridi (2026-10-04)
+
+- Amaç: kullanıcı workspace'te şu an ne olduğunu haritadan okusun. Farkındalık
+  katmanı sinyal kaynağı, harita yüzey. Tasarım: [68 §7.2](68-OZET-HARITASI.md),
+  [94 §10](94-FARKINDALIK-VE-NOTLAR.md).
+- Backend: `awareness.CollectOpenLoops` yapılandırılmış açık döngü taraması (brifing ve
+  nabız aynı veriden metin üretir; koşu durumu `db.FlowFailure` ile de eşleşir);
+  `api/views_attention.go` haritaya `attention` (ref → düzey + nedenler) ve `status`
+  sayaçlarını ekler; yeni `GET /api/views/graph/live` yalnız oynak katmanları döner.
+  Testler: `views_attention_test.go`, rota tablosu girişi.
+- Frontend: `eventToRefreshSignals` `explorer` (yapı) / `explorer-live` (katman)
+  ayrımı; `explorerAttention.ts` (facet eşlemesi, `mergeLive`, `changedKeys`, spot
+  ışığı süresi); `useExplorerGraph.refreshLive`; `explorerVis` düzeye göre halka ve
+  10 sn spot halesi; `ExplorerStatusStrip` sayaçları aynı zamanda süzgeç
+  (`ExplorerFilter.attention`). i18n `explorer.status.*`, `tooltip.attention.*`.
+- Canlı testte bulunan eski hata: `useAppEvents.onEvent` `session` dalı panel
+  sinyallerini bump'lamadan dönüyordu; oturum olayları (oluştur/sil/etiket/durum)
+  haritaya ve yürütme akışına hiç ulaşmıyordu. Dal artık workspace süzgeciyle
+  `bumpSignalsForEvent` çağırır. Doğrulama: etiket değişimi `GET /api/views/graph`,
+  pin değişimi `GET /api/views/graph/live` tetikledi; şerit ve halka olayla güncellendi.
+- Canlı LLM testi (claude-cli ve codex-cli): tur boyunca çalışan sayacı ve avatar
+  parıltısı, `remember` ile yeni not düğümü, başarısız kart halkası ve sayacı, iki araç
+  hatası sonrası "notice" halkası, codex `spawn_session` ile yeni oturum düğümü
+  doğrulandı. Bulgu: etkileşimli `ask_user` "seni bekleyen"e yansımıyordu (kalıcı
+  `SessionAsk` yok); `interactionStore.pendingSessions` dikkat katmanına katıldı ve
+  yeni `interaction` kontrol olayı (`open/resolve/cancel`) `explorer-live`'ı tetikler.
+
 ## Harita rotaları geri bağlandı, projeksiyon kopyaları kaldırıldı (2026-10-04)
 
 - Hata: `f9ab586b` akış rotalarını `flows.go`'ya taşırken eski `registerFlowRoutes`

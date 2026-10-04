@@ -13,6 +13,7 @@ package api
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/bilal-arikan/tionharness/internal/view"
@@ -162,7 +163,9 @@ func (s *Server) handleGetViewGraph(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	graph := view.Graph{Nodes: nodes, Edges: edges, Live: live, Meta: meta}
+	running := s.liveSessions(ws(r)).RunningSet()
+	attention, status := graphAttention(r.Context(), ws(r), running, s.interactions.pendingSessions(ws(r).ID), time.Now())
+	graph := view.Graph{Nodes: nodes, Edges: edges, Live: live, Meta: meta, Attention: attention, Status: status}
 	// Never emit null arrays: an empty workspace still has a root node, and an
 	// edge-less graph is [] not null.
 	if graph.Nodes == nil {
@@ -191,6 +194,8 @@ func (s *Server) registerViewRoutes(mux *http.ServeMux) {
 	// Registered before the {kind}/{id} pattern only for readability; "graph" is
 	// a literal segment and never collides with a two-segment ref.
 	mux.HandleFunc("GET /api/views/graph", s.handleGetViewGraph)
+	// The map's volatile layers alone (live sessions, attention, status strip).
+	mux.HandleFunc("GET /api/views/graph/live", s.handleGetViewGraphLive)
 	// One projection: the same bytes the agent gets from get_view (_Docs/66).
 	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
 	// Explorer map drill-down: the structural child handles of a node.

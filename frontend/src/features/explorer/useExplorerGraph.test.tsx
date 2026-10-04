@@ -152,7 +152,14 @@ describe('useExplorerGraph', () => {
     expect(latest!.panelRef).toEqual({ kind: 'agent', id: 'AG1' })
     await render({
       search: '',
-      filter: { hiddenBuckets: [], liveOnly: false, kinds: ['task'], agentIds: [], tags: [] },
+      filter: {
+        hiddenBuckets: [],
+        liveOnly: false,
+        kinds: ['task'],
+        agentIds: [],
+        tags: [],
+        attention: [],
+      },
     })
     expect(latest!.visibleGraph!.nodes.map((h) => h.ref.id)).not.toContain('SES1')
     expect(latest!.nodes.map((n) => n.id)).not.toContain('agent:AG1#live:SES1')

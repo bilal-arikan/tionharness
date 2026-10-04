@@ -147,6 +147,45 @@ describe('ExplorerView', () => {
     expect(again.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('shows the status strip and narrows the map from a counter', async () => {
+    const s2: ViewRef = { kind: 'session', id: 'SES2' }
+    mocks.viewGraph.mockResolvedValue({
+      ...graph,
+      nodes: [...graph.nodes, { label: 'session:SES2 Calm', ref: s2 }],
+      edges: [...graph.edges, { source: sessions, target: s2 }],
+      attention: { 'session:SES1': { level: 'danger', reasons: ['stuck'] } },
+      status: {
+        at: 1,
+        running: 0,
+        waiting: 0,
+        stuck: 1,
+        failedCards: 0,
+        failedRuns: 0,
+        stale: 0,
+        notesToday: 3,
+      },
+    })
+    const { host } = await mount()
+    const strip = host.querySelector('[aria-label="Durum şeridi"]')!
+    expect(strip.textContent).toContain('takılan · 1')
+    expect(strip.textContent).toContain('bugün 3 not')
+    expect(strip.textContent).toContain('henüz özet yok')
+    const waiting = [...strip.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('seni bekleyen'),
+    )!
+    expect(waiting.hasAttribute('disabled')).toBe(true)
+    const stuck = [...strip.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('takılan'),
+    )!
+    expect(latestGraphProps().nodes.map((n) => n.id)).toContain('session:SES2')
+    await act(async () => stuck.click())
+    expect(stuck.getAttribute('aria-pressed')).toBe('true')
+    const ids = latestGraphProps().nodes.map((n) => n.id)
+    expect(ids).toContain('session:SES1')
+    expect(ids).not.toContain('session:SES2')
+    expect(host.textContent).toContain('1 filtre · temizle')
+  })
+
   it('folds and unfolds the selected node from the side panel and remembers it', async () => {
     const first = await mount()
     // The root has children: the toggle is offered and hides the subtree.

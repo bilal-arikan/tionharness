@@ -13,7 +13,10 @@ import { bumpSignal } from '@/shared/lib/refreshSignals'
 // Signal key names — mirrored on the consumer side via useRefreshTrigger('key').
 // Centralized here so a rename / add / remove is a single-file change.
 const SIGNAL_BOARD = 'board' // task CRUD + board column changes
-const SIGNAL_EXPLORER = 'explorer' // Özet Haritası drill-down (open branches)
+export const SIGNAL_EXPLORER = 'explorer' // Harita: node/edge set changed → whole map re-pull
+// Harita: only the volatile layers changed (a turn started or ended, a digest
+// landed, a session got stuck) → GET /api/views/graph/live, nodes stay put.
+export const SIGNAL_EXPLORER_LIVE = 'explorer-live'
 export const SIGNAL_ACTIVITY = 'activity' // useActivity's per-view busy flags
 export const SIGNAL_EXECUTIONS = 'executions' // GET /api/executions consumers (session runtime map)
 export const SIGNAL_AGENTS = 'agents' // AgentsView
@@ -36,6 +39,20 @@ export const SIGNAL_WORKSPACE_ACTIVITY = 'workspace-activity' // cross-workspace
 //
 // An empty array means "no panel needs to re-fetch" (e.g. a `navigate` event
 // for a workspace the user isn't viewing, a `settings` change, etc.).
+// Session ops that change nothing the map's structure or labels depend on: the
+// session's node stays, only its live state / attention may move.
+const SESSION_LIVE_OPS = new Set([
+  'message_added',
+  'message_activity',
+  'pin',
+  'workdir',
+  'rewind',
+  'delete_message',
+  'feedback',
+  'summary',
+  'role',
+])
+
 export function signalsForEvent(e: AppEvent): string[] {
   switch (e.type) {
     case 'board':
@@ -49,13 +66,17 @@ export function signalsForEvent(e: AppEvent): string[] {
       // App.tsx's existing onEventRef branch already calls refreshSessions()
       // for the chat sidebar; this signal additionally nudges the executions
       // feed (each execution is a session, so a new / deleted / state-changed
-      // session can change the list).
-      return [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER]
+      // session can change the list). A metadata-only op keeps the map's node
+      // set: only its live layer is re-pulled.
+      return SESSION_LIVE_OPS.has(e.target?.op ?? '')
+        ? [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER_LIVE]
+        : [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER]
     case 'chat':
       // Chat turn started / ended. App.tsx already handles wake phases +
       // active transcript reload. Panel-wise: executions list may flip
-      // (running → done) and the map may flip the session's running glow.
-      return [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER, SIGNAL_ACTIVITY]
+      // (running → done) and the map flips the session's glow and rings
+      // without re-pulling its structure.
+      return [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER_LIVE, SIGNAL_ACTIVITY]
     case 'flow':
       return [SIGNAL_FLOWS, SIGNAL_EXPLORER, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
     case 'schedule':
@@ -69,11 +90,14 @@ export function signalsForEvent(e: AppEvent): string[] {
     case 'spawned':
       return [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER, SIGNAL_ACTIVITY]
     case 'worker':
-      return [SIGNAL_EXECUTIONS, SIGNAL_SCHEDULES, SIGNAL_EXPLORER, SIGNAL_ACTIVITY]
+      // A worker's turn: its session node already exists (spawn created it);
+      // only the glow and the coordinator's awaiting-workers state move.
+      return [SIGNAL_EXECUTIONS, SIGNAL_SCHEDULES, SIGNAL_EXPLORER_LIVE, SIGNAL_ACTIVITY]
     case 'task':
       // Task run lifecycle (different from board CRUD). The map cares too: a
-      // task run starting or finishing adds/removes the live avatar node.
-      return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY, SIGNAL_EXPLORER]
+      // task run starting or finishing adds/removes the live avatar node,
+      // which the live layer carries.
+      return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY, SIGNAL_EXPLORER_LIVE]
     case 'agent':
     case 'agent-catalog':
     case 'agent-model-changed':
@@ -83,11 +107,19 @@ export function signalsForEvent(e: AppEvent): string[] {
     case 'skills':
       return [SIGNAL_SKILLS]
     case 'notes':
-    case 'awareness_digest':
-      // A note was written / corrected / archived / deleted, or a session's
-      // end-of-turn digest changed: the Notes screen re-fetches its lists, and
-      // the map gains/loses a note leaf.
+      // A note was written / corrected / archived / deleted: the Notes screen
+      // re-fetches its lists, and the map gains/loses a note leaf.
       return [SIGNAL_NOTES, SIGNAL_EXPLORER]
+    case 'awareness_digest':
+      // A session's end-of-turn digest changed: the Notes screen's digests tab
+      // and the map's attention layer (tool errors, status strip) refresh; no
+      // node was added or removed.
+      return [SIGNAL_NOTES, SIGNAL_EXPLORER_LIVE]
+    case 'interaction':
+      // A human-in-the-loop prompt opened or closed: the map's "waiting for
+      // you" ring and counter follow it. The session's own card is drawn from
+      // the session stream, not from here.
+      return [SIGNAL_EXPLORER_LIVE]
     default:
       // settings / workspaces / navigate / session_step (routed through the
       // separate `step` SSE channel) don't drive panel refreshes.

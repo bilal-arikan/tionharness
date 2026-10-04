@@ -9,6 +9,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_EXPLORER, SIGNAL_EXPLORER_LIVE } from '@/app/eventToRefreshSignals'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
 import { refToString } from '@/types'
 import { ViewPanel } from '@/features/view/ViewPanel'
@@ -16,6 +17,7 @@ import { VisNetworkGraph } from '@/features/network/VisNetworkGraph'
 import { useStoredDensity } from '@/features/network/useStoredDensity'
 import { ExplorerDetailDrawer } from './ExplorerDetailDrawer'
 import { ExplorerFilters } from './ExplorerFilters'
+import { ExplorerStatusStrip } from './ExplorerStatusStrip'
 import { useExplorerCollapse } from './useExplorerCollapse'
 import { useExplorerFilter } from './useExplorerFilter'
 import { screenForRef, type ExplorerTarget } from './explorerNavigation'
@@ -75,6 +77,7 @@ export function ExplorerView({
     facets,
     buckets,
     liveCount,
+    status,
     selectedChildCount,
     selectedKey,
     focusKey,
@@ -82,6 +85,7 @@ export function ExplorerView({
     selectKey,
     fallbackToRoot,
     refresh,
+    refreshLive,
   } = useExplorerGraph({
     onError,
     search,
@@ -112,12 +116,18 @@ export function ExplorerView({
   )
   const closeDetail = useCallback(() => setDetailOpen(false), [])
 
-  // Live update: the central SSE dispatcher bumps 'explorer' on every structural
-  // change; re-pull the whole map (one call) and let the physics absorb the diff.
-  const tick = useRefreshTrigger('explorer')
+  // Live update: the central SSE dispatcher bumps 'explorer' when a node or
+  // edge may have appeared or vanished (re-pull the whole map, let the physics
+  // absorb the diff) and 'explorer-live' when only glows, rings or the status
+  // strip moved (re-pull the light layer, nodes stay put).
+  const tick = useRefreshTrigger(SIGNAL_EXPLORER)
   useEffect(() => {
     if (tick > 0) refresh()
   }, [tick, refresh])
+  const liveTick = useRefreshTrigger(SIGNAL_EXPLORER_LIVE)
+  useEffect(() => {
+    if (liveTick > 0) refreshLive()
+  }, [liveTick, refreshLive])
 
   const searchResults = useMemo<ExplorerSearchResult[]>(() => {
     const needle = search.trim().toLowerCase()
@@ -238,6 +248,15 @@ export function ExplorerView({
           </button>
         </div>
       </header>
+
+      {graph && (
+        <ExplorerStatusStrip
+          status={status}
+          liveCount={liveCount}
+          filter={filter}
+          onChange={setFilter}
+        />
+      )}
 
       {graph && visibleGraph && (
         <ExplorerFilters

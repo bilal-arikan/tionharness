@@ -27,6 +27,14 @@ type Graph struct {
 	// Meta carries per-session facet data (kind / agent / tags / archived) keyed
 	// by Ref.String, for the map's filters.
 	Meta map[string]GraphMeta `json:"meta"`
+	// Attention marks the nodes a human should look at right now (a session
+	// waiting for an answer, a stuck session, a failed run or card…), keyed by
+	// Ref.String. Empty, never null. Computed by the api layer from the
+	// awareness open-loop collector (_Docs/94 §11).
+	Attention map[string]GraphAttention `json:"attention"`
+	// Status is the map's status strip: the live counters a user reads before
+	// reading any node. Nil when the attention layer is unavailable.
+	Status *GraphStatus `json:"status,omitempty"`
 }
 
 // Graph walks the structural tree from the workspace root once, breadth first,

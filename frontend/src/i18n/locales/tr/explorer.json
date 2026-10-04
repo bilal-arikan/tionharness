@@ -108,7 +108,15 @@
     "running": "çalışıyor",
     "awaitingWorkers": "worker bekliyor",
     "session": "oturum: {{id}}",
-    "doubleClickChat": "çift tık sohbeti açar"
+    "doubleClickChat": "çift tık sohbeti açar",
+    "attention": {
+      "waiting-ask": "senden bir cevap bekliyor",
+      "stuck": "takıldı",
+      "blocked": "koordinatör engellendi",
+      "failed-card": "kart başarısız sütununda",
+      "stale-card": "kart uzun süredir ilerlemiyor",
+      "tool-errors": "son özette araç hataları var"
+    }
   },
   "edge": {
     "selfLoop": "{{source}} kendi üzerine döngü",
@@ -128,5 +136,28 @@
     "tools": "Araçlar",
     "rota": "Rota",
     "notes": "Notlar"
+  },
+  "status": {
+    "label": "Durum şeridi",
+    "running": "çalışan",
+    "waiting": "seni bekleyen",
+    "stuck": "takılan",
+    "failed": "başarısız kart",
+    "stale": "eskiyen kart",
+    "failedRuns_one": "+{{count}} başarısız koşu (24 sa)",
+    "failedRuns_other": "+{{count}} başarısız koşu (24 sa)",
+    "notesToday_one": "bugün {{count}} not",
+    "notesToday_other": "bugün {{count}} not",
+    "noDigest": "henüz özet yok",
+    "age": {
+      "now": "son özet az önce",
+      "minutes_one": "son özet {{count}} dk önce",
+      "minutes_other": "son özet {{count}} dk önce",
+      "hours_one": "son özet {{count}} sa önce",
+      "hours_other": "son özet {{count}} sa önce",
+      "days_one": "son özet {{count}} gün önce",
+      "days_other": "son özet {{count}} gün önce"
+    },
+    "filterHint": "Haritayı bu düğümlere süz"
   }
 }

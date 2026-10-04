@@ -1,6 +1,7 @@
 // Projection layer (internal/view): the compact summary of a large entity.
 import type {
   ViewChildrenResult,
+  ViewGraphLiveResult,
   ViewGraphResult,
   ViewLevel,
   ViewNeighborhoodResult,
@@ -36,6 +37,13 @@ export const viewApi = {
   // network's data source. Uncapped: the physics layout owns the visual budget.
   viewGraph(signal?: AbortSignal): Promise<ViewGraphResult> {
     return req<ViewGraphResult>('/api/views/graph', { signal })
+  },
+
+  // viewGraphLive fetches only the volatile layers (live sessions, attention,
+  // status strip): what the Explorer re-pulls on a state event instead of the
+  // whole map, so a badge change never re-settles the physics.
+  viewGraphLive(signal?: AbortSignal): Promise<ViewGraphLiveResult> {
+    return req<ViewGraphLiveResult>('/api/views/graph/live', { signal })
   },
 
   viewNeighborhood(ref: ViewRef, signal?: AbortSignal): Promise<ViewNeighborhoodResult> {

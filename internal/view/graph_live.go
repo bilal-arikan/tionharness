@@ -55,6 +55,52 @@ const (
 	LiveAwaitingWorkers = "awaiting-workers"
 )
 
+// Attention levels, strongest first. The map draws a ring per level; the
+// status strip counts them.
+const (
+	AttentionDanger = "danger" // stuck session, failed run or card
+	AttentionWarn   = "warn"   // waiting for a human answer, blocked coordinator, stale card
+	AttentionNotice = "notice" // tool errors piled up in the last digest
+)
+
+// Attention reason codes (GraphAttention.Reasons). Stable strings: the UI maps
+// them to labels and the status strip filters on them.
+const (
+	ReasonWaitingAsk = "waiting-ask"
+	ReasonStuck      = "stuck"
+	ReasonBlocked    = "blocked"
+	ReasonFailedCard = "failed-card"
+	ReasonStaleCard  = "stale-card"
+	ReasonToolErrors = "tool-errors"
+)
+
+// GraphAttention is one node's "look here" marker: the strongest level among
+// its reasons, the reasons themselves, and when the fact was last observed.
+type GraphAttention struct {
+	Level   string   `json:"level"`
+	Reasons []string `json:"reasons"`
+	// At is the entity's own last-activity stamp (unix seconds), so the UI can
+	// order "newest first" without a second lookup. 0 = unknown.
+	At int64 `json:"at,omitempty"`
+}
+
+// GraphStatus is the status strip above the map: what a user reads first.
+type GraphStatus struct {
+	At      int64 `json:"at"`
+	Running int   `json:"running"`
+	Waiting int   `json:"waiting"` // sessions waiting for a human answer
+	Stuck   int   `json:"stuck"`   // stuck sessions + blocked coordinators
+	// FailedCards are cards in the failed column (map nodes); FailedRuns are
+	// flow runs failed in the last 24h (counted only: runs are not map nodes).
+	FailedCards int `json:"failedCards"`
+	FailedRuns  int `json:"failedRuns"`
+	Stale       int `json:"stale"` // cards in progress past the stale threshold
+	// NotesToday counts memory notes written since local midnight.
+	NotesToday int `json:"notesToday"`
+	// LastDigestAt is the newest session digest's stamp; 0 = none yet.
+	LastDigestAt int64 `json:"lastDigestAt,omitempty"`
+}
+
 // graphLive computes the live layer against the walk's session snapshot. The
 // awaiting-workers rule mirrors the Network screen's: a coordinator counts as
 // live while any of its direct workers is running.

@@ -205,6 +205,51 @@ planı [tarihsel tasarım ekine](arsiv/68-OZET-HARITASI-ODAK-TASARIMI.md) taşı
 Güncel ekran §7'deki vis-network ağıdır; `ExplorerGraph.tsx`, `ExplorerNode.tsx`
 ve `SummarySidePanel.tsx` eski planın adlarıdır, canlı kaynak listesi değildir.
 
+### 7.2 Canlı durum katmanı (2026-10-04)
+
+Haritanın amacı ajana grafik vermek değil, **kullanıcının workspace'te şu an ne olup
+bittiğini tek bakışta görmesi**. Farkındalık katmanı ([94](94-FARKINDALIK-VE-NOTLAR.md))
+bu bilginin kaynağı, harita canlı yüzeyi. İlk dilim üç parça:
+
+- **Olay → delta, yeniden çekme değil.** `eventToRefreshSignals` iki sinyal üretir:
+  `explorer` (düğüm/kenar eklenip silinmiş olabilir: `session create/delete/tags…`,
+  `board`, `notes`, `spawned`, `agent`, `flow`, `schedule`) tüm haritayı çeker;
+  `explorer-live` (`chat`, `worker`, `task`, `awareness_digest`, meta-veri oturum
+  op'ları) yalnız `GET /api/views/graph/live` ile parıltı, halka ve durum şeridini
+  çeker. Düğüm kümesi yerinde kalır, fizik yeniden yerleşmez. `explorerAttention.ts`
+  `mergeLive` ile katmanı mevcut haritanın üstüne bindirir.
+- **Dikkat halkaları.** `GET /api/views/graph` ve `/graph/live` yanıtına
+  `attention` (ref → `{level, reasons, at}`) ve `status` eklendi. Backend
+  (`api/views_attention.go`) `awareness.CollectOpenLoops` ile aynı taramayı yapar:
+  bekleyen soru ve engellenmiş koordinatör **warn**, takılmış oturum ve başarısız
+  kart **danger**, son özette araç hatası **notice**. `explorerVis.ts` düzeye göre
+  halka çizer (danger: kalın kenarlık + geniş gölge, warn: aynısı uyarı renginde,
+  notice: kesik kenarlık); araç ipucu nedenleri listeler. Halka canlı parıltısını
+  kenarlıkta geçer: koşan ama takılmış oturum takılmış okunur.
+- **Durum şeridi.** `ExplorerStatusStrip`: çalışan · seni bekleyen · takılan ·
+  başarısız kart · eskiyen kart sayaçları, bugün yazılan not sayısı ve son özetin
+  yaşı. Her sayaç bir süzgeç: basınca harita o düğümlere daralır
+  (`ExplorerFilter.attention`, `applyExplorerFilter` oturum ve kartları süzer,
+  yapıyı korur). Sıfır sayaç soluk ve basılamaz; boş harita "yüklenemedi" okunurdu.
+- **Spot ışığı.** `changedKeys` iki yük arasında halkası veya parıltısı değişen
+  düğümleri bulur; 10 sn geniş hale (`FLASH_MS`), sonra sönme. Kamera kendiliğinden
+  kaymaz (takip modu kapalı, karar 4).
+
+Veri akışı: `/graph/live` her istekte depodan ve kalıcı özet indeksinden türetilir;
+ayrı bir dikkat dosyası yoktur, yenileme sonrası da doğrudur. Akış koşuları harita
+düğümü olmadığından yalnız sayılır (`status.failedRuns`), halka almaz.
+
+**Etkileşimli sorular (canlı LLM testinde bulundu).** Sohbet turundaki `ask_user`
+kalıcı `SessionAsk` tablosuna yazmaz; yalnız oturum hub'ında `interaction_open`
+olarak yaşar ve haritanın baktığı açık döngü taraması onu görmez. Bu yüzden
+`interactionStore.pendingSessions` da "seni bekleyen" kaynağıdır ve soru açılınca,
+cevaplanınca veya iptal edilince yük taşımayan `interaction` olayı
+(`events.TypeInteraction`) yayınlanır; `eventToRefreshSignals` onu `explorer-live`'a
+yönlendirir, toast üretmez (kartı oturum akışı zaten gösterir).
+
+Sonraki dilimler (onaylı plan): köken kenarları (not → yazan oturum, oturum →
+artifact) ve yan panelde akış sekmesi; ardından tazelik ısısı ve "değişti" noktası.
+
 ## 8. Dahil edilen iyileştirmeler (tasarım gereği)
 
 1. **Döngü koruması:** lazy gezinmede visited-set + max derinlik sonsuz açılımı
