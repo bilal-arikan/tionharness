@@ -28,11 +28,11 @@ danışma) backend'den ve UI'dan tamamen çıkarıldı.
   güncellendi; arşiv kayıtlarına dokunulmadı. Eski usage/journal satırlarındaki
   `btw` kind string'i olduğu gibi kalır.
 
-Doğrulama: `go build ./...`, `tsc --noEmit`, eslint temiz; `scripts/test.sh full`
-bu Mac'te değişiklikten bağımsız 20 vitest ve 3 Go paketinde (`agent`, `api`,
-`tools` — `/private` symlink ve locale kaynaklı) hata veriyor; aynı hatalar
-değişmemiş HEAD üzerinde de birebir tekrarlandı. depcheck ve `git diff --check`
-temiz.
+Doğrulama: `go build ./...`, `tsc --noEmit`, eslint temiz; vitest
+`LC_ALL=tr_TR.UTF-8` ile 1249/1249 geçti. `go test ./...` bu Mac'te
+değişiklikten bağımsız 3 pakette (`agent`, `api`, `tools` — `/private` symlink
+kaynaklı) hata veriyor; aynı hatalar değişmemiş HEAD üzerinde de birebir
+tekrarlandı. depcheck ve `git diff --check` temiz.
 
 ## Harita canlı durum katmanı: olay → delta, dikkat halkaları, durum şeridi (2026-10-04)
 
