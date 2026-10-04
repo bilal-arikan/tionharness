@@ -26,11 +26,6 @@ const (
 	KindSummary  CallKind = db.UsageKindSummary
 	KindReflect  CallKind = db.UsageKindReflect
 	KindCompact  CallKind = db.UsageKindCompact
-	// KindBtw is the "/btw" side chat: a one-shot, tool-less consultation that
-	// reads the session's context but is NEVER written back to its history. It is
-	// an AUXILIARY kind (like title/summary), so isConversationKind excludes it and
-	// its throwaway prompt cannot be mistaken for a prompt-cache break.
-	KindBtw CallKind = db.UsageKindBtw
 	// KindDecide is a decision-model call (internal/decider). It never reaches a
 	// chat provider, so it is not an auxiliary provider kind; it only labels the
 	// usage those calls record.
@@ -121,12 +116,12 @@ func callKindFrom(ctx context.Context) CallKind {
 }
 
 // isAuxiliaryKind reports whether a call origin is a tool-less side job (title,
-// summary, compaction, reflection, /btw) rather than an agent turn. Auxiliary
+// summary, compaction, reflection) rather than an agent turn. Auxiliary
 // calls never need the Interaction MCP bridge, the CLI's built-in tools or the
 // persistent claude-cli process; they get the smallest possible request instead.
 func isAuxiliaryKind(k CallKind) bool {
 	switch k {
-	case KindTitle, KindSummary, KindReflect, KindCompact, KindBtw:
+	case KindTitle, KindSummary, KindReflect, KindCompact:
 		return true
 	default:
 		return false

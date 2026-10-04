@@ -96,8 +96,8 @@ func TestContextOverheadTokensReturnsWarmStepBaseline(t *testing.T) {
 	}
 }
 
-// TestContextOverheadStepBaseReachesPrepare walks the whole chain the three turn
-// call sites (chat_stream.go, chat_btw.go, wake_turn.go) wire up: the (total,
+// TestContextOverheadStepBaseReachesPrepare walks the whole chain the turn call
+// sites (chat_stream.go, wake_turn.go) wire up: the (total,
 // stepBase) pair contextOverheadTokens returns is stamped on the context with
 // WithContextOverhead + WithContextOverheadStepBase, and Prepare's fold then
 // drops exactly the trace of the messages it summarized away.

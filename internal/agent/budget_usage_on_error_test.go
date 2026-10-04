@@ -70,7 +70,7 @@ func usageForAgent(t *testing.T, rt *Runtime, agentID string) db.Usage {
 	return got
 }
 
-// The auxiliary funnel (reflect/summary/title/btw) must bill a turn that failed
+// The auxiliary funnel (reflect/summary/title) must bill a turn that failed
 // after the request was sent — recording usage only on the success path billed
 // exactly the most expensive turns as zero.
 func TestGuardedCompleteBillsFailedTurn(t *testing.T) {

@@ -438,7 +438,7 @@ hesaplar: `max(SummaryMsgCount, CLICompactMsgCount)` — yani TionHarness'in ken
 yoksa `-1` (soğuk tur trace tutmaz, hiçbir şey sayılmaz); sınır transkriptin
 sonunu aşarsa `0` (muhafazakâr: tüm pending pencere sayılır). Bu değer
 `conversation.WithContextOverheadStepBase` ile ctx'e damgalanır; çağrı yerleri
-`chat_stream.go`, `chat_btw.go`, `wake_turn.go`.
+`chat_stream.go`, `wake_turn.go`.
 
 **Tarihsel hata (düzeltildi).** Fold sonrası `AfterTokens`, fold **öncesi**
 ölçülmüş `overhead` ile hesaplanıyordu. Katlanan mesajlar böylece iki kez

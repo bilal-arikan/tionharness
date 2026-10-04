@@ -894,7 +894,7 @@ başarılı tur ile aynı yoldan işlenir.
 |-----|-----------|--------|
 | Tool-loop içi | `recordedComplete` | Kalıcı (persistent) CLI turu düştüğünde **ve** ardından tek-atımlık `Complete` düştüğünde ayrı ayrı — fallback zaten ayrı faturalanır, atlanırsa bütün bir turun tokenları düşerdi |
 | Tool-loop içi | `recordedStream` | Akış (`Stream`) hatası |
-| Tool-loop dışı | `guardedComplete` (`budget.go:145-159`) | Yardımcı turlar: reflect (`coordination_stall.go`, `insightanalyzer.go`, `lessons.go`), summary (`summarizer.go`), title (`titler.go`), btw (`btw.go`) |
+| Tool-loop dışı | `guardedComplete` (`budget.go:145-159`) | Yardımcı turlar: reflect (`coordination_stall.go`, `insightanalyzer.go`, `lessons.go`), summary (`summarizer.go`), title (`titler.go`) |
 
 **Fold yolunun kendi kaydı var (2026-09-02).** `internal/conversation` iki yerde
 sağlayıcıya **doğrudan** gider — `summarizeRendered` (rolling fold) ve
@@ -1294,7 +1294,7 @@ Uygulanan kaldıraçlar (hepsi ayarlanabilir, varsayılan açık):
    Test: `TestCLINativeToolAllowlistDisjointFromSuppression` (allowlist ∩
    disallow = ∅, iki shell durumu × üç mod).
 2. **Yardımcı çağrılar araçsız ve köprüsüz** (`isAuxiliaryKind`: title/summary/
-   reflect/compact/btw): `toolLoopTurn.aux` interaction endpoint'ini ve MCP
+   reflect/compact): `toolLoopTurn.aux` interaction endpoint'ini ve MCP
    config'ini atlar, `--tools ""` gönderir, persistent havuza **girmez** (aynı
    oturum id'siyle farklı prompt → fingerprint uyuşmazlığı ana süreci iki kez
    soğuk başlatıyordu). Compaction katlaması ve handoff da `CLIRestrictNativeTools`

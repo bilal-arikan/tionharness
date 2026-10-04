@@ -28,17 +28,6 @@
       "file": "File"
     }
   },
-  "btw": {
-    "title": "Btw — side question",
-    "notSaved": "not saved to history",
-    "descriptionBefore": "The agent answers this question with the full context of the current conversation, but the question and answer are",
-    "descriptionEmphasis": "not added",
-    "descriptionAfter": "to chat history and the main task is not interrupted. Tools are unavailable in the side chat (it cannot run commands or edit files).",
-    "placeholder": "Write a side question — press Enter to ask",
-    "questionLabel": "Side question",
-    "asking": "Asking…",
-    "ask": "Ask"
-  },
   "mic": {
     "server": "server",
     "browser": "browser",

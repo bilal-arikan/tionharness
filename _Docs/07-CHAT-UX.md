@@ -115,7 +115,6 @@ warm transcriptin üstüne eklenmez.
 | `/compact` komutu              | `manual`    | Claude slash-control veya Codex `thread/compact/start`                |
 | `/compact-custom` komutu       | `manual`    | `Manager.ForceCompact` dönüşü                                         |
 | Tur içi taşma kurtarması       | `reactive`  | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
-| Yan sohbet (`btw`)             | `auto`      | `chat_btw.go`; `Prepare`'in paylaşılan katlaması                      |
 
 `reactive` yol `conversation.CompactInFlightMessages`'ın döndürdüğü
 `ReactiveFold`'u kullanır: tur içi mesaj dilimi katlandığından oturum özeti
@@ -124,11 +123,6 @@ yazılmaz, dolayısıyla debug journal kaydında **fold ordinali yoktur**
 gerçek değerlerdir. Bu dalda `compaction` adımı `recovery` adımını **değiştirmez**,
 ona eklenir: `recovery` turun neden yeniden denendiğini, `compaction` katlamanın
 neye mal olduğunu söyler.
-
-`btw` uç noktası tek bir JSON gövdesiyle yanıt verir (SSE yazıcısı yok) ve hiç
-mesaj oluşturmaz (adımın kalıcılaşacağı `Steps` yok) — bu yüzden adım yalnız
-session hub'ına yayınlanır: oturumu açık tutan tüm pencereler katlamayı canlı
-görür.
 
 ### Kalıcılık
 
@@ -1029,8 +1023,8 @@ group-hover:opacity-100` hayaletiydi → satırın üzerine gelmeyen kullanıcı
     ona ait olmayan bir eleştiriyi üstlenmesi yanlış olurdu.
   - Prompt, modele bunu **sessizce uygulamasını** söyler: puanı gündeme getirme,
     teşekkür etme, 👎 için özür dileme. Not varsa alıntıdan **üstündür**.
-  - 5 çağıranın hepsine bağlandı: `chat_stream.go` (akış), `chat.go` (bloklayan),
-    `chat_btw.go` (yan sohbet), `wake_turn.go` (otomatik uyanma), `session_context.go`
+  - 4 çağıranın hepsine bağlandı: `chat_stream.go` (akış), `chat.go` (bloklayan),
+    `wake_turn.go` (otomatik uyanma), `session_context.go`
     (bağlam önizlemesi — gerçek turu birebir yansıtması için).
   - Test: `chat_feedback_summary_test.go` (boş/temizlenmiş puan, 👍/👎 + tur-yaşı
     etiketleri, sıralama, üst sınır, kırpma).

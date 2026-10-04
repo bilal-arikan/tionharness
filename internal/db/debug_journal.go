@@ -94,7 +94,7 @@ var debugEnumValues = map[string]map[string]struct{}{
 	},
 	"Kind": {
 		"automation-run": {}, "chat": {}, "command": {},
-		"btw": {}, "compact": {}, "decide": {}, "delegate": {}, "other": {}, "reflect": {},
+		"compact": {}, "decide": {}, "delegate": {}, "other": {}, "reflect": {},
 		"schedule": {}, "schedule-run": {}, "spawned": {}, "subagent": {}, "summary": {},
 		"system": {}, "task": {}, "title": {}, "worker": {},
 	},

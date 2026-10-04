@@ -50,7 +50,7 @@
 yükler ve `runFlowTurn`'a girer; her `llm` düğümü `executeTurn` (düz tamamlama, claude-cli
 delege döngüsü ya da native araç döngüsü) ile koşar, yani aşamalar sohbet turunun tüm
 yeteneklerini (araçlar, izinler, prompt cache, resume) korur. Yardımcı çağrılar (başlık,
-özet, compaction, ders, btw) ve sistem ajanları doğrudan yola gider.
+özet, compaction, ders) ve sistem ajanları doğrudan yola gider.
 
 - `thread` düğümü taban isteğin son kullanıcı mesajını render edilmiş promptla değiştirir;
   `fresh` düğümü geçmişi, özeti ve CLI `ResumeSessionID`'yi atar. Başka ajanı adlandıran

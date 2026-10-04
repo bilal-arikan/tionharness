@@ -28,17 +28,6 @@
       "file": "Dosya"
     }
   },
-  "btw": {
-    "title": "Btw — yan soru",
-    "notSaved": "geçmişe yazılmaz",
-    "descriptionBefore": "Ajan bu soruyu mevcut konuşmanın tam bağlamıyla yanıtlar, ama soru ve cevap sohbet geçmişine",
-    "descriptionEmphasis": "eklenmez",
-    "descriptionAfter": "ve ana görev kesilmez. Yan sohbette araç kullanımı yoktur (komut çalıştıramaz, dosya düzenleyemez).",
-    "placeholder": "Yan soru yaz — Enter ile sor",
-    "questionLabel": "Yan soru",
-    "asking": "Soruluyor…",
-    "ask": "Sor"
-  },
   "mic": {
     "server": "sunucu",
     "browser": "tarayıcı",

@@ -1,19 +1,20 @@
 # 61 — Merkezi Prompt Registry
 
-> **Özet (2026-09-05):** Uygulamaya dağınık gömülü LLM promptları tek kayıt
+> **Özet (2026-10-05):** Uygulamaya dağınık gömülü LLM promptları tek kayıt
 > defterinde (`internal/prompts`) toplandı: embed edilmiş `.md` default'lar,
 > workspace override + `{{yerTutucu}}` doğrulaması + default'a fallback, epoch
 > rozeti ve `debug.jsonl` prompt izi. Durum: **tamamlandı** (çekirdek 2026-07-15).
 > 2026-09-05'te kapsam ayrıldı: bir sistem ajanına bağlı 14 prompt
 > (`OwnedBySystemKey`) Promptlar ekranından çıkarıldı — etkin metinleri ajanın
-> `Soul` alanıdır ve Ayarlar ▸ Sistem ajanları'ndan düzenlenir; ekranda 7 serbest
-> prompt kaldı. Soul editörüne `GET /api/agents/{id}/builtin-prompt` ile beslenen
+> `Soul` alanıdır ve Ayarlar ▸ Sistem ajanları'ndan düzenlenir; ekranda serbest
+> promptlar kaldı (2026-10-05'te btw yan sohbetiyle birlikte `btw-system` /
+> `btw-preamble` silindi; 5 serbest anahtar). Soul editörüne `GET /api/agents/{id}/builtin-prompt` ile beslenen
 > "Koddaki prompta dön" düğmesi eklendi. Sahip paketler: `internal/prompts`,
 > `internal/api`, `frontend/src/features/{settings,agents}`.
 
 ## Sorun
 
-Prompt metinleri kod tabanına dağılmış Go sabitleriydi (summarizer, titler, btw,
+Prompt metinleri kod tabanına dağılmış Go sabitleriydi (summarizer, titler,
 lessons, insight-analyzer, auto-continue, subagent profilleri, handoff/continuation,
 compaction, koordinatör el kitabı). Yalnızca 3'ü (`summary`/`title`/`compact`)
 workspace `config/prompts/*.md` mekanizmasına bağlıydı; gerisi düzenlenemiyordu ve
@@ -52,7 +53,6 @@ conversation ve api çevrim olmadan bağımlı olabilir).
 | `compact` | konuşma compaction'ı (conversation/manager.go) | `{{summary}}` `{{messages}}` | — |
 | `handoff` | context-reset devir dokümanı (conversation/handoff.go) | `{{summary}}` `{{transcript}}` `{{environment}}` | — |
 | `continuation` | handoff sonrası açılış mesajı (agent/handoff.go) | `{{handoff}}` `{{oldSession}}` `{{artifact}}` (+ ops. `{{fileNote}}`) | — |
-| `btw-system` / `btw-preamble` | yan soru danışmanı (btw.go) — araçsızlık yapısal, prompt değil | — | — |
 | `lesson` | hata→ders reflection (lessons.go) | — | — |
 | `insight-analyzer` | retrospektif tarama analizörü (insightanalyzer.go) | — | — |
 | `auto-continue` | otonom devam dürtmesi (autocontinue.go) | — | — |
@@ -71,7 +71,7 @@ WSSettings ile senkron).
 damgalar; `RecordUsage` bunu `debug.jsonl`'deki `llm_call` olayına `promptKey` /
 `promptHash` alanları olarak yazar. Düzenlenmiş prompt default'tan farklı
 hash'lenir → "kötü tur hangi prompt sürümüyle koştu" sorusu debug journal'dan
-cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer, btw-system.
+cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer.
 
 ## API / UI
 
@@ -112,7 +112,7 @@ gömülü promptu (`prompts.Default`) döner; sistem rolü yoksa 404. Soul edit�
 düzenleme** olarak yerleştirir — Kaydet'e basılana kadar uygulanmaz, ve
 özelleştirmenin model/araç seçimleri korunur (satırı silmek gerekmez).
 
-Kalan serbest 7 anahtar: `handoff`, `continuation`, `btw-system`, `btw-preamble`,
+Kalan serbest 5 anahtar: `handoff`, `continuation`,
 `auto-continue`, `coordinator`, `terse`.
 
 ## Drift koruması
@@ -126,7 +126,7 @@ Yeni prompt eklemek = 1 Spec girdisi + 1 `.md` dosyası.
 
 - `internal/prompts/{prompts,render,resolve}.go` + `defaults/*.md` + test
 - `internal/agent/wsconfig.go` (readPrompt/WorkspacePrompt/seed), `prompttrace.go`,
-  `prompts.go` (vitrin), summarizer/titler/btw/lessons/insightanalyzer/
+  `prompts.go` (vitrin), summarizer/titler/lessons/insightanalyzer/
   autocontinue/subagent/coordination/handoff rewiring
 - `internal/conversation/manager.go` (compact Render + ctx validasyonu),
   `handoff.go` (BuildHandoff `promptTmpl` parametresi)

@@ -182,8 +182,6 @@
   "composer": {
     "attachFile": "Attach file",
     "autoResolved": "Auto ({{label}})",
-    "btw": "Btw side question",
-    "btwTitle": "Btw — ask a side question without saving it to history or interrupting the main task",
     "close": "Close",
     "dismissError": "Dismiss error",
     "editableImageMissing": "The editable image attachment is no longer available.",

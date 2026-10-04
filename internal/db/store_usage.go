@@ -25,7 +25,6 @@ const (
 	UsageKindSummary  = "summary"
 	UsageKindReflect  = "reflect"
 	UsageKindCompact  = "compact"
-	UsageKindBtw      = "btw"
 	UsageKindDecide   = "decide" // decision-model call (internal/decider): a typed answer, not text
 	UsageKindSystem   = "system"
 	UsageKindOther    = "other"

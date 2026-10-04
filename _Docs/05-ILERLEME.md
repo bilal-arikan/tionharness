@@ -1,6 +1,6 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-10-04):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
+> **Özet (2026-10-05):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
 
 Önceki kayıtlar:
 
@@ -8,6 +8,31 @@
 - [Ağustos 2026](arsiv/05-ILERLEME-2026-08.md)
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
+
+## Btw yan sohbet özelliği kaldırıldı (2026-10-05)
+
+Oturumlardaki "btw" yan soru özelliği (araçsız, transkript-dışı tek seferlik
+danışma) backend'den ve UI'dan tamamen çıkarıldı.
+
+- Backend: `POST /api/chat/btw` rotası ve `internal/api/chat_btw.go`,
+  `internal/agent/btw.go` (`AskBtw`, `buildBtwRequest`) ve testleri silindi;
+  `KindBtw` / `db.UsageKindBtw` ve debug journal'daki `btw` kind değeri
+  kaldırıldı (`isAuxiliaryKind` artık title/summary/reflect/compact).
+- Promptlar: `btw-system` / `btw-preamble` kayıt girdileri ve
+  `internal/prompts/defaults/btw-*.md` silindi. Workspace'te kalmış
+  `config/prompts/btw-*.md` override'ları artık hiçbir yerde okunmaz.
+- Frontend: composer'daki btw butonu, `BtwPanel`, `chatApi.btw`,
+  `BtwResponse` tipi ve `composer.btw*` / `btw.*` i18n anahtarları (en/tr)
+  kaldırıldı.
+- Etkin dokümanlar (07, 17, 38, 61, 74, 93, maliyet planı, analiz notu)
+  güncellendi; arşiv kayıtlarına dokunulmadı. Eski usage/journal satırlarındaki
+  `btw` kind string'i olduğu gibi kalır.
+
+Doğrulama: `go build ./...`, `tsc --noEmit`, eslint temiz; `scripts/test.sh full`
+bu Mac'te değişiklikten bağımsız 20 vitest ve 3 Go paketinde (`agent`, `api`,
+`tools` — `/private` symlink ve locale kaynaklı) hata veriyor; aynı hatalar
+değişmemiş HEAD üzerinde de birebir tekrarlandı. depcheck ve `git diff --check`
+temiz.
 
 ## Harita canlı durum katmanı: olay → delta, dikkat halkaları, durum şeridi (2026-10-04)
 

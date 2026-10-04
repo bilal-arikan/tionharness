@@ -19,9 +19,9 @@ const (
 	reloadHistoryLen       = 6 // transcript length at the moment the gate fires
 )
 
-// TestNativeCompactionResumeFieldsRequireASessionReload pins WHY the three turn
-// paths re-read the session after prep.NativeCompacted (chat_stream.go,
-// wake_turn.go, chat_btw.go): runNativeCompact rotates the session's CLI resume
+// TestNativeCompactionResumeFieldsRequireASessionReload pins WHY the turn paths
+// re-read the session after prep.NativeCompacted (chat_stream.go,
+// wake_turn.go): runNativeCompact rotates the session's CLI resume
 // id and boundary in the store via SetSessionCLIResume, and the session value the
 // turn carries in memory predates that write. Planning the CLI resume from the
 // stale copy resumes a thread the CLI has replaced and re-sends the delta from the

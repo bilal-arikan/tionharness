@@ -659,10 +659,6 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	// Control an in-flight streaming turn: stop (cancel) or steer (live guidance).
 	mux.HandleFunc("POST /api/chat/control", s.handleChatControl)
-	// Side chat ("btw"): a tool-less one-shot question answered against the
-	// session's context WITHOUT being written into its history. Answerable while
-	// the main turn is still streaming. See _Docs/60-BTW-YAN-SOHBET.md.
-	mux.HandleFunc("POST /api/chat/btw", s.handleChatBtw)
 	// Disarm a pending one-shot self-wake (schedule_wake) for a session — the
 	// user pressed "Durdur" on the waiting banner before the wake fired.
 	mux.HandleFunc("POST /api/chat/wake/cancel", s.handleCancelWake)

@@ -479,9 +479,9 @@ kapsam:
 
 **Uygulanmayan (bilinçli):** hermes'in `_build_static_fallback_summary`
 muadili — LLM'siz statik özet. Ayrı iş; TSK838 kapsamı dışında bırakıldı.
-Ayrıca `chat_btw.go` ve `wake_turn.go` da `Prepare` çağırıyor; oralarda fold
-hatası artık turu düşürmüyor ama **ekran uyarısı yok** (o yollarda lead-step
-kanalı yok) — journal olayı ikisini de kapsıyor.
+Ayrıca `wake_turn.go` da `Prepare` çağırıyor; orada fold
+hatası artık turu düşürmüyor ama **ekran uyarısı yok** (o yolda lead-step
+kanalı yok) — journal olayı onu da kapsıyor.
 
 ### Ö3 — Etkisizlik breaker'ı
 

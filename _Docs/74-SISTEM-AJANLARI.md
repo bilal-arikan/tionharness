@@ -62,7 +62,7 @@ aboneliğinden değil **API anahtarından** ödenir.
 oturum ajanının sağlayıcı+modeliyle (ör. claude-cli opus, tam taban) doğrudan
 `provider.Complete` çağırıyordu; `compaction` sistem ajanının modeli yalnız
 belgede geçerliydi. `Runtime.FoldContext(ctx, agent)` (`internal/agent/
-fold_target.go`) beş katlama giriş noktasında (`chat_turn_phases`, `chat_btw`,
+fold_target.go`) dört katlama giriş noktasında (`chat_turn_phases`,
 `summary`, `wake_turn`, `toolloop_phases.compactAndRetry`) + handoff'ta
 `conversation.WithFoldTarget` damgalar: aynı sağlayıcıda yalnız model değişir
 (provider nesnesi elde kalır), yönlendirmede sağlayıcı da değişir. Katlama

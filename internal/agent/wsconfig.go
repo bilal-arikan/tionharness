@@ -15,7 +15,7 @@ import (
 //	├── config/
 //	│   ├── prompts/<key>.md   overrides for central-registry runtime prompts
 //	│   │                      (keys: internal/prompts — summary/title/compact/
-//	│   │                      handoff/continuation/btw-*/lesson/…)
+//	│   │                      handoff/continuation/lesson/…)
 //	│   ├── instructions.md    workspace-wide agent guidance
 //	│   └── README.md          human notes (free-form)
 //	├── store/
@@ -111,7 +111,7 @@ değiştirebilir.
 - ` + "`prompts/<anahtar>.md`" + ` — merkezi prompt kayıt defterindeki (registry) bir
   runtime promptunu bu workspace için geçersiz kılar. Anahtar listesi ve her
   promptun açıklaması Ayarlar → Promptlar & Dosyalar ekranındadır (summary,
-  title, compact, handoff, continuation, btw-*, lesson, insight-analyzer,
+  title, compact, handoff, continuation, lesson, insight-analyzer,
   auto-continue, coordinator, subagent-*).
 - ` + "`instructions.md`" + ` — bu workspace'teki tüm ajanlara eklenen yönergeler
 

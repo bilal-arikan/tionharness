@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircleQuestion, Paperclip, SlidersHorizontal, Wrench } from 'lucide-react'
+import { Paperclip, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '@/types'
 import { AttachmentChip } from './AttachmentChip'
 import { WorkDirBadge } from './WorkDirBadge'
@@ -11,7 +11,6 @@ import { AgentSelect } from './composer/AgentSelect'
 import { ComposerPicker } from './composer/ComposerPicker'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './composer/pickerOptions'
 import { AutocompleteMenu } from './composer/AutocompleteMenu'
-import { BtwPanel } from './composer/BtwPanel'
 import { MicButton } from './composer/MicButton'
 import { ToolAccessPanel } from './composer/ToolAccessPanel'
 import { SendActions } from './composer/SendActions'
@@ -154,11 +153,6 @@ export function Composer({
   // settles so the same draft cannot be submitted twice; on failure the text is
   // kept (see `send`) and the lock is released for a retry.
   const [sending, setSending] = useState(false)
-  // Btw side chat: an off-transcript, tool-less question answered against the
-  // session's context. Deliberately usable WHILE a turn streams (that is the
-  // point: "ask without interrupting the main task"), so it is not gated on
-  // `streaming` / `disabled` — only on having a session and a target agent.
-  const [btwOpen, setBtwOpen] = useState(false)
   // Tool inspector: a read-only view of what the selected agent can use right now
   // (eager vs on-demand tools) and what the MCP gateway has open. Informational
   // only — it never changes configuration, so it stays usable while streaming.
@@ -884,12 +878,6 @@ export function Composer({
           />
         )}
 
-        {/* Btw side chat. Rendered only with a session + agent (both are required to
-          answer), and stays open across a streaming turn on purpose. */}
-        {btwOpen && sessionId && agentId && (
-          <BtwPanel sessionId={sessionId} agentId={agentId} onClose={() => setBtwOpen(false)} />
-        )}
-
         {/* Tool inspector. Needs a target agent (tool access is per-agent); no
           session required, so it also answers "what could this agent do?". */}
         {toolsOpen && agentId && (
@@ -1015,22 +1003,6 @@ export function Composer({
               className={BTN_ICON}
             >
               <Paperclip size={18} />
-            </button>
-
-            {/* Btw: a side question answered from the conversation's context but never
-              written into it. Enabled even while a turn is streaming — asking one is
-              exactly what this button is for. Needs a session + a target agent. */}
-            <button
-              type="button"
-              onClick={() => setBtwOpen((o) => !o)}
-              disabled={!sessionId || !agentId}
-              title={t('composer.btwTitle')}
-              aria-label={t('composer.btw')}
-              aria-expanded={btwOpen}
-              data-testid="composer-btw"
-              className={`${BTN_ICON} ${btwOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
-            >
-              <MessageCircleQuestion size={18} />
             </button>
 
             {/* Voice dictation: language picker + mic toggle. Speaking appends

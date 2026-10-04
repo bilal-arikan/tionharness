@@ -65,7 +65,7 @@ MCP ertelemesi zaten çalışıyor (+460); proje CLAUDE.md +10k (kullanıcı dos
 | # | Ne | Durum |
 |---|-----|-------|
 | 9 | ✅ claude-cli yerleşik araç **allowlist'i** (`claudeCliToolAllowlist`, `--tools`) — köprülü turda taban 36k → ~11k | `internal/climcp/allowlist.go` `NativeToolAllowlist`, `providers/claudecli.go nativeToolArgs` |
-| 10 | ✅ Yardımcı çağrılar (title/summary/compaction/reflect/btw) **köprüsüz + `--tools ""`** ve persistent havuz dışı | `internal/agent/toolloop_phases.go` (`aux`), `callkind.go isAuxiliaryKind` |
+| 10 | ✅ Yardımcı çağrılar (title/summary/compaction/reflect) **köprüsüz + `--tools ""`** ve persistent havuz dışı | `internal/agent/toolloop_phases.go` (`aux`), `callkind.go isAuxiliaryKind` |
 | 11 | ✅ Yardımcı çağrıları **native Anthropic API'ye yönlendirme** (`auxNativeRouting`; compaction katlaması dahil, `FoldContext`) — ~36k → ~1–2k/çağrı, API anahtarından faturalanır | `internal/agent/systemagent_route.go`, `fold_target.go`, `conversation.WithFoldTarget` |
 | 12 | ✅ Stall yargıcı `stall-judge` sistem ajanı + metin-hash memo (aynı mesaj tekrar yargılanmaz) | `internal/agent/coordination_stall.go` |
 | — | ✅ Kullanıcı kurulumunda `claudePersistentSession` eski `false` → `true` | `~/.tionharness/settings.json` |

@@ -72,16 +72,6 @@ var specs = []Spec{
 		Placeholders: []string{"handoff", "oldSession", "artifact"},
 	},
 	{
-		Key:   "btw-system",
-		Label: "Yan soru (btw) sistem promptu",
-		Hint:  "Araçsız, transkript-dışı yan soru danışmanının kuralları. Araçsızlık yapısal olarak da zorlanır (prompt tek güvence değildir).",
-	},
-	{
-		Key:   "btw-preamble",
-		Label: "Yan soru (btw) kullanıcı önsözü",
-		Hint:  "Yan sorunun kullanıcı mesajının başına eklenen sözleşme tekrarı (agentic CLI sağlayıcıları için).",
-	},
-	{
 		Key:              "lesson",
 		Label:            "Ders çıkarma (reflection) promptu",
 		Hint:             "Kötü biten turdan tek, genellenebilir ders damıtan arka plan reflection çağrısının sistem promptu.",

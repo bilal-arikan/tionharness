@@ -182,8 +182,6 @@
   "composer": {
     "attachFile": "Dosya ekle",
     "autoResolved": "Oto ({{label}})",
-    "btw": "Btw yan soru",
-    "btwTitle": "Btw — yan soru sor (geçmişe yazılmaz, ana görevi kesmez)",
     "close": "Kapat",
     "dismissError": "Hatayı kapat",
     "editableImageMissing": "Düzenlenebilir görsel eki artık kullanılamıyor.",
