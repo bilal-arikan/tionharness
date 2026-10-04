@@ -1,0 +1,27 @@
+{
+  "name": "tionharness-promo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TionHarness promo video (Remotion) in landscape, portrait and square formats",
+  "scripts": {
+    "music": "node scripts/make-music.mjs",
+    "studio": "remotion studio",
+    "render:horizontal": "remotion render Horizontal out/tionharness-horizontal.mp4",
+    "render:vertical": "remotion render Vertical out/tionharness-vertical.mp4",
+    "render:square": "remotion render Square out/tionharness-square.mp4",
+    "render": "npm run music && npm run render:horizontal && npm run render:vertical && npm run render:square",
+    "music:flows": "node scripts/make-flow-music.mjs",
+    "render:flows": "npm run music:flows && remotion render FlowsOverview out/flows/1-flows.mp4 && remotion render FlowsEvolution out/flows/2-evolution.mp4 && remotion render FlowsJev out/flows/3-jev-automation.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.532",
+    "@remotion/google-fonts": "4.0.532",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.532"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.8",
+    "typescript": "5.8.3"
+  }
+}
