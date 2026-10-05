@@ -427,7 +427,6 @@ func (s *Server) routeTable() *http.ServeMux {
 	s.registerEntityArchiveRoutes(mux)
 	s.registerMarketRoutes(mux)
 	s.registerIngestRoutes(mux)
-	s.registerTTSRoutes(mux)
 	s.registerSTTRoutes(mux)
 	s.registerSettingsRoutes(mux)
 	s.registerDeciderRoutes(mux)

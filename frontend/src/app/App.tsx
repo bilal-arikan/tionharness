@@ -77,7 +77,6 @@ import { useShellLayout } from './useShellLayout'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { isImagePath, mediaUrl } from '@/shared/lib/paths'
 import { copyToClipboard } from '@/shared/lib/clipboard'
-import { initServerTts, initTtsUnlock } from '@/shared/lib/tts'
 import { initServerStt } from '@/shared/lib/stt'
 
 // localStorage key holding the workspace ids this client has already offered the
@@ -489,12 +488,9 @@ export default function App() {
   // start/end, flow failures) for the active workspace, whatever screen is open.
   useWorkspaceSignals(activeWorkspaceId)
 
-  // Boot the read-aloud engine: probe for the optional server-side Piper TTS
-  // (so 'auto' prefers it) and arm the mobile autoplay unlock on first gesture.
+  // Probe for the optional server-side whisper.cpp STT engine.
   useEffect(() => {
-    void initServerTts()
     void initServerStt()
-    initTtsUnlock()
   }, [])
 
   // Navigation guard: if the current screen has unsaved edits, confirm before

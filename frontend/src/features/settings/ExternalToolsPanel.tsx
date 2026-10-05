@@ -1,5 +1,5 @@
 // External tools settings panel. Detects optional CLI tools used alongside
-// TionHarness (token optimisation, dev, render — e.g. `sqz`, `mmdc`, `piper`),
+// TionHarness (token optimisation, dev, render — e.g. `sqz`, `mmdc`, `whisper-cli`),
 // reports the version each one has installed, checks that against the latest
 // published release, and lets the user wire the hook-based ones into TionHarness
 // with one click. Self-contained (own load), exempt from the global Save bar —
@@ -587,9 +587,8 @@ export function ExternalToolsPanel({ onError }: Props) {
                       {/* Manual upgrade instructions, shown only once an update is
                         actually available. TionHarness will not overwrite these
                         binaries itself: on Windows a running child (an MCP stdio
-                        server holding its own .exe, a piper synth mid-render)
-                        locks the file, and a half-applied copy leaves a broken
-                        tool with no way back. */}
+                        server holding its own .exe) locks the file, and a
+                        half-applied copy leaves a broken tool with no way back. */}
                       {t.found &&
                         updates[t.name]?.status === 'outdated' &&
                         t.updateKind === 'manual' && (

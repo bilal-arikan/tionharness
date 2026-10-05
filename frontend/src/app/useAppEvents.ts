@@ -10,7 +10,6 @@ import { publishFlowNode } from '@/shared/lib/flowNodeBus'
 import type { AppEvent, FlowNodeEvent, Message, TurnStep } from '@/types'
 import { emitToast } from '@/shared/lib/notifyBus'
 import { toast } from '@/shared/components/toastStore'
-import { speakLatestReply } from '@/shared/lib/tts'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
 import { viewForEventType } from './eventViews'
@@ -226,14 +225,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       }
       if (sid === d.activeSessionId) {
         d.chat.clearAutoLive(sid)
-        // A real completion (not a wake armed/start/cancelled phase) can be read
-        // aloud once the reloaded transcript carries the final reply text.
-        const isCompletion = !phase || phase === 'done'
-        refreshEventTranscript(d, sid)
-          .then((msgs) => {
-            if (isCompletion && msgs) speakLatestReply(msgs)
-          })
-          .catch(() => {})
+        refreshEventTranscript(d, sid).catch(() => {})
       }
       // Completion feedback when a real assistant reply lands, routed through the
       // single toast funnel: a turn-done chime (gated by the device-local

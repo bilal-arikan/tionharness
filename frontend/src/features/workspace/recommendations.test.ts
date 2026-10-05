@@ -387,9 +387,9 @@ describe('tool-update', () => {
 
   it('fires for an outdated tool and names the published version', () => {
     const rec = runRules(
-      withUpdates([{ name: 'piper', status: 'outdated', latest: 'v1.6.0' }]),
+      withUpdates([{ name: 'whisper-cli', status: 'outdated', latest: 'v1.6.0' }]),
     ).find((r) => r.key === 'tool-update')
-    expect(rec?.desc).toContain('piper → v1.6.0')
+    expect(rec?.desc).toContain('whisper-cli → v1.6.0')
     expect(rec?.variant).toBe('warning')
   })
 
@@ -420,11 +420,11 @@ describe('tool-update', () => {
       withUpdates(
         [
           { name: 'mmdc', status: 'outdated', latest: '12.0.0' },
-          { name: 'piper', status: 'outdated', latest: 'v1.6.0' },
+          { name: 'whisper-cli', status: 'outdated', latest: 'v1.6.0' },
         ],
         [
           { name: 'mmdc', found: true, wire: 'cli', updateKind: 'command' },
-          { name: 'piper', found: true, wire: '', updateKind: 'manual' },
+          { name: 'whisper-cli', found: true, wire: '', updateKind: 'manual' },
         ],
       ),
     ).find((r) => r.key === 'tool-update')
@@ -434,8 +434,8 @@ describe('tool-update', () => {
   it('says everything is manual when none is package-manager backed', () => {
     const rec = runRules(
       withUpdates(
-        [{ name: 'piper', status: 'outdated', latest: 'v1.6.0' }],
-        [{ name: 'piper', found: true, wire: '', updateKind: 'manual' }],
+        [{ name: 'whisper-cli', status: 'outdated', latest: 'v1.6.0' }],
+        [{ name: 'whisper-cli', found: true, wire: '', updateKind: 'manual' }],
       ),
     ).find((r) => r.key === 'tool-update')
     expect(rec?.desc).toContain('elle güncellenir')

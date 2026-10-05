@@ -19,7 +19,6 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
 	"github.com/bilal-arikan/tionharness/internal/stt"
-	"github.com/bilal-arikan/tionharness/internal/tts"
 )
 
 // ClaudeToolName is the catalog key for the Claude Code CLI. Named after the
@@ -53,8 +52,8 @@ const (
 	UpdateCommand = "command"
 	// UpdateManual: the upgrade replaces a binary or unpacks an archive in place.
 	// TionHarness refuses to do this: on Windows a running child (an MCP stdio server
-	// holding its own .exe, a piper synth in flight) locks the file, and a half-
-	// applied update leaves the tool broken. The UI shows Note + the release link.
+	// holding its own .exe) locks the file, and a half-applied update leaves the
+	// tool broken. The UI shows Note + the release link.
 	UpdateManual = "manual"
 )
 
@@ -391,23 +390,6 @@ var Catalog = []Tool{
 		},
 	},
 	{
-		Name:     "piper",
-		Desc:     "Piper — yerel/offline nöral TTS motoru (35+ dil, Türkçe dahil). TionHarness sunucu-tarafı sesli okuma (TTS) için OTOMATİK kullanır → telefon dahil her cihazda aynı ses. Progs\\piper\\.venv altına pip ile kurulur (eski standalone kurulum da tanınır) veya PATH'te bulunur; bir de .onnx ses modeli gerekir.",
-		URL:      "https://github.com/OHF-Voice/piper1-gpl",
-		Category: "voice",
-		// Kept for the LEGACY standalone binary, which still answers --version. The
-		// current wheel install does not have the flag at all and is probed through
-		// its venv interpreter instead — see Tool.VersionProbe.
-		VersionArgs: []string{"--version"},
-		Update: UpdateSpec{
-			Kind: UpdateManual,
-			// Deliberately NOT a `command` spec: the interpreter to run is the venv's
-			// own python, whose absolute path is host-specific and unknown to this
-			// static catalog. Handing the user their real command beats guessing one.
-			Note: "Upstream Windows için artık standalone arşiv YAYINLAMIYOR, yalnız Python wheel'i (`piper_tts-*.whl`) veriyor. Kurulum bir venv'dedir; güncellemek için o venv'in python'ıyla `python -m pip install --upgrade piper-tts` çalıştır (varsayılan konum: `Progs\\piper\\.venv\\Scripts\\python.exe`). Ses modelleri (.onnx) ayrıdır, `Progs\\piper\\voices` altında kalır, yeniden indirmen gerekmez.",
-		},
-	},
-	{
 		Name:        "whisper-cli",
 		Desc:        "whisper.cpp — yerel/offline STT (ses→metin, 100+ dil, Türkçe dahil). TionHarness sunucu-tarafı sesle yazma (dikte) için kullanır; ffmpeg + bir ggml-*.bin model gerekir. Progs\\whisper altına kurulur veya PATH'te bulunur.",
 		URL:         "https://github.com/ggml-org/whisper.cpp",
@@ -491,10 +473,9 @@ func pathOverride(name string) string {
 }
 
 // Detect resolves a known tool's presence + absolute path. Most tools are found
-// on PATH (exec.LookPath, honouring PATHEXT on Windows), but piper and
-// whisper-cli usually live OUTSIDE PATH (a Progs install), so they use the
-// tts/stt resolvers (env / Progs / PATH) that the voice subsystems already rely
-// on. Detection never runs the tool.
+// on PATH (exec.LookPath, honouring PATHEXT on Windows), but whisper-cli
+// usually lives OUTSIDE PATH (a Progs install), so it uses the stt resolver
+// (env / Progs / PATH) that the voice subsystem already relies on. Detection never runs the tool.
 func Detect(name string) (bool, string) {
 	// An explicit override wins and does NOT fall back to PATH: the override is
 	// what TionHarness executes, so if it points at nothing the honest answer is
@@ -513,11 +494,6 @@ func Detect(name string) (bool, string) {
 		// "find" the WindowsApps stub, and the version probe would then report
 		// "Python was not found" for a machine with a perfectly good interpreter.
 		if p, ok := proc.LookInterpreter(proc.PythonCandidates()...); ok {
-			return true, p
-		}
-		return false, ""
-	case "piper":
-		if p := tts.BinaryPath(); p != "" {
 			return true, p
 		}
 		return false, ""

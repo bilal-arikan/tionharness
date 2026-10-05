@@ -23,7 +23,6 @@ import { ingestApi } from './api/ingest'
 import { marketApi } from './api/market'
 import { systemApi } from './api/system'
 import { providerApi } from './api/providers'
-import { ttsServerApi } from './api/tts'
 import { sttServerApi } from './api/stt'
 import { viewApi } from './api/views'
 import { trajectoryApi } from './api/trajectories'
@@ -55,7 +54,6 @@ export const api = {
   ...marketApi,
   ...systemApi,
   ...providerApi,
-  ...ttsServerApi,
   ...sttServerApi,
   ...viewApi,
   ...trajectoryApi,

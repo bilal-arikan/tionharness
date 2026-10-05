@@ -617,7 +617,7 @@
       "dev": "Development tools",
       "render": "Rendering / diagrams",
       "design": "Design",
-      "voice": "Voice (TTS / STT)"
+      "voice": "Voice (STT)"
     },
     "description": "Checks whether optional CLI tools used with TionHarness are installed on this device. Path overrides are checked first, then PATH. Tools are not installed, run or modified. Hook tools can be connected with one click; MCP and CLI tools are shown with an information badge.",
     "version": "v{{version}}",

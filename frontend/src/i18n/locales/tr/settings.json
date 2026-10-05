@@ -254,11 +254,7 @@
     "effectsTitle": "Ses efektleri",
     "effectsLabel": "Ses efektleri",
     "effectsHint": "Ajan yanıtı bitince çalınan sesi, mikrofon başlatma ve durdurma seslerini ve ajanın soru, onay ya da izin istediğinde çalan uyarıları denetler.",
-    "sttTitle": "Sesli giriş (STT)",
-    "ttsTitle": "Sesli okuma (TTS)",
-    "autoReadLabel": "Yanıtları sesli oku",
-    "autoReadHint": "Ajan yanıtı tamamlanınca metni sesli okur; kod blokları, tablolar ve bağlantılar atlanır.",
-    "autoReadEnabledSample": "Sesli okuma açık."
+    "sttTitle": "Sesli giriş (STT)"
   },
   "stt": {
     "language": "Mikrofon dili",
@@ -280,38 +276,6 @@
       "server": {
         "label": "Sunucu (Whisper)",
         "hint": "Kaydı sunucuya yükler; whisper.cpp çevrimdışı olarak yazıya döker ve WebView2'de de çalışır."
-      }
-    }
-  },
-  "tts": {
-    "engine": "Seslendirme motoru",
-    "serverVoice": "Sunucu sesi (Piper)",
-    "serverVoiceHint_one": "{{count}} ses yüklü. Sunucuda üretilir; telefon dahil her cihazda aynı ses kullanılır.",
-    "serverVoiceHint_other": "{{count}} ses yüklü. Sunucuda üretilir; telefon dahil her cihazda aynı ses kullanılır.",
-    "autoServerVoice": "Otomatik (ilk yüklü ses)",
-    "browserVoice": "Tarayıcı sesi",
-    "browserVoiceHint_one": "{{count}} ses (☁ = çevrimiçi). Boş bırakılırsa dile göre otomatik seçilir. Daha fazlası için Windows dil paketi ekleyin.",
-    "browserVoiceHint_other": "{{count}} ses (☁ = çevrimiçi). Boş bırakılırsa dile göre otomatik seçilir. Daha fazlası için Windows dil paketi ekleyin.",
-    "browserVoiceEmpty": "Ses listesi yükleniyor ya da cihazda TTS sesi yok.",
-    "autoBrowserVoice": "Otomatik (dile göre)",
-    "defaultVoice": "varsayılan",
-    "volume": "Ses seviyesi",
-    "rate": "Hız",
-    "pitch": "Ton",
-    "test": "Sesi dene",
-    "sample": "Merhaba, bu bir sesli okuma örneğidir.",
-    "engines": {
-      "auto": {
-        "label": "Otomatik",
-        "hint": "Sunucuda Piper varsa onu, yoksa tarayıcı sesini kullanır."
-      },
-      "browser": {
-        "label": "Tarayıcı",
-        "hint": "Cihazın kendi speechSynthesis seslerini kullanır."
-      },
-      "server": {
-        "label": "Sunucu (Piper)",
-        "hint": "Sunucuda üretilir; telefon dahil her cihazda aynı ses kullanılır."
       }
     }
   },

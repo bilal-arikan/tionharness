@@ -301,7 +301,7 @@ export interface UpdateStatus {
   downloadFile: string
 }
 
-// Detection result for an optional external CLI tool (rtk, sqz, mmdc, piper…).
+// Detection result for an optional external CLI tool (rtk, sqz, mmdc, whisper-cli…).
 // The backend resolves the executable's path without running it, then reads the
 // version by invoking only the tool's version flag (side-effect free, 3s cap).
 // `category` groups tools in the panel; `wire` tells how it is used once present:

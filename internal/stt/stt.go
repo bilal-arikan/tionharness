@@ -1,6 +1,6 @@
 // Package stt shells out to an OPTIONAL external whisper.cpp speech-to-text CLI
-// (plus ffmpeg for audio conversion) found on the host, mirroring the tts/Piper
-// external-tool pattern: nothing is compiled in, and when the binaries/model are
+// (plus ffmpeg for audio conversion) found on the host, following the external-tool
+// pattern: nothing is compiled in, and when the binaries/model are
 // absent the server reports unavailable so the frontend falls back to the
 // browser's Web Speech recognition.
 //

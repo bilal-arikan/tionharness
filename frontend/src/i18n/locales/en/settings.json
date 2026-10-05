@@ -254,11 +254,7 @@
     "effectsTitle": "Sound effects",
     "effectsLabel": "Sound effects",
     "effectsHint": "Controls the chime when an agent finishes, microphone start/stop sounds, and alerts when an agent asks a question or requests approval or permission.",
-    "sttTitle": "Voice input (STT)",
-    "ttsTitle": "Read aloud (TTS)",
-    "autoReadLabel": "Read replies aloud",
-    "autoReadHint": "Reads the text aloud when an agent reply finishes, skipping code blocks, tables, and links.",
-    "autoReadEnabledSample": "Read aloud is on."
+    "sttTitle": "Voice input (STT)"
   },
   "stt": {
     "language": "Microphone language",
@@ -280,38 +276,6 @@
       "server": {
         "label": "Server (Whisper)",
         "hint": "Upload the recording for whisper.cpp to transcribe offline, including in WebView2."
-      }
-    }
-  },
-  "tts": {
-    "engine": "Speech engine",
-    "serverVoice": "Server voice (Piper)",
-    "serverVoiceHint_one": "{{count}} voice installed. Generated on the server, with the same voice on every device, including phones.",
-    "serverVoiceHint_other": "{{count}} voices installed. Generated on the server, with the same voice on every device, including phones.",
-    "autoServerVoice": "Automatic (first installed voice)",
-    "browserVoice": "Browser voice",
-    "browserVoiceHint_one": "{{count}} voice (☁ = online). Empty selects automatically by language. Add a Windows language pack for more voices.",
-    "browserVoiceHint_other": "{{count}} voices (☁ = online). Empty selects automatically by language. Add a Windows language pack for more voices.",
-    "browserVoiceEmpty": "The voice list is loading, or this device has no TTS voices.",
-    "autoBrowserVoice": "Automatic (by language)",
-    "defaultVoice": "default",
-    "volume": "Volume",
-    "rate": "Rate",
-    "pitch": "Pitch",
-    "test": "Test voice",
-    "sample": "Hello, this is a read-aloud sample.",
-    "engines": {
-      "auto": {
-        "label": "Automatic",
-        "hint": "Use Piper on the server when available; otherwise use a browser voice."
-      },
-      "browser": {
-        "label": "Browser",
-        "hint": "Use this device's speechSynthesis voices."
-      },
-      "server": {
-        "label": "Server (Piper)",
-        "hint": "Generate speech on the server with the same voice on every device, including phones."
       }
     }
   },

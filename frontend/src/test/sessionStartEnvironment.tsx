@@ -86,10 +86,6 @@ vi.mock('@/app/useTranscript', () => ({
 vi.mock('@/shared/hooks/useReferencedAgents', () => ({
   useReferencedAgents: (agents: unknown) => agents,
 }))
-vi.mock('@/shared/lib/tts', () => ({
-  initServerTts: sessionStartTest.noop,
-  initTtsUnlock: sessionStartTest.noop,
-}))
 vi.mock('@/shared/lib/stt', () => ({ initServerStt: sessionStartTest.noop }))
 vi.mock('@/features/chat/useChatStream', () => ({
   useChatStream: () => ({

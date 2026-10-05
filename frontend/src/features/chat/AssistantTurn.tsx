@@ -1,12 +1,10 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { tokens as fmtTok } from '@/shared/lib/format'
-import { RotateCcw, ThumbsUp, ThumbsDown, Volume2, Square } from 'lucide-react'
+import { RotateCcw, ThumbsUp, ThumbsDown } from 'lucide-react'
 import type { Message } from '@/types'
 import type { AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { api } from '@/api'
-import { speak, stopSpeaking, ttsAvailable } from '@/shared/lib/tts'
 import { Markdown } from '@/shared/components/markdown/Markdown'
-import { TtsVolumeSlider } from './TtsVolumeSlider'
 import { TurnSteps } from './TurnSteps'
 import { parseSteps, stepTruncated } from './turnStepUtils'
 import { ThinkingBlock } from './ThinkingBlock'
@@ -137,28 +135,6 @@ export const AssistantTurn = memo(function AssistantTurn({
   // message). Not offered while still streaming.
   const canRetry = !!onRetry && steps.some((st) => st.kind === 'error') && !isLastLive
 
-  // Manual read-aloud (TTS) of this reply's prose. Local "speaking" state drives
-  // the play/stop icon; it resets when the utterance ends. Offered only when the
-  // browser supports speech synthesis, the turn is finished, and it has text.
-  const [speaking, setSpeaking] = useState(false)
-  const canSpeak = ttsAvailable() && !isLastLive && m.text.trim().length > 0
-  const toggleSpeak = () => {
-    if (speaking) {
-      stopSpeaking()
-      setSpeaking(false)
-      return
-    }
-    setSpeaking(true)
-    speak(m.text, () => setSpeaking(false))
-  }
-  // Stop this bubble's speech if it unmounts mid-utterance.
-  useEffect(
-    () => () => {
-      if (speaking) stopSpeaking()
-    },
-    [speaking],
-  )
-
   // Did this turn mutate any file? Drives the bulk file-changes chip. Cheap
   // probe rather than the full extraction — the modal does that work when
   // opened. Skipped on the live bubble: the trace grows with every delta, and
@@ -274,7 +250,7 @@ export const AssistantTurn = memo(function AssistantTurn({
         </div>
       </div>
       {/* Footer BELOW the bubble: passive meta (time, duration, model, token spend)
-          on the LEFT, action chips (read-aloud, rating, retry, delete) on the
+          on the LEFT, action chips (rating, retry, delete) on the
           RIGHT. The chips are visible at rest, not hover-only — see
           messageActions.ts. */}
       <div className={TURN_FOOTER}>
@@ -332,21 +308,6 @@ export const AssistantTurn = memo(function AssistantTurn({
               />
             )}
             {canCopy && <CopyButton text={m.text} />}
-            {/* Read this reply aloud (TTS). Toggles play/stop; strips code/tables.
-                The adjacent slider sets the GLOBAL read-aloud volume (all bubbles). */}
-            {canSpeak && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={toggleSpeak}
-                  title={speaking ? t('assistant.stopReading') : t('assistant.readAloudTitle')}
-                  aria-label={speaking ? t('assistant.stopReading') : t('assistant.readAloud')}
-                  className={speaking ? actionChipActive() : actionChip()}
-                >
-                  {speaking ? <Square size={13} /> : <Volume2 size={13} />}
-                </button>
-                <TtsVolumeSlider />
-              </div>
-            )}
             {/* Feedback thumbs (not on the live bubble). */}
             {onFeedback && !isLastLive && (
               <>

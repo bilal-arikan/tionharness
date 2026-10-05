@@ -65,9 +65,7 @@ func (s *Server) handleExternalTools(w http.ResponseWriter, r *http.Request) {
 		found, p := exttools.Detect(t.Name)
 		st.Found, st.Path = found, p
 		out[i] = st
-		// The probe is not always the tool itself — a wheel-installed CLI with no
-		// --version flag is asked via its venv interpreter instead (VersionProbe).
-		probe, args := t.VersionProbe(p)
+		args := t.VersionArgs
 		if !found || len(args) == 0 {
 			continue
 		}
@@ -80,7 +78,7 @@ func (s *Server) handleExternalTools(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			out[i].Version = v
-		}(i, probe, args)
+		}(i, p, args)
 	}
 	wg.Wait()
 	writeJSON(w, http.StatusOK, out)
@@ -127,8 +125,7 @@ func (s *Server) handleExternalToolUpdates(w http.ResponseWriter, r *http.Reques
 			out[i].Latest, out[i].ReleaseURL = rel.Tag, rel.URL
 			out[i].PublishedAt, out[i].Stale = rel.PublishedAt, stale
 
-			probe, args := t.VersionProbe(path)
-			local, verErr := exttools.LocalVersion(r.Context(), probe, args)
+			local, verErr := exttools.LocalVersion(r.Context(), path, t.VersionArgs)
 			if verErr != nil {
 				out[i].Error = verErr.Error() // status stays "unknown"
 				return
@@ -149,7 +146,7 @@ func (s *Server) handleExternalToolUpdates(w http.ResponseWriter, r *http.Reques
 // Deliberately restricted to package-manager-backed tools (exttools.UpdateCommand):
 // tools whose upgrade means overwriting a binary or unpacking an archive answer
 // 409 with the manual instructions instead. On Windows a running child — an MCP
-// stdio server holding its own .exe, a piper synth in flight — locks the file,
+// stdio server holding its own .exe — locks the file,
 // and a half-applied replacement leaves the tool broken with no way back.
 //
 // This is a USER action only; it is not exposed as an agent tool, so an agent

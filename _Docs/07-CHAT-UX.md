@@ -712,54 +712,11 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   Tüm UI sesleri **tek cihaz-yerel tercihe** bağlı (`shared/lib/sounds.ts`
   `soundEffectsEnabled`) → Ayarlar ▸ **Ses** ▸ **Ses efektleri** toggle'ı
   (`SoundPanel`); açınca örnek chime çalar.
-- **Yanıtı sesli okuma (TTS, `shared/lib/tts.ts`):** tarayıcı `speechSynthesis` ile
-  ajan yanıtını sesli okur — **güvenli bağlam/izin gerektirmez** (mikrofonun aksine
-  HTTP/LAN'da da çalışır). `stripForSpeech` yalnız düz metni bırakır: fenced/inline
-  kod (fenced **bloklar**), datatable/mermaid/html-preview blokları, tablolar, görsel/link,
-  çıplak URL ve Windows dosya yolları ayıklanır. **Inline kod** (tek-backtick) ise cümlenin
-  parçası olduğu için **okunur** — sadece backtick'ler atılır, içindeki kelime kalır.
-  **Manuel:** her asistan balonunda 🔊
-  buton (`AssistantTurn`, play/stop). **Otomatik:** tur bitince aktif oturumda okur
-  (`useAppEvents` completion dalı → `speakLatestReply`; id-dedupe + interrupted/cancelled
-  atlanır). Dil `ttsLang()` → açık TTS seçimi, yoksa composer ses dili (`stt.lang`),
-  yoksa motor varsayılanı. **Ayarlar ▸ Ses** (yeni özel alt-sayfa `SoundPanel` —
-  ses efektleri + STT + TTS bir arada; NotificationsPanel'den ayrıldı)
-  - `TtsSettings.tsx`): "Yanıtları sesli oku" toggle'ı (cihaz-yerel, varsayılan kapalı)
-  - **ses seçimi** (`speechSynthesis.getVoices()`, `voiceschanged` ile tazelenir,
-    voiceURI'ye göre) + **hız** (0.5–2×) + **ton** (0–2) slider'ları + "Sesi dene" butonu.
-    Tüm bu tercihler hem otomatik okuma hem balon 🔊 butonunu etkiler; `speak` rate/pitch/
-    seçili sesi uygular (`resolveVoice`: voiceURI › dile göre eşleşen ses).
-- **Uzun metin okuma (tarayıcı motoru):** Chrome/Edge `speechSynthesis` uzun
-  utterance'ı ~15sn/birkaç yüz karakterde cümle ortasında keser + sekme blur'unda
-  stall eder. `speak` metni **cümlelere bölüp** (`splitForSpeech`, ≤180 char) zincirleme
-  kuyrukta seslendirir + 10sn'de bir `pause()/resume()` keep-alive. Cümle sınırı =
-  **ardından boşluk gelen** `.!?…` → `file.ts`, `127.0.0.1`, `3.14`, `v1.2.0`, `Node.js`
-  gibi kod/sayı token'ları bölünmez. `stopSpeaking` kuyruğu temizler. (Sunucu Piper
-  motorunda bu sorunlar yok — tek kesintisiz WAV.)
-- **Global ses seviyesi slider'ı (`TtsVolumeSlider.tsx`):** her asistan balonundaki 🔊
-  butonunun yanında kompakt bir volume slider'ı. **Tek global değer** (`ttsVolume`/
-  `setTtsVolume`, 0–1) — biri değişince `onTtsVolumeChange` yayınıyla **tüm balonların
-  slider'ları + Ayarlar ▸ Ses'teki slider** anında güncellenir. Volume iki motora da
-  uygulanır (`speechSynthesis` `utterance.volume`; sunucu `<audio>.volume`, çalan ses
-  canlı güncellenir).
-- **Sunucu TTS motoru (Piper, harici CLI):** tarayıcı sesleri yerine sunucuda üretilen
-  **doğal Piper** sesi — böylece **telefon/thin client** da okur (sesi sunucu üretir,
-  cihaz sadece çalar). Backend `internal/tts` (piper.exe tespiti: `TIONHARNESS_PIPER` env
-  › `Progs\piper` layout › PATH; `voices/*.onnx` tarar; `os/exec`+60s timeout, `--model`
-  - stdin metin → WAV). **Kurulum şekli değişti (2026-08-20):** upstream
-    (`OHF-Voice/piper1-gpl`) Windows'a standalone arşiv yayınlamayı bıraktı, yerine
-    Python wheel veriyor → kurulum artık `Progs\piper\.venv` ve aranan ilk aday
-    `.venv\Scripts\piper.exe` (eski standalone layout listede kaldı, bozulmaz).
-    CLI sözleşmesi **aynı**: piper1-gpl `--model`/`--output_file` alt-çizgili
-    yazımları takma ad olarak koruyor, bu yüzden `Synthesize` sürüme göre
-    dallanmıyor. Ses modelleri venv dışında (`Progs\piper\voices`) durduğu için
-    `voiceDirs` iki seviye yukarıyı da tarar + `internal/api/tts.go` (`GET /api/tts/status`, `POST /api/tts`
-    → `audio/wav`). Frontend `api/tts.ts` + `shared/lib/tts.ts` motor katmanı: `resolveEngine`
-    (`auto`/`browser`/`server`; auto Piper varsa onu), server yolunda `/api/tts` → paylaşımlı
-    `<audio>`; hata/yoksa **browser speechSynthesis'e düşer**. **Mobil autoplay:** ilk
-    jestte sessiz-WAV ile `initTtsUnlock`, boot'ta `initServerTts` (App.tsx). Ayarlar'da
-    motor seçici (Segmented) + sunucu ses listesi (`TtsSettings`). Piper yoksa hiçbir şey
-    değişmez. **Kurulum-bağımsız** (tek-binary'e gömülü değil).
+- **Yanıtı sesli okuma (TTS) kaldırıldı (2026-10-05):** tarayıcı `speechSynthesis`
+  ve sunucu Piper motoru, balondaki 🔊 butonu + ses seviyesi slider'ı, otomatik okuma
+  ve Ayarlar ▸ Ses'teki TTS bölümü tamamen çıkarıldı (`internal/tts`, `/api/tts*`,
+  `shared/lib/tts.ts`, `TtsSettings`, `TtsVolumeSlider`). Ayarlar ▸ Ses artık yalnız
+  ses efektleri + STT'yi barındırır. Ayrıntı `05-ILERLEME.md` 2026-10-05.
 - **Sunucu STT motoru (whisper.cpp, harici CLI):** tarayıcı Web Speech yerine sunucuda
   transkripsiyon — offline, Türkçe, WebView2/thin client'ta da çalışır. Backend
   `internal/stt` (whisper-cli + **ffmpeg** tespiti: env › `Progs\whisper` layout › PATH;
@@ -1122,7 +1079,7 @@ UI'a yine `session_change("title")` ile anında yansır.
   - **Sol:** pasif meta — saat, süre, model, token, cache sıcaklık noktası
     (`00:35 · ⏱ 4 dk 32 sn · claude-opus-4-8 · ↑34 ↓9.8k ⚡6.5M 🔥`); kullanıcı turunda
     saat + yönlendirme rozeti.
-  - **Sağ:** aksiyon çipleri — asistanda 🔊 sesli oku + 👍/👎 puan + "Yeniden dene" +
+  - **Sağ:** aksiyon çipleri — asistanda 👍/👎 puan + "Yeniden dene" +
     🗑 sil; kullanıcıda ⟲ geri sar + 🗑 sil.
   - **Görünürlük düzeltmesi (asıl kazanım):** butonlar eskiden
     `opacity-0 group-hover:opacity-100` hayaletiydi → fark edilmiyorlardı. Artık

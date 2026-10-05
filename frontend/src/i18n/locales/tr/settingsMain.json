@@ -617,7 +617,7 @@
       "dev": "Geliştirme araçları",
       "render": "Render / diyagram",
       "design": "Tasarım",
-      "voice": "Ses (TTS / STT)"
+      "voice": "Ses (STT)"
     },
     "description": "TionHarness ile kullanılabilen isteğe bağlı CLI araçlarının bu cihazda kurulu olup olmadığını kontrol eder. Önce yol geçersiz kılması, sonra PATH aranır. Araçlar kurulmaz, çalıştırılmaz veya değiştirilmez. Hook araçları tek tıkla bağlanabilir; MCP ve CLI araçları bilgi rozetiyle gösterilir.",
     "version": "v{{version}}",

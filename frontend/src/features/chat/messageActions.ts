@@ -1,6 +1,6 @@
 // Shared styling for the per-message footer: the passive meta (time, duration,
 // model, token spend) and the action controls (rewind / delete / rate /
-// read-aloud / retry).
+// retry).
 //
 // The footer sits OUTSIDE the bubble, directly beneath it, on the neutral chat
 // background — so there is a single palette and no per-surface variants.
@@ -30,7 +30,7 @@ const HOVER: Record<ActionIntent, string> = {
   positive: 'hover:border-[var(--color-success)] hover:text-[var(--color-success)]',
 }
 
-// Turned-ON look (thumb chosen, read-aloud playing): a filled chip so the state is
+// Turned-ON look (thumb chosen): a filled chip so the state is
 // obvious without hovering. Replaces REST wholesale rather than layering on top.
 const ACTIVE: Record<ActionIntent, string> = {
   default: 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]',

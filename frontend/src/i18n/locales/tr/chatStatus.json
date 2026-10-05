@@ -152,10 +152,6 @@
     "newer": "Sonraki mesajları yükle",
     "latest": "En yeniye git"
   },
-  "tts": {
-    "title": "Sesli okuma seviyesi: %{{percent}} (tüm sohbetler için ortak)",
-    "label": "Sesli okuma ses seviyesi"
-  },
   "wake": {
     "soon": "birazdan",
     "seconds": "~{{seconds}} sn",

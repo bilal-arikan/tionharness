@@ -1,4 +1,4 @@
-// Server (whisper.cpp) STT engine selection + status, mirroring shared/lib/tts.ts.
+// Server (whisper.cpp) STT engine selection + status.
 // The browser Web Speech API stays the default/fallback; when the host has
 // whisper-cli + ffmpeg + a model, the server engine can transcribe uploaded audio
 // (works in WebView2 / thin clients that lack Web Speech recognition).

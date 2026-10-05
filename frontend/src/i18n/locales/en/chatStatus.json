@@ -152,10 +152,6 @@
     "newer": "Load newer messages",
     "latest": "Jump to latest"
   },
-  "tts": {
-    "title": "Read-aloud volume: {{percent}}% (shared across all chats)",
-    "label": "Read-aloud volume"
-  },
   "wake": {
     "soon": "shortly",
     "seconds": "~{{seconds}}s",

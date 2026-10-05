@@ -380,29 +380,16 @@ Update      UpdateSpec // Kind: "command" | "manual"
   **fail-open** → bayat cache `stale=true` ile döner; cache yoksa hata.
 - **`Compare`** ayrıştıramadığında **`unknown`** — tahmin yok. Yerel sürüm
   ileriyse `up-to-date` (dev build "eski" gösterilmez).
-- **`Tool.VersionProbe(path)`** (2026-08-20, `versionprobe.go`) — probun *neyi*
-  çalıştıracağını çözer; normalde `(path, VersionArgs)`. Tek istisna **piper**:
-  upstream Windows'a artık standalone arşiv değil wheel veriyor ve CLI'da
-  `--version` **yok** (bayrak usage metniyle reddediliyor, içinde sürüm-şeklinde
-  token olmadığı için panelde kalıcı "sürüm okunamadı" kalırdı). İkili bir venv
-  console script'iyse prob o venv'in python'ına döner:
-  `python -c "importlib.metadata.version('piper-tts')"`. Güvenlik mandalı
-  **`pyvenv.cfg`**'dir — yalnız klasör adına (`Scripts`/`bin`) bakmak
-  `/usr/bin/piper`'ı venv sanıp yanındaki sistem python'ına sorardı. Eski
-  standalone kurulum venv'de olmadığı için `--version` yoluna düşer; bu yüzden
-  katalogdaki `VersionArgs` **silinmedi**.
+- **`Tool.VersionProbe(path)`** (2026-08-20) piper'ın wheel kurulumu için venv
+  python'ına soran istisnaydı; piper/TTS 2026-10-05'te kaldırılınca `versionprobe.go`
+  da silindi — prob artık her araç için `(path, VersionArgs)`.
 
 ### Güncelleme neden sadece kısmen otomatik
 
 | Kind | Araçlar | Neden |
 |------|---------|-------|
 | `command` | `mmdc` (npm), `ffmpeg` (winget), `git` (winget `Git.Git`), `bun` (winget `Oven-sh.Bun`), `npm` (`npm i -g npm@latest`) | Paket yöneticisi kurulum dizinini ve çalışan ikiliyi kendi yönetir |
-| `manual` | claude, rtk, sqz, codebase-memory-mcp, openpencil, piper, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini, süren bir claude-cli turu `claude`'u, açık `op` sunucusu `op.exe`'yi) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
-
-`piper` **başka bir sebeple** manual: artık pip paketi, yani kilit sorunu yok —
-ama çalıştırılacak interpreter o kuruluma ait venv'in python'ıdır ve mutlak yolu
-host'a göre değişir, statik katalog bilemez. Kullanıcıya tahmin edilmiş bir komut
-vermektense `Note` içinde gerçek komutu göstermek tercih edildi.
+| `manual` | claude, rtk, sqz, codebase-memory-mcp, openpencil, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini, süren bir claude-cli turu `claude`'u, açık `op` sunucusu `op.exe`'yi) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
 
 `RunUpdate` komutu **katalogdan** alır, istekten değil → enjeksiyon yolu yok.
 5 dk timeout + `TreeKill`; `HardenedEnv` sayesinde soru soracak bir paket
@@ -591,7 +578,7 @@ sürüm** katmanı zaten çapraz-platformdu:
 - `exec.LookPath` Linux PATH'ini doğal olarak kullanır; `--version` probe'ları aynı.
 - `proc.PythonCandidates()` Linux'ta `python3`'ü öne alır, `IsWindowsAppAlias` orada
   daima `false` (Store stub'ı yalnız Windows sorunudur).
-- `tts`/`stt` çözücüleri `exeName()` ile `.exe`'yi düşürür ve PATH'e fallback yapar.
+- `stt` çözücüsü `exeName()` ile `.exe`'yi düşürür ve PATH'e fallback yapar.
 - `gitProjectURL` Linux'ta akışı zaten kapatıyordu.
 
 **Güncelleme katmanı ise Windows'a çakılıydı** — üç girdi `winget` ilan ediyordu.

@@ -9,6 +9,29 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Sesli okuma (TTS) desteği kaldırıldı (2026-10-05)
+
+Ajan yanıtlarını sesli okuma özelliği motorlarıyla birlikte tamamen çıkarıldı;
+sesle yazma (STT/whisper) ve ses efektleri olduğu gibi kaldı.
+
+- Backend: `internal/tts` paketi (Piper CLI sarmalayıcısı) ve
+  `internal/api/tts.go` (`GET /api/tts/status`, `POST /api/tts`) silindi.
+  Harici araç kataloğundan `piper` girdisi ve yalnız onun için var olan
+  `exttools/versionprobe.go` (venv python'ı ile sürüm sorma) kaldırıldı; sürüm
+  probu artık her araçta `(path, VersionArgs)`.
+- Frontend: `shared/lib/tts.ts`, `api/tts.ts`, `TtsSettings`,
+  `TtsVolumeSlider`, asistan balonundaki 🔊 butonu, tur bitiminde otomatik okuma
+  (`useAppEvents`), boot'taki `initServerTts`/`initTtsUnlock` ve ilgili i18n
+  anahtarları (en/tr) silindi. Ayarlar ▸ Ses artık yalnız ses efektleri + STT;
+  harici araç kategorisi etiketi "Ses (STT)".
+- Dokümanlar 07, 32, 54 güncellendi. Cihazlarda kalmış TTS `localStorage`
+  tercihleri artık okunmaz.
+
+Doğrulama: `go build ./...`, `go vet`, `tsc --noEmit` temiz; vitest
+(`LC_ALL=tr_TR.UTF-8`) 1249/1249 geçti; depcheck ve `git diff --check` temiz.
+`go test ./...` yalnız bu Mac'e özgü, HEAD'de de tekrarlanan 7 testte
+(`agent`, `api`, `tools` — `/private` symlink) hata veriyor.
+
 ## Btw yan sohbet özelliği kaldırıldı (2026-10-05)
 
 Oturumlardaki "btw" yan soru özelliği (araçsız, transkript-dışı tek seferlik

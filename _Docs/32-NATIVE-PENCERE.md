@@ -134,7 +134,7 @@ yeri `proc` üzerinden geçirildi:
 | `internal/api/external_tools_maint.go` | harici araç bakımı | `proc.CommandContext` |
 | `internal/tools/builtin_codebase_search.go` | codebase-memory CLI | `proc.CommandContext` |
 | `internal/worktree/git.go` (`ExecRunner`) | `git` | `proc.CommandContext` |
-| `internal/stt/stt.go`, `internal/tts/tts.go` | ffmpeg / whisper / piper | `proc.CommandContext` |
+| `internal/stt/stt.go` | ffmpeg / whisper | `proc.CommandContext` |
 | `cmd/tionharness-desktop/main.go` (`openBrowser`) | `rundll32` | `proc.HideConsole` |
 
 İlk ikisi en görünür olanlardı: `rtk` ve `sqz` her shell aracı çağrısında koşar, yani her komutta
