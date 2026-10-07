@@ -1,6 +1,6 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-10-05):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
+> **Özet (2026-10-07):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
 
 Önceki kayıtlar:
 
@@ -8,6 +8,66 @@
 - [Ağustos 2026](arsiv/05-ILERLEME-2026-08.md)
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
+
+## Harici araçlar: codex tek tıkla güncellenir (2026-10-07)
+
+Codex CLI, Ayarlar ▸ Harici araçlar panelinde artık "Güncelle" düğmesi ve
+kopyalanabilir komut alır (önceden yalnız manuel nottu). Ayrıntı
+[69](69-CODEX-CLI-SAGLAYICI.md).
+
+- **Kurulum sahibine göre komut:** `internal/exttools/codex.go`
+  `codexUpdateSpec` algılanan yolu symlink'lerden geçirip okur. npm global
+  kurulumda `npm install -g --prefix <prefix> @openai/codex@latest` (prefix
+  kurulumun kendisinden; PATH'teki npm başka bir Node'a ait olabilir), Homebrew
+  cask'ta `brew upgrade --cask codex`, tanınmayan kurulumda manuel not.
+- **Katalog:** `Tool.ResolveUpdate` + `Tool.EffectiveUpdate(path)`; API
+  (`internal/api/external_tools.go`) hem listede hem güncelleme uç noktasında
+  yola göre çözülmüş spec'i kullanır. `UpdateCommandLine` boşluklu argümanları
+  tırnaklar.
+- **Meşgul koruması:** `Tool.ProcLabelPrefix` ("codex") ve
+  `exttools.RunningProcesses`; procwatch'ta çalışan bir codex sağlayıcı süreci
+  varken `RunUpdate` `ErrToolBusy` döner, uç nokta 409 verir. Kullanıcının kendi
+  terminalinde çalıştırdığı codex ledger'da görünmez.
+- **Doğrulama:** `internal/exttools/codex_test.go` (npm symlink/shim, cask,
+  bilinmeyen kurulum, tırnaklama, meşgul koruması). Bu Mac'te canlı:
+  `/api/external-tools` codex için `npm install -g --prefix /opt/homebrew
+  @openai/codex@latest` döndü, `POST /api/external-tools/codex/update` başarıyla
+  koştu (0.160.1, güncel).
+
+## Harita: zaman penceresi, ajan okuma defteri ve sadeleştirme (2026-10-05)
+
+Harita (Explorer) artık Rota'daki gibi zamana göre süzülür ve ajanların neyi ne
+zaman okuduğunu gösterir; araç çubuğu üç satırdan bire indi. Ayrıntı
+[68 §7.3](68-OZET-HARITASI.md).
+
+- **Zaman penceresi:** 1 sa · 6 sa · 24 sa · 3 gün · tümü (varsayılan 24 sa).
+  Düğüm zamanı = oluşturulma, düzenlenme ve ajan okumasının en yenisi; pencere dışı
+  gizlenir, pencere içi düğümün köke giden yolu ve canlı oturumlar kalır
+  (`explorerFilter.ts` `recentWithAncestors`). Temizle pencereyi korur.
+- **Damgalar:** `/api/views/graph` ve `/graph/live` yanıtında `times`
+  (`view.GraphTimes`, `internal/view/graph_times.go`).
+- **Ajan okuma defteri:** workspace store'da `view-reads.json`
+  (`db.RecordViewRead`, 60 sn birleştirme, 5000 kayıt sınırı). Başarılı `get_view`,
+  `read_artifact`, `use_skill`, `note_expand` çağrıları native döngüde
+  (`toolloop_phases.go`) ve CLI köprüsünde (`mcp_interaction.go`)
+  `Runtime.RecordEntityRead` ile kaydedilir (`tools.ReadRefFor`).
+- **Yan panel:** "Son okuyan: <ajan> · N dk önce" ve "Düzenlendi · …"
+  (`ExplorerNodeTimes.tsx`).
+- **Sadeleştirme:** başlıktaki düğüm/bağlantı özeti kalktı, yenile yalnız ikon;
+  durum şeridi + filtre satırı tek satır (yalnız sıfır olmayan sayaçlar, not/özet
+  bilgisi ⓘ ipucunda); **Canlı** çipi kalktı ("çalışan" sayacı aynı süzgeç);
+  katmanlar/tür/ajan/etiket ve yoğunluk varsayılan kapalı Filtreler panelinde.
+- **Düzeltme:** TTS kaldırmasından `AssistantTurn.tsx`'te kalan tanımsız
+  `canSpeak` referansı silindi (`tsc` kırıktı, balon çalışma anında patlıyordu).
+
+Doğrulama: yeni Go testleri (`store_view_reads_test.go`, `view_reads_test.go`,
+`graph_times_test.go`) ve vitest (zaman penceresi, varsayılan, temizle) geçti;
+`scripts/test.sh full` vitest 1253/1253, depcheck ve `git diff --check` temiz;
+`go test ./...` yalnız bu Mac'e özgü bilinen 7 testte ve temiz HEAD'de de aralıklı
+düşen `workspace` `TestDeleteMarksAndClearsRemovalOnTheProductionPath`'te hata
+veriyor. Scratch veriyle
+canlı denemede 1 sa penceresi 65 düğümü 47'ye indirdi, yan panel kaydedilen okumayı
+"Son okuyan: Titler · 7 dk önce" olarak gösterdi.
 
 ## Sesli okuma (TTS) desteği kaldırıldı (2026-10-05)
 
