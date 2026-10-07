@@ -58,6 +58,7 @@ export function mergeLive(graph: ViewGraphResult, live: ViewGraphLiveResult): Vi
     live: live.live ?? [],
     meta: live.meta ?? graph.meta,
     attention: live.attention ?? {},
+    times: live.times ?? graph.times,
     status: live.status ?? graph.status,
   }
 }

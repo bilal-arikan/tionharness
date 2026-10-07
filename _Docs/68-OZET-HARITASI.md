@@ -7,6 +7,7 @@
 > kaldırıldı; tüm workspace tek çağrıyla (`GET /api/views/graph`) yüklenir ve Ağ ekranındaki
 > aynı fizik motoruyla merkezde workspace, çevresinde 11 grup, her üye kendi grubuna bağlı
 > olarak çizilir — bkz. §7.0).
+> **Zaman penceresi + ajan okuma defteri + tek araç satırı** ✅ (2026-10-05, §7.3).
 > Kalan opsiyonel: MCP resource tree + büyük-workspace performansı (sigma.js) — ihtiyaç
 > kanıtlanınca.
 > **Önkoşul okuma:** `_Docs/66-VIEW-KATMANI.md` (bu özelliğin motoru), `internal/view/*`,
@@ -178,7 +179,8 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   Avatar tıklanınca panel ajan kartını gösterir (`panelRefFor`).
 - **Filtre çubuğu (2026-09-05, Ağ'dan taşındı):** `ExplorerFilters` + `explorerFilter.ts`:
   katman çipleri (kökün 11 çocuğu; gizlenen kovacığın yalnız onun ulaştığı alt ağacı
-  düşer), **Canlı** (yalnız çalışan oturumlar), tür / ajan / etiket (oturum `meta`'sı).
+  düşer), tür / ajan / etiket (oturum `meta`'sı). Yalnız-canlı süzgeci 2026-10-05'ten
+  beri durum şeridindeki "çalışan" sayacıdır (ayrı **Canlı** çipi kalktı, §7.3).
   Fasetler AND, faset içi OR; kökten ulaşılamayan düğüm atılır. `localStorage`
   (`tionharness.explorerFilter`) ile kalıcı. Kalıcılık GC'si (`canonicalNodeIds`)
   filtrelenmemiş grafı görür.
@@ -190,12 +192,14 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   `childCounts` tam grafın çocuk sayısını verir.
 - **Ekranında aç (2026-09-05):** sağ panelin üstündeki buton seçili düğümü sahibi
   olan ekranda açar (`explorerNavigation.screenForRef` → `App` `applyRoute`).
-  Yoğunluk kaydırıcısı `useStoredDensity` ile kalıcıdır.
+  Yoğunluk kaydırıcısı `useStoredDensity` ile kalıcıdır; 2026-10-05'ten beri katlanan
+  Filtreler panelindedir.
 - **Korunanlar:** harita-içi arama (eşleşmeyen düğüm/kenar solar, sonuç listesi tık =
   odak), URL deep-link (`?node=`; haritada olmayan ref görünür hata + "köke dön"),
   dar ekranda `ExplorerDetailDrawer` (modal dialog semantiği). Klavye ok-gezinmesi ve
   `+N` taşma listesi kaldırıldı (canvas tabanlı; tüm düğümler zaten görünür).
-- **Dosyalar:** `ExplorerView.tsx` (kabuk), `ExplorerSearch.tsx`, `ExplorerDetailDrawer.tsx`,
+- **Dosyalar:** `ExplorerView.tsx` (kabuk), `ExplorerFilters.tsx` (araç satırı),
+  `ExplorerStatusStrip.tsx`, `ExplorerNodeTimes.tsx`, `ExplorerSearch.tsx`, `ExplorerDetailDrawer.tsx`,
   `explorerVis.ts`, `explorerSeed.ts`, `useExplorerGraph.ts` (+ testler).
 
 ### 7.1 Tarihsel odak grafiği
@@ -230,7 +234,9 @@ bu bilginin kaynağı, harita canlı yüzeyi. İlk dilim üç parça:
   başarısız kart · eskiyen kart sayaçları, bugün yazılan not sayısı ve son özetin
   yaşı. Her sayaç bir süzgeç: basınca harita o düğümlere daralır
   (`ExplorerFilter.attention`, `applyExplorerFilter` oturum ve kartları süzer,
-  yapıyı korur). Sıfır sayaç soluk ve basılamaz; boş harita "yüklenemedi" okunurdu.
+  yapıyı korur). 2026-10-05'ten beri şerit ayrı satır değil, tek araç satırının
+  parçasıdır: yalnız sıfır olmayan (ya da basılı) sayaçlar çizilir, not sayısı ve
+  özet yaşı ⓘ ipucundadır (§7.3).
 - **Spot ışığı.** `changedKeys` iki yük arasında halkası veya parıltısı değişen
   düğümleri bulur; 10 sn geniş hale (`FLASH_MS`), sonra sönme. Kamera kendiliğinden
   kaymaz (takip modu kapalı, karar 4).
@@ -246,6 +252,39 @@ olarak yaşar ve haritanın baktığı açık döngü taraması onu görmez. Bu 
 cevaplanınca veya iptal edilince yük taşımayan `interaction` olayı
 (`events.TypeInteraction`) yayınlanır; `eventToRefreshSignals` onu `explorer-live`'a
 yönlendirir, toast üretmez (kartı oturum akışı zaten gösterir).
+
+### 7.3 Zaman penceresi, ajan okuma defteri ve sadeleştirme (2026-10-05)
+
+- **Zaman penceresi.** Rota araç çubuğundaki kesim haritaya taşındı:
+  1 sa · 6 sa · 24 sa · 3 gün · tümü (`ExplorerFilter.window`, `TIME_WINDOWS`).
+  Düğümün zamanı oluşturulma, düzenlenme ve ajan okuması damgalarının **en yenisidir**
+  (`touchedAt`). Pencere dışı düğüm gizlenir; pencere içi bir düğümün köke giden yolu
+  (`recentWithAncestors` ters kenar taraması: kart → kolon → pano, oturum → tür grubu,
+  ajan → oturumu) kalır. Canlı oturumlar ve avatarları hep görünür; damgasız yük
+  (eski backend) kesilmez. Varsayılan 24 sa (`DEFAULT_TIME_WINDOW`), seçim
+  `tionharness.explorerFilter` içinde kalıcı; "temizle" fasetleri siler, pencereyi
+  korur ve pencere faset sayısına girmez. Saat dakikada bir ve her yükte ilerler.
+- **Damgalar.** `GET /api/views/graph` ve `/graph/live` yanıtında `times`
+  (ref → `{created, updated, read, readBy}`, unix saniye). `view.GraphTimes`
+  oturum, ajan, kart, artifact, otomasyon, zamanlama, skill (`ModifiedAt`), içgörü
+  (`LastSeen`), not ve Rota (`ListTrajectories`, opsiyonel arayüz) için üretir;
+  yapısal önbelleğe girmez (her istekte).
+- **Ajan okuma defteri.** `db.RecordViewRead` / `ViewReads`
+  (`internal/db/store_view_reads.go`, workspace store'da `view-reads.json`, kendi
+  kilidi, tembel yükleme). Başarılı `get_view`, `read_artifact`, `use_skill`,
+  `note_expand` çağrıları `tools.ReadRefFor` ile harita ref'ine çevrilir (not başlığı
+  `notes.Store.Resolve` ile id'ye) ve `Runtime.RecordEntityRead` ile yazılır: native
+  döngüde `runToolCall` sonunda, CLI sağlayıcılarda `interactionBackend.Call`
+  dönüşünde (okuyan = oturumun ajanı). Listeleme/arama araçları okuma sayılmaz. Aynı
+  ajanın aynı düğümü 60 sn içinde tekrar okuması yazmaz; 5000 kayıt üstünde en
+  eskiler düşer.
+- **Yan panel.** `ExplorerNodeTimes`: "Son okuyan: <ajan> · N dk önce" ve
+  "Düzenlendi · …" (yoksa "Oluşturuldu"); ajan adı haritadaki ajan düğümünden.
+- **Sadeleştirme.** Başlıkta yalnız başlık, arama ve ikon-yenile kaldı (düğüm/bağlantı
+  özeti filtre satırındaki "görünen/toplam" ile aynıydı). Durum şeridi ile filtre
+  satırı tek satırda: zaman çipleri · sıfır olmayan sayaçlar · ⓘ · Filtreler ·
+  görünen/toplam · temizle. Katman/tür/ajan/etiket çipleri ve yoğunluk varsayılan
+  kapalı Filtreler panelinde.
 
 Sonraki dilimler (onaylı plan): köken kenarları (not → yazan oturum, oturum →
 artifact) ve yan panelde akış sekmesi; ardından tazelik ısısı ve "değişti" noktası.

@@ -81,6 +81,24 @@ func (b *interactionBackend) activationStore(token string) (*db.DB, string) {
 	return ws.DB, run.sessionID
 }
 
+// recordEntityRead is the CLI half of the map's read ledger: a bridged read tool
+// (get_view, read_artifact, use_skill, note_expand) never reaches the native
+// tool loop, so its read is stamped here. The reader is the session's agent.
+func (b *interactionBackend) recordEntityRead(ctx context.Context, run *chatRun, tool string, args json.RawMessage) {
+	if !tools.IsReadTool(tool) || b.apiSrv == nil || b.apiSrv.workspaces == nil {
+		return
+	}
+	ws, err := b.apiSrv.workspaces.Get(run.workspaceID)
+	if err != nil || ws == nil || ws.Runtime == nil || ws.DB == nil {
+		return
+	}
+	agentID := ""
+	if sess, err := ws.DB.GetSession(ctx, run.sessionID); err == nil {
+		agentID = sess.AgentID
+	}
+	ws.Runtime.RecordEntityRead(ctx, run.sessionID, agentID, tool, args)
+}
+
 // hydrateActivated loads the session's persisted activation set into the cache
 // the first time a token is seen. The disk read runs OUTSIDE b.mu; the merge
 // re-takes it. A read failure (corrupt sidecar) is logged — never swallowed —
@@ -963,6 +981,11 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	if text := b.toolCallError(token, name, run); text != "" {
 		return interaction.CallResult{Text: text, IsError: true}, nil
 	}
+	defer func() {
+		if callErr == nil && !result.IsError {
+			b.recordEntityRead(ctx, run, bare, args)
+		}
+	}()
 	// Sink-bound tools (todo/artifact/notify/focus/session-edit) all share one
 	// shape: pull the per-run sink, inject it as a context value, call the shared
 	// builtin handler. Dispatched through a single table+helper instead of one

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  defaultExplorerFilter,
   EXPLORER_FILTER_KEY,
   emptyExplorerFilter,
   parseExplorerFilter,
@@ -18,7 +19,7 @@ export function useExplorerFilter(): [
     try {
       return parseExplorerFilter(globalThis.localStorage?.getItem(EXPLORER_FILTER_KEY))
     } catch {
-      return emptyExplorerFilter()
+      return defaultExplorerFilter()
     }
   })
   useEffect(() => {
@@ -28,6 +29,10 @@ export function useExplorerFilter(): [
       // Persistence is best-effort when storage is blocked by browser policy.
     }
   }, [filter])
-  const clear = useCallback(() => setFilter(emptyExplorerFilter()), [])
+  // Clear drops the facets; the time window is a lens, not a facet, and stays.
+  const clear = useCallback(
+    () => setFilter((current) => ({ ...emptyExplorerFilter(), window: current.window })),
+    [],
+  )
   return [filter, setFilter, clear]
 }

@@ -1,7 +1,6 @@
 {
   "title": "Harita",
   "workspace": "Workspace",
-  "summary": "{{nodes}} düğüm · {{edges}} bağlantı",
   "density": "Yoğunluk",
   "densityHint": "Düğümlerin sıkışıklığı",
   "refresh": "Yenile",
@@ -25,15 +24,22 @@
   "filters": {
     "label": "Harita filtreleri",
     "layers": "katmanlar",
-    "live": "Canlı",
-    "liveHint": "Yalnız şu an çalışan oturumlar",
     "kind": "tür",
     "agent": "ajan",
     "all": "tümü",
     "tag": "etiket",
     "nodeCount": "{{visible}}/{{total}} düğüm",
     "clear_one": "{{count}} filtre · temizle",
-    "clear_other": "{{count}} filtre · temizle"
+    "clear_other": "{{count}} filtre · temizle",
+    "window": "zaman penceresi",
+    "windowHint": "Bu süre içinde oluşturulan, düzenlenen ya da bir ajanın okuduğu düğümleri göster (en yeni zamana bakılır)",
+    "windowOptions": {
+      "0": "tümü",
+      "3600": "1 sa",
+      "21600": "6 sa",
+      "86400": "24 sa",
+      "259200": "3 gün"
+    }
   },
   "selection": {
     "announcement": "Seçili düğüm {{label}} ({{kind}}).",
@@ -41,7 +47,22 @@
     "showChildren_other": "Alt düğümleri göster · {{count}}",
     "hideChildren_one": "Alt düğümleri gizle · {{count}}",
     "hideChildren_other": "Alt düğümleri gizle · {{count}}",
-    "openScreen": "{{label}} ekranında aç"
+    "openScreen": "{{label}} ekranında aç",
+    "times": {
+      "readBy": "Son okuyan: {{agent}} · {{age}}",
+      "readByUnknown": "Son ajan okuması · {{age}}",
+      "edited": "Düzenlendi · {{age}}",
+      "created": "Oluşturuldu · {{age}}",
+      "age": {
+        "now": "az önce",
+        "minutes_one": "{{count}} dk önce",
+        "minutes_other": "{{count}} dk önce",
+        "hours_one": "{{count}} sa önce",
+        "hours_other": "{{count}} sa önce",
+        "days_one": "{{count}} gün önce",
+        "days_other": "{{count}} gün önce"
+      }
+    }
   },
   "errors": {
     "invalidFocus": "Geçersiz odak bağlantısı: {{focus}}",

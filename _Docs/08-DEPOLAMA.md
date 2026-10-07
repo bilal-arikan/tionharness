@@ -59,6 +59,8 @@ store/
 ├── model-resolutions.json            # "<provider>|<istenen model>" → gerçekte sunulan model
 │                                     #   (claude-cli takma adları: "opus" → "claude-opus-5");
 │                                     #   turlardan GÖZLEMLENİR, yalnız değer değişince yazılır
+├── view-reads.json                   # harita ref'i → son ajan okuması {at, agentId, sessionId}
+│                                     #   (Harita zaman penceresi, _Docs/68 §7.3; ≤5000 kayıt)
 └── counters.json                      # entity-başına insan-okunabilir id sayacı
 ```
 

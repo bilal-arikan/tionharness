@@ -83,6 +83,10 @@ type DB struct {
 	// describes. Observed from completed turns / count endpoints, never hardcoded.
 	tokenCalibrations map[string]TokenCalibration
 
+	// viewReads is the "an agent read this map node" ledger (store_view_reads.go),
+	// loaded lazily on first use under its own lock — never d.mu.
+	viewReads viewReadLedger
+
 	// globalModelRes is the shared app-level model-resolution store (one per
 	// installation, wired by the workspace manager). It is written alongside
 	// modelResolutions and read only as a fallback, so a fresh workspace can

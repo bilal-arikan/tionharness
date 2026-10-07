@@ -1264,6 +1264,9 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 		t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_repair", Detail: call.Name, Err: true})
 	}
 
+	if !res.IsError {
+		t.r.RecordEntityRead(t.ctx, SessionIDFrom(t.ctx), t.agent.ID, call.Name, call.Input)
+	}
 	b.results = append(b.results, res)
 	st := TurnStep{
 		Kind:    StepTool,

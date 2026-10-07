@@ -4,6 +4,7 @@ import {
   applyExplorerFilter,
   childCounts,
   countActiveExplorerFacets,
+  defaultExplorerFilter,
   emptyExplorerFilter,
   explorerFacets,
   parseExplorerFilter,
@@ -201,12 +202,12 @@ describe('filter persistence helpers', () => {
       hiddenBuckets: ['tools:tools'],
     }
     expect(parseExplorerFilter(serializeExplorerFilter(f))).toEqual(f)
-    expect(parseExplorerFilter(null)).toEqual(emptyExplorerFilter())
-    expect(parseExplorerFilter('{nope')).toEqual(emptyExplorerFilter())
+    expect(parseExplorerFilter(null)).toEqual(defaultExplorerFilter())
+    expect(parseExplorerFilter('{nope')).toEqual(defaultExplorerFilter())
     expect(
       parseExplorerFilter(JSON.stringify({ kinds: 'chat', liveOnly: 'yes', tags: [1, 'a'] })),
     ).toEqual({
-      ...emptyExplorerFilter(),
+      ...defaultExplorerFilter(),
       tags: ['a'],
     })
     expect(countActiveExplorerFacets(f)).toBe(3)
@@ -255,5 +256,82 @@ describe('attention facet', () => {
     )
     expect(parsed.attention).toEqual(['failed'])
     expect(countActiveExplorerFacets(parsed)).toBe(1)
+  })
+})
+
+describe('time window', () => {
+  const NOW = 1_800_000_000
+  const nowMs = NOW * 1000
+  const timed: ViewGraphResult = {
+    ...graph,
+    live: [],
+    times: {
+      // SES2 was edited 2h ago, W1 only read by an agent 10 min ago, SES1 is a
+      // day old; AG1/AG2 were created long ago.
+      'session:SES1': { created: NOW - 90_000, updated: NOW - 86_500 },
+      'session:SES2': { created: NOW - 90_000, updated: NOW - 7_200 },
+      'session:W1': { created: NOW - 90_000, read: NOW - 600, readBy: 'AG2' },
+      'agent:AG1': { created: NOW - 900_000 },
+      'agent:AG2': { created: NOW - 900_000 },
+    },
+  }
+  const cut = (window: 0 | 3600 | 21600 | 86400 | 259200, g = timed) => {
+    const live = augmentLive(g)
+    return keys(
+      applyExplorerFilter(
+        live.graph,
+        { ...emptyExplorerFilter(), window },
+        live.liveState,
+        ROOT,
+        undefined,
+        nowMs,
+      ),
+    )
+  }
+
+  it('keeps nodes whose newest stamp (created, edited or read) is inside the window', () => {
+    const hour = cut(3600)
+    // W1 counts through its agent read; its coordinator SES1 stays as its parent.
+    expect(hour).toContain('session:W1')
+    expect(hour).toContain('session:SES1')
+    expect(hour).not.toContain('session:SES2')
+    expect(hour).not.toContain('agent:AG2')
+    // Untimed nodes with nothing recent below them go too.
+    expect(hour).not.toContain('tools:tools')
+    expect(hour).toContain(ROOT)
+
+    const sixHours = cut(21600)
+    expect(sixHours).toContain('session:SES2')
+    expect(sixHours).toContain('category:sessions')
+    // An agent above a recent session is on its path, so it stays.
+    expect(sixHours).toContain('agent:AG2')
+  })
+
+  it('is the identity at "all time" and keeps live sessions whatever their stamps', () => {
+    expect(cut(0)).toHaveLength(augmentLive(timed).graph.nodes.length)
+    const withLive = cut(3600, { ...timed, live: graph.live })
+    expect(withLive).toContain('session:SES1')
+    expect(withLive).toContain('agent:AG1#live:SES1')
+  })
+
+  it('does not cut a payload that carries no stamps', () => {
+    const live = augmentLive(graph)
+    const out = applyExplorerFilter(
+      live.graph,
+      { ...emptyExplorerFilter(), window: 3600 },
+      live.liveState,
+      ROOT,
+      undefined,
+      nowMs,
+    )
+    expect(out.nodes).toHaveLength(live.graph.nodes.length)
+  })
+
+  it('persists the window, defaults to a day and is not counted as a facet', () => {
+    const f = { ...emptyExplorerFilter(), window: 3600 as const }
+    expect(parseExplorerFilter(serializeExplorerFilter(f))).toEqual(f)
+    expect(parseExplorerFilter(JSON.stringify({ window: 42 })).window).toBe(86400)
+    expect(parseExplorerFilter(JSON.stringify({ kinds: [] })).window).toBe(86400)
+    expect(countActiveExplorerFacets(f)).toBe(0)
   })
 })

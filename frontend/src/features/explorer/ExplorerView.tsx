@@ -17,7 +17,7 @@ import { VisNetworkGraph } from '@/features/network/VisNetworkGraph'
 import { useStoredDensity } from '@/features/network/useStoredDensity'
 import { ExplorerDetailDrawer } from './ExplorerDetailDrawer'
 import { ExplorerFilters } from './ExplorerFilters'
-import { ExplorerStatusStrip } from './ExplorerStatusStrip'
+import { ExplorerNodeTimes } from './ExplorerNodeTimes'
 import { useExplorerCollapse } from './useExplorerCollapse'
 import { useExplorerFilter } from './useExplorerFilter'
 import { screenForRef, type ExplorerTarget } from './explorerNavigation'
@@ -79,6 +79,7 @@ export function ExplorerView({
     liveCount,
     status,
     selectedChildCount,
+    selectedTimes,
     selectedKey,
     focusKey,
     focusTick,
@@ -170,8 +171,18 @@ export function ExplorerView({
       </span>
     </button>
   )
-  const openSessionButton = (selectedTarget || foldButton) && (
-    <div className="flex flex-col gap-2 border-b border-[var(--color-border)] px-3 py-2">
+  const agentLabel = useCallback(
+    (id: string) => {
+      const handle = graph?.nodes.find(
+        (h) => h.ref.kind === 'agent' && !h.ref.sub && h.ref.id === id,
+      )
+      return handle ? displayLabel(handle) : id
+    },
+    [graph],
+  )
+  const nodeTimes = <ExplorerNodeTimes times={selectedTimes} agentLabel={agentLabel} />
+  const openSessionButton = (
+    <div className="flex flex-col gap-2 border-b border-[var(--color-border)] px-3 py-2 empty:hidden">
       {selectedTarget && (
         <button
           onClick={() => onOpenTarget?.(selectedTarget)}
@@ -188,6 +199,7 @@ export function ExplorerView({
           </span>
         </button>
       )}
+      {nodeTimes}
       {foldButton}
     </div>
   )
@@ -209,26 +221,6 @@ export function ExplorerView({
         />
 
         <div className="ml-auto flex items-center gap-3 text-xs">
-          {graph && (
-            <span className="hidden truncate text-[var(--color-text-dim)] md:inline">
-              {t('summary', { nodes: graph.nodes.length, edges: graph.edges.length })}
-            </span>
-          )}
-          <label
-            className="hidden items-center gap-2 text-[var(--color-text-dim)] sm:flex"
-            title={t('densityHint')}
-          >
-            {t('density')}
-            <input
-              type="range"
-              min={0.4}
-              max={2}
-              step={0.1}
-              value={density}
-              onChange={(e) => setDensity(parseFloat(e.target.value))}
-              className="w-20 accent-[var(--color-accent)]"
-            />
-          </label>
           <button
             onClick={() => setDetailOpen(true)}
             className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] lg:hidden"
@@ -241,22 +233,13 @@ export function ExplorerView({
             onClick={refresh}
             disabled={loading}
             title={t('refreshHint')}
-            className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
+            aria-label={t('refresh')}
+            className="flex shrink-0 items-center rounded-lg border border-[var(--color-border)] p-1.5 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">{t('refresh')}</span>
           </button>
         </div>
       </header>
-
-      {graph && (
-        <ExplorerStatusStrip
-          status={status}
-          liveCount={liveCount}
-          filter={filter}
-          onChange={setFilter}
-        />
-      )}
 
       {graph && visibleGraph && (
         <ExplorerFilters
@@ -265,9 +248,12 @@ export function ExplorerView({
           onClear={clearFilter}
           buckets={buckets}
           facets={facets}
+          status={status}
           liveCount={liveCount}
           visibleCount={visibleGraph.nodes.length}
           totalCount={graph.nodes.length}
+          density={density}
+          onDensity={setDensity}
         />
       )}
 

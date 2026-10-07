@@ -73,12 +73,17 @@ export function useExplorerGraph({
   const graphRef = useRef<ViewGraphResult | null>(null)
   // Spotlight: node key -> when its ring or glow last changed.
   const [flashes, setFlashes] = useState<Map<string, number>>(() => new Map())
+  // The time window's "now" (applyExplorerFilter). Advanced by every landed
+  // payload — what just arrived is never cut by a stale clock — and by a
+  // minute timer while a window is set.
+  const [nowMs, setNowMs] = useState(() => Date.now())
 
   // landGraph commits a payload and spotlights what changed since the last one.
   const landGraph = useCallback((next: ViewGraphResult) => {
     const changed = changedKeys(graphRef.current, next)
     graphRef.current = next
     setGraph(next)
+    setNowMs(Date.now())
     if (changed.length === 0) return
     setFlashes((current) => {
       const merged = new Map(current)
@@ -178,13 +183,24 @@ export function useExplorerGraph({
     setFocus((current) => (current.key === key ? current : { key, tick: current.tick + 1 }))
   }, [initialFocus, t])
 
+  // The time window slides with the clock: re-cut once a minute while one is
+  // set, so a node ages out of "last hour" without waiting for an event.
+  const windowOn = filter.window > 0
+  useEffect(() => {
+    if (!windowOn) return
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [windowOn])
+
   // Live layer (avatar nodes off executing sessions) over the raw map, then the
   // filter over that. Both are pure and cheap relative to the physics.
   const live = useMemo(() => (graph ? augmentLive(graph) : null), [graph])
   const visible = useMemo(
     () =>
-      live ? applyExplorerFilter(live.graph, filter, live.liveState, ROOT_KEY, collapsed) : null,
-    [live, filter, collapsed],
+      live
+        ? applyExplorerFilter(live.graph, filter, live.liveState, ROOT_KEY, collapsed, nowMs)
+        : null,
+    [live, filter, collapsed, nowMs],
   )
   // Children per node on the full (unfiltered) map: the fold toggle's count.
   const counts = useMemo(() => (live ? childCounts(live.graph) : new Map<string, number>()), [live])
@@ -291,6 +307,8 @@ export function useExplorerGraph({
     status: graph?.status ?? null,
     attention,
     flashing,
+    // Recency stamps of the selected node (created / edited / last agent read).
+    selectedTimes: graph?.times?.[selectedKey],
     // How many children the selected node has on the full map (0 = leaf).
     selectedChildCount: counts.get(selectedKey) ?? 0,
     nodes,

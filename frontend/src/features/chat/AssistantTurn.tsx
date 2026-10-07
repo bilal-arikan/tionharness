@@ -148,7 +148,6 @@ export const AssistantTurn = memo(function AssistantTurn({
   const hasActions =
     showChanges ||
     canCopy ||
-    canSpeak ||
     (!!onFeedback && !isLastLive) ||
     canRetry ||
     (!!onDelete && !isLastLive)

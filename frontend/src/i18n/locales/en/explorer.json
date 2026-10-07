@@ -1,7 +1,6 @@
 {
   "title": "Map",
   "workspace": "Workspace",
-  "summary": "{{nodes}} nodes · {{edges}} connections",
   "density": "Density",
   "densityHint": "How tightly nodes are packed",
   "refresh": "Refresh",
@@ -25,15 +24,22 @@
   "filters": {
     "label": "Map filters",
     "layers": "layers",
-    "live": "Live",
-    "liveHint": "Only sessions running now",
     "kind": "kind",
     "agent": "agent",
     "all": "all",
     "tag": "tag",
     "nodeCount": "{{visible}}/{{total}} nodes",
     "clear_one": "{{count}} filter · clear",
-    "clear_other": "{{count}} filters · clear"
+    "clear_other": "{{count}} filters · clear",
+    "window": "time window",
+    "windowHint": "Show nodes created, edited or read by an agent within this span (the newest of the three counts)",
+    "windowOptions": {
+      "0": "all",
+      "3600": "1h",
+      "21600": "6h",
+      "86400": "24h",
+      "259200": "3d"
+    }
   },
   "selection": {
     "announcement": "Selected node {{label}} ({{kind}}).",
@@ -41,7 +47,22 @@
     "showChildren_other": "Show child nodes · {{count}}",
     "hideChildren_one": "Hide child nodes · {{count}}",
     "hideChildren_other": "Hide child nodes · {{count}}",
-    "openScreen": "Open on the {{label}} screen"
+    "openScreen": "Open on the {{label}} screen",
+    "times": {
+      "readBy": "Last read by {{agent}} · {{age}}",
+      "readByUnknown": "Last agent read · {{age}}",
+      "edited": "Edited · {{age}}",
+      "created": "Created · {{age}}",
+      "age": {
+        "now": "just now",
+        "minutes_one": "{{count}} min ago",
+        "minutes_other": "{{count}} min ago",
+        "hours_one": "{{count}} h ago",
+        "hours_other": "{{count}} h ago",
+        "days_one": "{{count}} day ago",
+        "days_other": "{{count}} days ago"
+      }
+    }
   },
   "errors": {
     "invalidFocus": "Invalid focus link: {{focus}}",

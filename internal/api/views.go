@@ -165,7 +165,12 @@ func (s *Server) handleGetViewGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	running := s.liveSessions(ws(r)).RunningSet()
 	attention, status := graphAttention(r.Context(), ws(r), running, s.interactions.pendingSessions(ws(r).ID), time.Now())
-	graph := view.Graph{Nodes: nodes, Edges: edges, Live: live, Meta: meta, Attention: attention, Status: status}
+	times, err := p.GraphTimes(r.Context(), ws(r).DB.ViewReads())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	graph := view.Graph{Nodes: nodes, Edges: edges, Live: live, Meta: meta, Attention: attention, Times: times, Status: status}
 	// Never emit null arrays: an empty workspace still has a root node, and an
 	// edge-less graph is [] not null.
 	if graph.Nodes == nil {
@@ -179,6 +184,9 @@ func (s *Server) handleGetViewGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	if graph.Meta == nil {
 		graph.Meta = map[string]view.GraphMeta{}
+	}
+	if graph.Times == nil {
+		graph.Times = map[string]view.GraphTimes{}
 	}
 	writeJSON(w, http.StatusOK, graph)
 }

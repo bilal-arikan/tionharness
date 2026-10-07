@@ -108,6 +108,11 @@ afterEach(async () => {
 describe('ExplorerView', () => {
   it('remembers the density slider across remounts', async () => {
     const first = await mount()
+    // The slider lives in the folded filter panel.
+    const toggle = first.host.querySelector<HTMLButtonElement>(
+      '[data-testid="explorer-filters-toggle"]',
+    )!
+    await act(async () => toggle.click())
     const slider = first.host.querySelector<HTMLInputElement>('input[type="range"]')!
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
     await act(async () => {
@@ -121,7 +126,7 @@ describe('ExplorerView', () => {
     expect(latestGraphProps().density).toBe(1.6)
   })
 
-  it('offers the Network facets as a filter row and remembers them', async () => {
+  it('folds the facets behind one toggle and remembers the live filter', async () => {
     mocks.viewGraph.mockResolvedValue({
       ...graph,
       live: [{ session: s1, state: 'running', agent: { id: 'AG1', name: 'builder' } }],
@@ -129,12 +134,19 @@ describe('ExplorerView', () => {
     })
     const first = await mount()
     const group = first.host.querySelector('[aria-label="Harita filtreleri"]')!
+    // Folded by default: the time window and the counters show, the facets do not.
+    expect(group.textContent).toContain('24 sa')
+    expect(group.textContent).not.toContain('#t')
+    await act(async () =>
+      group.querySelector<HTMLButtonElement>('[data-testid="explorer-filters-toggle"]')!.click(),
+    )
     expect(group.textContent).toContain('Oturumlar')
-    expect(group.textContent).toContain('Canlı · 1')
     expect(group.textContent).toContain('#t')
+    // The running counter is the live-only toggle.
     const liveChip = [...group.querySelectorAll('button')].find((b) =>
-      b.textContent?.startsWith('Canlı'),
+      b.textContent?.startsWith('çalışan'),
     )!
+    expect(liveChip.textContent).toContain('çalışan · 1')
     await act(async () => liveChip.click())
     expect(liveChip.getAttribute('aria-pressed')).toBe('true')
     expect(first.host.textContent).toContain('1 filtre · temizle')
@@ -142,7 +154,7 @@ describe('ExplorerView', () => {
     roots.delete(first.root)
     const second = await mount()
     const again = [...second.host.querySelectorAll('button')].find((b) =>
-      b.textContent?.startsWith('Canlı'),
+      b.textContent?.startsWith('çalışan'),
     )!
     expect(again.getAttribute('aria-pressed')).toBe('true')
   })
@@ -168,12 +180,11 @@ describe('ExplorerView', () => {
     const { host } = await mount()
     const strip = host.querySelector('[aria-label="Durum şeridi"]')!
     expect(strip.textContent).toContain('takılan · 1')
-    expect(strip.textContent).toContain('bugün 3 not')
-    expect(strip.textContent).toContain('henüz özet yok')
-    const waiting = [...strip.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('seni bekleyen'),
-    )!
-    expect(waiting.hasAttribute('disabled')).toBe(true)
+    // Zero counters are not drawn; notes and digest age ride in the info tooltip.
+    expect(strip.textContent).not.toContain('seni bekleyen')
+    const info = strip.querySelector('[role="img"]')!
+    expect(info.getAttribute('title')).toContain('bugün 3 not')
+    expect(info.getAttribute('title')).toContain('henüz özet yok')
     const stuck = [...strip.querySelectorAll('button')].find((b) =>
       b.textContent?.includes('takılan'),
     )!
@@ -184,6 +195,14 @@ describe('ExplorerView', () => {
     expect(ids).toContain('session:SES1')
     expect(ids).not.toContain('session:SES2')
     expect(host.textContent).toContain('1 filtre · temizle')
+    // Clearing drops the facet but keeps the time window.
+    const clear = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('temizle'),
+    )!
+    await act(async () => clear.click())
+    expect(latestGraphProps().nodes.map((n) => n.id)).toContain('session:SES2')
+    const day = [...host.querySelectorAll('button')].find((b) => b.textContent === '24 sa')!
+    expect(day.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('folds and unfolds the selected node from the side panel and remembers it', async () => {
@@ -225,7 +244,7 @@ describe('ExplorerView', () => {
     expect(props.settle).toBeUndefined()
     expect(props.canonicalReady).toBe(true)
     expect(props.nodes.map((n) => n.id)).toContain('session:SES1')
-    expect(host.textContent).toContain('3 düğüm · 2 bağlantı')
+    expect(host.textContent).toContain('3/3 düğüm')
     expect(host.querySelector('[data-testid="view-panel"]')!.textContent).toBe(
       'workspace:workspace',
     )

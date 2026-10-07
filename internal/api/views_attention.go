@@ -144,10 +144,19 @@ func (s *Server) handleGetViewGraphLive(w http.ResponseWriter, r *http.Request) 
 	if meta == nil {
 		meta = map[string]view.GraphMeta{}
 	}
+	times, err := p.GraphTimes(r.Context(), ws(r).DB.ViewReads())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if times == nil {
+		times = map[string]view.GraphTimes{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"live":      live,
 		"meta":      meta,
 		"attention": attention,
+		"times":     times,
 		"status":    status,
 	})
 }

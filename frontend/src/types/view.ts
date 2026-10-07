@@ -117,6 +117,16 @@ export interface ViewGraphMeta {
   archived?: boolean
 }
 
+// ViewGraphTimes is a node's recency facets (unix seconds; absent = unknown):
+// created, last edited, last read by an agent and who read it. The map's time
+// window keeps a node whose newest stamp falls inside it.
+export interface ViewGraphTimes {
+  created?: number
+  updated?: number
+  read?: number
+  readBy?: string
+}
+
 // ViewGraphAttention marks a node a human should look at: the strongest level
 // among its reasons (danger > warn > notice) and the reason codes themselves
 // (waiting-ask, stuck, blocked, failed-card, stale-card, tool-errors). Derived
@@ -151,6 +161,8 @@ export interface ViewGraphResult {
   meta?: Record<string, ViewGraphMeta>
   // Keyed by refToString of the node (sessions and board cards today).
   attention?: Record<string, ViewGraphAttention>
+  // Keyed by refToString of the node (timed entities, plus anything an agent read).
+  times?: Record<string, ViewGraphTimes>
   status?: ViewGraphStatus | null
 }
 
@@ -161,6 +173,7 @@ export interface ViewGraphLiveResult {
   live: ViewGraphLive[]
   meta: Record<string, ViewGraphMeta>
   attention: Record<string, ViewGraphAttention>
+  times?: Record<string, ViewGraphTimes>
   status: ViewGraphStatus | null
 }
 

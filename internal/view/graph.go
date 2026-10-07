@@ -32,6 +32,10 @@ type Graph struct {
 	// Ref.String. Empty, never null. Computed by the api layer from the
 	// awareness open-loop collector (_Docs/94 §11).
 	Attention map[string]GraphAttention `json:"attention"`
+	// Times carries each node's created / updated / last-agent-read stamps
+	// (GraphTimes), keyed by Ref.String, for the map's recency window. Empty,
+	// never null. Filled by the api layer (it owns the read ledger).
+	Times map[string]GraphTimes `json:"times"`
 	// Status is the map's status strip: the live counters a user reads before
 	// reading any node. Nil when the attention layer is unavailable.
 	Status *GraphStatus `json:"status,omitempty"`

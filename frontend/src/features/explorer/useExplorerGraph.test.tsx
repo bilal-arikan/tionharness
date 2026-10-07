@@ -159,6 +159,7 @@ describe('useExplorerGraph', () => {
         agentIds: [],
         tags: [],
         attention: [],
+        window: 0,
       },
     })
     expect(latest!.visibleGraph!.nodes.map((h) => h.ref.id)).not.toContain('SES1')

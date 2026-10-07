@@ -1,14 +1,17 @@
-import { Radio, X } from 'lucide-react'
+import { Clock, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { ViewGraphStatus } from '@/types'
 import { avatarForeground } from '@/shared/lib/avatar'
 import { FilterToggle, useFilterDisclosure } from '@/shared/components'
 import {
   countActiveExplorerFacets,
   sessionKindLabel,
+  TIME_WINDOWS,
   toggleValue,
   type ExplorerFacets,
   type ExplorerFilter,
 } from './explorerFilter'
+import { ExplorerStatusStrip } from './ExplorerStatusStrip'
 
 export interface ExplorerBucket {
   key: string
@@ -22,45 +25,100 @@ interface Props {
   onClear: () => void
   buckets: ExplorerBucket[]
   facets: ExplorerFacets
+  status: ViewGraphStatus | null | undefined
   liveCount: number
   visibleCount: number
   totalCount: number
+  // Canvas packing (useStoredDensity); a rarely-touched knob, so it lives in
+  // the folded panel with the other facets.
+  density: number
+  onDensity: (value: number) => void
 }
 
 const chipBase = 'flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition'
 const chipOff = `${chipBase} border-[var(--color-border)] text-[var(--color-text-dim)] opacity-70 hover:opacity-100`
 const chipOn = `${chipBase} border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent)]`
 
-// ExplorerFilters is the toolbar row under the map header: the Network
-// screen's facets, re-homed. Layer chips hide whole groups; the live toggle
-// keeps only executing sessions; kind / agent / tag chips narrow sessions.
+// ExplorerFilters is the map's single toolbar under the header. The first line
+// is what a user reaches for every visit: the time window (the Rota toolbar's
+// cutoff — the map's main lens), the live counters (each one a filter, the
+// running one the live-only toggle), the folded-facets toggle and the visible
+// node count. The folded panel holds the rarely-touched rest: layer chips that
+// hide whole groups, session kind / agent / tag facets, and the density knob.
 export function ExplorerFilters({
   filter,
   onChange,
   onClear,
   buckets,
   facets,
+  status,
   liveCount,
   visibleCount,
   totalCount,
+  density,
+  onDensity,
 }: Props) {
   const { t } = useTranslation('explorer')
   const active = countActiveExplorerFacets(filter)
-  const [open, toggle] = useFilterDisclosure('explorer')
+  const [open, toggle] = useFilterDisclosure('explorer', false)
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-border)] py-2 text-xs max-md:px-3 md:px-6"
+      className="flex flex-col gap-2 border-b border-[var(--color-border)] py-2 text-xs max-md:px-3 md:px-6"
       role="group"
       aria-label={t('filters.label')}
     >
-      <FilterToggle
-        open={open}
-        onToggle={toggle}
-        activeCount={active}
-        testId="explorer-filters-toggle"
-      />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span
+          className="flex items-center gap-1"
+          role="group"
+          aria-label={t('filters.window')}
+          title={t('filters.windowHint')}
+        >
+          <Clock size={12} className="text-[var(--color-text-dim)]" />
+          {TIME_WINDOWS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onChange({ ...filter, window: value })}
+              aria-pressed={filter.window === value}
+              className={`rounded px-1.5 py-0.5 ${
+                filter.window === value
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                  : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              {t(`filters.windowOptions.${value}`)}
+            </button>
+          ))}
+        </span>
+        <ExplorerStatusStrip
+          status={status}
+          liveCount={liveCount}
+          filter={filter}
+          onChange={onChange}
+        />
+        <FilterToggle
+          open={open}
+          onToggle={toggle}
+          activeCount={active}
+          testId="explorer-filters-toggle"
+        />
+        <span className="ml-auto text-[var(--color-text-dim)]">
+          {t('filters.nodeCount', { visible: visibleCount, total: totalCount })}
+        </span>
+        {active > 0 && (
+          <button
+            onClick={onClear}
+            className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            <X size={11} />
+            {t('filters.clear', { count: active })}
+          </button>
+        )}
+      </div>
+
       {open && (
-        <>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span className="text-[var(--color-text-dim)]">{t('filters.layers')}:</span>
           {buckets.map((bucket) => {
             const on = !filter.hiddenBuckets.includes(bucket.key)
@@ -93,18 +151,6 @@ export function ExplorerFilters({
               </button>
             )
           })}
-
-          <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
-          <button
-            onClick={() => onChange({ ...filter, liveOnly: !filter.liveOnly })}
-            aria-pressed={filter.liveOnly}
-            className={filter.liveOnly ? chipOn : chipOff}
-            title={t('filters.liveHint')}
-          >
-            <Radio size={11} />
-            {t('filters.live')}
-            {liveCount > 0 ? ` · ${liveCount}` : ''}
-          </button>
 
           {facets.kinds.length > 0 && (
             <>
@@ -157,20 +203,23 @@ export function ExplorerFilters({
               ))}
             </>
           )}
-        </>
-      )}
 
-      <span className="ml-auto text-[var(--color-text-dim)]">
-        {t('filters.nodeCount', { visible: visibleCount, total: totalCount })}
-      </span>
-      {active > 0 && (
-        <button
-          onClick={onClear}
-          className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-        >
-          <X size={11} />
-          {t('filters.clear', { count: active })}
-        </button>
+          <label
+            className="flex items-center gap-2 text-[var(--color-text-dim)]"
+            title={t('densityHint')}
+          >
+            {t('density')}
+            <input
+              type="range"
+              min={0.4}
+              max={2}
+              step={0.1}
+              value={density}
+              onChange={(e) => onDensity(parseFloat(e.target.value))}
+              className="w-20 accent-[var(--color-accent)]"
+            />
+          </label>
+        </div>
       )}
     </div>
   )
