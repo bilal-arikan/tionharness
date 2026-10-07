@@ -2,7 +2,7 @@
 // provider/model overrides, autonomy pause and the delete danger zone. The
 // publish/export-as-template flow now lives in its own "Dışa Aktar" sub-tab.
 import type { AwarenessSettings, WorkspaceSettings } from '@/types'
-import { Field, NumberField, Toggle, inputCls, type WsSet } from './primitives'
+import { Field, FieldLabel, NumberField, Toggle, inputCls, type WsSet } from './primitives'
 import { CodexPluginsSection } from './CodexPluginsSection'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { formatDate } from '@/shared/lib/intl'
@@ -24,12 +24,6 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
     setWsField('awareness', { ...aw, [key]: val })
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        {t('workspace.introPrefix')}{' '}
-        <span className="font-medium text-[var(--color-text)]">{ws.name}</span>{' '}
-        {t('workspace.introSuffix')}
-      </div>
-
       {/* Stats */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
@@ -56,13 +50,25 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       <WorkspaceDataFolder path={ws.dataDir} />
 
       <div className="flex items-end gap-3">
-        <Field label={t('workspace.name')}>
+        {/* The page intro ("these settings apply only to <name>…") rides on the
+            name field's (ⓘ) — the panel has no heading of its own. */}
+        <label className="flex flex-col gap-1">
+          <FieldLabel
+            label={t('workspace.name')}
+            hint={
+              <>
+                {t('workspace.introPrefix')}{' '}
+                <span className="font-medium text-[var(--color-text)]">{ws.name}</span>{' '}
+                {t('workspace.introSuffix')}
+              </>
+            }
+          />
           <input
             value={ws.name}
             onChange={(e) => setWsField('name', e.target.value)}
             className={inputCls}
           />
-        </Field>
+        </label>
         <Field label={t('workspace.icon')}>
           <EmojiField value={ws.icon} onChange={(e) => setWsField('icon', e)} clearLabel="⬡" />
         </Field>

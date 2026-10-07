@@ -318,15 +318,6 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
 
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5 text-xs text-[var(--color-text-dim)]">
-        {t('export.intro.beforeName')}
-        <span className="font-medium text-[var(--color-text)]">{ws.name}</span>
-        {t('export.intro.afterName')}
-        <span className="font-medium text-[var(--color-text)]">{t('export.intro.pack')}</span>
-        {t('export.intro.afterPack')}{' '}
-        <span className="font-medium text-[var(--color-text)]">{t('export.secrets')}</span>
-      </div>
-
       {/* Pack metadata */}
       <div className="space-y-2">
         <Field label={t('export.metadata.name')}>
@@ -497,6 +488,21 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
           {msg.text}
         </p>
       )}
+    </>
+  )
+}
+
+// ExportIntro is the tab's "what does exporting do" note. WorkspaceView shows it
+// behind the (ⓘ) next to the Export tab title rather than inline above the form.
+export function ExportIntro({ name }: { name: string }) {
+  const { t } = useTranslation('workspace')
+  return (
+    <>
+      {t('export.intro.beforeName')}
+      <span className="font-medium">{name}</span>
+      {t('export.intro.afterName')}
+      <span className="font-medium">{t('export.intro.pack')}</span>
+      {t('export.intro.afterPack')} <span className="font-medium">{t('export.secrets')}</span>
     </>
   )
 }

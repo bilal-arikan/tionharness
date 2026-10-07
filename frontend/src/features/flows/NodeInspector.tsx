@@ -1,4 +1,4 @@
-import { Trash2, X } from 'lucide-react'
+import { PanelRightClose, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   Agent,
@@ -11,7 +11,7 @@ import type {
 } from '@/types'
 import { PromptEditor } from '@/shared/components/PromptEditor'
 import { OptionPills } from '@/shared/components/OptionPills'
-import { InfoPopover } from '@/shared/components/InfoPopover'
+import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
 import { NODE_CHROME } from './nodeChrome'
 import { outgoing } from './flowGraph'
 
@@ -28,6 +28,8 @@ interface Props {
   onDeleteNode: (id: string) => void
   onDeleteEdge: (id: string) => void
   onClose: () => void
+  // When set, the empty state shows a button that folds the docked panel away.
+  onCollapse?: () => void
 }
 
 const inputCls =
@@ -46,9 +48,10 @@ function Field({
     <label className="block space-y-1">
       <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-dim)]">
         {label}
-        {hint && <InfoPopover text={hint} fixed />}
+        {hint && <InfoPopover text={hint} mode="long" />}
       </span>
       {children}
+      <FieldHint text={hint} className="text-[11px]" />
     </label>
   )
 }
@@ -69,6 +72,7 @@ export function NodeInspector({
   onDeleteNode,
   onDeleteEdge,
   onClose,
+  onCollapse,
 }: Props) {
   const { t } = useTranslation('flows')
   const node = nodeId ? graph.nodes.find((n) => n.id === nodeId) : undefined
@@ -77,8 +81,24 @@ export function NodeInspector({
   if (!node && !edge) {
     return (
       <div className="p-4 text-xs text-[var(--color-text-dim)]">
-        <p>{t('inspector.empty')}</p>
-        <p className="mt-2">{t('inspector.emptyHint')}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="flex items-center gap-1">
+            {t('inspector.empty')}
+            <InfoPopover text={t('inspector.emptyHint')} />
+          </p>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              title={t('inspector.collapse')}
+              aria-label={t('inspector.collapse')}
+              data-testid="flow-inspector-collapse"
+              className="-mr-1 -mt-1 shrink-0 rounded p-1 hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              <PanelRightClose size={14} />
+            </button>
+          )}
+        </div>
       </div>
     )
   }

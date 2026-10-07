@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { Toggle, NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
+import { SettingsDisclosureInfo } from './SettingsDisclosure'
 
 export function AnthropicOptions({ draft, set }: PanelProps) {
   const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('anthropic.description')}</p>
+      <SettingsDisclosureInfo text={t('anthropic.description')} />
       <Toggle
         label={t('anthropic.extendedCache.label')}
         hint={t('anthropic.extendedCache.hint')}

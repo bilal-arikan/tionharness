@@ -55,6 +55,7 @@ export function ScheduleModal({ agents, editing, onClose, onSaved, onDelete, onE
     return (
       <FormModal
         title={t('scheduleModal.oneShotTitle')}
+        info={t('scheduleModal.oneShotDescription')}
         icon={Clock}
         accent={COLUMN_ACCENT.schedules}
         submitLabel={t('common.close')}
@@ -64,9 +65,6 @@ export function ScheduleModal({ agents, editing, onClose, onSaved, onDelete, onE
         deleteTestId="schedule-delete"
         testId="schedule-edit-modal"
       >
-        <p className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-          {t('scheduleModal.oneShotDescription')}
-        </p>
         <Field label={t('scheduleModal.runTime')}>
           <div className="font-mono text-sm text-[var(--color-text)]">
             {fmtTime(editing.fireAt)}

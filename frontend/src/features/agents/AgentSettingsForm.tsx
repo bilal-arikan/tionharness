@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Eye, Trash2, Star, Copy, RotateCcw, Power, GitBranch, Lock } from 'lucide-react'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { View } from '@/app/NavRail'
@@ -11,6 +11,7 @@ import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
 import { Button, PromptEditor } from '@/shared/components'
+import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
 import { OptionPills } from '@/shared/components/OptionPills'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import { useCatalog, thinkingOptionsForModel } from '@/shared/lib/catalog'
@@ -139,7 +140,6 @@ export function AgentSettingsForm({
   allowFreeDerive = true,
 }: Props) {
   const { t } = useTranslation('agents')
-  const descriptionId = useId()
   // `locked` gates every editor and mutating action below. It now follows
   // `readOnly` ALONE: a built-in system agent is editable in place, its edit
   // stored in the app-global layer and applied to every workspace, so it no
@@ -462,6 +462,14 @@ export function AgentSettingsForm({
   }
 
   const parentName = parent?.name
+  // How inheritance works for this agent, behind an (i) beside the lineage chips.
+  const inheritInfo = !isChild
+    ? null
+    : !agent.system
+      ? t('settings.inheritNote', { parent: parentName ?? t('settings.parentFallback') })
+      : !agent.locked
+        ? t('settings.roleNote', { parent: parentName ?? agent.systemKey, role: agent.systemKey })
+        : null
   const badge = (key: AgentOverrideKey) =>
     isChild ? (
       <FieldOverrideBadge
@@ -617,8 +625,13 @@ export function AgentSettingsForm({
             )}
           </div>
         </div>
-        {lineage.length > 0 && (
-          <AgentLineageChips lineage={lineage} self={preview} onSelectAgent={onSelectAgent} />
+        {(lineage.length > 0 || inheritInfo) && (
+          <div className="flex min-w-0 items-center gap-1">
+            {lineage.length > 0 && (
+              <AgentLineageChips lineage={lineage} self={preview} onSelectAgent={onSelectAgent} />
+            )}
+            {inheritInfo && <InfoPopover text={inheritInfo} />}
+          </div>
         )}
       </div>
 
@@ -639,25 +652,6 @@ export function AgentSettingsForm({
           >
             <Lock size={14} className="mt-0.5 shrink-0" />
             <p>{t('settings.builtinNote', { role: agent.systemKey })}</p>
-          </div>
-        )}
-        {isChild && !agent.system && (
-          <div
-            data-testid="agent-inherit-note"
-            className="rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
-          >
-            {t('settings.inheritNote', { parent: parentName ?? t('settings.parentFallback') })}
-          </div>
-        )}
-        {isChild && agent.system && !agent.locked && (
-          <div
-            data-testid="agent-role-note"
-            className="rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
-          >
-            {t('settings.roleNote', {
-              parent: parentName ?? agent.systemKey,
-              role: agent.systemKey,
-            })}
           </div>
         )}
 
@@ -697,7 +691,7 @@ export function AgentSettingsForm({
             <p className="text-xs text-[var(--color-text-dim)]">{t('settings.libraryParent')}</p>
           )}
           {!agent.system && !libraryParent && (parentOptions.length > 0 || isChild) && (
-            <Field label={t('settings.fields.parent')}>
+            <Field label={t('settings.fields.parent')} info={t('settings.parentHelp')}>
               <select
                 data-testid="agent-parent-select"
                 value={agent.parentId ?? ''}
@@ -713,7 +707,6 @@ export function AgentSettingsForm({
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-[var(--color-text-dim)]">{t('settings.parentHelp')}</p>
             </Field>
           )}
 
@@ -783,7 +776,18 @@ export function AgentSettingsForm({
             </p>
           )}
 
-          <OptionField label={t('settings.fields.thinking')} trailing={badge('thinkingLevel')}>
+          <OptionField
+            label={t('settings.fields.thinking')}
+            info={
+              <>
+                {t('settings.thinkingHelp')}
+                {provider === 'claude-cli' && thinkingLevel === 'off' && (
+                  <span className="mt-2 block">⚡ {t('settings.thinkingOffHelp')}</span>
+                )}
+              </>
+            }
+            trailing={badge('thinkingLevel')}
+          >
             <OptionPills
               value={thinkingLevel}
               onChange={(v) => {
@@ -792,23 +796,15 @@ export function AgentSettingsForm({
               }}
               options={thinkingOptions}
               ariaLabel={t('settings.fields.thinking')}
-              ariaDescribedBy={`${descriptionId}-thinking-level`}
               testid="agent-thinking-level"
             />
           </OptionField>
-          <p
-            id={`${descriptionId}-thinking-level`}
-            className="-mt-2 text-xs text-[var(--color-text-dim)]"
-          >
-            {t('settings.thinkingHelp')}
-          </p>
-          {provider === 'claude-cli' && thinkingLevel === 'off' && (
-            <p className="-mt-1 rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2 py-1 text-xs text-[var(--color-text-dim)]">
-              ⚡ {t('settings.thinkingOffHelp')}
-            </p>
-          )}
 
-          <OptionField label={t('settings.fields.permission')} trailing={badge('permissionMode')}>
+          <OptionField
+            label={t('settings.fields.permission')}
+            info={t('settings.permissionHelp')}
+            trailing={badge('permissionMode')}
+          >
             <OptionPills
               value={permissionMode}
               onChange={(v) => {
@@ -817,19 +813,13 @@ export function AgentSettingsForm({
               }}
               options={PERMISSION_OPTIONS}
               ariaLabel={t('settings.fields.permission')}
-              ariaDescribedBy={`${descriptionId}-permission-mode`}
               testid="agent-permission-mode"
             />
           </OptionField>
-          <p
-            id={`${descriptionId}-permission-mode`}
-            className="-mt-2 text-xs text-[var(--color-text-dim)]"
-          >
-            {t('settings.permissionHelp')}
-          </p>
 
           <OptionField
             label={t('settings.fields.nativeWebSearch')}
+            info={t('settings.nativeWebSearchHelp')}
             trailing={badge('nativeWebSearch')}
           >
             <OptionPills
@@ -840,18 +830,15 @@ export function AgentSettingsForm({
               }}
               options={BOOLEAN_OPTIONS}
               ariaLabel={t('settings.fields.nativeWebSearch')}
-              ariaDescribedBy={`${descriptionId}-native-web-search`}
               testid="agent-native-web-search"
             />
           </OptionField>
-          <p
-            id={`${descriptionId}-native-web-search`}
-            className="-mt-2 text-xs text-[var(--color-text-dim)]"
-          >
-            {t('settings.nativeWebSearchHelp')}
-          </p>
 
-          <OptionField label={t('settings.fields.nativeShell')} trailing={badge('nativeShell')}>
+          <OptionField
+            label={t('settings.fields.nativeShell')}
+            info={t('settings.nativeShellHelp')}
+            trailing={badge('nativeShell')}
+          >
             <OptionPills
               value={nativeShell ? 'on' : 'off'}
               onChange={(value) => {
@@ -860,18 +847,15 @@ export function AgentSettingsForm({
               }}
               options={BOOLEAN_OPTIONS}
               ariaLabel={t('settings.fields.nativeShell')}
-              ariaDescribedBy={`${descriptionId}-native-shell`}
               testid="agent-native-shell"
             />
           </OptionField>
-          <p
-            id={`${descriptionId}-native-shell`}
-            className="-mt-2 text-xs text-[var(--color-text-dim)]"
-          >
-            {t('settings.nativeShellHelp')}
-          </p>
 
-          <OptionField label={t('settings.fields.coordinator')} trailing={badge('coordinatorMode')}>
+          <OptionField
+            label={t('settings.fields.coordinator')}
+            info={t('settings.coordinatorHelp')}
+            trailing={badge('coordinatorMode')}
+          >
             <OptionPills
               value={coordinatorMode ? 'on' : 'off'}
               onChange={(value) => {
@@ -880,16 +864,9 @@ export function AgentSettingsForm({
               }}
               options={BOOLEAN_OPTIONS}
               ariaLabel={t('settings.fields.coordinator')}
-              ariaDescribedBy={`${descriptionId}-coordinator-mode`}
               testid="agent-coordinator-mode"
             />
           </OptionField>
-          <p
-            id={`${descriptionId}-coordinator-mode`}
-            className="-mt-2 text-xs text-[var(--color-text-dim)]"
-          >
-            {t('settings.coordinatorHelp')}
-          </p>
           {coordinatorMode && (
             <Field label={t('settings.fields.workflow')} trailing={badge('coordinatorWorkflow')}>
               <CoordinatorWorkflowPicker
@@ -907,6 +884,7 @@ export function AgentSettingsForm({
             <>
               <Field
                 label={t('settings.fields.coordinatorPrompt')}
+                info={t('settings.coordinatorPromptHelp')}
                 trailing={badge('coordinatorPrompt')}
               >
                 <PromptEditor
@@ -919,9 +897,6 @@ export function AgentSettingsForm({
                   rows={3}
                 />
               </Field>
-              <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
-                {t('settings.coordinatorPromptHelp')}
-              </p>
             </>
           )}
 
@@ -987,9 +962,15 @@ export function AgentSettingsForm({
           />
 
           <div className="border-t border-[var(--color-border)] pt-4">
-            <div className="mb-1 flex items-center gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            <div className="mb-3 flex items-center gap-2">
+              <h3 className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
                 {t('settings.toolsTitle')}
+                <InfoPopover
+                  text={t('settings.toolsHelp', {
+                    inheritance: isChild ? t('settings.toolsInheritance') : '',
+                  })}
+                  label={t('settings.toolsTitle')}
+                />
               </h3>
               {isChild && (
                 <FieldOverrideBadge
@@ -1001,11 +982,6 @@ export function AgentSettingsForm({
                 />
               )}
             </div>
-            <p className="mb-3 text-xs text-[var(--color-text-dim)]">
-              {t('settings.toolsHelp', {
-                inheritance: isChild ? t('settings.toolsInheritance') : '',
-              })}
-            </p>
             <AgentToolsSection
               key={toolsKey}
               agentId={agent.id}
@@ -1034,12 +1010,16 @@ export function AgentSettingsForm({
   )
 }
 
+// info is the field's explanation: shown under the control when short, behind an
+// (i) next to the label when long.
 function Field({
   label,
+  info,
   trailing,
   children,
 }: {
   label: string
+  info?: React.ReactNode
   trailing?: React.ReactNode
   children: React.ReactNode
 }) {
@@ -1047,19 +1027,23 @@ function Field({
     <label className="block space-y-1">
       <span className="flex items-center gap-2 text-xs font-medium text-[var(--color-text-dim)]">
         {label}
+        {info && <InfoPopover text={info} label={label} mode="long" />}
         {trailing}
       </span>
       {children}
+      <FieldHint text={info} className="text-[11px]" />
     </label>
   )
 }
 
 function OptionField({
   label,
+  info,
   trailing,
   children,
 }: {
   label: string
+  info?: React.ReactNode
   trailing?: React.ReactNode
   children: React.ReactNode
 }) {
@@ -1067,9 +1051,11 @@ function OptionField({
     <fieldset className="block min-w-0 space-y-1">
       <legend className="flex w-full items-center gap-2 text-xs font-medium text-[var(--color-text-dim)]">
         {label}
+        {info && <InfoPopover text={info} label={label} mode="long" />}
         {trailing}
       </legend>
       {children}
+      <FieldHint text={info} className="text-[11px]" />
     </fieldset>
   )
 }

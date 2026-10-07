@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { Download, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { workspaceApi } from '@/api/workspaces'
 import { Button, toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import type { CodexDiscoveredMarketplace, CodexMarketplace } from '@/types'
 import { inputCls } from './primitives'
 
@@ -185,15 +186,13 @@ export function CodexPluginsSection({
       {/* Discovery + import */}
       <div className="flex flex-col gap-1.5 border-t border-[var(--color-border)] pt-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-xs font-medium text-[var(--color-text)]">
+          <div className="flex items-center gap-1 text-xs font-medium text-[var(--color-text)]">
             {t('plugins.discoveredTitle')}
+            <InfoPopover text={t('plugins.discoveryDescription')} />
           </div>
           <Button onClick={discover} disabled={busy}>
             <RefreshCw size={14} /> {busy ? t('plugins.scanning') : t('plugins.scan')}
           </Button>
-        </div>
-        <div className="text-[11px] text-[var(--color-text-dim)]">
-          {t('plugins.discoveryDescription')}
         </div>
         {discovered?.length === 0 && (
           <div className="text-xs text-[var(--color-text-dim)]">{t('plugins.noneFound')}</div>

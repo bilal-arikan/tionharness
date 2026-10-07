@@ -1,5 +1,6 @@
 import { Coins } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { InfoPopover } from '@/shared/components'
 import { formatDateTime, numberFormat } from '@/shared/lib/intl'
 import type { DecisionSpendReport, DecisionSpendTotals } from '@/types/decisionSpend'
 
@@ -74,14 +75,14 @@ export function DecisionSpendSection({ report }: { report: DecisionSpendReport }
         <h2 className="text-sm font-medium text-[var(--color-text)]">
           {t('decisionSpend.title', { defaultValue: 'Decision model spend' })}
         </h2>
-      </div>
-      <div className="min-w-0 space-y-3 p-3 sm:p-4">
-        <p className="text-xs text-[var(--color-text-dim)]">
-          {t('decisionSpend.scope', {
+        <InfoPopover
+          text={t('decisionSpend.scope', {
             defaultValue:
               'Across all workspaces. This separate view is not added to workspace totals; some calls already appear in agent usage.',
           })}
-        </p>
+        />
+      </div>
+      <div className="min-w-0 space-y-3 p-3 sm:p-4">
         {report.startedAt > 0 && (
           <p className="text-[11px] text-[var(--color-text-dim)]">
             {t('decisionSpend.startedAt', {

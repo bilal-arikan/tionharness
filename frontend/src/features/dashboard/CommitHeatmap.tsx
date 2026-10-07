@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
+import { InfoPopover } from '@/shared/components'
 import type { CommitActivity, CommitActivityDay } from '@/types'
 import { dateFormat } from '@/shared/lib/intl'
 import { count } from '@/shared/lib/format'
@@ -100,9 +101,12 @@ export function CommitHeatmap() {
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 id="commit-activity-title" className="text-sm font-medium">
-            {t('commits.title')}
-          </h2>
+          <div className="flex items-center gap-1">
+            <h2 id="commit-activity-title" className="text-sm font-medium">
+              {t('commits.title')}
+            </h2>
+            <InfoPopover text={t('commits.interactionHint')} />
+          </div>
           <p className="text-[11px] text-[var(--color-text-dim)]">{t('commits.period')}</p>
         </div>
         {!loading && data?.isGitRepo !== false && total > 0 && (
@@ -202,8 +206,7 @@ export function CommitHeatmap() {
               })}
             </div>
           </div>
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--color-text-dim)]">
-            <span>{t('commits.interactionHint')}</span>
+          <div className="mt-1 flex flex-wrap items-center justify-end gap-2 text-[10px] text-[var(--color-text-dim)]">
             <div className="flex items-center gap-1" aria-label={t('commits.intensityLabel')}>
               <span>{t('commits.less')}</span>
               {LEVEL_CLASS.map((className) => (

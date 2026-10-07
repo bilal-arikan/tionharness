@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { useAgentEditorApi } from './AgentEditorContext'
 import type { AgentTools, AgentToolEntry, AgentToolTier } from '@/types'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
-import { SelectionBar, SelectionBarButton } from '@/shared/components'
+import { InfoPopover, SelectionBar, SelectionBarButton } from '@/shared/components'
 import { AGENT_TIERS } from '@/features/tools/toolMeta'
 import { AgentTierBadge, AgentTierSelector } from '@/features/tools/VisibilityControls'
 import { AgentToolOverrideRow } from './AgentToolOverrideRow'
@@ -252,10 +252,9 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
 
           {groups.length > 0 && (
             <div className="mb-3 border-t border-[var(--color-border)] pt-3">
-              <div className="mb-2">
-                <p className="text-xs font-medium text-[var(--color-text)]">{t('tools.groups')}</p>
-                <p className="text-[11px] text-[var(--color-text-dim)]">{t('tools.groupsHelp')}</p>
-              </div>
+              <p className="mb-2 flex items-center gap-1 text-xs font-medium text-[var(--color-text)]">
+                {t('tools.groups')} <InfoPopover text={t('tools.groupsHelp')} />
+              </p>
               <ul className="space-y-1.5">
                 {groups.map((group) => (
                   <AgentToolGroupRow

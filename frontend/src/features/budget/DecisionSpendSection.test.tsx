@@ -90,8 +90,9 @@ describe('DecisionSpendSection', () => {
     expect(container.textContent).toContain('7 primary / fallback · 3 comparison · 2 test calls')
     expect(container.textContent).toContain('12 calls · 1,234 input / 50 output tokens')
     expect(container.textContent).toContain('TypeSafe · jev')
-    expect(container.textContent).toContain('Across all workspaces')
-    expect(container.textContent).toContain('not added to workspace totals')
+    // The scope note sits behind the header's (i), not inline.
+    expect(container.textContent).not.toContain('Across all workspaces')
+    expect(container.querySelector('h2 + [role="button"][aria-expanded="false"]')).not.toBeNull()
   })
 
   it('renders measured zero separately from unavailable cost and handles an empty window', () => {

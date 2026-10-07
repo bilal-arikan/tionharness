@@ -9,6 +9,7 @@ import { KeyRound, Globe, ExternalLink, Loader2, Check, Copy } from 'lucide-reac
 import { api } from '@/api'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Button, ModalOverlay, toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { inputCls } from './primitives'
 
 type Method = 'device' | 'apikey'
@@ -202,15 +203,17 @@ export function CodexAuthDialog({
         className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold">{t('auth.codex.title')}</h2>
-        <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          {t('auth.codex.description', { provider: providerLabel })}
-          {isLoggedIn && (
-            <span className="ml-1 text-[var(--color-success)]">
-              ✓ {t('auth.currentlyLoggedIn')}
-            </span>
-          )}
-        </p>
+        <h2
+          className={`${isLoggedIn ? 'mb-1' : 'mb-4'} flex items-center gap-1 text-base font-semibold`}
+        >
+          {t('auth.codex.title')}
+          <InfoPopover text={t('auth.codex.description', { provider: providerLabel })} />
+        </h2>
+        {isLoggedIn && (
+          <p className="mb-4 text-xs text-[var(--color-success)]">
+            ✓ {t('auth.currentlyLoggedIn')}
+          </p>
+        )}
 
         {/* Method tabs */}
         <div className="mb-4 flex gap-2">
@@ -243,10 +246,7 @@ export function CodexAuthDialog({
                 </Button>
               </div>
             ) : !verifyUrl ? (
-              <>
-                <p className="text-xs text-[var(--color-text-dim)]">
-                  {t('auth.codex.browserDescription')}
-                </p>
+              <div className="flex items-center gap-2">
                 <Button onClick={startDeviceLogin} size="lg" disabled={deviceBusy}>
                   {deviceBusy ? (
                     <Loader2 size={15} className="animate-spin" />
@@ -255,7 +255,8 @@ export function CodexAuthDialog({
                   )}
                   {deviceBusy ? t('auth.connecting') : t('auth.startBrowser')}
                 </Button>
-              </>
+                <InfoPopover text={t('auth.codex.browserDescription')} />
+              </div>
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
@@ -320,11 +321,9 @@ export function CodexAuthDialog({
           </div>
         ) : (
           <div className="mb-2 space-y-2">
-            <p className="text-xs text-[var(--color-text-dim)]">
-              {t('auth.codex.apiKeyDescription')}
-            </p>
-            <label className="mb-1 block text-xs text-[var(--color-text-dim)]">
+            <label className="mb-1 flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
               {t('auth.codex.apiKeyLabel')}
+              <InfoPopover text={t('auth.codex.apiKeyDescription')} />
             </label>
             <input
               ref={apiKeyRef}

@@ -211,7 +211,10 @@ function WorkspacePackPreview({
       )}
 
       {schedules.length > 0 && (
-        <PreviewSection title={t('preview.workspace.schedules', { count: schedules.length })}>
+        <PreviewSection
+          title={t('preview.workspace.schedules', { count: schedules.length })}
+          info={t('preview.workspace.schedulesHint')}
+        >
           <div className="space-y-1.5">
             {schedules.map((s, i) => (
               <div
@@ -235,14 +238,14 @@ function WorkspacePackPreview({
               </div>
             ))}
           </div>
-          <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-            {t('preview.workspace.schedulesHint')}
-          </p>
         </PreviewSection>
       )}
 
       {automations.length > 0 && (
-        <PreviewSection title={t('preview.workspace.automations', { count: automations.length })}>
+        <PreviewSection
+          title={t('preview.workspace.automations', { count: automations.length })}
+          info={t('preview.workspace.automationsHint')}
+        >
           <div className="space-y-1.5">
             {automations.map((a, i) => (
               <div
@@ -280,9 +283,6 @@ function WorkspacePackPreview({
               </div>
             ))}
           </div>
-          <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-            {t('preview.workspace.automationsHint')}
-          </p>
         </PreviewSection>
       )}
 
@@ -321,15 +321,13 @@ function WorkspacePackPreview({
       {promptKeys.length > 0 && (
         <PreviewSection
           title={t('preview.workspace.promptOverrides', { count: promptKeys.length })}
+          info={t('preview.workspace.promptOverridesHint')}
         >
           <div className="flex flex-wrap gap-1">
             {promptKeys.map((k) => (
               <MiniChip key={k}>{k}</MiniChip>
             ))}
           </div>
-          <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-            {t('preview.workspace.promptOverridesHint')}
-          </p>
         </PreviewSection>
       )}
 

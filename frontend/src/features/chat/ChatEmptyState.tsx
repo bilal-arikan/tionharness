@@ -6,7 +6,7 @@
 //   - Without agents: guidance + a shortcut to the Agents screen to create one.
 import { MessageSquarePlus, Bot } from 'lucide-react'
 import type { Agent } from '@/types'
-import { Button } from '@/shared/components'
+import { Button, InfoPopover } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -69,10 +69,10 @@ export function ChatEmptyState({
 
         {hasAgents ? (
           <>
-            <h2 className="mb-1 text-lg font-semibold">{t('empty.startTitle')}</h2>
-            <p className="mb-5 text-sm text-[var(--color-text-dim)]">
-              {t('empty.startDescription')}
-            </p>
+            <h2 className="mb-5 flex items-center justify-center gap-1.5 text-lg font-semibold">
+              {t('empty.startTitle')}
+              <InfoPopover text={t('empty.startDescription')} />
+            </h2>
 
             {defaultAgentDeleted && (
               <p
@@ -118,10 +118,10 @@ export function ChatEmptyState({
           </>
         ) : (
           <>
-            <h2 className="mb-1 text-lg font-semibold">{t('empty.createAgentTitle')}</h2>
-            <p className="mb-5 text-sm text-[var(--color-text-dim)]">
-              {t('empty.createAgentDescription')}
-            </p>
+            <h2 className="mb-5 flex items-center justify-center gap-1.5 text-lg font-semibold">
+              {t('empty.createAgentTitle')}
+              <InfoPopover text={t('empty.createAgentDescription')} />
+            </h2>
             <Button onClick={onGoToAgents} size="lg" className="w-full">
               <Bot size={16} /> {t('empty.createAgent')}
             </Button>

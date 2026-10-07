@@ -79,6 +79,8 @@
     "linearEdge": "Doğrusal bir kenar; etiket taşımaz.",
     "deleteEdge": "Kenarı sil",
     "close": "Kapat",
+    "collapse": "Paneli daralt",
+    "expand": "Paneli genişlet",
     "title": "Başlık",
     "prompt": "Prompt",
     "promptHint": "Şablon: {{input}}, {{last}}, {{node.<id>}}, {{visit}}. Boş = {{input}}.",

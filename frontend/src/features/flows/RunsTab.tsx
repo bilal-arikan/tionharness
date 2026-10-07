@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowLeft, ExternalLink, Star, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
 import type { Flow, FlowRun, FlowRunStep } from '@/types'
 import { api } from '@/api'
-import { Badge, EmptyState, type BadgeTone } from '@/shared/components'
+import { Badge, EmptyState, InfoPopover, type BadgeTone } from '@/shared/components'
 import { formatDurationMs, relativeTime, fullDateTime } from '@/shared/lib/time'
 import { tokens as fmtTokens } from '@/shared/lib/format'
 import { NODE_CHROME } from './nodeChrome'
@@ -295,7 +295,7 @@ export function RunsTab({ flow, runs, loading, stacked, onReload, onOpenSession,
   if (!loading && runs.length === 0) {
     return (
       <EmptyState title={t('runs.empty')}>
-        {t('runs.emptyHint', { name: flow.agentName })}
+        <InfoPopover text={t('runs.emptyHint', { name: flow.agentName })} />
       </EmptyState>
     )
   }

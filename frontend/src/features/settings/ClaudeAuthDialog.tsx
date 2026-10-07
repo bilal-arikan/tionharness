@@ -4,6 +4,7 @@ import { Check, ExternalLink, Globe, Loader2 } from 'lucide-react'
 import { api } from '@/api'
 import { workspaceApi } from '@/api/workspaces'
 import { Button, ModalOverlay } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { inputCls } from './primitives'
 
 function isRemoteAccess(): boolean {
@@ -115,13 +116,15 @@ export function ClaudeAuthDialog({
         className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold">{t('auth.claude.title')}</h2>
-        <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          {t('auth.claude.description', { provider: providerLabel })}
-          {isLoggedIn && (
-            <span className="ml-1 text-[var(--color-success)]">✓ {t('auth.loggedIn')}</span>
-          )}
-        </p>
+        <h2
+          className={`${isLoggedIn ? 'mb-1' : 'mb-4'} flex items-center gap-1 text-base font-semibold`}
+        >
+          {t('auth.claude.title')}
+          <InfoPopover text={t('auth.claude.description', { provider: providerLabel })} />
+        </h2>
+        {isLoggedIn && (
+          <p className="mb-4 text-xs text-[var(--color-success)]">✓ {t('auth.loggedIn')}</p>
+        )}
 
         {done ? (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-[var(--color-success)]/40 px-4 py-6 text-center">

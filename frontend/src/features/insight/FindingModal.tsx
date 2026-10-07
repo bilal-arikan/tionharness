@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, LayoutGrid, Trash2, X } from 'lucide-react'
 import type { AppliedEntity, InsightFinding } from '@/types'
-import { ModalOverlay, PaneHeader } from '@/shared/components'
+import { InfoPopover, ModalOverlay, PaneHeader } from '@/shared/components'
 import { ChannelBadge, SeverityBadge, RegressedBadge, StatusBadge } from './insightBadges'
 
 interface Props {
@@ -105,8 +105,16 @@ export function FindingModal({
           )}
           {f.proposal && (
             <div data-testid="finding-proposal">
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
+              <div className="mb-0.5 flex items-center gap-1 text-xs font-semibold text-[var(--color-text-dim)]">
                 {t('finding.recipeProposal')}
+                <InfoPopover
+                  text={
+                    <>
+                      {t('finding.recipeHintBefore')} <code>applied</code>{' '}
+                      {t('finding.recipeHintAfter', { slug: f.proposal.slug })}
+                    </>
+                  }
+                />
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
@@ -134,10 +142,6 @@ export function FindingModal({
               </div>
               <p className="mt-1 text-xs text-[var(--color-text-dim)]">
                 {t('finding.evidence')}: {f.proposal.evidence}
-              </p>
-              <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                {t('finding.recipeHintBefore')} <code>applied</code>{' '}
-                {t('finding.recipeHintAfter', { slug: f.proposal.slug })}
               </p>
             </div>
           )}

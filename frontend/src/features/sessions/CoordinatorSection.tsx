@@ -256,6 +256,19 @@ export function CoordinatorSection({
           <div className="flex items-center justify-between rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)]/5 px-2.5 py-2">
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-accent)]">
               <Users size={13} /> {t('coordinator.enabled')}
+              {/* Scope, not decoration: an agent can be configured as a coordinator
+                  BY DEFAULT, in which case closing it here and opening a new chat
+                  looks like the switch "came back on". It did not — this one is
+                  per-session; the (i) says so. */}
+              <InfoPopover
+                text={
+                  <Trans
+                    ns="sessions"
+                    i18nKey="coordinator.scopeHint"
+                    components={{ strong: <strong /> }}
+                  />
+                }
+              />
             </span>
             <button
               onClick={() => toggleRole('')}
@@ -265,17 +278,6 @@ export function CoordinatorSection({
               {toggling ? '…' : t('actions.close')}
             </button>
           </div>
-          {/* Scope, not decoration: an agent can be configured as a coordinator BY
-              DEFAULT, in which case closing it here and opening a new chat looks like
-              the switch "came back on". It did not — this one is per-session. */}
-          <p className="px-0.5 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-            <Trans
-              ns="sessions"
-              i18nKey="coordinator.scopeHint"
-              components={{ strong: <strong /> }}
-            />
-          </p>
-
           {/* Phantom-spawn hard-halt: a persistent, actionable banner (not a transient
               toast). Shown until the coordinator recovers (a real spawn_worker call) or
               the user resumes it here. */}

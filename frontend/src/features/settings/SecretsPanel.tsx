@@ -4,6 +4,7 @@ import { api } from '@/api'
 import type { Secret } from '@/types'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Button, LoadingState, toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { useAsync } from '@/shared/hooks/useAsync'
 import { Trans, useTranslation } from 'react-i18next'
 
@@ -114,24 +115,36 @@ export function SecretsPanel({ onError }: Props) {
           <div className="flex items-center gap-2">
             <KeyRound size={18} className="text-[var(--color-accent)]" />
             <h2 className="text-sm font-semibold">{t('secrets.title')}</h2>
-          </div>
-          <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-            <Trans
-              i18nKey="secrets.intro"
-              ns="settings"
-              components={{
-                strong: <strong />,
-                secretList: <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5" />,
-                secretGet: <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5" />,
-              }}
+            <InfoPopover
+              text={
+                <Trans
+                  i18nKey="secrets.intro"
+                  ns="settings"
+                  components={{
+                    strong: <strong />,
+                    secretList: (
+                      <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5" />
+                    ),
+                    secretGet: <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5" />,
+                  }}
+                />
+              }
             />
-          </p>
+          </div>
         </header>
 
         {/* Add / edit form */}
         <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <h3 className="mb-3 text-xs font-semibold text-[var(--color-text-dim)]">
+          <h3 className="mb-3 flex items-center gap-1 text-xs font-semibold text-[var(--color-text-dim)]">
             {editing ? t('secrets.editTitle', { name }) : t('secrets.newTitle')}
+            <InfoPopover
+              text={
+                <>
+                  {t('secrets.nameRulePrefix')} <code>_</code>, <code>-</code>, <code>.</code>{' '}
+                  {t('secrets.nameRuleSuffix')}
+                </>
+              }
+            />
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input
@@ -161,10 +174,6 @@ export function SecretsPanel({ onError }: Props) {
               className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none sm:col-span-2"
             />
           </div>
-          <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-            {t('secrets.nameRulePrefix')} <code>_</code>, <code>-</code>, <code>.</code>{' '}
-            {t('secrets.nameRuleSuffix')}
-          </p>
           <div className="mt-3 flex items-center gap-2">
             <Button
               data-testid="secret-save"

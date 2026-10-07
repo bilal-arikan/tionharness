@@ -5,6 +5,7 @@ import { THEME_COLORS, type ThemeColorVariant } from '@/shared/lib/themePresets'
 import { applyAppearance, resolveAppearance, type Appearance } from '@/shared/lib/theme'
 import { Field } from './primitives'
 import { Button, LoadingState, toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 
 // AppearancePanel edits the ACTIVE WORKSPACE's appearance override (the theme
 // preset — a color + light/dark variant). It is self-contained — it loads/saves
@@ -113,13 +114,6 @@ export function AppearancePanel({
 
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        {t('appearance.scope.prefix')}{' '}
-        <span className="font-medium text-[var(--color-text)]">
-          {t('appearance.scope.emphasis')}
-        </span>{' '}
-        {t('appearance.scope.suffix')}
-      </div>
       <Field label={t('appearance.theme.label')} hint={t('appearance.theme.hint')}>
         <div className="space-y-2.5">
           {THEME_COLORS.map((c) => {
@@ -177,8 +171,20 @@ export function AppearancePanel({
         >
           {t('appearance.reset')}
         </button>
-        <span className="text-xs text-[var(--color-text-dim)]">
+        {/* The per-workspace scope note lives behind the status line's (ⓘ). */}
+        <span className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
           {hasOverride ? t('appearance.customStatus') : t('appearance.globalStatus')}
+          <InfoPopover
+            text={
+              <>
+                {t('appearance.scope.prefix')}{' '}
+                <span className="font-medium text-[var(--color-text)]">
+                  {t('appearance.scope.emphasis')}
+                </span>{' '}
+                {t('appearance.scope.suffix')}
+              </>
+            }
+          />
         </span>
       </div>
     </>

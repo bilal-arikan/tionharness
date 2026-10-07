@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { Toggle, NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
+import { SettingsDisclosureInfo } from './SettingsDisclosure'
 
 export function ContextRecovery({ draft, set }: PanelProps) {
   const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('contextRecovery.description')}</p>
+      <SettingsDisclosureInfo text={t('contextRecovery.description')} />
       <Toggle
         label={t('contextRecovery.compact.label')}
         hint={t('contextRecovery.compact.hint')}

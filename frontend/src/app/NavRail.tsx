@@ -186,7 +186,7 @@ export function NavRail({
         data-testid="nav-rail"
         data-rail-mode={compact ? (peek ? 'peek' : 'compact') : collapsed ? 'collapsed' : 'full'}
         className={`th-col hidden h-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] md:flex ${
-          collapsed ? 'w-14' : 'w-52'
+          collapsed ? 'w-14' : 'w-[11.25rem]'
         } ${compact ? 'absolute inset-y-0 left-0 z-40' : ''} ${
           compact && peek ? 'shadow-[var(--shadow-lg)]' : ''
         }`}
@@ -259,7 +259,7 @@ export function NavRail({
                 onClick={collapse}
                 title={t('shell.collapse')}
                 aria-label={t('shell.collapseNavigation')}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                className="flex h-9 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
               >
                 <ChevronLeft size={18} />
               </button>

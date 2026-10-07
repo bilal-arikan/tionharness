@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next'
 import { MessageSquare, Waypoints, X } from 'lucide-react'
 import { api } from '@/api'
-import { EmptyState } from '@/shared/components'
+import { EmptyState, InfoPopover } from '@/shared/components'
 import { useLanes, connectLanes, seedLanes, resetLanes } from '@/shared/lib/laneStore'
 import { trajectoryForRoot } from '@/shared/lib/laneModel'
 import { seedLiveness, seedSessions, seedTrajectories } from '@/shared/lib/laneReducer'
@@ -300,7 +300,7 @@ export function RotaPanel({
               icon={Waypoints}
               title={loading ? t('panel.loadingLanes') : t('panel.noLanes')}
             >
-              {t('panel.emptyHint')}
+              <InfoPopover text={t('panel.emptyHint')} />
             </EmptyState>
           ) : trajectoryId ? (
             <RotaTrajectoryView

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Brush, Loader2, X } from 'lucide-react'
 import { api } from '@/api'
-import { Badge, ModalOverlay } from '@/shared/components'
+import { Badge, InfoPopover, ModalOverlay } from '@/shared/components'
 import type { CuratorAction, CuratorReport } from '@/types/curator'
 import { fmtTime } from './timeUtils'
 import { CURATOR_ENTITY_LABEL, CURATOR_REASON_LABEL } from './curatorMeta'
@@ -64,7 +64,7 @@ export function CuratorPanel({ onClose, onError, onChanged }: Props) {
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
           <Brush size={16} className="opacity-70" />
           <span className="text-sm font-semibold">{t('curator.title')}</span>
-          <span className="text-xs text-[var(--color-text-dim)]">{t('curator.description')}</span>
+          <InfoPopover text={t('curator.description')} />
           <button
             type="button"
             onClick={onClose}

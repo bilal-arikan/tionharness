@@ -1,3 +1,4 @@
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { AnthropicOptions } from './AnthropicOptions'
 import { CliOptions } from './CliOptions'
 import { SettingsDisclosure } from './SettingsDisclosure'
@@ -12,8 +13,10 @@ export function ProviderOptionsPanel({
   const { t } = useTranslation('settings')
   return (
     <section className="space-y-4 border-t border-[var(--color-border)] pt-4">
-      <h3 className="text-sm font-semibold">{t('providerOptions.title')}</h3>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('providerOptions.description')}</p>
+      <h3 className="flex items-center gap-1 text-sm font-semibold">
+        {t('providerOptions.title')}
+        <InfoPopover text={t('providerOptions.description')} />
+      </h3>
       <SettingsDisclosure title={t('providerOptions.anthropic')}>
         <AnthropicOptions {...props} />
       </SettingsDisclosure>

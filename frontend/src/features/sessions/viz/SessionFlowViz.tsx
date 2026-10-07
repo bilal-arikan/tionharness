@@ -9,6 +9,7 @@ import { SelfHealingEvents } from './SelfHealingEvents'
 import { PromptCacheEvents } from './PromptCacheEvents'
 import { ThinkingShareChart } from './ThinkingShareChart'
 import { HookActivity } from './HookActivity'
+import { InfoPopover } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 // How many raw events to pull for the visualizations. Covers the whole span for
@@ -87,65 +88,47 @@ export function SessionFlowViz({
             </div>
           ) : events && events.length > 0 ? (
             <div className="flex flex-col gap-3">
-              <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {t('visualization.sankey.title')}
-                </div>
-                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  {t('visualization.sankey.help')}
-                </p>
+              <VizSection
+                title={t('visualization.sankey.title')}
+                info={t('visualization.sankey.help')}
+              >
                 <ToolSankey events={events} agentNames={agentNames} />
-              </div>
+              </VizSection>
 
-              <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {t('visualization.timeline.title')}
-                </div>
-                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  {t('visualization.timeline.help')}
-                </p>
+              <VizSection
+                title={t('visualization.timeline.title')}
+                info={t('visualization.timeline.help')}
+              >
                 <ConcurrencyTimeline events={events} agentNames={agentNames} />
-              </div>
+              </VizSection>
 
-              <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {t('visualization.selfHealing.title')}
-                </div>
-                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  {t('visualization.selfHealing.help')}
-                </p>
+              <VizSection
+                title={t('visualization.selfHealing.title')}
+                info={t('visualization.selfHealing.help')}
+              >
                 <SelfHealingEvents events={events} />
-              </div>
+              </VizSection>
 
-              <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {t('visualization.promptCache.title')}
-                </div>
-                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  {t('visualization.promptCache.help')}
-                </p>
+              <VizSection
+                title={t('visualization.promptCache.title')}
+                info={t('visualization.promptCache.help')}
+              >
                 <PromptCacheEvents events={events} />
-              </div>
+              </VizSection>
 
-              <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {t('visualization.thinking.title')}
-                </div>
-                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  {t('visualization.thinking.description')}
-                </p>
+              <VizSection
+                title={t('visualization.thinking.title')}
+                info={t('visualization.thinking.description')}
+              >
                 <ThinkingShareChart events={events} />
-              </div>
+              </VizSection>
 
-              <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-                  {t('visualization.hooks.title')}
-                </div>
-                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  {t('visualization.hooks.description')}
-                </p>
+              <VizSection
+                title={t('visualization.hooks.title')}
+                info={t('visualization.hooks.description')}
+              >
                 <HookActivity events={events} hooks={hooks} />
-              </div>
+              </VizSection>
 
               {events.length >= EVENT_LIMIT && (
                 <p className="text-[10px] text-[var(--color-text-dim)]">
@@ -161,5 +144,26 @@ export function SessionFlowViz({
         </div>
       )}
     </section>
+  )
+}
+
+// VizSection is one titled chart; what the chart shows sits behind an (i).
+function VizSection({
+  title,
+  info,
+  children,
+}: {
+  title: string
+  info: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        {title}
+        <InfoPopover text={info} label={title} />
+      </div>
+      {children}
+    </div>
   )
 }

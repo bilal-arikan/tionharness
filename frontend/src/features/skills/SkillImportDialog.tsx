@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/api'
 import type { Discovered, IngestInstallResult, IngestKind } from '@/api/ingest'
-import { Button, ModalOverlay } from '@/shared/components'
+import { Button, InfoPopover, ModalOverlay } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -156,8 +156,10 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
             <Download size={18} className="text-[var(--color-accent)]" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('import.title')}</h2>
-            <p className="text-xs text-[var(--color-text-dim)]">{t('import.subtitle')}</p>
+            <h2 className="flex items-center gap-1 text-sm font-semibold text-[var(--color-text)]">
+              {t('import.title')}
+              <InfoPopover text={t('import.subtitle')} />
+            </h2>
           </div>
         </div>
 
@@ -184,10 +186,20 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
               </div>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">
+                <span className="mb-1 flex items-center gap-1 text-xs font-medium text-[var(--color-text-dim)]">
                   {source === 'github'
                     ? t('import.githubLocationLabel')
                     : t('import.localLocationLabel')}
+                  {source === 'github' && (
+                    <InfoPopover
+                      text={
+                        <>
+                          {t('import.githubHintBefore')} <code>skills/</code>{' '}
+                          {t('import.githubHintAfter')}
+                        </>
+                      }
+                    />
+                  )}
                 </span>
                 <input
                   data-testid="import-location"
@@ -201,12 +213,6 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                   }
                   className={`${inputCls} font-mono`}
                 />
-                {source === 'github' && (
-                  <span className="mt-1 block text-[10px] text-[var(--color-text-dim)]">
-                    {t('import.githubHintBefore')} <code>skills/</code>{' '}
-                    {t('import.githubHintAfter')}
-                  </span>
-                )}
               </label>
             </>
           )}

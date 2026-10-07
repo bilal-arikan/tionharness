@@ -14,7 +14,7 @@ import type {
   DeciderTestResult,
   DeciderView,
 } from '@/types/decider'
-import { toast } from '@/shared/components'
+import { InfoPopover, toast } from '@/shared/components'
 import { DeciderProviderCard } from './DeciderProviderCard'
 import { DeciderProviderForm } from './DeciderProviderForm'
 import { DeciderSetupGuide } from './DeciderSetupGuide'
@@ -125,10 +125,10 @@ export function DeciderProviders({ onOpenAuthorities }: Props) {
     <>
       <div className="flex items-center gap-1.5 pt-4 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         <Scale size={13} className="text-[var(--color-accent)]" /> {t('providers.title')}
+        <InfoPopover text={t('providers.hint')} />
       </div>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        {t('providers.hint')}{' '}
-        {onOpenAuthorities && (
+      {onOpenAuthorities && (
+        <p className="-mt-1 text-xs">
           <button
             type="button"
             onClick={onOpenAuthorities}
@@ -137,8 +137,8 @@ export function DeciderProviders({ onOpenAuthorities }: Props) {
           >
             {t('providers.openAuthorities')}
           </button>
-        )}
-      </p>
+        </p>
+      )}
       <div className="space-y-2" data-testid="decider-providers">
         {!editing && (
           <DeciderSetupGuide

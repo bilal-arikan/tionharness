@@ -86,8 +86,8 @@ export function WorkspaceSwitcher({
   }
 
   return (
-    <div ref={rootRef} className="relative border-b border-[var(--color-border)] px-3 py-3">
-      <div className="flex items-center gap-1">
+    <div ref={rootRef} className="relative border-b border-[var(--color-border)] px-2 py-3">
+      <div className="flex items-center gap-0.5">
         <button
           onClick={() => setOpen((v) => !v)}
           data-testid="workspace-switcher"
@@ -96,9 +96,10 @@ export function WorkspaceSwitcher({
           aria-label={
             active?.name ? t('switcher.activeAria', { name: active.name }) : t('switcher.select')
           }
-          className="flex min-w-0 flex-1 items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
+          title={active?.name}
+          className="flex min-w-0 flex-1 items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-2 py-2 text-sm hover:opacity-90"
         >
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-1">
             <span
               className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
               style={
@@ -137,7 +138,7 @@ export function WorkspaceSwitcher({
             )}
             <span className="truncate font-medium">{active?.name || t('switcher.select')}</span>
           </span>
-          <span className="text-xs text-[var(--color-text-dim)]">▾</span>
+          <span className="shrink-0 text-xs text-[var(--color-text-dim)]">▾</span>
         </button>
         {trailing}
       </div>

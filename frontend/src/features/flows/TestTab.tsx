@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ExternalLink, Play } from 'lucide-react'
 import type { Flow, FlowNodeEvent, FlowNodeFrame, FlowRun } from '@/types'
 import { api } from '@/api'
-import { Badge, Button } from '@/shared/components'
+import { Badge, Button, InfoPopover } from '@/shared/components'
 import { subscribeFlowNode } from '@/shared/lib/flowNodeBus'
 import { formatDurationMs } from '@/shared/lib/time'
 import { NODE_CHROME } from './nodeChrome'
@@ -79,9 +79,6 @@ export function TestTab({ flow, onOpenSession, onError }: Props) {
   return (
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-3 p-3 md:p-4">
-        <p className="text-xs text-[var(--color-text-dim)]">
-          {t('test.hint', { name: flow.agentName })}
-        </p>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -97,6 +94,7 @@ export function TestTab({ flow, onOpenSession, onError }: Props) {
           <Button onClick={start} disabled={running || !input.trim()} data-testid="flow-test-run">
             <Play size={13} /> {running ? t('test.running') : t('test.run')}
           </Button>
+          <InfoPopover text={t('test.hint', { name: flow.agentName })} />
           {sessionId && onOpenSession && (
             <Button variant="secondary" size="md" onClick={() => onOpenSession(sessionId)}>
               <ExternalLink size={13} /> {t('runs.openSession')}

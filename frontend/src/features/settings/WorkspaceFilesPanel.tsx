@@ -7,6 +7,7 @@ import { api } from '@/api'
 import type { WorkspaceConfig, WorkspaceConfigPatch } from '@/types'
 import { Field } from './primitives'
 import { PromptEditor, LoadingState, toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { displayPath } from '@/shared/lib/paths'
 import { changedEditablePrompts } from '@/shared/lib/workspacePrompts'
@@ -120,11 +121,20 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
 
   return (
     <>
+      {/* The folder stays visible; the sentence around it sits behind the (ⓘ). */}
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
-        <span className="text-xs text-[var(--color-text-dim)]">
-          {t('workspaceFiles.locationPrefix')}{' '}
-          <code className="rounded bg-[var(--color-bg)] px-1">{displayPath(config.dir)}</code>{' '}
-          {t('workspaceFiles.locationSuffix')}
+        <span className="flex min-w-0 items-center gap-1 text-xs text-[var(--color-text-dim)]">
+          <code className="truncate rounded bg-[var(--color-bg)] px-1">
+            {displayPath(config.dir)}
+          </code>
+          <InfoPopover
+            text={
+              <>
+                {t('workspaceFiles.locationPrefix')} <code>{displayPath(config.dir)}</code>{' '}
+                {t('workspaceFiles.locationSuffix')}
+              </>
+            }
+          />
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={config.dir} />
@@ -144,21 +154,27 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
         />
       </Field>
 
-      <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        {t('workspaceFiles.runtimePrompts')}
-      </div>
-      <p className="text-[11px] text-[var(--color-text-dim)]">
-        {t('workspaceFiles.systemPromptsPrefix')}{' '}
-        <strong>{t('workspaceFiles.systemAgentsPath')}</strong>{' '}
-        {t('workspaceFiles.systemPromptsSuffix')}{' '}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+        <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+          {t('workspaceFiles.runtimePrompts')}
+          <InfoPopover
+            text={
+              <>
+                {t('workspaceFiles.systemPromptsPrefix')}{' '}
+                <strong>{t('workspaceFiles.systemAgentsPath')}</strong>{' '}
+                {t('workspaceFiles.systemPromptsSuffix')}
+              </>
+            }
+          />
+        </span>
         <button
           type="button"
           onClick={onGoToAgents}
-          className="text-[var(--color-accent)] underline underline-offset-2"
+          className="text-[11px] text-[var(--color-accent)] underline underline-offset-2"
         >
           {t('workspaceFiles.openAgents')}
         </button>
-      </p>
+      </div>
       {config.promptKeys.map((key) => {
         const meta = config.promptMeta?.[key] ?? { ...FALLBACK_META, label: key }
         const isDefault = draft.prompts[key].trim() === (config.defaults[key] ?? '').trim()

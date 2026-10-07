@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Bell } from 'lucide-react'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '@/shared/lib/notifyPrefs'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { Toggle } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import { useTranslation } from 'react-i18next'
@@ -30,8 +31,10 @@ export function NotificationsPanel({
 
   return (
     <section className="flex flex-col gap-4">
-      <SubHead icon={Bell}>{t('notifications.title')}</SubHead>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('notifications.scope')}</p>
+      <SubHead icon={Bell}>
+        {t('notifications.title')}
+        <InfoPopover text={t('notifications.scope')} />
+      </SubHead>
       <fieldset disabled={saving} className="min-w-0">
         <Toggle
           label={t('notifications.masterLabel')}
@@ -45,8 +48,10 @@ export function NotificationsPanel({
           {t('common.saving')}
         </p>
       )}
-      <SubHead icon={Bell}>{t('notifications.typesTitle')}</SubHead>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('notifications.typesHint')}</p>
+      <SubHead icon={Bell}>
+        {t('notifications.typesTitle')}
+        <InfoPopover text={t('notifications.typesHint')} />
+      </SubHead>
       {NOTIFY_TYPES.map((type) => (
         <Toggle
           key={type.type}

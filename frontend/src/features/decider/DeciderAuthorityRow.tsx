@@ -9,7 +9,7 @@ import type {
   DeciderConfig,
   DeciderModelInstance,
 } from '@/types/decider'
-import { Badge } from '@/shared/components'
+import { Badge, InfoPopover } from '@/shared/components'
 import { OptionPills } from '@/shared/components/OptionPills'
 import { inputCls } from '@/features/settings/primitives'
 import { percent, usd } from '@/shared/lib/format'
@@ -89,6 +89,7 @@ export function DeciderAuthorityRow({
       <div className="space-y-1">
         <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
           {label}
+          {description && <InfoPopover text={description} />}
           <Badge tone="accent">
             {t(`pattern.${authority.pattern}`, { defaultValue: authority.pattern })}
           </Badge>
@@ -99,7 +100,6 @@ export function DeciderAuthorityRow({
             </span>
           )}
         </p>
-        <p className="text-xs text-[var(--color-text-dim)]">{description}</p>
       </div>
       <OptionPills
         value={ac.mode}
@@ -113,7 +113,11 @@ export function DeciderAuthorityRow({
         testid={`decider-mode-${authority.id}`}
       />
       <label className="flex items-center gap-3 text-xs text-[var(--color-text-dim)]">
-        <span className="shrink-0 font-medium text-[var(--color-text)]">{t('threshold')}</span>
+        <span className="flex shrink-0 items-center gap-1 font-medium text-[var(--color-text)]">
+          {t('threshold')}
+          {/* The slider shares this row, so even a short hint stays behind the (ⓘ). */}
+          {thresholdHint && <InfoPopover text={thresholdHint} mode="icon" />}
+        </span>
         <input
           type="range"
           min={0.5}
@@ -129,12 +133,17 @@ export function DeciderAuthorityRow({
           {percent(ac.threshold)}
         </span>
       </label>
-      <p className="text-xs text-[var(--color-text-dim)]">{thresholdHint}</p>
 
       {workflow && (
         <details className="rounded-md border border-[var(--color-border)] p-2">
           <summary className="min-h-11 cursor-pointer content-center text-xs font-medium">
-            {t('workflow.limits', { defaultValue: 'Workflow limits' })}
+            {t('workflow.limits', { defaultValue: 'Workflow limits' })}{' '}
+            <InfoPopover
+              text={t('workflow.measureHint', {
+                defaultValue:
+                  'Agreement measures behavior differences. Use session feedback and applied outcomes to assess usefulness.',
+              })}
+            />
           </summary>
           <div className="grid gap-3 py-2 sm:grid-cols-2">
             {(
@@ -195,12 +204,6 @@ export function DeciderAuthorityRow({
                 </label>
               ))}
           </div>
-          <p className="text-xs text-[var(--color-text-dim)]">
-            {t('workflow.measureHint', {
-              defaultValue:
-                'Agreement measures behavior differences. Use session feedback and applied outcomes to assess usefulness.',
-            })}
-          </p>
         </details>
       )}
 

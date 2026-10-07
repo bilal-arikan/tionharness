@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { Hook, SessionDebugEvent } from '@/types'
+import { InfoPopover } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 // HookActivity summarizes a session's tool/lifecycle HOOK firings from the debug
@@ -125,11 +126,16 @@ export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; h
           )
         })}
       </ul>
-      <p className="mt-1.5 text-[10px] text-[var(--color-text-dim)]">
-        {hasOptimizer
-          ? t('visualization.hooks.optimizerHelp')
-          : t('visualization.hooks.optimizerInactive')}{' '}
-        {t('visualization.hooks.nativeOnly')}
+      {/* Whether the optimizer fired is state; how to read the counts is an (i). */}
+      <p className="mt-1.5 flex items-center gap-1 text-[10px] text-[var(--color-text-dim)]">
+        {!hasOptimizer && t('visualization.hooks.optimizerInactive')}
+        <InfoPopover
+          text={
+            hasOptimizer
+              ? `${t('visualization.hooks.optimizerHelp')} ${t('visualization.hooks.nativeOnly')}`
+              : t('visualization.hooks.nativeOnly')
+          }
+        />
       </p>
     </div>
   )

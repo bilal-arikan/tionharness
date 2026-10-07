@@ -1,12 +1,23 @@
 import { Loader2, ChevronDown, type LucideIcon } from 'lucide-react'
+import { InfoPopover } from '@/shared/components'
 
 // ---- presentational helpers ----
 
-export function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// info is an optional explanation of the section, kept behind an (i) by the title.
+export function Section({
+  title,
+  info,
+  children,
+}: {
+  title: string
+  info?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <section>
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-        {title}
+      <div className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        <span className="opacity-70">{title}</span>
+        {info && <InfoPopover text={info} label={title} />}
       </div>
       {children}
     </section>

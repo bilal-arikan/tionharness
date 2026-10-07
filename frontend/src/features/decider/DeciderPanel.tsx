@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Scale } from 'lucide-react'
 import { api } from '@/api'
 import type { DeciderConfig, DeciderTestResult, DeciderView } from '@/types/decider'
-import { Badge, Button, LoadingState, toast } from '@/shared/components'
+import { Badge, Button, InfoPopover, LoadingState, toast } from '@/shared/components'
 import { Field, Toggle, inputCls } from '@/features/settings/primitives'
 import { formatTime } from '@/shared/lib/intl'
 import { percent, usd } from '@/shared/lib/format'
@@ -121,6 +121,7 @@ export function DeciderPanel({ onError, onOpenProviders }: Props) {
       <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-dim)]">
         <p className="flex items-center gap-2 font-medium text-[var(--color-text)]">
           <Scale size={15} /> {t('title')}
+          <InfoPopover text={t('intro')} />
           <Badge tone={tone}>
             {!view.config.enabled
               ? t('status.off')
@@ -129,7 +130,6 @@ export function DeciderPanel({ onError, onOpenProviders }: Props) {
                 : t('status.notReady')}
           </Badge>
         </p>
-        <p>{t('intro')}</p>
         <p className="text-xs">{t('privacy')}</p>
         {defaultLabel && <p className="text-xs">{t('status.model', { label: defaultLabel })}</p>}
         {view.status.backoffUntil ? (

@@ -12,6 +12,7 @@ import {
   isZvecGrepServer,
 } from '@/shared/lib/zvecGrep'
 import { Trans, useTranslation } from 'react-i18next'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 
 interface Props {
   tool: ExternalToolStatus
@@ -51,15 +52,21 @@ export function ZvecGrepCallout({ tool, servers, onServersChanged, onError }: Pr
       data-testid="zvec-callout"
       className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]"
     >
-      <span className="font-medium text-[var(--color-text)]">🔎 {t('zvec.title')}:</span>{' '}
-      <Trans
-        i18nKey="zvec.description"
-        ns="settings"
-        components={{
-          code: <code />,
-          strong: <span className="font-medium text-[var(--color-text)]" />,
-        }}
-      />
+      <span className="flex items-center gap-1 font-medium text-[var(--color-text)]">
+        🔎 {t('zvec.title')}
+        <InfoPopover
+          text={
+            <Trans
+              i18nKey="zvec.description"
+              ns="settings"
+              components={{
+                code: <code />,
+                strong: <span className="font-medium text-[var(--color-text)]" />,
+              }}
+            />
+          }
+        />
+      </span>
       <div className="mt-2 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
         <button
           type="button"

@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
 import { formatTime } from '@/shared/lib/intl'
 import { count } from '@/shared/lib/format'
+import { InfoPopover } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 // ThinkingShareChart plots the hidden-reasoning share of each llm_call's output
@@ -44,6 +45,7 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
         <span className="text-[var(--color-text-dim)]">
           {t('visualization.thinking.total', { tokens: count(model.totalThink) })}
         </span>
+        <InfoPopover text={t('visualization.thinking.help')} />
       </div>
       {/* Per-call bars: height ∝ thinking share of that call's output. */}
       <div className="flex h-16 items-end gap-px overflow-x-auto">
@@ -61,9 +63,6 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
           />
         ))}
       </div>
-      <p className="mt-1 text-[9px] text-[var(--color-text-dim)]">
-        {t('visualization.thinking.help')}
-      </p>
     </div>
   )
 }

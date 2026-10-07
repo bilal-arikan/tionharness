@@ -9,9 +9,8 @@ export function ProfilePanel({ draft, set }: PanelProps) {
   const { t } = useTranslation(['settings', 'common'])
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        {t('profile.intro')}
-      </div>
+      {/* The page intro (profile.intro) sits behind the (ⓘ) next to the category
+          title in SettingsPanel. */}
       <Field label={t('profile.name')} hint={t('profile.nameHint')}>
         <input
           value={draft.userName}

@@ -5,6 +5,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
+import { InfoPopover } from '@/shared/components'
 
 // One selectable row. `emoji` (e.g. an agent avatar) takes precedence over the
 // section icon; `sub` is an optional dimmed second line (cron, agent name, …).
@@ -22,7 +23,7 @@ interface Props {
   picked: Set<string>
   setPicked: Dispatch<SetStateAction<Set<string>>>
   emptyHint: string
-  // Optional note under the title (e.g. why some items are excluded by design).
+  // Optional note behind an (ⓘ) by the title (e.g. why some items are excluded by design).
   note?: string
 }
 
@@ -54,6 +55,7 @@ export function ExportPickList({
           <span className="text-xs font-normal text-[var(--color-text-dim)]">
             ({picked.size}/{entries.length})
           </span>
+          {note && <InfoPopover text={note} />}
         </span>
         {entries.length > 0 && (
           <button
@@ -64,7 +66,6 @@ export function ExportPickList({
           </button>
         )}
       </div>
-      {note && <p className="text-[11px] text-[var(--color-text-dim)]">{note}</p>}
       {entries.length === 0 ? (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
           {emptyHint}

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { api } from '@/api'
 import type { PromptInfo, SlashCommand } from '@/types'
 import { CommandsPanel } from './CommandsPanel'
-import { StepKindsPanel } from './StepKindsPanel'
+import { InfoPopover } from '@/shared/components/InfoPopover'
+import { StepKindsIntro, StepKindsPanel } from './StepKindsPanel'
 import { useTranslation } from 'react-i18next'
 
 export function ReferencePanel({
@@ -38,8 +39,7 @@ export function ReferencePanel({
 
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('reference.description')}</p>
-      <div aria-label={t('reference.sectionsAria')} className="flex gap-2">
+      <div aria-label={t('reference.sectionsAria')} className="flex items-center gap-2">
         {(['commands', 'stepkinds'] as const).map((key) => (
           <button
             key={key}
@@ -50,6 +50,19 @@ export function ReferencePanel({
             {key === 'commands' ? t('reference.commands') : t('reference.stepKinds')}
           </button>
         ))}
+        {/* One (ⓘ) for the page and, on the step-kinds tab, that list's intro. */}
+        <InfoPopover
+          text={
+            <>
+              {t('reference.description')}
+              {tab === 'stepkinds' && (
+                <span className="mt-1.5 block">
+                  <StepKindsIntro />
+                </span>
+              )}
+            </>
+          }
+        />
       </div>
       <div className="space-y-4">
         {tab === 'commands' ? (

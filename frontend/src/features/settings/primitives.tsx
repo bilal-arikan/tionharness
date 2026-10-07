@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
+import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
 import { NumberValidityCtx } from './numberValidity'
 import type { NumberValidity } from './numberValidity'
 import { useTranslation } from 'react-i18next'
@@ -46,6 +47,18 @@ export type WsSet = <K extends keyof WorkspaceSettings>(key: K, val: WorkspaceSe
 export const inputCls =
   'rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
 
+// FieldLabel is a field's title; a long hint sits behind an (ⓘ) next to it. A
+// short hint is not drawn here — the field shows it under the control with
+// <FieldHint>.
+export function FieldLabel({ label, hint }: { label: string; hint?: ReactNode }) {
+  return (
+    <span className="flex items-center gap-1 text-sm font-medium">
+      {label}
+      {hint && <InfoPopover text={hint} mode="long" />}
+    </span>
+  )
+}
+
 export function Field({
   label,
   hint,
@@ -57,9 +70,9 @@ export function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-sm font-medium">{label}</span>
+      <FieldLabel label={label} hint={hint} />
       {children}
-      {hint && <span className="text-xs text-[var(--color-text-dim)]">{hint}</span>}
+      <FieldHint text={hint} />
     </label>
   )
 }
@@ -152,7 +165,7 @@ export function NumberField({
 
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-sm font-medium">{label}</span>
+      <FieldLabel label={label} hint={hint} />
       <input
         type="number"
         inputMode="numeric"
@@ -170,7 +183,7 @@ export function NumberField({
           {error}
         </span>
       )}
-      {hint && <span className="text-xs text-[var(--color-text-dim)]">{hint}</span>}
+      <FieldHint text={hint} />
     </label>
   )
 }
@@ -186,6 +199,8 @@ export function Toggle({
   checked: boolean
   onChange: (v: boolean) => void
 }) {
+  // The whole row toggles; the (ⓘ) stops its own click, so reading the hint never
+  // flips the switch.
   return (
     <button
       type="button"
@@ -196,8 +211,8 @@ export function Toggle({
       className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-left"
     >
       <span>
-        <span className="block text-sm font-medium">{label}</span>
-        {hint && <span className="block text-xs text-[var(--color-text-dim)]">{hint}</span>}
+        <FieldLabel label={label} hint={hint} />
+        <FieldHint text={hint} />
       </span>
       <span
         className={`relative h-5 w-9 flex-shrink-0 rounded-full transition ${
@@ -217,8 +232,8 @@ export function Toggle({
 // Segmented is a single-choice control (radio-as-buttons) for a small set of
 // mutually-exclusive options. Preferred over multiple booleans when the choices
 // exclude each other — it makes the "only one" contract visual and removes the need
-// for a "both on → which wins?" warning. The active option's own hint is shown when
-// present, so the description updates with the selection.
+// for a "both on → which wins?" warning. The active option's own hint is shown
+// when present, so the description follows the selection.
 export function Segmented<T extends string>({
   label,
   hint,
@@ -235,7 +250,7 @@ export function Segmented<T extends string>({
   const active = options.find((o) => o.value === value)
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
-      <span className="text-sm font-medium">{label}</span>
+      <FieldLabel label={label} hint={active?.hint ?? hint} />
       <div className="mt-0.5 flex gap-0.5 rounded-md bg-[var(--color-surface-2)] p-0.5">
         {options.map((o) => (
           <button
@@ -251,9 +266,7 @@ export function Segmented<T extends string>({
           </button>
         ))}
       </div>
-      {(active?.hint ?? hint) && (
-        <span className="text-xs text-[var(--color-text-dim)]">{active?.hint ?? hint}</span>
-      )}
+      <FieldHint text={active?.hint ?? hint} />
     </div>
   )
 }
@@ -287,7 +300,7 @@ export function Slider({
   return (
     <div className={`flex flex-col gap-1 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{label}</span>
+        <FieldLabel label={label} hint={hint} />
         {badge && (
           <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs font-medium tabular-nums text-[var(--color-text)]">
             {badge}
@@ -303,7 +316,7 @@ export function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--color-surface-2)] accent-[var(--color-accent)]"
       />
-      {hint && <span className="text-xs text-[var(--color-text-dim)]">{hint}</span>}
+      <FieldHint text={hint} />
       {sub && <span className="text-xs text-[var(--color-text-dim)]">{sub}</span>}
     </div>
   )

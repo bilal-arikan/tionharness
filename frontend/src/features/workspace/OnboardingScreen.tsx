@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Sparkles, FolderPlus, FolderOpen } from 'lucide-react'
 import { WorkspaceCreateModal, type NewWorkspaceData } from './WorkspaceCreateModal'
 import { api } from '@/api'
-import { Button } from '@/shared/components'
+import { Button, InfoPopover } from '@/shared/components'
 
 interface Props {
   // onCreate provisions the first workspace. Once it resolves the app has an
@@ -60,8 +60,10 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
           <h1 className="flex items-center justify-center gap-2 text-xl font-semibold">
             <Sparkles size={18} className="text-[var(--color-accent)]" />
             {t('onboarding.title')}
+            <InfoPopover
+              text={`${t('onboarding.description')}\n\n${t('onboarding.requireWorkspace')}`}
+            />
           </h1>
-          <p className="text-sm text-[var(--color-text-dim)]">{t('onboarding.description')}</p>
         </div>
 
         <div className="flex flex-col items-stretch gap-2 sm:flex-row">
@@ -86,8 +88,6 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
             {error}
           </p>
         )}
-
-        <p className="text-xs text-[var(--color-text-dim)]">{t('onboarding.requireWorkspace')}</p>
       </div>
 
       {showModal && (

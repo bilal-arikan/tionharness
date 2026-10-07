@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
-import { Button, ModalOverlay, TagEditor } from '@/shared/components'
+import { Button, InfoPopover, ModalOverlay, TagEditor } from '@/shared/components'
 import type { NoteConfidence, NoteKind, NoteScope, NoteWrite } from '@/types'
 import {
   NOTE_CONFIDENCES,
@@ -69,7 +69,10 @@ export function NoteForm({ mode, initial, submitting, onSubmit, onCancel }: Prop
         className="flex max-h-[90vh] w-[42rem] max-w-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-          <h2 className="text-sm font-semibold">{t(`form.title.${mode}`)}</h2>
+          <h2 className="flex items-center gap-1 text-sm font-semibold">
+            {t(`form.title.${mode}`)}
+            {mode === 'correct' && <InfoPopover text={t('form.correctHint')} />}
+          </h2>
           <button
             type="button"
             onClick={onCancel}
@@ -81,12 +84,6 @@ export function NoteForm({ mode, initial, submitting, onSubmit, onCancel }: Prop
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
-          {mode === 'correct' && (
-            <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-              {t('form.correctHint')}
-            </p>
-          )}
-
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <label className="flex flex-col gap-1">
               <span className={labelCls}>{t('form.kind')}</span>
@@ -222,7 +219,7 @@ export function NoteForm({ mode, initial, submitting, onSubmit, onCancel }: Prop
               onChange={(e) => set('private', e.target.checked)}
             />
             <span>{t('form.private')}</span>
-            <span className="text-xs text-[var(--color-text-dim)]">{t('form.privateHint')}</span>
+            <InfoPopover text={t('form.privateHint')} />
           </label>
         </div>
 

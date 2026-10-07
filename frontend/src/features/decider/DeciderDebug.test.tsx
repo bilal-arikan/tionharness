@@ -95,7 +95,13 @@ it('shows a correlated timeline and distinguishes yes probability from correctne
   await act(async () => {
     root.render(<DeciderDebug view={view} />)
   })
-  expect(container.textContent).toContain('Agreement is not accuracy')
+  // The evidence caveat sits behind the (ⓘ) on the agreement line.
+  expect(container.textContent).not.toContain('Agreement is not accuracy')
+  const info = [...container.querySelectorAll<HTMLElement>('[role="button"][aria-expanded]')].find(
+    (el) => el.parentElement?.textContent?.includes('agreement'),
+  )!
+  act(() => info.click())
+  expect(document.body.textContent).toContain('Agreement is not accuracy')
   expect(container.textContent).toContain('SES7')
   expect(container.querySelector('summary')?.textContent).toContain('Shadow')
   expect(container.textContent).toContain('P(yes) = 18%')

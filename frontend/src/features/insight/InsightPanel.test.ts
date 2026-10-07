@@ -27,6 +27,7 @@ vi.mock('@/shared/components', () => ({
   ListPane: ({ children }: { children: ReactNode }) =>
     createElement('aside', { 'data-testid': 'scan-rail' }, children),
   PaneHeader: () => null,
+  InfoPopover: () => null,
   toast: { success: vi.fn() },
 }))
 vi.mock('@/shared/components/SidebarChrome', () => ({ SidebarHeader: () => null }))

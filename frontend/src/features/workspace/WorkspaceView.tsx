@@ -17,9 +17,9 @@ import { AppearancePanel } from '@/features/settings/appPanels'
 import { LogsPanel } from '@/features/logs/LogsPanel'
 import { ProjectPanel } from './ProjectPanel'
 import { ProcessPanel } from './ProcessPanel'
-import { WorkspaceExportPanel } from './WorkspaceExportPanel'
+import { ExportIntro, WorkspaceExportPanel } from './WorkspaceExportPanel'
 import { RecommendationsPanel } from './RecommendationsPanel'
-import { Button, CollapsibleListShell, toast } from '@/shared/components'
+import { Button, CollapsibleListShell, InfoPopover, toast } from '@/shared/components'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import { useTranslation } from 'react-i18next'
 
@@ -215,6 +215,11 @@ export function WorkspaceView({
                 </span>
               )}
               {activeMeta ? t(activeMeta.labelKey) : ''}
+              {/* Tab-level explanations live behind an (ⓘ) next to the title. */}
+              {tab === 'export' && ws && <InfoPopover text={<ExportIntro name={ws.name} />} />}
+              {tab === 'recommendations' && (
+                <InfoPopover text={t('recommendations.panel.description')} />
+              )}
             </span>
             {showSave && (
               <div className="flex items-center gap-3">

@@ -23,6 +23,7 @@ import {
   keyMissing,
   toInput,
 } from './modelDraft'
+import { InfoPopover } from '@/shared/components'
 import { DeciderFieldInput, FieldShell } from './DeciderFieldInput'
 import { fieldInputCls, formCls, primaryButtonCls, secondaryButtonCls } from './providerStyles'
 
@@ -63,6 +64,9 @@ export function DeciderProviderForm({
   const [err, setErr] = useState('')
 
   const backend = backends.find((b) => b.id === draft.backend)
+  const kindInfo = backend
+    ? t(`backend.${backend.id}.description`, { defaultValue: backend.description ?? '' })
+    : ''
   const backendLabel = (b: DeciderBackend) => t(`backend.${b.id}.label`, { defaultValue: b.label })
   const presetLabel = (p: DeciderPreset) => t(`preset.${p.id}.label`, { defaultValue: p.label })
   const keyStored = !!editing?.secretsSet[API_KEY]
@@ -126,27 +130,31 @@ export function DeciderProviderForm({
       )}
 
       <div className="grid grid-cols-2 gap-1.5">
-        <select
-          className={fieldInputCls}
-          value={draft.backend}
-          disabled={!!editing}
-          aria-label={t('form.kind')}
-          onChange={(e) => {
-            const next = backends.find((b) => b.id === e.target.value)
-            if (next) {
-              setDraft({ ...draftFromBackend(next), label: backendLabel(next) })
-              setCustom(false)
-              setTemplate('')
-            }
-          }}
-          data-testid="decider-provider-kind"
-        >
-          {backends.map((b) => (
-            <option key={b.id} value={b.id}>
-              {backendLabel(b)}
-            </option>
-          ))}
-        </select>
+        {/* The selected kind's description sits behind the (ⓘ) beside it. */}
+        <div className="flex min-w-0 items-center gap-1">
+          <select
+            className={`${fieldInputCls} min-w-0 flex-1`}
+            value={draft.backend}
+            disabled={!!editing}
+            aria-label={t('form.kind')}
+            onChange={(e) => {
+              const next = backends.find((b) => b.id === e.target.value)
+              if (next) {
+                setDraft({ ...draftFromBackend(next), label: backendLabel(next) })
+                setCustom(false)
+                setTemplate('')
+              }
+            }}
+            data-testid="decider-provider-kind"
+          >
+            {backends.map((b) => (
+              <option key={b.id} value={b.id}>
+                {backendLabel(b)}
+              </option>
+            ))}
+          </select>
+          {kindInfo && <InfoPopover text={kindInfo} />}
+        </div>
         <input
           className={fieldInputCls}
           value={draft.label}
@@ -156,11 +164,6 @@ export function DeciderProviderForm({
           data-testid="decider-provider-label"
         />
       </div>
-      {backend && (
-        <p className="text-[10px] text-[var(--color-text-dim)]">
-          {t(`backend.${backend.id}.description`, { defaultValue: backend.description ?? '' })}
-        </p>
-      )}
 
       <label className="flex items-center gap-1.5 text-xs">
         <input
@@ -225,9 +228,8 @@ export function DeciderProviderForm({
         {draft.credentials === 'provider' ? (
           <FieldShell
             label={t('form.provider')}
-            help={
-              providers.length === 0 ? t('form.providerMissing') : t('form.credentialsProviderHint')
-            }
+            help={t('form.credentialsProviderHint')}
+            warning={providers.length === 0 ? t('form.providerMissing') : undefined}
           >
             <select
               className={fieldInputCls}
@@ -264,7 +266,7 @@ export function DeciderProviderForm({
             </FieldShell>
             <FieldShell
               label={backend?.keyRequired ? t('form.apiKey') : t('form.apiKeyOptional')}
-              help={missingKey ? t('form.apiKeyRequired') : undefined}
+              warning={missingKey ? t('form.apiKeyRequired') : undefined}
             >
               <input
                 type="password"

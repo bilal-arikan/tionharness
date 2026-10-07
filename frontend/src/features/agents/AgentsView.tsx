@@ -26,6 +26,7 @@ import {
   PaneHeader,
   ArchiveViewToggle,
   ArchiveViewBanner,
+  InfoPopover,
 } from '@/shared/components'
 import { archiveSide } from '@/shared/lib/archive'
 import {
@@ -77,11 +78,8 @@ interface Props {
 }
 
 const rosterSectionHeading = (label: string, hint: string) => (
-  <h3
-    className="mb-1 mt-3 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]"
-    title={hint}
-  >
-    {label}
+  <h3 className="mb-1 mt-3 flex items-center gap-1 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+    {label} <InfoPopover text={hint} label={label} />
   </h3>
 )
 
@@ -467,7 +465,10 @@ export function AgentsView({
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
             />
             <label className="block space-y-1 text-xs text-[var(--color-text-dim)]">
-              <span>{t('view.parent')}</span>
+              <span className="flex items-center gap-1">
+                {t('view.parent')}
+                {createParentId && <InfoPopover text={t('view.inheritCreateHelp')} />}
+              </span>
               <select
                 data-testid="agent-create-parent-select"
                 value={createParentId}
@@ -493,9 +494,7 @@ export function AgentsView({
               rows={3}
               data-testid="agent-create-soul-textarea"
             />
-            {createParentId ? (
-              <p className="text-xs text-[var(--color-text-dim)]">{t('view.inheritCreateHelp')}</p>
-            ) : (
+            {!createParentId && (
               <>
                 <div data-testid="agent-create-provider-wrap" className="contents">
                   <ProviderInstanceModelSelect
@@ -515,7 +514,10 @@ export function AgentsView({
                     onChange={(e) => setCoordinatorMode(e.target.checked)}
                     className="mt-0.5 accent-[var(--color-accent)]"
                   />
-                  <span>{t('view.coordinatorCreate')}</span>
+                  <span className="flex items-center gap-1">
+                    {t('view.coordinatorCreate')}
+                    {coordinatorMode && <InfoPopover text={t('view.coordinatorPromptHelp')} />}
+                  </span>
                 </label>
                 {coordinatorMode && (
                   <>
@@ -531,9 +533,6 @@ export function AgentsView({
                       placeholder={t('view.coordinatorPrompt')}
                       rows={3}
                     />
-                    <p className="text-xs text-[var(--color-text-dim)]">
-                      {t('view.coordinatorPromptHelp')}
-                    </p>
                   </>
                 )}
               </>

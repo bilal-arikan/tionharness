@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DeciderConfig, DeciderMode, DeciderView } from '@/types/decider'
-import { Badge } from '@/shared/components'
+import { Badge, InfoPopover } from '@/shared/components'
 import {
   authorityConfig,
   defaultModelId,
@@ -89,15 +89,17 @@ export function DeciderWorkflows({ view, draft, onChange }: Props) {
                     }`}
                   >
                     <span className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                      <span className="min-w-0 break-words text-sm font-medium">
+                      <span className="flex min-w-0 items-center gap-1 break-words text-sm font-medium">
                         {t(`authority.${authority.id}.label`, { defaultValue: authority.label })}
+                        {authority.description && (
+                          <InfoPopover
+                            text={t(`authority.${authority.id}.description`, {
+                              defaultValue: authority.description,
+                            })}
+                          />
+                        )}
                       </span>
                       <Badge tone={MODE_TONE[mode]}>{t(`modeLabel.${mode}`)}</Badge>
-                    </span>
-                    <span className="mt-1 block break-words text-xs text-[var(--color-text-dim)]">
-                      {t(`authority.${authority.id}.description`, {
-                        defaultValue: authority.description,
-                      })}
                     </span>
                   </button>
                 )
@@ -106,11 +108,15 @@ export function DeciderWorkflows({ view, draft, onChange }: Props) {
           ))}
         </nav>
         <div id={detailId} className="min-w-0 space-y-2" data-testid="decider-workflow-detail">
-          <p className="text-xs text-[var(--color-text-dim)]">
-            {t('workflow.detailHint', {
-              defaultValue: 'Configure the selected workflow. Save applies your changes.',
-            })}
-          </p>
+          {/* No heading over the detail pane, so its note gets a lone (ⓘ). */}
+          <div className="flex justify-end">
+            <InfoPopover
+              align="right"
+              text={t('workflow.detailHint', {
+                defaultValue: 'Configure the selected workflow. Save applies your changes.',
+              })}
+            />
+          </div>
           <DeciderAuthorityRow
             key={selected.id}
             authority={selected}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bug, ChevronDown, ChevronRight, Loader2, AlertTriangle, Info } from 'lucide-react'
 import { api } from '@/api'
+import { InfoPopover } from '@/shared/components'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { SessionDebugSummary, SessionDebugEvent } from '@/types'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
@@ -113,6 +114,7 @@ export function SessionDebugCard({
             <ChevronRight size={12} className="shrink-0" />
           )}
           <Bug size={12} className="shrink-0" /> {t('debug.title')}
+          <InfoPopover text={t('debug.description')} />
           {!open && (
             <span className="ml-auto flex items-center gap-1.5 normal-case tracking-normal">
               <span>{t('debug.turns', { count: sum.turns })}</span>
@@ -128,8 +130,6 @@ export function SessionDebugCard({
 
       {open && (
         <div className="mt-2">
-          <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">{t('debug.description')}</p>
-
           {/* Headline metric grid */}
           <div className="grid grid-cols-3 gap-1.5">
             <Metric label={t('debug.metric.turns')} value={String(sum.turns)} />

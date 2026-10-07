@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import type { PromptInfo, SlashCommand } from '@/types'
 import { PromptDetails } from './primitives'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 
 interface Props {
   commands: SlashCommand[]
@@ -16,10 +17,19 @@ export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpen
   const { t } = useTranslation('settingsMain')
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        {t('commands.intro.prefix')} <code className="rounded bg-[var(--color-bg)] px-1">/</code>{' '}
-        {t('commands.intro.middle')}{' '}
-        <code className="rounded bg-[var(--color-bg)] px-1">"/command"</code>.
+      {/* How to open the palette / escape a command: on demand, behind an (ⓘ).
+          The surrounding tab owns the heading, so the button stands alone. */}
+      <div className="flex">
+        <InfoPopover
+          text={
+            <>
+              {t('commands.intro.prefix')}{' '}
+              <code className="rounded bg-[var(--color-bg)] px-1">/</code>{' '}
+              {t('commands.intro.middle')}{' '}
+              <code className="rounded bg-[var(--color-bg)] px-1">"/command"</code>.
+            </>
+          }
+        />
       </div>
       {commands.length === 0 ? (
         <div className="text-sm text-[var(--color-text-dim)]">{t('commands.empty')}</div>

@@ -79,6 +79,8 @@
     "linearEdge": "A linear edge; it carries no label.",
     "deleteEdge": "Delete edge",
     "close": "Close",
+    "collapse": "Collapse panel",
+    "expand": "Expand panel",
     "title": "Title",
     "prompt": "Prompt",
     "promptHint": "Template: {{input}}, {{last}}, {{node.<id>}}, {{visit}}. Empty = {{input}}.",

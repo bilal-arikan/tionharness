@@ -128,6 +128,7 @@ vi.mock('@/shared/components', async () => ({
   Toaster: () => null,
   CommandPalette: () => null,
   LoadingState: () => null,
+  InfoPopover: () => null,
   toast: { error: vi.fn() },
 }))
 vi.mock('@/app/lazyPanels', () => ({}))

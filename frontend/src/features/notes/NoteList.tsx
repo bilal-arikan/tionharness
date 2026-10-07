@@ -26,9 +26,11 @@ export function NoteList({ notes, snippets, activeId, onSelect, loading, filtere
   if (loading && notes.length === 0) return <LoadingState label={t('list.loading')} />
   if (notes.length === 0) {
     return (
-      <EmptyState icon={NotebookPen} title={filtered ? t('list.noMatch') : t('list.empty')}>
-        {!filtered && t('list.emptyHint')}
-      </EmptyState>
+      <EmptyState
+        icon={NotebookPen}
+        title={filtered ? t('list.noMatch') : t('list.empty')}
+        hint={filtered ? undefined : t('list.emptyHint')}
+      />
     )
   }
   return (

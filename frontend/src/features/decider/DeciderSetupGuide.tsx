@@ -2,10 +2,11 @@
 // step is done: a credential (a provider account to borrow, or a decision
 // provider's own key), a ready decision provider, the master switch. Each step
 // carries the action that finishes it on the current screen, or a link to the
-// screen that does.
+// screen that does; the step's how-to text sits behind an (ⓘ) next to its title.
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
+import { InfoPopover } from '@/shared/components'
 import type { SetupStep, SetupStepId } from './deciderModel'
 import { cardCls } from './providerStyles'
 
@@ -37,13 +38,14 @@ export function DeciderSetupGuide({ steps, actions = {} }: Props) {
             </span>
             <div className="min-w-0 flex-1 space-y-1">
               <p
-                className={
-                  s.done ? 'text-[var(--color-text-dim)] line-through' : 'text-[var(--color-text)]'
-                }
+                className={`flex items-center gap-1 ${
+                  s.done ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-text)]'
+                }`}
               >
-                <span className="font-medium">{t(`setup.${s.id}.title`)}</span>
-                {' — '}
-                {t(`setup.${s.id}.text`)}
+                <span className={`font-medium ${s.done ? 'line-through' : ''}`}>
+                  {t(`setup.${s.id}.title`)}
+                </span>
+                <InfoPopover text={t(`setup.${s.id}.text`)} />
               </p>
               {!s.done && actions[s.id]}
             </div>

@@ -52,10 +52,8 @@ export function SessionContextUsage({ info, ctxWindow, ctxUsed, ctxFree, ctxPct 
         window: formatTokens(ctxWindow),
         percent: ctxPct,
       })}
+      info={t('contextUsage.explanation')}
     >
-      <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">
-        {t('contextUsage.explanation')}
-      </p>
       {/* Stacked usage bar: each filler a coloured segment, remainder free. */}
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-bg)]">
         {info.fillers.map((f) => {

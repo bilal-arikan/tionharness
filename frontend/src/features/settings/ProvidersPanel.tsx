@@ -3,6 +3,7 @@ import { Boxes } from 'lucide-react'
 import { api } from '@/api'
 import type { ProviderInstance } from '@/api/providers'
 import { toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 import { CodexAuthDialog } from './CodexAuthDialog'
 import { ProviderInstanceForm } from './providers/ProviderInstanceForm'
@@ -150,8 +151,8 @@ export function ProvidersPanel({ onOpenDecider }: Props) {
     <>
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         <Boxes size={13} className="text-[var(--color-accent)]" /> {t('providers.title')}
+        <InfoPopover text={t('providers.description')} />
       </div>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">{t('providers.description')}</p>
       <ProviderInstances />
       {/* Decision providers (internal/decider): answer typed questions only,
           so they live in their own list and never reach a model picker. */}

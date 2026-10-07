@@ -2,7 +2,7 @@ import { Download, Check, KeyRound, ArrowUpCircle, X } from 'lucide-react'
 import type { Pack, Secret } from '@/types'
 import type { PriceTable } from '@/api/providers'
 import type { PreviewItem } from '@/api/ingest'
-import { Button, ModalOverlay } from '@/shared/components'
+import { Button, InfoPopover, ModalOverlay } from '@/shared/components'
 import { installLabelKey, updateAvailable } from './marketHelpers'
 import { KindBadge, PackMeta, SourceRefPreview } from './previewParts'
 import { PackPreview } from './PackPreview'
@@ -80,8 +80,9 @@ export function PackDetailModal({
           <PackMeta pack={selected} />
           {selected.kind === 'provider' && (
             <div className="mt-3">
-              <label className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+              <label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
                 {t('detail.apiKeyFromSecrets')}
+                <InfoPopover text={t('detail.keyOptionalHint')} />
               </label>
               <div className="mt-1 flex items-center gap-2">
                 <select
@@ -108,11 +109,11 @@ export function PackDetailModal({
                   </button>
                 )}
               </div>
-              <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-                {pickedSecret
-                  ? t('detail.secretWillBeUsed', { name: pickedSecret })
-                  : t('detail.keyOptionalHint')}
-              </p>
+              {pickedSecret && (
+                <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+                  {t('detail.secretWillBeUsed', { name: pickedSecret })}
+                </p>
+              )}
             </div>
           )}
           {(() => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/api'
+import { InfoPopover } from '@/shared/components'
 import type { FleetFinding } from '@/types'
 import { SeverityBadge, RegressedBadge } from './insightBadges'
 
@@ -36,7 +37,7 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--color-text-dim)]">{t('fleet.description')}</p>
+        <InfoPopover text={t('fleet.description')} />
         <button
           onClick={load}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]"

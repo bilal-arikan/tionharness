@@ -39,19 +39,25 @@ export function ComposerPicker({
   const leading = triggerIcon ?? (current.icon ? <span>{current.icon}</span> : null)
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
+    // Labelled triggers stack the label under the glyph in small type and stretch
+    // to the toolbar row's height, so they keep the icon-button footprint.
+    <div ref={rootRef} className={`relative shrink-0 ${iconOnly ? '' : 'flex self-stretch'}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         title={title(current)}
-        className={`flex items-center gap-1 rounded-xl border px-2.5 py-3 text-sm transition ${
+        className={`flex items-center rounded-xl border px-2.5 text-sm transition ${
+          iconOnly ? 'gap-1 py-3' : 'flex-col justify-center py-1'
+        } ${
           value
             ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
             : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
         }`}
       >
         {leading}
-        {!iconOnly && <span className="hidden sm:inline">{current.label}</span>}
+        {!iconOnly && (
+          <span className="hidden text-[10px] leading-none sm:inline">{current.label}</span>
+        )}
       </button>
 
       {open && (

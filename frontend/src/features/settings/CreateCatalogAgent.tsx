@@ -4,6 +4,7 @@ import { agentCatalogApi } from '@/api/agentCatalog'
 import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
 import { useCatalog, thinkingOptionsForModel } from '@/shared/lib/catalog'
 import { THINKING_OPTIONS } from '@/features/agents/agentOptions'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 
 interface Props {
   open: boolean
@@ -51,7 +52,6 @@ export function CreateCatalogAgent({ open, onClose, onCreated }: Props) {
         }}
         className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
       >
-        <p className="text-xs text-[var(--color-text-dim)]">{t('createAgent.description')}</p>
         <label className="block text-xs">
           {t('createAgent.name')}
           <input
@@ -91,13 +91,16 @@ export function CreateCatalogAgent({ open, onClose, onCreated }: Props) {
             {error}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={pending || !name.trim()}
-          className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
-        >
-          {pending ? t('createAgent.creating') : t('createAgent.submit')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={pending || !name.trim()}
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {pending ? t('createAgent.creating') : t('createAgent.submit')}
+          </button>
+          <InfoPopover text={t('createAgent.description')} />
+        </div>
       </form>
     </div>
   )

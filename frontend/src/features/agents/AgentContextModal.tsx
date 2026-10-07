@@ -95,12 +95,10 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
         {/* Header — title with the copy + close actions inline beside it. */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold">
-              {t('context.title', { name: agentName })}
+            <h2 className="flex min-w-0 items-center gap-1 text-sm font-semibold">
+              <span className="truncate">{t('context.title', { name: agentName })}</span>
+              <InfoPopover text={t('context.description')} />
             </h2>
-            <p className="truncate text-xs text-[var(--color-text-dim)]">
-              {t('context.description')}
-            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {data && (
@@ -331,12 +329,14 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
 
               {shownLazyTools.length > 0 && (
                 <CollapsibleSection
-                  title={t('context.lazyTools', { total: shownLazyTools.length })}
+                  title={
+                    <>
+                      {t('context.lazyTools', { total: shownLazyTools.length })}
+                      <InfoPopover text={t('context.lazyDescription')} />
+                    </>
+                  }
                   bulk={bulk}
                 >
-                  <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                    {t('context.lazyDescription')}
-                  </p>
                   <ul className="space-y-1">
                     {shownLazyTools.map((tool) => (
                       <li

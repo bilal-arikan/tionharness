@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, GitBranch, Save, Sparkles, X } from 'lucide-react'
+import { ChevronDown, GitBranch, PanelRightOpen, Save, Sparkles, X } from 'lucide-react'
 import type { Connection } from '@xyflow/react'
 import type {
   Agent,
@@ -16,7 +16,15 @@ import type {
   Automation,
 } from '@/types'
 import { api } from '@/api'
-import { Badge, Button, EmptyState, ListPane, PaneHeader, ModalOverlay } from '@/shared/components'
+import {
+  Badge,
+  Button,
+  EmptyState,
+  InfoPopover,
+  ListPane,
+  PaneHeader,
+  ModalOverlay,
+} from '@/shared/components'
 import { SidebarHeader, RefreshButton, SELECTED_ITEM_CLS } from '@/shared/components/SidebarChrome'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
@@ -338,6 +346,12 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
     [flows, q],
   )
   const inspectorOpen = !!selNode || !!selEdge
+  // The docked inspector can be folded to a thin rail while nothing is selected;
+  // picking a node or edge always shows it again.
+  const [inspectorCollapsed, setInspectorCollapsed] = useSessionState(
+    'flows.inspectorCollapsed',
+    false,
+  )
 
   const tabs = (
     <div
@@ -549,7 +563,23 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
                   </div>
                 )}
               </div>
-              {!stacked && (
+              {!stacked && inspectorCollapsed && !inspectorOpen && (
+                <aside
+                  className="flex w-9 shrink-0 justify-center border-l border-[var(--color-border)] bg-[var(--color-surface)] pt-3"
+                  data-testid="flow-inspector-rail"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setInspectorCollapsed(false)}
+                    title={t('inspector.expand')}
+                    aria-label={t('inspector.expand')}
+                    className="h-fit rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                  >
+                    <PanelRightOpen size={14} />
+                  </button>
+                </aside>
+              )}
+              {!stacked && (!inspectorCollapsed || inspectorOpen) && (
                 <aside
                   className="w-[22rem] shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]"
                   data-testid="flow-inspector"
@@ -570,6 +600,7 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
                       setSelNode(null)
                       setSelEdge(null)
                     }}
+                    onCollapse={() => setInspectorCollapsed(true)}
                   />
                   {selected.note && (
                     <p className="border-t border-[var(--color-border)] px-4 py-3 text-[11px] text-[var(--color-text-dim)]">
@@ -612,10 +643,10 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
       {saveOpen && selected && (
         <ModalOverlay onClose={() => setSaveOpen(false)}>
           <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-2xl">
-            <h2 className="mb-1 text-sm font-semibold">
+            <h2 className="mb-3 flex items-center gap-1 text-sm font-semibold">
               {t('save.title', { v: selected.version + 1 })}
+              <InfoPopover text={t('save.hint')} />
             </h2>
-            <p className="mb-3 text-xs text-[var(--color-text-dim)]">{t('save.hint')}</p>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}

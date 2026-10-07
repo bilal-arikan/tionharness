@@ -6,7 +6,6 @@ export function GeneralPanel({ draft, set }: PanelProps) {
   const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('shared.appliesAll')}</p>
       <Toggle
         label={t('general.keepAwake.label')}
         hint={t('general.keepAwake.hint')}

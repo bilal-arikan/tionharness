@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { ToolVisibility, WorkspaceTool } from '@/types'
 import { toolSource, toolServer, toolLabel, visibilityMeta, type ParamRow } from './toolMeta'
 import { toolIcon } from '@/shared/lib/toolIcons'
+import { InfoPopover } from '@/shared/components'
 import { VisibilityBadge, VisibilitySelector } from './VisibilityControls'
 import { useTranslation } from 'react-i18next'
 
@@ -80,13 +81,11 @@ export function ToolDetail({
       )}
 
       <section>
-        <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        <h3 className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
           {t('detail.contextVisibility')}
+          <InfoPopover text={visibilityMeta(tool.visibility).hint} />
         </h3>
         <VisibilitySelector value={tool.visibility} busy={visBusy} onSelect={onSetVisibility} />
-        <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-          {visibilityMeta(tool.visibility).hint}
-        </p>
       </section>
 
       <section>
@@ -130,13 +129,17 @@ export function ToolDetail({
 
       {examples.length > 0 && (
         <section>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+          <h3 className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
             {t('detail.examples', { count: examples.length })}
+            <InfoPopover
+              text={
+                <>
+                  {t('detail.examplesHintBefore')} <b>{t('visibility.full.label')}</b>{' '}
+                  {t('detail.examplesHintAfter')}
+                </>
+              }
+            />
           </h3>
-          <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-            {t('detail.examplesHintBefore')} <b>{t('visibility.full.label')}</b>{' '}
-            {t('detail.examplesHintAfter')}
-          </p>
           <div className="space-y-2">
             {examples.map((ex, i) => (
               <pre

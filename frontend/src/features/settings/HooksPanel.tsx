@@ -9,6 +9,7 @@ import type { Hook, HookEvent, BuiltinHook } from '@/types'
 import type { HookInput } from '@/api/hooks'
 import { Field, Toggle, inputCls } from './primitives'
 import { Button, LoadingState, toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 
 interface Props {
   onError: (msg: string) => void
@@ -113,12 +114,10 @@ export function HooksPanel({ onError }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-dim)]">
-        <p className="mb-1 flex items-center gap-2 font-medium text-[var(--color-text)]">
-          <Webhook size={15} /> {t('hooks.title')}
-        </p>
-        <p>{t('hooks.description')}</p>
-      </div>
+      <p className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
+        <Webhook size={15} /> {t('hooks.title')}
+        <InfoPopover text={t('hooks.description')} />
+      </p>
 
       <div
         role="alert"
@@ -281,9 +280,7 @@ export function HooksPanel({ onError }: Props) {
         <div className="space-y-2">
           <p className="flex items-center gap-2 pt-2 text-sm font-medium text-[var(--color-text)]">
             <Lock size={14} /> {t('hooks.builtins.title')}
-          </p>
-          <p className="text-[11px] text-[var(--color-text-dim)]">
-            {t('hooks.builtins.description')}
+            <InfoPopover text={t('hooks.builtins.description')} />
           </p>
           {builtins.map((b) => (
             <div
@@ -296,12 +293,10 @@ export function HooksPanel({ onError }: Props) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-[var(--color-text)]">{b.name}</span>
+                  {b.description && <InfoPopover text={b.description} />}
                   <span className="font-mono text-[10px] text-[var(--color-text-dim)]">
                     {b.event}
                   </span>
-                </div>
-                <div className="text-[11px] leading-snug text-[var(--color-text-dim)]">
-                  {b.description}
                 </div>
                 {b.setting && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">

@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
+import { SettingsDisclosureInfo } from './SettingsDisclosure'
 
 export function DelegationLimits({ draft, set }: PanelProps) {
   const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('delegation.description')}</p>
+      <SettingsDisclosureInfo text={t('delegation.description')} />
       <NumberField
         label={t('delegation.depth.label')}
         hint={t('delegation.depth.hint')}

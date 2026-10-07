@@ -13,7 +13,7 @@ import {
   Snowflake,
 } from 'lucide-react'
 import { api } from '@/api'
-import { PaneHeader } from '@/shared/components'
+import { InfoPopover, PaneHeader } from '@/shared/components'
 import type { KindStat, ProviderStat, BudgetTrendPoint } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { kindColor } from '@/shared/lib/palette'
@@ -230,22 +230,26 @@ function FragmentRows({
 }
 
 // SummaryCard is one headline metric at the top of the screen.
+// sub is a data line under the value; info is what the figure means, behind an (i).
 function SummaryCard({
   icon,
   label,
   value,
   sub,
+  info,
 }: {
   icon: React.ReactNode
   label: string
   value: string
   sub?: string
+  info?: string
 }) {
   return (
     <div className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
       <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
         {icon}
         {label}
+        {info && <InfoPopover text={info} label={label} />}
       </div>
       <div className="mt-1 text-2xl font-semibold text-[var(--color-text)]">{value}</div>
       {sub && <div className="text-xs text-[var(--color-text-dim)]">{sub}</div>}
@@ -254,7 +258,7 @@ function SummaryCard({
 }
 
 // SavingsCell is one optimization source's contribution inside the Tasarruf
-// Merkezi grid: a title, a prominent value, a sub-line, and a tooltip explaining
+// Merkezi grid: a title, a prominent value, a sub-line, and an (i) explaining
 // what the figure means and whether it is real billing or an estimate.
 function SavingsCell({
   title,
@@ -272,8 +276,11 @@ function SavingsCell({
   tone?: 'success' | 'warning'
 }) {
   return (
-    <div className="px-4 py-3" title={hint}>
-      <div className="text-[11px] text-[var(--color-text-dim)]">{title}</div>
+    <div className="px-4 py-3">
+      <div className="flex items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
+        {title}
+        <InfoPopover text={hint} label={title} />
+      </div>
       <div className="mt-0.5 text-xl font-semibold" style={{ color: `var(--color-${tone})` }}>
         {primary}
       </div>
@@ -444,28 +451,31 @@ export function BudgetPanel({ onError }: Props) {
               inflate the real billed input without appearing in the popup's eager
               "Araçlar" count. See the session context popup's "Talep-üzerine" chip. */}
             {usage.totals.estimated && (
-              <div className="mb-5 flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#d97706)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#d97706)_8%,transparent)] px-3 py-2 text-[11px] text-[var(--color-text-dim)]">
-                <span className="text-[var(--color-warning,#d97706)]">{t('infoSymbol')}</span>
-                <span>
-                  <strong className="text-[var(--color-text)]">{t('cliOverhead.title')}</strong>{' '}
-                  {t('cliOverhead.descriptionBefore')} <strong>{t('cliOverhead.billed')}</strong>{' '}
-                  {t('cliOverhead.descriptionAfter')}
-                  <br />
-                  <span className="mt-1 inline-block">
-                    <strong className="text-[var(--color-text)]">
-                      {t('cliOverhead.toolCountTitle')}
-                    </strong>{' '}
-                    {t('cliOverhead.toolCountBefore')} <em>{t('cliOverhead.toolsLabel')}</em>{' '}
-                    {t('cliOverhead.toolCountMiddle')} <em>{t('cliOverhead.eager')}</em>{' '}
-                    {t('cliOverhead.toolCountSet')}{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code>{' '}
-                    {t('cliOverhead.activatedWith')} <em>{t('cliOverhead.deferred')}</em>{' '}
-                    {t('cliOverhead.tools')}{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">--resume</code>{' '}
-                    {t('cliOverhead.resumeAfter')} <em>{t('cliOverhead.onDemandLabel')}</em>{' '}
-                    {t('cliOverhead.chip')}
-                  </span>
-                </span>
+              <div className="mb-5 flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-dim)]">
+                {t('cliOverhead.title').replace(/:\s*$/, '')}
+                <InfoPopover
+                  text={
+                    <>
+                      {t('cliOverhead.descriptionBefore')}{' '}
+                      <strong>{t('cliOverhead.billed')}</strong> {t('cliOverhead.descriptionAfter')}
+                      <br />
+                      <span className="mt-1 inline-block">
+                        <strong className="text-[var(--color-text)]">
+                          {t('cliOverhead.toolCountTitle')}
+                        </strong>{' '}
+                        {t('cliOverhead.toolCountBefore')} <em>{t('cliOverhead.toolsLabel')}</em>{' '}
+                        {t('cliOverhead.toolCountMiddle')} <em>{t('cliOverhead.eager')}</em>{' '}
+                        {t('cliOverhead.toolCountSet')}{' '}
+                        <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code>{' '}
+                        {t('cliOverhead.activatedWith')} <em>{t('cliOverhead.deferred')}</em>{' '}
+                        {t('cliOverhead.tools')}{' '}
+                        <code className="rounded bg-[var(--color-surface-2)] px-1">--resume</code>{' '}
+                        {t('cliOverhead.resumeAfter')} <em>{t('cliOverhead.onDemandLabel')}</em>{' '}
+                        {t('cliOverhead.chip')}
+                      </span>
+                    </>
+                  }
+                />
               </div>
             )}
 
@@ -495,13 +505,13 @@ export function BudgetPanel({ onError }: Props) {
                 icon={<Percent size={12} />}
                 label={t('cumulative.cacheHitRate')}
                 value={percent(usage.cumulative.cacheHitRate)}
-                sub={t('cumulative.cacheHitRateHint')}
+                info={t('cumulative.cacheHitRateHint')}
               />
               <SummaryCard
                 icon={<DollarSign size={12} />}
                 label={t('cumulative.noCacheCost')}
                 value={`${usage.cumulative.noCacheCostUSD > 0 && !usage.totals.priced ? '~' : ''}${usd(usage.cumulative.noCacheCostUSD)}`}
-                sub={t('cumulative.noCacheCostHint')}
+                info={t('cumulative.noCacheCostHint')}
               />
               {/* Cooling waste: avoidable overpay from warm prefixes that cooled
                 (TTL/eviction) before the next turn. Only shown when it occurred —
@@ -511,7 +521,7 @@ export function BudgetPanel({ onError }: Props) {
                   icon={<Snowflake size={12} />}
                   label={t('cumulative.coolingWaste', { count: days })}
                   value={`${usage.cumulative.coolingWasteEstimated ? '~' : ''}${usd(usage.cumulative.coolingWasteUSD ?? 0)}`}
-                  sub={t('cumulative.coolingWasteHint')}
+                  info={t('cumulative.coolingWasteHint')}
                 />
               )}
             </div>

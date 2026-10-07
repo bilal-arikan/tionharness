@@ -71,10 +71,6 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        {t('recommendations.panel.description')}
-      </div>
-
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"

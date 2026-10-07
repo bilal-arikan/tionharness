@@ -134,7 +134,7 @@ export function SystemAgentsPanel({ onError, headerTarget }: Props) {
         </p>
       )}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <aside className="flex max-h-80 min-h-0 flex-col border-b border-[var(--color-border)] bg-[var(--color-surface)] lg:max-h-none lg:w-80 lg:shrink-0 lg:border-b-0 lg:border-r xl:w-96">
+        <aside className="flex max-h-80 min-h-0 flex-col border-b border-[var(--color-border)] bg-[var(--color-surface)] lg:max-h-none lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
           <AgentLibraryRoster
             rows={visible}
             byId={byId}

@@ -23,6 +23,18 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
+// A section description sits in its card's title row: inline when short, behind
+// the (ⓘ) when long (the cut-off is by length, so it differs per locale). Return
+// the description text either way for the section whose title contains `title`.
+function sectionInfo(container: HTMLElement, title: string): string {
+  const heading = [...container.querySelectorAll('h3')].find((h) => h.textContent?.includes(title))
+  expect(heading).toBeTruthy()
+  const trigger = heading!.querySelector<HTMLElement>('[role="button"]')
+  if (!trigger) return heading!.textContent ?? ''
+  act(() => trigger.click())
+  return document.body.querySelector('[role="tooltip"]')?.textContent ?? ''
+}
+
 describe('ExecutionPanel spawn limits', () => {
   it('renders no wall-clock hard-cap controls', () => {
     const container = document.createElement('div')
@@ -33,7 +45,9 @@ describe('ExecutionPanel spawn limits', () => {
 
     act(() => root.render(<ExecutionPanel draft={draft} set={vi.fn()} setDraft={vi.fn()} />))
 
-    expect(container.textContent).toContain('Productive work has no total duration cap.')
+    expect(sectionInfo(container, i18next.t('settingsMain:execution.background'))).toContain(
+      'Productive work has no total duration cap.',
+    )
     expect(container.textContent).not.toContain('spawnTimeoutMin')
     expect(container.textContent).not.toContain('Spawn süresi — üst sınır')
     expect(container.textContent).not.toContain('Zamanlama süresi (dk)')
@@ -50,8 +64,9 @@ describe('ExecutionPanel spawn limits', () => {
       root.render(<ExecutionPanel draft={{} as AppSettings} set={vi.fn()} setDraft={vi.fn()} />),
     )
 
-    expect(container.textContent).toContain('Üretken işlerin toplam süre sınırı yoktur.')
     expect(container.textContent).toContain('Arka plan çalışmaları ve boşta kalma sınırları')
-    expect(container.textContent).not.toContain('Productive work has no total duration cap.')
+    const info = sectionInfo(container, 'Arka plan çalışmaları ve boşta kalma sınırları')
+    expect(info).toContain('Üretken işlerin toplam süre sınırı yoktur.')
+    expect(info).not.toContain('Productive work has no total duration cap.')
   })
 })

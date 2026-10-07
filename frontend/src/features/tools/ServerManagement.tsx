@@ -8,7 +8,7 @@ import type {
   ImportableMCPServer,
 } from '@/types'
 import { parseArgs, serverToImportJson, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
-import { EmptyState, ModalOverlay, PaneHeader, toast } from '@/shared/components'
+import { EmptyState, InfoPopover, ModalOverlay, PaneHeader, toast } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 // ServerManagement is the MCP server list + add form, shown when no tool is
@@ -117,7 +117,10 @@ export function ServerManagement(props: {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{tr('server.title')}</h2>
+        <h2 className="flex items-center gap-1 text-sm font-semibold">
+          {tr('server.title')}
+          <InfoPopover text={tr('server.intro')} />
+        </h2>
         <button
           data-testid="mcp-importable-open"
           onClick={openImportable}
@@ -127,8 +130,7 @@ export function ServerManagement(props: {
           {tr('server.otherServers')}
         </button>
       </div>
-      <p className="mb-3 text-xs text-[var(--color-text-dim)]">{tr('server.intro')}</p>
-      <div className="space-y-2">
+      <div className="mt-2 space-y-2">
         {servers.map((s) => {
           // This server's MCP tools — drives the per-server visibility quick action
           // (set the whole server's tools to one tier at once).
@@ -344,6 +346,15 @@ export function ServerManagement(props: {
           )}
           <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
             <span className="shrink-0">{tr('server.connectionScope')}</span>
+            {scope === 'scoped' && poolStats && (
+              <InfoPopover
+                text={`${tr('server.scopedConnections')} ${
+                  poolStats.idleSec > 0
+                    ? tr('server.idleClose', { minutes: Math.round(poolStats.idleSec / 60) })
+                    : tr('server.idleDisabled')
+                }`}
+              />
+            )}
             <select
               data-testid="mcp-server-scope-select"
               value={scope}
@@ -355,14 +366,6 @@ export function ServerManagement(props: {
             </select>
           </label>
         </div>
-        {scope === 'scoped' && poolStats && (
-          <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-            {tr('server.scopedConnections')}{' '}
-            {poolStats.idleSec > 0
-              ? tr('server.idleClose', { minutes: Math.round(poolStats.idleSec / 60) })
-              : tr('server.idleDisabled')}
-          </p>
-        )}
         <div className="mt-3 flex items-center gap-2">
           <button
             data-testid="mcp-server-add"
@@ -385,14 +388,18 @@ export function ServerManagement(props: {
 
       {/* Bulk import from a pasted mcpServers JSON document. */}
       <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h3 className="mb-1 text-xs font-semibold text-[var(--color-text-dim)]">
+        <h3 className="mb-2 flex items-center gap-1 text-xs font-semibold text-[var(--color-text-dim)]">
           {tr('server.importJsonTitle')}
+          <InfoPopover
+            text={
+              <>
+                {tr('server.importJsonBefore')}{' '}
+                <code className="text-[var(--color-text)]">mcpServers</code>{' '}
+                {tr('server.importJsonAfter')}
+              </>
+            }
+          />
         </h3>
-        <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-          {tr('server.importJsonBefore')}{' '}
-          <code className="text-[var(--color-text)]">mcpServers</code>{' '}
-          {tr('server.importJsonAfter')}
-        </p>
         <textarea
           data-testid="mcp-import-textarea"
           value={importText}
@@ -428,7 +435,7 @@ export function ServerManagement(props: {
           >
             <PaneHeader
               title={tr('server.otherModalTitle')}
-              subtitle={tr('server.otherModalSubtitle')}
+              info={tr('server.otherModalSubtitle')}
               right={
                 <button
                   data-testid="mcp-importable-close"

@@ -80,9 +80,7 @@ export function DigestsTab({ onError, agentNames, onOpenSession }: Props) {
         {loading && entries.length === 0 ? (
           <LoadingState label={t('digests.loading')} />
         ) : entries.length === 0 ? (
-          <EmptyState icon={FileText} title={t('digests.empty')}>
-            {t('digests.emptyHint')}
-          </EmptyState>
+          <EmptyState icon={FileText} title={t('digests.empty')} hint={t('digests.emptyHint')} />
         ) : (
           <ul className="flex flex-col gap-1 p-2" data-testid="digest-list">
             {entries.map((e) => {

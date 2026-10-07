@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Info, Layers, Plus, X } from 'lucide-react'
+import { Check, Layers, Plus, X } from 'lucide-react'
 import { agentCatalogApi, type CatalogAgent, type CatalogWorkspace } from '@/api/agentCatalog'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 
 interface Props {
   entry: CatalogAgent
@@ -44,15 +45,9 @@ export function AgentWorkspaceAssignments({ entry, workspaces, onChanged, onErro
         <span className="text-[10px] font-normal text-[var(--color-text-dim)]">
           ({entry.assignments.length})
         </span>
-        <span
-          tabIndex={0}
-          role="note"
-          aria-label={entry.agent.locked ? t('assignments.builtInHint') : t('assignments.syncHint')}
-          title={entry.agent.locked ? t('assignments.builtInHint') : t('assignments.syncHint')}
-          className="text-[var(--color-text-dim)]"
-        >
-          <Info size={12} />
-        </span>
+        <InfoPopover
+          text={entry.agent.locked ? t('assignments.builtInHint') : t('assignments.syncHint')}
+        />
       </div>
       <div className="flex min-w-0 flex-wrap gap-1.5">
         {workspaces.map((workspace) => {

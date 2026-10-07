@@ -113,9 +113,11 @@ export function ContextTab({ onError, onOpenSession }: Props) {
       </div>
 
       {!selected ? (
-        <EmptyState title={t('context.selectPrompt')} className="flex-1 justify-center">
-          {t('context.selectHint')}
-        </EmptyState>
+        <EmptyState
+          title={t('context.selectPrompt')}
+          hint={t('context.selectHint')}
+          className="flex-1 justify-center"
+        />
       ) : loading && !current ? (
         <LoadingState label={t('context.loading')} />
       ) : current ? (

@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { ScanSearch, Eraser, RefreshCw, ArrowUpCircle, Copy } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { systemApi } from '@/api/system'
 import type {
   Hook,
@@ -32,6 +33,10 @@ import { SearchIndexPanel } from './SearchIndexPanel'
 // to the workspace's isolated CBM store (CBM_CACHE_DIR) whenever the command
 // contains this marker, so no env needs to be supplied at creation time.
 const CBM_TOOL = 'codebase-memory-mcp'
+
+// Callout titles are written as lead-ins ("… integration:"); with the body moved
+// behind an (ⓘ) the trailing colon would dangle, so it is dropped for display.
+const calloutTitle = (s: string) => s.replace(/:\s*$/, '')
 
 interface Props {
   onError: (msg: string) => void
@@ -350,9 +355,8 @@ export function ExternalToolsPanel({ onError }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        {translate('externalTools.description')}
-      </div>
+      {/* The panel intro (externalTools.description) sits behind the (ⓘ) next to
+          the category title in SettingsPanel. */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -414,6 +418,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                             <code className="rounded bg-[var(--color-surface-2)] px-1 font-medium">
                               {t.name}
                             </code>
+                            {t.desc && <InfoPopover text={t.desc} />}
                             {t.found ? (
                               <span className="text-[var(--color-success)]">
                                 ✓ {translate('externalTools.installed')}
@@ -478,9 +483,11 @@ export function ExternalToolsPanel({ onError }: Props) {
                               </span>
                             )}
                           </div>
-                          <div className="truncate text-xs text-[var(--color-text-dim)]">
-                            {t.found ? displayPath(t.path ?? '') : t.desc}
-                          </div>
+                          {t.found && (
+                            <div className="truncate text-xs text-[var(--color-text-dim)]">
+                              {displayPath(t.path ?? '')}
+                            </div>
+                          )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           {t.found && t.wire === 'hook' && TOOL_HOOK_TEMPLATES[t.name] && (
@@ -653,10 +660,10 @@ export function ExternalToolsPanel({ onError }: Props) {
                         anchored directly under its own tool row. */}
                       {t.name === CBM_TOOL && (
                         <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-                          <span className="font-medium text-[var(--color-text)]">
-                            🧠 {translate('externalTools.cbm.title')}
-                          </span>{' '}
-                          {translate('externalTools.cbm.description')}
+                          <span className="flex items-center gap-1 font-medium text-[var(--color-text)]">
+                            🧠 {calloutTitle(translate('externalTools.cbm.title'))}
+                            <InfoPopover text={translate('externalTools.cbm.description')} />
+                          </span>
                           <div className="mt-2 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
                             <button
                               type="button"
@@ -717,20 +724,25 @@ export function ExternalToolsPanel({ onError }: Props) {
                     Windows), with a one-click repair. Rendered once under the group. */}
                 {cat === 'token' && (
                   <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-                    <span className="font-medium text-[var(--color-text)]">
-                      ⚡ {translate('externalTools.token.title')}
-                    </span>{' '}
-                    {translate('externalTools.token.description')}
-                    {/* This used to warn "do not enable rtk and sqz together — both rewrite
-                        the command". Measurement showed the opposite: they act at opposite
-                        ends and stacking wins (git log -30: 6595 ham → sqz 2027 → rtk 2157
-                        → rtk+sqz 1167 token). The old text steered users away from their
-                        best configuration. */}
-                    <span className="font-medium text-[var(--color-text)]">
-                      {' '}
-                      {translate('externalTools.token.enableBoth')}
-                    </span>{' '}
-                    {translate('externalTools.token.enableBothDetail')}
+                    <span className="flex items-center gap-1 font-medium text-[var(--color-text)]">
+                      ⚡ {calloutTitle(translate('externalTools.token.title'))}
+                      {/* This used to warn "do not enable rtk and sqz together — both
+                          rewrite the command". Measurement showed the opposite: they act
+                          at opposite ends and stacking wins (git log -30: 6595 ham → sqz
+                          2027 → rtk 2157 → rtk+sqz 1167 token). The old text steered
+                          users away from their best configuration. */}
+                      <InfoPopover
+                        text={
+                          <>
+                            {translate('externalTools.token.description')}{' '}
+                            <span className="font-medium text-[var(--color-text)]">
+                              {translate('externalTools.token.enableBoth')}
+                            </span>{' '}
+                            {translate('externalTools.token.enableBothDetail')}
+                          </>
+                        }
+                      />
+                    </span>
                     {tokenHooksNeedingFix().length > 0 && (
                       <div className="mt-2 flex flex-col gap-1.5 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
                         {tokenHooksNeedingFix().map((h) => (
@@ -767,8 +779,9 @@ export function ExternalToolsPanel({ onError }: Props) {
                 {cat === 'token' && report && (report.rtkFound || report.sqzFound) && (
                   <div className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-[var(--color-text)]">
+                      <span className="flex items-center gap-1 font-medium text-[var(--color-text)]">
                         🔧 {translate('externalTools.maintenance.title')}
+                        <InfoPopover text={translate('externalTools.maintenance.description')} />
                       </span>
                       <button
                         type="button"
@@ -786,7 +799,6 @@ export function ExternalToolsPanel({ onError }: Props) {
                         {maintBusy === 'refresh' ? '…' : translate('shared.refresh')}
                       </button>
                     </div>
-                    <p className="mt-1">{translate('externalTools.maintenance.description')}</p>
                     {(['rtk', 'sqz'] as const).map((name) => {
                       const found = name === 'rtk' ? report.rtkFound : report.sqzFound
                       const gain = name === 'rtk' ? report.rtkGain : report.sqzGain

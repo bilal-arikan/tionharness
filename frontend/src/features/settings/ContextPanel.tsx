@@ -4,6 +4,7 @@ import { ContextRecovery } from './ContextRecovery'
 import { ContextProgress } from './ContextProgress'
 import { ContextHandoff } from './ContextHandoff'
 import { Layers } from 'lucide-react'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { NumberField, Segmented } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
@@ -111,19 +112,23 @@ export function ContextPanel({ draft, set, setDraft }: PanelProps) {
           onChange={(v) => set('contextBudgetFraction', v)}
         />
       </div>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        {t('context.formula.prefix')}{' '}
-        <span className="font-medium">{t('context.formula.floor')}</span>,{' '}
-        <span className="font-medium">{t('context.formula.ceil')}</span>
-        {t('context.formula.suffix')}
-      </p>
-
       {/* Live preview: shows the effective budget these three knobs resolve to, per
           representative window, plus WHICH bound is active — so it is obvious why
-          lowering the floor below a ceil-capped value changes nothing. */}
+          lowering the floor below a ceil-capped value changes nothing. The clamp
+          formula itself sits behind the heading's (ⓘ). */}
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
-        <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+        <div className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
           {t('context.preview.heading')}
+          <InfoPopover
+            text={
+              <>
+                {t('context.formula.prefix')}{' '}
+                <span className="font-medium">{t('context.formula.floor')}</span>,{' '}
+                <span className="font-medium">{t('context.formula.ceil')}</span>
+                {t('context.formula.suffix')}
+              </>
+            }
+          />
         </div>
         {previews.map((p) => (
           <div key={p.label} className="flex items-center justify-between gap-2 py-0.5 text-xs">

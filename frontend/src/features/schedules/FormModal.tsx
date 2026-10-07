@@ -1,10 +1,12 @@
 import type { LucideIcon } from 'lucide-react'
 import { Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button, ModalOverlay } from '@/shared/components'
+import { Button, InfoPopover, ModalOverlay } from '@/shared/components'
 
 interface Props {
   title: string
+  /** Optional explanation shown behind an (ⓘ) next to the title. */
+  info?: string
   icon: LucideIcon
   accent: string
   submitLabel: string
@@ -22,6 +24,7 @@ interface Props {
 // footer with the submit/cancel pair.
 export function FormModal({
   title,
+  info,
   icon: Icon,
   accent,
   submitLabel,
@@ -44,7 +47,10 @@ export function FormModal({
           style={{ borderTopColor: accent }}
         >
           <Icon size={17} style={{ color: accent }} />
-          <h2 className="flex-1 text-sm font-semibold text-[var(--color-text)]">{title}</h2>
+          <h2 className="flex flex-1 items-center gap-1 text-sm font-semibold text-[var(--color-text)]">
+            {title}
+            {info && <InfoPopover text={info} />}
+          </h2>
           <button
             type="button"
             onClick={onClose}

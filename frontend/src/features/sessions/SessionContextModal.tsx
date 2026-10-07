@@ -128,13 +128,15 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
         {/* Header — title with the copy + close actions inline beside it. */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold">
-              {t('context.title')}
-              {title ? ` — ${title}` : ''}
+            <h2 className="flex min-w-0 items-center gap-1 text-sm font-semibold">
+              <span className="truncate">
+                {t('context.title')}
+                {title ? ` — ${title}` : ''}
+              </span>
+              {data && <InfoPopover text={t('context.subtitle', { agent: data.agentName })} />}
             </h2>
             <p className="truncate text-xs text-[var(--color-text-dim)]">
-              {data ? t('context.subtitle', { agent: data.agentName }) : t('common.loading')}
-              {' · '}
+              {!data && `${t('common.loading')} · `}
               {t('context.readOnly')}
             </p>
           </div>
@@ -555,11 +557,16 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
               })()}
 
               <CollapsibleSection
-                title={t('context.sections.eagerTools', { count: data.tools.length })}
+                title={
+                  <>
+                    {t('context.sections.eagerTools', { count: data.tools.length })}
+                    {!data.cliOverhead && <InfoPopover text={t('context.tools.eagerHelp')} />}
+                  </>
+                }
                 right={<CacheTag cached={data.cache.toolsCached} />}
                 bulk={bulk}
               >
-                {data.cliOverhead ? (
+                {data.cliOverhead && (
                   <HintNote>
                     <Trans
                       ns="sessions"
@@ -567,10 +574,6 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                       components={{ strong: <strong /> }}
                     />
                   </HintNote>
-                ) : (
-                  <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                    {t('context.tools.eagerHelp')}
-                  </p>
                 )}
                 {data.tools.length === 0 ? (
                   <Dim>{t('context.tools.noEager')}</Dim>
@@ -624,35 +627,47 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                   tools it activates on demand via ToolSearch across the session. */}
               {data.lazyTools.length > 0 && (
                 <CollapsibleSection
-                  title={t('context.sections.lazyTools', { count: data.lazyTools.length })}
+                  title={
+                    <>
+                      {t('context.sections.lazyTools', { count: data.lazyTools.length })}
+                      <InfoPopover
+                        text={
+                          <>
+                            <Trans
+                              ns="sessions"
+                              i18nKey="context.tools.lazyHelp"
+                              components={{
+                                code: <code className="rounded bg-[var(--color-surface-2)] px-1" />,
+                              }}
+                            />{' '}
+                            {data.cliOverhead ? (
+                              <Trans
+                                ns="sessions"
+                                i18nKey="context.tools.lazyCli"
+                                components={{
+                                  code: (
+                                    <code className="rounded bg-[var(--color-surface-2)] px-1" />
+                                  ),
+                                }}
+                              />
+                            ) : (
+                              <Trans
+                                ns="sessions"
+                                i18nKey="context.tools.lazyNative"
+                                components={{
+                                  code: (
+                                    <code className="rounded bg-[var(--color-surface-2)] px-1" />
+                                  ),
+                                }}
+                              />
+                            )}
+                          </>
+                        }
+                      />
+                    </>
+                  }
                   bulk={bulk}
                 >
-                  <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                    <Trans
-                      ns="sessions"
-                      i18nKey="context.tools.lazyHelp"
-                      components={{
-                        code: <code className="rounded bg-[var(--color-surface-2)] px-1" />,
-                      }}
-                    />{' '}
-                    {data.cliOverhead ? (
-                      <Trans
-                        ns="sessions"
-                        i18nKey="context.tools.lazyCli"
-                        components={{
-                          code: <code className="rounded bg-[var(--color-surface-2)] px-1" />,
-                        }}
-                      />
-                    ) : (
-                      <Trans
-                        ns="sessions"
-                        i18nKey="context.tools.lazyNative"
-                        components={{
-                          code: <code className="rounded bg-[var(--color-surface-2)] px-1" />,
-                        }}
-                      />
-                    )}
-                  </p>
                   <ul className="space-y-1">
                     {data.lazyTools.map((tool) => (
                       <li

@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { Toggle, NumberField } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
+import { SettingsDisclosureInfo } from './SettingsDisclosure'
 
 export function AutonomousWork({ draft, set }: PanelProps) {
   const { t } = useTranslation('settingsMain')
   return (
     <>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('autonomous.description')}</p>
+      <SettingsDisclosureInfo text={t('autonomous.description')} />
       <Toggle
         label={t('autonomous.confine.label')}
         hint={t('autonomous.confine.hint')}

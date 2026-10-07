@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api'
 import type { DeciderDebugReport, DeciderView } from '@/types/decider'
-import { Button, LoadingState, SectionHead } from '@/shared/components'
+import { Button, InfoPopover, LoadingState, SectionHead } from '@/shared/components'
 import { inputCls } from '@/features/settings/primitives'
 import { percent, usd } from '@/shared/lib/format'
 import { formatTime } from '@/shared/lib/intl'
@@ -94,8 +94,10 @@ export function DeciderDebug({
       className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
       data-testid="decider-debug"
     >
-      <SectionHead>{t('debug.title')}</SectionHead>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('debug.privacy')}</p>
+      <SectionHead className="flex items-center gap-1">
+        {t('debug.title')}
+        <InfoPopover text={t('debug.privacy')} />
+      </SectionHead>
       <form
         className="grid gap-2 sm:grid-cols-4"
         onSubmit={(e) => {
@@ -204,14 +206,14 @@ export function DeciderDebug({
                 cost: usd(s.costUsd),
               })}
             </p>
-            <p className="text-xs text-[var(--color-text-dim)]">
+            <p className="flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
               {t('stats.latencyValue', { p50: s.p50Ms, p95: s.p95Ms })} ·{' '}
               {t('debug.agreement', {
                 n: s.compared,
                 rate: s.compared ? percent(s.agreed / s.compared) : '—',
               })}
+              <InfoPopover text={t('debug.evidenceHint')} />
             </p>
-            <p className="text-xs text-[var(--color-text-dim)]">{t('debug.evidenceHint')}</p>
             <p className="text-xs text-[var(--color-text-dim)]">
               {t('debug.testSummary', {
                 n: s.tests,

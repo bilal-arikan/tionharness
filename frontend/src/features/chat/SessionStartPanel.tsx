@@ -112,6 +112,15 @@ export function SessionStartPanel({
         <div className="flex items-center gap-1.5">
           <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
             <Users size={12} className="shrink-0" /> {t('sessionStart.title')}
+            <InfoPopover
+              text={
+                <>
+                  {t('sessionStart.footerBefore')} <strong>{t('sessionStart.coordination')}</strong>{' '}
+                  {t('sessionStart.footerAfter')}
+                </>
+              }
+              label={t('sessionStart.title')}
+            />
           </span>
           {loading && <Loader2 size={11} className="animate-spin text-[var(--color-text-dim)]" />}
           <button
@@ -168,11 +177,6 @@ export function SessionStartPanel({
             </div>
           </div>
         )}
-
-        <p className="mt-1.5 px-0.5 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-          {t('sessionStart.footerBefore')} <strong>{t('sessionStart.coordination')}</strong>{' '}
-          {t('sessionStart.footerAfter')}
-        </p>
       </div>
     </div>
   )

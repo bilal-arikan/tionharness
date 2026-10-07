@@ -1,4 +1,4 @@
-import { Search, Layers, Bot, Workflow, Users, CornerDownRight } from 'lucide-react'
+import { Search, Layers, Bot, Workflow, Users, CornerDownRight, Boxes } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CatalogAgent, CatalogWorkspace } from '@/api/agentCatalog'
 import type { Agent } from '@/types'
@@ -40,7 +40,7 @@ export function AgentLibraryRoster({
   const ids = rows.map((row) => row.agent.id)
   return (
     <>
-      <div className="space-y-2 border-b border-[var(--color-border)] p-3">
+      <div className="space-y-1.5 border-b border-[var(--color-border)] p-2">
         <label className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[var(--color-text-dim)]">
           <Search size={15} />
           <input
@@ -51,7 +51,7 @@ export function AgentLibraryRoster({
             className="min-w-0 flex-1 bg-transparent text-xs outline-none"
           />
         </label>
-        <div className="grid grid-cols-4 gap-1 rounded-lg bg-[var(--color-surface-2)] p-1">
+        <div className="flex gap-1 rounded-lg bg-[var(--color-surface-2)] p-1">
           {(
             [
               ['all', t('agentRoster.kinds.all'), Layers],
@@ -64,10 +64,11 @@ export function AgentLibraryRoster({
               key={value}
               onClick={() => setKind(value)}
               aria-pressed={kind === value}
-              className={`flex items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[10px] transition ${kind === value ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-sm' : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'}`}
+              title={label}
+              className={`flex min-w-0 flex-auto items-center justify-center gap-0.5 rounded-md px-0.5 py-1 text-[10px] transition ${kind === value ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-sm' : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'}`}
             >
-              <Icon size={12} className="shrink-0" />
-              {label}
+              <Icon size={11} className="shrink-0" />
+              <span className="truncate">{label}</span>
             </button>
           ))}
         </div>
@@ -86,9 +87,13 @@ export function AgentLibraryRoster({
           ))}
         </select>
       </div>
-      <div className="flex-1 space-y-1 overflow-y-auto p-2">
+      <div className="flex-1 space-y-0.5 overflow-y-auto p-1.5">
         {rows.map(({ agent, assignments }) => {
           const active = selectedId === agent.id || selection.isSelected(agent.id)
+          const workspaceLabel =
+            assignments.length === 0
+              ? t('agentRoster.unassigned')
+              : t('agentRoster.workspaceCount', { count: assignments.length })
           const parentName = agent.parentId
             ? (byId.get(agent.parentId)?.name ?? agent.parentId)
             : null
@@ -102,22 +107,25 @@ export function AgentLibraryRoster({
               onClick={(event) => {
                 if (!selection.handleClick(event, agent.id, ids, selectedId)) onSelect(agent.id)
               }}
-              className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${active ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]' : 'border-transparent hover:bg-[var(--color-surface-2)]'} ${agent.disabled ? 'opacity-60' : ''}`}
+              className={`w-full rounded-md border px-2 py-1 text-left transition ${active ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]' : 'border-transparent hover:bg-[var(--color-surface-2)]'} ${agent.disabled ? 'opacity-60' : ''}`}
             >
               <AgentIdentity
                 agent={agent}
                 size="sm"
-                subtitle={[
-                  resolveModelLabel(catalog, agent.provider, agent.model),
-                  assignments.length === 0
-                    ? t('agentRoster.unassigned')
-                    : t('agentRoster.workspaceCount', { count: assignments.length }),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+                subtitle={resolveModelLabel(catalog, agent.provider, agent.model)}
                 trailing={
-                  <span className="flex shrink-0 flex-col items-end gap-0.5 text-[10px] text-[var(--color-text-dim)]">
-                    <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
+                  <span className="flex shrink-0 items-center gap-1 text-[10px] text-[var(--color-text-dim)]">
+                    {/* Workspace count as a glyph + number; the wording lives in
+                        the tooltip. Zero is tinted: an unassigned agent runs nowhere. */}
+                    <span
+                      title={workspaceLabel}
+                      aria-label={workspaceLabel}
+                      className={`flex items-center gap-0.5 tabular-nums ${assignments.length === 0 ? 'text-[var(--color-warning)]' : ''}`}
+                    >
+                      <Boxes size={10} className="shrink-0" />
+                      {assignments.length}
+                    </span>
+                    <span className="rounded bg-[var(--color-surface-2)] px-1 py-px">
                       {agent.locked
                         ? t('agentRoster.badges.builtIn')
                         : agent.system
@@ -130,7 +138,7 @@ export function AgentLibraryRoster({
               />
               {parentName && (
                 <span
-                  className="ml-7 mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-[var(--color-text-dim)]"
+                  className="ml-7 flex min-w-0 items-center gap-1 text-[10px] text-[var(--color-text-dim)]"
                   title={t('agentRoster.inherits', { name: parentName })}
                   aria-label={t('agentRoster.inherits', { name: parentName })}
                 >

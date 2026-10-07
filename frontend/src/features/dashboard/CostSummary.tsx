@@ -1,4 +1,5 @@
 import type { CostBlock, DeltaStat } from '@/types'
+import { InfoPopover } from '@/shared/components'
 import { DeltaBadge } from './charts'
 import { fmtUsd } from './chartFormat'
 import { useTranslation } from 'react-i18next'
@@ -31,7 +32,10 @@ export function CostSummary({ cost, costDelta }: { cost: CostBlock; costDelta: D
   return (
     <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="mb-2 flex items-baseline gap-2">
-        <span className="text-sm font-medium">💰 {t('cost.title')}</span>
+        <span className="flex items-center gap-1 text-sm font-medium">
+          💰 {t('cost.title')}
+          {cost.estimated && <InfoPopover text={t('cost.estimatedNote')} />}
+        </span>
         {cost.coolingWaste > 0 && (
           <span
             className="text-[11px] text-[var(--color-text-dim)]"
@@ -58,9 +62,6 @@ export function CostSummary({ cost, costDelta }: { cost: CostBlock; costDelta: D
           </div>
         ))}
       </div>
-      {cost.estimated && (
-        <p className="mt-2 text-[10px] text-[var(--color-text-dim)]">{t('cost.estimatedNote')}</p>
-      )}
     </section>
   )
 }

@@ -1,3 +1,5 @@
+import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
+
 // CardAction is the prominent icon button used on board cards. Unlike the old
 // bare icons it carries a border + surface fill so "run" and "edit" read as real
 // buttons at a glance; `tone` colors the hover state.
@@ -38,7 +40,8 @@ export function CardAction({
   )
 }
 
-// Shared field chrome so the three modals look identical.
+// Shared field chrome so the three modals look identical. The hint sits behind
+// an (ⓘ) next to the label.
 export const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
 
@@ -52,11 +55,13 @@ export function Field({
   children: React.ReactNode
 }) {
   return (
-    <label className="block" title={hint}>
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+    <label className="block">
+      <span className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
         {label}
+        {hint && <InfoPopover text={hint} mode="long" />}
       </span>
       {children}
+      <FieldHint text={hint} className="mt-1 text-[11px]" />
     </label>
   )
 }

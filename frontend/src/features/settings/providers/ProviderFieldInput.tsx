@@ -3,6 +3,7 @@
 // nothing about which kind has which field is hardcoded here.
 import type { ProviderFieldSpec } from '@/api/providers'
 import { useTranslation } from 'react-i18next'
+import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
 
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
@@ -25,9 +26,12 @@ export function ProviderFieldInput({ field, value, isSet, onChange }: Props) {
 
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-[var(--color-text-dim)]">
-        {field.label}
-        {field.required && <span className="text-[var(--color-danger)]"> *</span>}
+      <span className="flex items-center gap-1 text-xs font-medium text-[var(--color-text-dim)]">
+        <span>
+          {field.label}
+          {field.required && <span className="text-[var(--color-danger)]"> *</span>}
+        </span>
+        {field.help && <InfoPopover text={field.help} mode="long" />}
       </span>
       {field.type === 'select' ? (
         <select
@@ -53,12 +57,12 @@ export function ProviderFieldInput({ field, value, isSet, onChange }: Props) {
           className={inputCls}
         />
       )}
-      {field.help && <span className="text-[10px] text-[var(--color-text-dim)]">{field.help}</span>}
       {field.secret && isSet && (
         <span className="text-[10px] text-[var(--color-success)]">
           {t('providerFields.savedEncrypted')}
         </span>
       )}
+      <FieldHint text={field.help} />
     </label>
   )
 }

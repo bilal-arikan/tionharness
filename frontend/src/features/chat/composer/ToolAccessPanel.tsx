@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Wrench, X } from 'lucide-react'
 import { api } from '@/api'
+import { InfoPopover } from '@/shared/components'
 import type { AgentToolAccess } from '@/types'
 import { ServerList, ToolList } from './ToolAccessList'
 import { useTranslation } from 'react-i18next'
@@ -132,6 +133,15 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
                 {t.count !== undefined && <span className="ml-1 opacity-60">{t.count}</span>}
               </button>
             ))}
+            <InfoPopover
+              text={
+                tab === 'eager'
+                  ? t('tools.descriptions.inContext')
+                  : tab === 'lazy'
+                    ? t('tools.descriptions.onDemand', { hiddenCount })
+                    : t('tools.descriptions.servers')
+              }
+            />
             <div className="flex-1" />
             <input
               value={query}
@@ -142,12 +152,6 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
               className="w-28 rounded-lg border border-[var(--color-border)] bg-transparent px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-text-dim)]"
             />
           </div>
-
-          <p className="mb-2 text-[11px] leading-4 text-[var(--color-text-dim)]">
-            {tab === 'eager' && t('tools.descriptions.inContext')}
-            {tab === 'lazy' && t('tools.descriptions.onDemand', { hiddenCount })}
-            {tab === 'servers' && t('tools.descriptions.servers')}
-          </p>
 
           <div className="max-h-[22rem] overflow-y-auto pr-1">
             {tab === 'eager' && (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
 import type { AppSettings, SettingsPatch, SlashCommand } from '@/types'
 import { LoadingState, toast } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { CatButton, NumberValidityProvider, type Cat } from './primitives'
 import { useNumberValidity } from './numberValidity'
 import { APP_CATS, HELP_CATS, resolveSettingsCat } from './settingsCats'
@@ -74,6 +75,7 @@ export function SettingsPanel({
   onToggleNav,
 }: Props) {
   const { t } = useTranslation('settings')
+  const { t: tMain } = useTranslation('settingsMain')
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
@@ -165,6 +167,13 @@ export function SettingsPanel({
 
   const catMeta = [...APP_CATS, ...HELP_CATS].find((c) => c.key === cat)
   const CatIcon = catMeta?.icon
+  // Page-level explanation for panels that have no heading of their own: shown
+  // behind an (ⓘ) next to the category title instead of a paragraph atop the form.
+  const catInfo: Partial<Record<Cat, string>> = {
+    profile: t('profile.intro'),
+    general: tMain('shared.appliesAll'),
+    exttools: tMain('externalTools.description'),
+  }
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -214,6 +223,7 @@ export function SettingsPanel({
               </span>
             )}
             {catMeta?.label ?? ''}
+            {catInfo[cat] && <InfoPopover text={catInfo[cat]} />}
           </span>
           <div className="flex items-center gap-3">
             {cat === 'sysagents' && (

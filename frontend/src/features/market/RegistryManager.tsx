@@ -3,7 +3,7 @@ import { Globe, Plus, RefreshCw, Trash2, AlertTriangle, Server, Sparkles } from 
 import type { Registry } from '@/types'
 import type { ConnectorInfo } from '@/api/market'
 import { api } from '@/api'
-import { Button, ModalOverlay, toast } from '@/shared/components'
+import { Button, InfoPopover, ModalOverlay, toast } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -117,13 +117,17 @@ export function RegistryManager({ onClose, onChanged }: Props) {
             <Server size={18} className="text-[var(--color-accent)]" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">
+            <h2 className="flex items-center gap-1 text-sm font-semibold text-[var(--color-text)]">
               {t('registry.title')}
+              <InfoPopover
+                text={
+                  <>
+                    {t('registry.descriptionBefore')} <code>registry.json</code>{' '}
+                    {t('registry.descriptionAfter')}
+                  </>
+                }
+              />
             </h2>
-            <p className="text-xs text-[var(--color-text-dim)]">
-              {t('registry.descriptionBefore')} <code>registry.json</code>{' '}
-              {t('registry.descriptionAfter')}
-            </p>
           </div>
           <button
             onClick={refresh}
@@ -141,6 +145,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
             <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-dim)]">
                 <Sparkles size={13} /> {t('registry.connectorSources')}
+                <InfoPopover text={t('registry.connectorHint')} />
               </div>
               <div className="space-y-1.5">
                 {connectors.map((c) => (
@@ -158,9 +163,6 @@ export function RegistryManager({ onClose, onChanged }: Props) {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-[var(--color-text-dim)]">
-                {t('registry.connectorHint')}
-              </p>
             </div>
           )}
 

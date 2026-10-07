@@ -4,6 +4,7 @@ import type { Pack, PackKind } from '@/types'
 import type { PriceTable } from '@/api/providers'
 import type { PreviewItem } from '@/api/ingest'
 import { Markdown } from '@/shared/components/markdown/Markdown'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { fmtPrice, packKindKey, sourceLabel, stripFrontmatter } from './marketHelpers'
 import { formatDate } from '@/shared/lib/intl'
 import { useTranslation } from 'react-i18next'
@@ -86,8 +87,9 @@ export function ModelList({
   const table = prices[providerId] || {}
   return (
     <div className="pt-1">
-      <span className="text-xs text-[var(--color-text-dim)]">
+      <span className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
         {t('preview.models', { count: ids.length })}
+        <InfoPopover text={t('preview.priceHint')} />
       </span>
       <div className="mt-1 max-h-64 overflow-y-auto rounded bg-[var(--color-surface-2)] p-1.5">
         {ids.map((id) => {
@@ -112,7 +114,6 @@ export function ModelList({
           )
         })}
       </div>
-      <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">{t('preview.priceHint')}</p>
     </div>
   )
 }
@@ -141,11 +142,21 @@ export function StatChip({
 }
 
 // PreviewSection is a titled block used inside the workspace preview.
-export function PreviewSection({ title, children }: { title: string; children: ReactNode }) {
+// info, when given, is the section's explanatory note shown behind an (ⓘ) by the title.
+export function PreviewSection({
+  title,
+  info,
+  children,
+}: {
+  title: string
+  info?: ReactNode
+  children: ReactNode
+}) {
   return (
     <div>
-      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+      <div className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         {title}
+        {info && <InfoPopover text={info} />}
       </div>
       {children}
     </div>

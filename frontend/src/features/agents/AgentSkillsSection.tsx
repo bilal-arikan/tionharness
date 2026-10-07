@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Plus, Sparkles, X } from 'lucide-react'
 import type { Skill, SkillSource } from '@/types'
 import { api } from '@/api'
+import { InfoPopover } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -54,10 +55,10 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
 
   return (
     <div className="border-t border-[var(--color-border)] pt-4">
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+      <h3 className="mb-3 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         {t('skills.title')}
+        <InfoPopover text={t('skills.description')} label={t('skills.title')} />
       </h3>
-      <p className="mb-3 text-xs text-[var(--color-text-dim)]">{t('skills.description')}</p>
 
       {/* Selected (unordered set) — chips, mirroring the add pickers below. The
           whole chip is the remove control: click it to unassign (no separate X). */}
@@ -109,11 +110,9 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
           assigned to the agent. Clicking adds to the list. */}
       {available.length > 0 && (
         <div className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2">
-          <p className="mb-1 text-[11px] font-medium text-[var(--color-accent)]">
+          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-[var(--color-accent)]">
             {t('skills.restrictedTitle')}
-          </p>
-          <p className="mb-1.5 text-[10px] text-[var(--color-text-dim)]">
-            {t('skills.restrictedHelp')}
+            <InfoPopover text={t('skills.restrictedHelp')} label={t('skills.restrictedTitle')} />
           </p>
           <div className="flex flex-wrap gap-1.5">
             {available.map((s) => (
@@ -143,11 +142,9 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
           assigned to pin them in the prompt order. Clicking adds to the list. */}
       {shared.length > 0 && (
         <div className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2">
-          <p className="mb-1 text-[11px] font-medium text-[var(--color-success)]">
+          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-[var(--color-success)]">
             {t('skills.sharedTitle')}
-          </p>
-          <p className="mb-1.5 text-[10px] text-[var(--color-text-dim)]">
-            {t('skills.sharedHelp')}
+            <InfoPopover text={t('skills.sharedHelp')} label={t('skills.sharedTitle')} />
           </p>
           <div className="flex flex-wrap gap-1.5">
             {shared.map((s) => (

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { PanelLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { InfoPopover } from './InfoPopover'
 
 interface Props {
   // Screen title shown in the header (e.g. "Ajanlar"). Optional: omit it when
@@ -19,6 +20,9 @@ interface Props {
   // Optional secondary line after the title (e.g. the selected agent name),
   // mirroring the chat header's "· Ajan" subtitle.
   subtitle?: ReactNode
+  // Optional explanation of the screen, shown behind an (ⓘ) after the title
+  // instead of as an inline description.
+  info?: ReactNode
   // Optional right-aligned actions.
   right?: ReactNode
   // Optional "secondary" group (chips / side-info + one movable control). On md+
@@ -44,6 +48,7 @@ export function PaneHeader({
   listOpen,
   onToggleList,
   subtitle,
+  info,
   right,
   secondary,
   secondaryAlwaysWrap,
@@ -66,6 +71,7 @@ export function PaneHeader({
   const titleContent = titleSlot ?? (
     <>
       {title && <span className="shrink-0 truncate text-sm font-semibold">{title}</span>}
+      {info && <InfoPopover text={info} />}
       {subtitle && (
         <span className="truncate text-sm text-[var(--color-text-dim)]">{subtitle}</span>
       )}

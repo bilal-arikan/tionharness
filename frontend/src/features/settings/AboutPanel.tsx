@@ -5,6 +5,7 @@ import { siGithub } from 'simple-icons'
 import type { VersionInfo } from '@/types'
 import { api } from '@/api'
 import { BrandIcon } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { formatDate } from '@/shared/lib/intl'
 
 // lucide-react v1 dropped its brand icons, so the GitHub mark comes from
@@ -50,14 +51,28 @@ export function AboutPanel() {
             monogram never drifts from the favicon and the exe icon. */}
         <img src="/favicon.svg" alt="TionHarness" className="h-10 w-10 rounded-xl" />
         <div>
-          <div className="text-base font-semibold text-[var(--color-text)]">TionHarness</div>
+          {/* Where settings live is reference material — behind the name's (ⓘ). */}
+          <div className="flex items-center gap-1 text-base font-semibold text-[var(--color-text)]">
+            TionHarness
+            <InfoPopover
+              text={
+                <>
+                  {t('about.storage.prefix')}{' '}
+                  <code className="rounded bg-[var(--color-surface-2)] px-1">settings.json</code>{' '}
+                  {t('about.storage.between')}{' '}
+                  <code className="rounded bg-[var(--color-surface-2)] px-1">ws-settings.json</code>{' '}
+                  {t('about.storage.suffix')}
+                </>
+              }
+            />
+          </div>
           <div className="text-[var(--color-text-dim)]">{t('about.tagline')}</div>
         </div>
       </div>
 
       {/* Version table */}
       <div className="rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)]">
-        <AboutRow label={t('about.version')}>
+        <AboutRow label={t('about.version')} info={t('about.updateNote')}>
           {loading ? (
             <span className="text-[var(--color-text-dim)]">{t('shared.loading')}</span>
           ) : error ? (
@@ -107,29 +122,26 @@ export function AboutPanel() {
           </a>
         ))}
       </div>
-
-      {/* Güncelleme notu */}
-      <div className="rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-[var(--color-text-dim)]">
-        <span className="mr-1.5 text-[var(--color-warning)]">⚠</span>
-        {t('about.updateNote')}
-      </div>
-
-      {/* Depolama açıklaması */}
-      <p className="text-[var(--color-text-dim)] leading-relaxed">
-        {t('about.storage.prefix')}{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">settings.json</code>{' '}
-        {t('about.storage.between')}{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">ws-settings.json</code>{' '}
-        {t('about.storage.suffix')}
-      </p>
     </div>
   )
 }
 
-function AboutRow({ label, children }: { label: string; children: React.ReactNode }) {
+function AboutRow({
+  label,
+  info,
+  children,
+}: {
+  label: string
+  // Optional explanation shown behind an (ⓘ) next to the label.
+  info?: string
+  children: React.ReactNode
+}) {
   return (
     <div className="flex items-center gap-4 px-3 py-2">
-      <span className="w-28 shrink-0 text-[var(--color-text-dim)]">{label}</span>
+      <span className="flex w-28 shrink-0 items-center gap-1 text-[var(--color-text-dim)]">
+        {label}
+        {info && <InfoPopover text={info} />}
+      </span>
       <span className="text-[var(--color-text)]">{children}</span>
     </div>
   )

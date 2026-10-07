@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Artifact, ArtifactKind } from '@/types'
+import { InfoPopover } from '@/shared/components'
 import { ArtifactView } from './ArtifactView'
 import { KINDS, artifactKindKey, isMediaKind } from './artifactMeta'
 import type { Draft } from './artifactGrouping'
@@ -68,6 +69,7 @@ export function ArtifactEditor({ active, draft, setDraft, groupNames }: Props) {
             <option key={n} value={n} />
           ))}
         </datalist>
+        {!isMediaKind(draft.kind) && <InfoPopover text={t('editor.saveHint')} align="right" />}
       </div>
       {isMediaKind(draft.kind) ? (
         <>
@@ -91,7 +93,6 @@ export function ArtifactEditor({ active, draft, setDraft, groupNames }: Props) {
             spellCheck={false}
             className="min-h-[40vh] flex-1 resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed"
           />
-          <p className="text-[11px] text-[var(--color-text-dim)]">{t('editor.saveHint')}</p>
         </>
       )}
     </div>

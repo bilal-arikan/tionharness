@@ -324,7 +324,15 @@ export function AutomationModal({
             <FieldError message={errorFor('target')} />
           </Field>
 
-          <Field label={t('fields.session')} hint={t('automationModal.sessionHint')}>
+          {/* The (ⓘ) also explains the continue mode while it is selected. */}
+          <Field
+            label={t('fields.session')}
+            hint={
+              sessionMode === 'continue'
+                ? `${t('automationModal.sessionHint')} ${t('automationModal.continueDescription')}`
+                : t('automationModal.sessionHint')
+            }
+          >
             <div className="inline-flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
               {(
                 [
@@ -346,11 +354,6 @@ export function AutomationModal({
                 </button>
               ))}
             </div>
-            {sessionMode === 'continue' && (
-              <p className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-                {t('automationModal.continueDescription')}
-              </p>
-            )}
           </Field>
 
           <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
-import { toast } from '@/shared/components'
+import { InfoPopover, toast } from '@/shared/components'
 import { NumberField, NumberValidityProvider } from '@/features/settings/primitives'
 import { useNumberValidity } from '@/features/settings/numberValidity'
 import type { InsightSettings } from '@/types'
@@ -102,7 +102,10 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
             onChange={(v) => setSettings({ ...settings, pruneDays: v })}
           />
           <label className="block">
-            <span className="text-sm">{t('settings.autoScanCron')}</span>
+            <span className="flex items-center gap-1 text-sm">
+              {t('settings.autoScanCron')}
+              <InfoPopover text={t('settings.cronHint')} />
+            </span>
             <input
               type="text"
               value={settings.autoScanCron ?? ''}
@@ -110,9 +113,6 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
               placeholder={t('settings.cronPlaceholder')}
               className={`${inputCls} w-full font-mono`}
             />
-            <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
-              {t('settings.cronHint')}
-            </span>
           </label>
           {numberValidity.hasInvalid && (
             <div className="text-xs text-[var(--color-danger)]">

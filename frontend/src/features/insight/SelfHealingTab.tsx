@@ -5,7 +5,7 @@ import { api } from '@/api'
 import type { AppSettings } from '@/types'
 import { NumberField, NumberValidityProvider, Toggle } from '@/features/settings/primitives'
 import { useNumberValidity } from '@/features/settings/numberValidity'
-import { LoadingState } from '@/shared/components'
+import { InfoPopover, LoadingState } from '@/shared/components'
 
 interface Props {
   onError: (msg: string) => void
@@ -79,6 +79,15 @@ export function SelfHealingTab({ onError }: Props) {
               <ShieldCheck size={14} />
             </span>
             {t('selfHealing.title')}
+            <InfoPopover
+              text={
+                <>
+                  {t('selfHealing.descriptionBefore')} <code>56-SELF-HEALING</code>
+                  {t('selfHealing.descriptionMiddle')} <code>stuck</code>{' '}
+                  {t('selfHealing.descriptionAfter')}
+                </>
+              }
+            />
           </h3>
           <div className="flex items-center gap-3">
             {numberValidity.hasInvalid && (
@@ -96,12 +105,6 @@ export function SelfHealingTab({ onError }: Props) {
               <Save className="h-4 w-4" /> {saving ? t('actions.saving') : t('actions.save')}
             </button>
           </div>
-        </div>
-
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-          {t('selfHealing.descriptionBefore')} <code>56-SELF-HEALING</code>
-          {t('selfHealing.descriptionMiddle')} <code>stuck</code>{' '}
-          {t('selfHealing.descriptionAfter')}
         </div>
 
         <Toggle

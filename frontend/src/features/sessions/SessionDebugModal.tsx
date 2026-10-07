@@ -1,5 +1,5 @@
 import { Bug, X } from 'lucide-react'
-import { ModalOverlay, PaneHeader } from '@/shared/components'
+import { InfoPopover, ModalOverlay, PaneHeader } from '@/shared/components'
 import { SessionDebugCard } from './SessionDebugCard'
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
@@ -44,9 +44,12 @@ export function SessionDebugModal({
           titleSlot={
             <>
               <Bug size={16} className="shrink-0 text-[var(--color-text-dim)]" />
-              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
-                {t('debug.title')}
-                {title ? ` — ${title}` : ''}
+              <h2 className="flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold">
+                <span className="truncate">
+                  {t('debug.title')}
+                  {title ? ` — ${title}` : ''}
+                </span>
+                <InfoPopover text={t('debug.description')} />
               </h2>
             </>
           }

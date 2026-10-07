@@ -63,28 +63,34 @@ export function StatTiles({ c }: { c: DashboardCounters }) {
     },
   ]
 
+  // One bordered panel split into cells (gap-px over a border-coloured fill draws
+  // the dividers, and every breakpoint's column count divides 6 so rows stay full).
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 square:grid-cols-3">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-3 lg:grid-cols-6 square:grid-cols-3">
       {tiles.map((t) => (
-        <div
-          key={t.label}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-        >
-          <div className="text-xs text-[var(--color-text-dim)]">{t.label}</div>
-          <div
-            className={`mt-0.5 text-2xl font-semibold tabular-nums ${
-              t.tone === 'danger'
-                ? 'text-[var(--color-danger)]'
-                : t.tone === 'warn'
-                  ? 'text-[var(--color-accent)]'
-                  : ''
-            }`}
-          >
-            {count(t.value)}
+        <div key={t.label} className="min-w-0 bg-[var(--color-surface)] px-3 py-2">
+          <div className="truncate text-[11px] text-[var(--color-text-dim)]">{t.label}</div>
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <span
+              className={`text-lg font-semibold leading-tight tabular-nums ${
+                t.tone === 'danger'
+                  ? 'text-[var(--color-danger)]'
+                  : t.tone === 'warn'
+                    ? 'text-[var(--color-accent)]'
+                    : ''
+              }`}
+            >
+              {count(t.value)}
+            </span>
+            {t.hint && (
+              <span
+                className="min-w-0 truncate text-[10px] text-[var(--color-text-dim)]"
+                title={t.hint}
+              >
+                {t.hint}
+              </span>
+            )}
           </div>
-          {t.hint && (
-            <div className="mt-0.5 truncate text-[11px] text-[var(--color-text-dim)]">{t.hint}</div>
-          )}
         </div>
       ))}
     </div>

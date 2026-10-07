@@ -8,6 +8,7 @@ import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 import { formatDateTime } from '@/shared/lib/intl'
 import { formatBytes } from '@/shared/lib/format'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 
 export function BackupPanel({ draft, set }: PanelProps) {
   const { t } = useTranslation('settingsMain')
@@ -100,13 +101,10 @@ export function BackupPanel({ draft, set }: PanelProps) {
 
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        <span className="font-medium text-[var(--color-text)]">{t('backup.scope.title')}</span>{' '}
-        {t('backup.scope.body')}
-      </div>
+      {/* The app-wide scope note rides along in the master switch's (ⓘ). */}
       <Toggle
         label={t('backup.auto.label')}
-        hint={t('backup.auto.hint')}
+        hint={`${t('backup.auto.hint')}\n\n${t('backup.scope.title')} ${t('backup.scope.body')}`}
         checked={draft.backupEnabled}
         onChange={(v) => set('backupEnabled', v)}
       />
@@ -159,7 +157,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={runNow}
@@ -168,9 +166,9 @@ export function BackupPanel({ draft, set }: PanelProps) {
         >
           {running ? t('backup.running') : t('backup.runNow')}
         </button>
-        {msg && <span className="text-xs text-[var(--color-text-dim)]">{msg}</span>}
+        <InfoPopover text={t('backup.note')} />
+        {msg && <span className="ml-1 text-xs text-[var(--color-text-dim)]">{msg}</span>}
       </div>
-      <p className="text-xs text-[var(--color-text-dim)]">{t('backup.note')}</p>
 
       {/* Archive list + one-click restore */}
       <SubHead icon={Archive}>{t('backup.archives.title', { count: totalArchives })}</SubHead>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Volume2, Mic } from 'lucide-react'
 import { soundEffectsEnabled, setSoundEffectsEnabled, playTurnDone } from '@/shared/lib/sounds'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import { Toggle } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import { SttSettings } from './SttSettings'
@@ -19,16 +20,22 @@ export function SoundPanel() {
     if (on) playTurnDone()
   }
 
+  // Both sections below are device-local; the note sits behind each heading's (ⓘ).
+  const deviceNote = (
+    <>
+      {t('sound.deviceOnlyPrefix')}{' '}
+      <span className="font-medium text-[var(--color-text)]">{t('sound.deviceOnly')}</span>{' '}
+      {t('sound.deviceOnlySuffix')}
+    </>
+  )
+
   return (
     <div className="flex flex-col gap-4">
-      <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        {t('sound.deviceOnlyPrefix')}{' '}
-        <span className="font-medium text-[var(--color-text)]">{t('sound.deviceOnly')}</span>{' '}
-        {t('sound.deviceOnlySuffix')}
-      </p>
-
       <div className="flex flex-col gap-2">
-        <SubHead icon={Volume2}>{t('sound.effectsTitle')}</SubHead>
+        <SubHead icon={Volume2}>
+          {t('sound.effectsTitle')}
+          <InfoPopover text={deviceNote} />
+        </SubHead>
         <Toggle
           label={t('sound.effectsLabel')}
           hint={t('sound.effectsHint')}
@@ -38,7 +45,10 @@ export function SoundPanel() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <SubHead icon={Mic}>{t('sound.sttTitle')}</SubHead>
+        <SubHead icon={Mic}>
+          {t('sound.sttTitle')}
+          <InfoPopover text={deviceNote} />
+        </SubHead>
         <SttSettings />
       </div>
     </div>

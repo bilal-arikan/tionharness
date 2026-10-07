@@ -3,58 +3,64 @@
 import { STEP_KINDS } from '@/shared/stepKinds'
 import { useTranslation } from 'react-i18next'
 
-export function StepKindsPanel() {
+// StepKindsIntro explains the list; ReferencePanel shows it behind the (ⓘ) of its
+// tab row while this tab is active.
+export function StepKindsIntro() {
   const { t } = useTranslation('settings')
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        {t('stepKinds.introPrefix')} (
-        <code className="rounded bg-[var(--color-bg)] px-1">TurnStep</code>){' '}
-        {t('stepKinds.introMiddle')} <strong>{t('stepKinds.types')}</strong>
-        {t('stepKinds.introSuffix')} ({t('stepKinds.source')}:{' '}
-        <code className="rounded bg-[var(--color-bg)] px-1">internal/agent/trace.go</code>)
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {STEP_KINDS.map((s) => (
-          <div
-            key={s.kind}
-            className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-          >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
-              <s.Icon size={16} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-[var(--color-text)]">
-                  {t(`stepKinds.items.${s.kind}.label`)}
-                </span>
-                <code className="rounded bg-[var(--color-surface-2)] px-1 font-mono text-[11px] text-[var(--color-text-dim)]">
-                  {s.kind}
-                </code>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] ${
-                    s.status === 'active'
-                      ? 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]'
-                      : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
-                  }`}
-                >
-                  {s.status === 'active'
-                    ? t('stepKinds.status.active')
-                    : s.status === 'legacy'
-                      ? t('stepKinds.status.legacy')
-                      : t('stepKinds.status.infra')}
-                </span>
-                <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
-                  {s.persisted ? t('stepKinds.persisted') : t('stepKinds.liveOnly')}
-                </span>
-              </div>
-              <div className="mt-0.5 text-xs text-[var(--color-text-dim)]">
-                {t(`stepKinds.items.${s.kind}.description`)}
-              </div>
+      {t('stepKinds.introPrefix')} (
+      <code className="rounded bg-[var(--color-bg)] px-1">TurnStep</code>){' '}
+      {t('stepKinds.introMiddle')} <strong>{t('stepKinds.types')}</strong>
+      {t('stepKinds.introSuffix')} ({t('stepKinds.source')}:{' '}
+      <code className="rounded bg-[var(--color-bg)] px-1">internal/agent/trace.go</code>)
+    </>
+  )
+}
+
+export function StepKindsPanel() {
+  const { t } = useTranslation('settings')
+  return (
+    <div className="flex flex-col gap-1.5">
+      {STEP_KINDS.map((s) => (
+        <div
+          key={s.kind}
+          className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
+            <s.Icon size={16} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-[var(--color-text)]">
+                {t(`stepKinds.items.${s.kind}.label`)}
+              </span>
+              <code className="rounded bg-[var(--color-surface-2)] px-1 font-mono text-[11px] text-[var(--color-text-dim)]">
+                {s.kind}
+              </code>
+              <span
+                className={`rounded px-1.5 py-0.5 text-[10px] ${
+                  s.status === 'active'
+                    ? 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]'
+                    : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
+                }`}
+              >
+                {s.status === 'active'
+                  ? t('stepKinds.status.active')
+                  : s.status === 'legacy'
+                    ? t('stepKinds.status.legacy')
+                    : t('stepKinds.status.infra')}
+              </span>
+              <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
+                {s.persisted ? t('stepKinds.persisted') : t('stepKinds.liveOnly')}
+              </span>
+            </div>
+            <div className="mt-0.5 text-xs text-[var(--color-text-dim)]">
+              {t(`stepKinds.items.${s.kind}.description`)}
             </div>
           </div>
-        ))}
-      </div>
-    </>
+        </div>
+      ))}
+    </div>
   )
 }

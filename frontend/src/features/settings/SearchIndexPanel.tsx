@@ -15,6 +15,7 @@ import { RefreshCw, Hammer, Trash2, ScanSearch } from 'lucide-react'
 import { api } from '@/api'
 import type { SearchIndexStatus } from '@/types'
 import { displayPath } from '@/shared/lib/paths'
+import { InfoPopover } from '@/shared/components/InfoPopover'
 import {
   canActOn,
   formatIndexTime,
@@ -130,7 +131,10 @@ export function SearchIndexPanel({ onError }: Props) {
       className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-[var(--color-text)]">🗂 {t('searchIndex.title')}</span>
+        <span className="flex items-center gap-1 font-medium text-[var(--color-text)]">
+          🗂 {t('searchIndex.title')}
+          <InfoPopover text={t('searchIndex.description')} />
+        </span>
         <button
           type="button"
           data-testid="search-index-reload"
@@ -143,7 +147,6 @@ export function SearchIndexPanel({ onError }: Props) {
           {loading ? '…' : t('common.refresh')}
         </button>
       </div>
-      <p className="mt-1">{t('searchIndex.description')}</p>
 
       {rows && rows.length === 0 && (
         <p data-testid="search-index-empty" className="mt-2">
