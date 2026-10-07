@@ -1202,7 +1202,12 @@ merge edildi. Plandan sapan ve hâlâ geçerli noktalar:
 - **Katalog sürüm probe'u:** `internal/api/catalog_codexcli.go`,
   `catalog_claudecli.go`'nun aynası (10 dk başarı / 1 dk hata TTL'li
   `codex --version` önbelleği). `internal/exttools/catalog.go` `CodexToolName`
-  Harici Araçlar panelinde claude'un kardeşidir.
+  Harici Araçlar panelinde claude'un kardeşidir. 2026-10-07'den beri panelden
+  tek tıkla güncellenir: `exttools/codex.go` `codexUpdateSpec` kurulumun sahibini
+  yoldan okur (npm global → `npm install -g --prefix <prefix> @openai/codex@latest`,
+  Homebrew cask → `brew upgrade --cask codex`, tanınmayan kurulum → manuel not).
+  Çalışan bir `codex*` sağlayıcı süreci (procwatch) varken güncelleme 409 ile
+  reddedilir.
 - **Fiyatlandırma:** `internal/providers/pricing.go` `"openai"` tablosu yalnız
   `EstimateFor`'un `codex-cli` case'ini besler (`priceTable`'da `codex-cli`
   anahtarı yok — abonelik = fiyatsız). `gpt-5.4` (ChatGPT login'iyle

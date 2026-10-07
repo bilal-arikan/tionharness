@@ -58,11 +58,12 @@ func (s *Server) handleExternalTools(w http.ResponseWriter, r *http.Request) {
 	out := make([]externalToolStatus, len(exttools.Catalog))
 	var wg sync.WaitGroup
 	for i, t := range exttools.Catalog {
+		found, p := exttools.Detect(t.Name)
+		upd := t.EffectiveUpdate(p)
 		st := externalToolStatus{
 			Name: t.Name, Desc: t.Desc, URL: t.URL, Category: t.Category, Wire: t.Wire,
-			UpdateKind: t.Update.Kind, UpdateCommand: t.Update.UpdateCommandLine(), UpdateNote: t.Update.Note,
+			UpdateKind: upd.Kind, UpdateCommand: upd.UpdateCommandLine(), UpdateNote: upd.Note,
 		}
-		found, p := exttools.Detect(t.Name)
 		st.Found, st.Path = found, p
 		out[i] = st
 		args := t.VersionArgs
@@ -158,21 +159,26 @@ func (s *Server) handleExternalToolUpdate(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusNotFound, "bilinmeyen araç: "+name)
 		return
 	}
-	if found, _ := exttools.Detect(t.Name); !found {
+	found, p := exttools.Detect(t.Name)
+	if !found {
 		writeError(w, http.StatusConflict, t.Name+" bu cihazda kurulu değil")
 		return
 	}
-	if t.Update.Kind != exttools.UpdateCommand {
-		writeError(w, http.StatusConflict, t.Update.Note)
+	// The spec depends on how this install was made (codex: npm vs Homebrew), so
+	// it is resolved against the detected path, exactly as the panel showed it.
+	tool := *t
+	tool.Update = t.EffectiveUpdate(p)
+	if tool.Update.Kind != exttools.UpdateCommand {
+		writeError(w, http.StatusConflict, tool.Update.Note)
 		return
 	}
 
-	s.logger.Info("external tool update started", "tool", t.Name, "command", t.Update.UpdateCommandLine())
-	out, err := exttools.RunUpdate(r.Context(), *t)
+	s.logger.Info("external tool update started", "tool", t.Name, "command", tool.Update.UpdateCommandLine())
+	out, err := exttools.RunUpdate(r.Context(), tool)
 	if err != nil {
 		s.logger.Warn("external tool update failed", "tool", t.Name, "error", err)
 		status := http.StatusInternalServerError
-		if errors.Is(err, exttools.ErrManualUpdate) {
+		if errors.Is(err, exttools.ErrManualUpdate) || errors.Is(err, exttools.ErrToolBusy) {
 			status = http.StatusConflict
 		}
 		writeJSON(w, status, map[string]any{"name": t.Name, "ok": false, "error": err.Error(), "output": out})

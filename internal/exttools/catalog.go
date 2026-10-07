@@ -95,6 +95,25 @@ type Tool struct {
 	// check would report "no published release" forever. Leave false unless the
 	// repo was checked — see LatestPreRelease for why this is not a global rule.
 	PreRelease bool
+	// ResolveUpdate, when set, inspects the detected install and returns the
+	// update that fits HOW it was installed (npm vs Homebrew …); false falls back
+	// to Update. Use EffectiveUpdate rather than reading Update directly.
+	ResolveUpdate func(path string) (UpdateSpec, bool)
+	// ProcLabelPrefix names the procwatch provider entries that run this binary
+	// ("codex" → codex-cli turns, app-server, preflight). While one is running,
+	// the update endpoint refuses: replacing the binary under a live turn breaks
+	// that turn, and on Windows the running .exe is locked anyway.
+	ProcLabelPrefix string
+}
+
+// EffectiveUpdate returns the update spec for this tool as installed at path.
+func (t Tool) EffectiveUpdate(path string) UpdateSpec {
+	if t.ResolveUpdate != nil && path != "" {
+		if s, ok := t.ResolveUpdate(path); ok {
+			return s
+		}
+	}
+	return t.Update
 }
 
 // wingetSpec builds a winget one-click update for the given package id — but ONLY
@@ -208,9 +227,15 @@ var Catalog = []Tool{
 		Category:    "provider",
 		Wire:        "provider",
 		VersionArgs: []string{"--version"},
+		// npm and Homebrew-cask installs get a one-click update (codexUpdateSpec
+		// reads which one owns the binary); anything else keeps this manual note.
+		// The "a running turn locks the binary" concern is handled by
+		// ProcLabelPrefix: the update endpoint refuses while a codex process runs.
+		ResolveUpdate:   codexUpdateSpec,
+		ProcLabelPrefix: "codex",
 		Update: UpdateSpec{
 			Kind: UpdateManual,
-			Note: "Terminalde `npm install -g @openai/codex` çalıştır (npm kurulumu). TionHarness bunu kendisi koşturmaz: çalışan bir codex-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm codex-cli ajanlarını durdurur.",
+			Note: "Bu codex kurulumunu hangi aracın yaptığı anlaşılamadı (npm veya Homebrew değil), o yüzden TionHarness karışmaz. npm ile kurduysan `npm install -g @openai/codex@latest`, Homebrew ile kurduysan `brew upgrade --cask codex`; aksi halde release sayfasından yeni ikiliyi indirip mevcut olanın üzerine kopyala.",
 		},
 	},
 	// rtk is wired by the ShellCommandRewrite SETTING, not a hook. It used to ship a

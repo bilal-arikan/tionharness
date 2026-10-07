@@ -2,6 +2,7 @@ package exttools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,6 +22,30 @@ const updateTimeout = 5 * time.Minute
 // gate, so a direct API call cannot make TionHarness overwrite a binary.
 var ErrManualUpdate = fmt.Errorf("bu araç otomatik güncellenmez")
 
+// ErrToolBusy is returned when the tool's binary is in use by a process
+// TionHarness is running (see Tool.ProcLabelPrefix).
+var ErrToolBusy = errors.New("araç şu an kullanımda")
+
+// RunningProcesses counts the running ledger entries that execute this tool's
+// binary. Zero for tools without a ProcLabelPrefix. The ledger only sees
+// processes TionHarness itself spawned — a codex the user runs in their own
+// terminal is invisible here.
+func RunningProcesses(t Tool) int {
+	if t.ProcLabelPrefix == "" {
+		return 0
+	}
+	n := 0
+	for _, e := range procwatch.Default().List(procwatch.Filter{
+		Statuses: []procwatch.Status{procwatch.StatusRunning},
+		Kinds:    []procwatch.Kind{procwatch.KindProvider},
+	}) {
+		if strings.HasPrefix(e.Label, t.ProcLabelPrefix) {
+			n++
+		}
+	}
+	return n
+}
+
 // RunUpdate executes a tool's update command and returns its combined output.
 //
 // Only UpdateCommand specs run: the command comes from this package's own
@@ -31,6 +56,9 @@ var ErrManualUpdate = fmt.Errorf("bu araç otomatik güncellenmez")
 func RunUpdate(ctx context.Context, t Tool) (string, error) {
 	if t.Update.Kind != UpdateCommand || t.Update.Command == "" {
 		return "", ErrManualUpdate
+	}
+	if n := RunningProcesses(t); n > 0 {
+		return "", fmt.Errorf("%w: %d çalışan %s süreci var — turlar bitince (veya Süreçler panelinden durdurunca) tekrar dene", ErrToolBusy, n, t.Name)
 	}
 	if _, err := lookPath(t.Update.Command); err != nil {
 		return "", fmt.Errorf("%q bu cihazda bulunamadı — %s güncellemesi bu paket yöneticisini gerektiriyor", t.Update.Command, t.Name)
@@ -69,5 +97,14 @@ func (s UpdateSpec) UpdateCommandLine() string {
 	if s.Kind != UpdateCommand || s.Command == "" {
 		return ""
 	}
-	return strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
+	parts := []string{s.Command}
+	for _, a := range s.Args {
+		// An npm --prefix can contain spaces (C:\Users\Ad Soyad\…); quote it so
+		// the copied line still works when pasted into a shell.
+		if strings.ContainsAny(a, " \t") {
+			a = `"` + a + `"`
+		}
+		parts = append(parts, a)
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
 }
