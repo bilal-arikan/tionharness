@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -100,8 +101,8 @@ func ShellToolNames() []string {
 	return names
 }
 
-// ShellTool runs a command through the POSIX shell (the "Bash" tool): /bin/sh on
-// Unix, bash.exe on Windows. High-risk (RiskExec), gated behind the shell switch.
+// ShellTool runs a command through the POSIX shell (the "Bash" tool): bash on
+// Unix (/bin/sh when bash is absent), bash.exe on Windows. High-risk (RiskExec), gated behind the shell switch.
 // It starts in the sandbox base directory but is NOT confined to it. Its
 // PowerShell sibling (PowerShellTool) handles Windows-native shells.
 type ShellTool struct {
@@ -195,7 +196,7 @@ func (t ShellTool) Available() bool { return t.exe != "" }
 
 func (t ShellTool) Def() providers.ToolDef {
 	bg := t.mgr != nil
-	desc := "Run a command through the POSIX shell (/bin/sh on Unix, bash.exe on Windows) and " +
+	desc := "Run a command through the POSIX shell (bash on macOS/Linux, git-bash on Windows) and " +
 		"return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may " +
 		"operate on any path. Bounded by a timeout (default 30s, max 120s; both configurable in settings). Use POSIX/Bash syntax. This is " +
 		"the PREFERRED shell — reach for it first, including on Windows. Only switch to the PowerShell tool " +
@@ -283,13 +284,20 @@ func (t PowerShellTool) Available() bool { return t.exe != "" }
 
 func (t PowerShellTool) Def() providers.ToolDef {
 	bg := t.mgr != nil
-	desc := "Run a command through PowerShell (pwsh 7+ if available, else Windows PowerShell 5.1) " +
+	host, nativeTasks, registry := "pwsh 7+ if available, else Windows PowerShell 5.1",
+		"Windows-native tasks (cmdlets, registry, $env: variables)", ", and registry PSDrives (HKLM:\\)"
+	if runtime.GOOS != "windows" {
+		// Off Windows the tool only exists because pwsh is installed; there is no
+		// registry and no Windows PowerShell host.
+		host, nativeTasks, registry = "pwsh, PowerShell 7+", "PowerShell-specific tasks (cmdlets, $env: variables)", ""
+	}
+	desc := "Run a command through PowerShell (" + host + ") " +
 		"and return its combined stdout+stderr (truncated to 64KB). Use ONLY when the Bash tool cannot do " +
-		"the job — i.e. for Windows-native tasks (cmdlets, registry, $env: variables); prefer Bash for " +
+		"the job — i.e. for " + nativeTasks + "; prefer Bash for " +
 		"everything else. Starts in the working directory but " +
 		"may operate on any path. Bounded by a timeout (default 30s, max 120s; both configurable in settings). Use PowerShell syntax: " +
-		"cmdlets (Get-ChildItem), $env:VAR for environment variables, 2>$null (not 2>/dev/null), and " +
-		"registry PSDrives (HKLM:\\). The command runs DIRECTLY in PowerShell — do NOT wrap it in another " +
+		"cmdlets (Get-ChildItem), $env:VAR for environment variables, 2>$null (not 2>/dev/null)" + registry + ". " +
+		"The command runs DIRECTLY in PowerShell — do NOT wrap it in another " +
 		"`powershell -Command \"...\"` (that re-parses the string and strips $variable references)."
 	if bg {
 		desc += bgHint

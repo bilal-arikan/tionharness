@@ -12,6 +12,8 @@ import { api } from '@/api'
 import type { Discovered, IngestInstallResult, IngestKind } from '@/api/ingest'
 import { Button, InfoPopover, ModalOverlay } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
+import { useServerOS } from '@/shared/hooks/useServerOS'
+import { examplePath } from '@/shared/lib/platform'
 
 interface Props {
   onClose: () => void
@@ -46,6 +48,7 @@ function deriveGroup(location: string): string {
 // features are stripped with a warning.
 export function SkillImportDialog({ onClose, onImported }: Props) {
   const { t } = useTranslation('skills')
+  const serverOS = useServerOS()
   const [step, setStep] = useState<Step>('locate')
   const [source, setSource] = useState<Source>('github')
   const [location, setLocation] = useState('')
@@ -209,7 +212,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
                   placeholder={
                     source === 'github'
                       ? t('import.githubLocationPlaceholder')
-                      : t('import.localLocationPlaceholder')
+                      : examplePath(serverOS, 'repo')
                   }
                   className={`${inputCls} font-mono`}
                 />

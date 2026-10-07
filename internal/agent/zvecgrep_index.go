@@ -6,12 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/exttools"
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 	"github.com/bilal-arikan/tionharness/internal/proc"
 	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
@@ -157,14 +157,8 @@ func zvecGrepBroadDir(dir string) bool {
 }
 
 // zvecGrepSamePath compares two directory paths the way the host filesystem does:
-// case-insensitively on Windows.
-func zvecGrepSamePath(a, b string) bool {
-	a, b = filepath.Clean(a), filepath.Clean(b)
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
-}
+// case-insensitively on Windows and macOS.
+func zvecGrepSamePath(a, b string) bool { return fspath.Equal(a, b) }
 
 // zvecGrepExcludeEntry is what ensureZvecGrepGitExclude appends.
 const zvecGrepExcludeEntry = "# zvec-grep local index (added by TionHarness)\n" + zvecGrepIndexDir + "/\n"

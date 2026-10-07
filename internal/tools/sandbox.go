@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 )
 
 // Sandbox is the base directory for filesystem and shell tools. Root is the
@@ -128,16 +130,12 @@ func rejectWindowsPathTricks(path string) error {
 	return nil
 }
 
-// underRoot reports whether abs is Root itself or a descendant of it. On Windows
-// the comparison is case-insensitive (NTFS is), matching the API-side boundary in
-// internal/api.underDir so both boundaries behave identically on one platform.
+// underRoot reports whether abs is Root itself or a descendant of it. On
+// case-insensitive hosts (Windows, default macOS volumes) a differently-cased
+// spelling of Root still matches — see fspath.Within — exactly like the API-side
+// boundary in internal/api.underDir, so both boundaries behave identically.
 func underRoot(abs, root string) bool {
-	prefix := root + string(filepath.Separator)
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(abs, root) ||
-			(len(abs) >= len(prefix) && strings.EqualFold(abs[:len(prefix)], prefix))
-	}
-	return abs == root || strings.HasPrefix(abs, prefix)
+	return fspath.Within(root, abs)
 }
 
 // Ready reports whether the sandbox has a configured base directory.
@@ -184,7 +182,12 @@ func (s Sandbox) Resolve(rel string) (string, error) {
 		} else {
 			abs = filepath.Clean(filepath.Join(s.Root, rel))
 		}
-		if !underRoot(abs, s.Root) {
+		// Root is stored resolved (cleanRoot), so an absolute input spelled through
+		// a symlinked ancestor — /tmp and /var live under /private on macOS — is
+		// lexically outside Root while reaching the very same place. Accept it when
+		// its real location is inside Root's; a relative input is joined onto Root
+		// and never needs this.
+		if !underRoot(abs, s.Root) && (!filepath.IsAbs(rel) || !realPathUnderRoot(abs, s.Root)) {
 			return "", fmt.Errorf("path %q escapes the sandbox", rel)
 		}
 		if err := checkRealPathUnderRoot(abs, s.Root, rel); err != nil {

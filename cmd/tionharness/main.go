@@ -12,10 +12,17 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/app"
 	"github.com/bilal-arikan/tionharness/internal/config"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 func main() {
 	logs, logger := app.SetupLogging()
+
+	// macOS/Linux: a Finder/launchd/desktop-launcher start inherits a minimal PATH
+	// that hides the claude/codex CLIs, node, rg and Homebrew tools.
+	if added := proc.AugmentPATH(); len(added) > 0 {
+		logger.Info("PATH augmented for child processes", "added", added)
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -41,7 +48,9 @@ func main() {
 	}()
 
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	// SIGHUP: closing the terminal on macOS/Linux must still run Shutdown, or
+	// children in their own process groups are orphaned.
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	<-stop
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

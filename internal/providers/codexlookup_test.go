@@ -56,7 +56,11 @@ func TestCodexCandidatePathsLinux(t *testing.T) {
 	got := codexCandidatePaths("linux")
 	want := []string{
 		filepath.Join("/home/tester", ".local", "bin", "codex"),
+		filepath.Join("/home/tester", ".npm-global", "bin", "codex"),
+		filepath.Join("/home/tester", ".bun", "bin", "codex"),
+		filepath.Join("/home/tester", ".volta", "bin", "codex"),
 		"/usr/local/bin/codex",
+		"/home/linuxbrew/.linuxbrew/bin/codex",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("candidate count = %d, want %d (got %v)", len(got), len(want), got)
@@ -72,8 +76,8 @@ func TestCodexCandidatePathsLinuxEmptyHomeSkipped(t *testing.T) {
 	t.Setenv("HOME", "")
 
 	got := codexCandidatePaths("linux")
-	want := []string{"/usr/local/bin/codex"}
-	if len(got) != len(want) || got[0] != want[0] {
+	want := []string{"/usr/local/bin/codex", "/home/linuxbrew/.linuxbrew/bin/codex"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("candidates = %v, want %v", got, want)
 	}
 }
@@ -84,6 +88,9 @@ func TestCodexCandidatePathsDarwin(t *testing.T) {
 	got := codexCandidatePaths("darwin")
 	want := []string{
 		filepath.Join("/Users/tester", ".local", "bin", "codex"),
+		filepath.Join("/Users/tester", ".npm-global", "bin", "codex"),
+		filepath.Join("/Users/tester", ".bun", "bin", "codex"),
+		filepath.Join("/Users/tester", ".volta", "bin", "codex"),
 		"/usr/local/bin/codex",
 		"/opt/homebrew/bin/codex",
 	}

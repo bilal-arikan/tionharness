@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/claudeauth"
 )
 
 // globalClaudeHomeDir mirrors settings.defaultClaudeConfigDir: the TionHarness-managed
@@ -99,6 +101,11 @@ func credentialLiveness(path string) credentialRank {
 	if err != nil {
 		return credentialRank{}
 	}
+	return credentialLivenessOf(b)
+}
+
+// credentialLivenessOf ranks a raw credential document (see credentialLiveness).
+func credentialLivenessOf(b []byte) credentialRank {
 	var c oauthCredential
 	if json.Unmarshal(b, &c) != nil {
 		return credentialRank{}
@@ -151,6 +158,11 @@ func ensureClaudeHomeCredential(home string) {
 		candidates = append(candidates, filepath.Join(uh, ".claude", ".credentials.json"))
 	}
 
+	if claudeauth.KeychainActive() {
+		healFromKeychain(home)
+		return
+	}
+
 	best, bestRank := "", credentialLiveness(dst)
 	for _, src := range candidates {
 		if r := credentialLiveness(src); r.betterThan(bestRank) {
@@ -167,6 +179,44 @@ func ensureClaudeHomeCredential(home string) {
 		return
 	}
 	_ = copyFile(best, dst, 0o600)
+}
+
+// healFromKeychain is ensureClaudeHomeCredential on macOS, where the claude CLI
+// keeps each config dir's login in the Keychain (claudeauth/keychain.go) and only
+// falls back to .credentials.json. Ranking and seeding therefore go through
+// claudeauth's raw read/write — which see the Keychain first and write both the
+// item and the file — instead of copying files that the CLI would ignore. The
+// ranking rules are those of credentialLiveness. Caller holds the heal lock.
+func healFromKeychain(home string) {
+	var sources []string
+	if g := globalClaudeHomeDir(); g != "" && g != home {
+		sources = append(sources, g)
+	}
+	if uh, err := os.UserHomeDir(); err == nil && uh != "" {
+		sources = append(sources, filepath.Join(uh, ".claude"))
+	}
+	current := func() credentialRank {
+		b, err := claudeauth.ReadCredentialsRaw(home)
+		if err != nil {
+			return credentialRank{}
+		}
+		return credentialLivenessOf(b)
+	}
+	var best []byte
+	bestRank := current()
+	for _, src := range sources {
+		b, err := claudeauth.ReadCredentialsRaw(src)
+		if err != nil {
+			continue
+		}
+		if r := credentialLivenessOf(b); r.betterThan(bestRank) {
+			best, bestRank = b, r
+		}
+	}
+	if best == nil || current().betterThan(bestRank) {
+		return
+	}
+	_ = claudeauth.WriteCredentialsRaw(home, best)
 }
 
 // credentialHealLocks holds one mutex per claude-home, keyed by path.

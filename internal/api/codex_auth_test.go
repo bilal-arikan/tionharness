@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -107,13 +108,14 @@ func TestHandleCodexAPIKeyLoginRequiresKey(t *testing.T) {
 
 // TestCodexHomeDirMatchesAgentResolution pins auth to the app-global data dir.
 func TestCodexHomeDirMatchesAgentResolution(t *testing.T) {
-	s := &Server{dataDir: `C:\data`}
+	dataDir := t.TempDir()
+	s := &Server{dataDir: dataDir}
 	rec := httptest.NewRecorder()
 	got, ok := s.resolveAppCLIHome(rec, "codex-cli")
 	if !ok {
 		t.Fatalf("resolve failed: status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	want := `C:\data\codex-home`
+	want := filepath.Join(dataDir, "codex-home")
 	if got != want {
 		t.Fatalf("resolved codex home = %q, want %q", got, want)
 	}

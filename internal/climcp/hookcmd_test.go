@@ -94,3 +94,39 @@ func TestNeedsPowerShellWrap(t *testing.T) {
 		}
 	}
 }
+
+// A workspace whose hooks were authored on Windows, run on macOS/Linux: PowerShell
+// source goes to pwsh when installed, and becomes a visible non-blocking failure
+// (not a bash syntax error) when it is not. Plain invocations are untouched.
+func TestHookCommandPowerShellOffWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("off-Windows routing")
+	}
+	const psHook = `$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; Write-Output $j.tool_name`
+	prev := lookPwsh
+	t.Cleanup(func() { lookPwsh = prev })
+
+	lookPwsh = func() (string, bool) { return "/opt/homebrew/bin/pwsh", true }
+	got := HookCommand(psHook)
+	if !strings.HasPrefix(got, "'/opt/homebrew/bin/pwsh' -NoProfile -NonInteractive -Command '") {
+		t.Errorf("with pwsh: HookCommand = %q", got)
+	}
+	if HookShellWarning(psHook) != "" {
+		t.Error("with pwsh the hook can run; no warning expected")
+	}
+
+	lookPwsh = func() (string, bool) { return "", false }
+	got = HookCommand(psHook)
+	if !strings.Contains(got, "pwsh") || !strings.HasSuffix(got, ">&2; exit 1") {
+		t.Errorf("without pwsh: HookCommand = %q, want a stderr message + exit 1", got)
+	}
+	if HookShellWarning(psHook) != ShellWarningPwshMissing {
+		t.Error("without pwsh the hook must be flagged")
+	}
+
+	for _, plain := range []string{"sqz hook claude", "node ./hook.js", "rtk-wrapper.sh"} {
+		if HookCommand(plain) != plain || HookShellWarning(plain) != "" {
+			t.Errorf("plain invocation %q must pass through unflagged", plain)
+		}
+	}
+}

@@ -9,6 +9,8 @@
 // so it happens only when the user asks for it here.
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useServerOS } from '@/shared/hooks/useServerOS'
+import { examplePath } from '@/shared/lib/platform'
 import { Download, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { workspaceApi } from '@/api/workspaces'
 import { Button, toast } from '@/shared/components'
@@ -30,6 +32,7 @@ export function CodexPluginsSection({
   onChangePlugins,
 }: Props) {
   const { t } = useTranslation('settingsMain')
+  const serverOS = useServerOS()
   const [discovered, setDiscovered] = useState<CodexDiscoveredMarketplace[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [newName, setNewName] = useState('')
@@ -173,7 +176,9 @@ export function CodexPluginsSection({
             value={newSource}
             onChange={(e) => setNewSource(e.target.value)}
             placeholder={
-              newType === 'local' ? 'C:\\...\\marketplace' : t('plugins.gitSourcePlaceholder')
+              newType === 'local'
+                ? examplePath(serverOS, 'marketplace')
+                : t('plugins.gitSourcePlaceholder')
             }
             className={`${inputCls} min-w-0 flex-1`}
           />

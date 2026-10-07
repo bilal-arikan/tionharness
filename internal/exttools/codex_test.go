@@ -84,8 +84,18 @@ func TestCodexUpdateSpecUnknownInstallFallsBackToManual(t *testing.T) {
 }
 
 func TestUpdateCommandLineQuotesSpacedArgs(t *testing.T) {
-	s := UpdateSpec{Kind: UpdateCommand, Command: "npm", Args: []string{"install", "-g", "--prefix", `C:\Users\Ad Soyad\npm`, "@openai/codex@latest"}}
-	want := `npm install -g --prefix "C:\Users\Ad Soyad\npm" @openai/codex@latest`
+	if runtime.GOOS == "windows" {
+		s := UpdateSpec{Kind: UpdateCommand, Command: "npm", Args: []string{"install", "-g", "--prefix", `C:\Users\Ad Soyad\npm`, "@openai/codex@latest"}}
+		want := `npm install -g --prefix "C:\Users\Ad Soyad\npm" @openai/codex@latest`
+		if got := s.UpdateCommandLine(); got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+		return
+	}
+	// POSIX shells still expand $ and backticks inside double quotes: single-quote,
+	// escaping an embedded single quote.
+	s := UpdateSpec{Kind: UpdateCommand, Command: "npm", Args: []string{"install", "-g", "--prefix", "/Users/ad soyad/it's npm", "@openai/codex@latest"}}
+	want := `npm install -g --prefix '/Users/ad soyad/it'\''s npm' @openai/codex@latest`
 	if got := s.UpdateCommandLine(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

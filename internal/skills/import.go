@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/fetch"
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 )
 
 // ImportResult reports the outcome of importing a Claude Code skill: the resulting
@@ -250,7 +251,7 @@ func (s *Store) ImportCCSkill(slug, raw, sourceURL string, files map[string][]by
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return Skill{}, res, fmt.Errorf("create dir for bundled file %q: %w", rel, err)
 		}
-		if err := os.WriteFile(dest, data, 0o644); err != nil {
+		if err := os.WriteFile(dest, data, fspath.FileModeFor(data)); err != nil {
 			return Skill{}, res, fmt.Errorf("write bundled file %q: %w", rel, err)
 		}
 		res.Files = append(res.Files, filepath.ToSlash(rel))

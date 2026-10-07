@@ -11,6 +11,7 @@ import { useReferencedAgents } from '@/shared/hooks/useReferencedAgents'
 import type { Agent, AgentPatch, Artifact, Message, Session } from '@/types'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import { copyToClipboard } from '@/shared/lib/clipboard'
+import { modKeyLabel } from '@/shared/lib/platform'
 import type { View } from './NavRail'
 import type { Route } from './url'
 import { INITIAL_ROUTE } from './useAppNavigation'
@@ -709,7 +710,7 @@ export function useSessionsController({
     async (id: string) => {
       try {
         const { path } = await api.sessionPath(id)
-        await copyToClipboard(path, i18next.t('shell.copyPathPrompt'))
+        await copyToClipboard(path, i18next.t('shell.copyPathPrompt', { mod: modKeyLabel() }))
       } catch (e) {
         setError((e as Error).message)
       }

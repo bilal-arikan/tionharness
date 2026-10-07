@@ -2,7 +2,9 @@ package tools
 
 import (
 	"fmt"
+	"log/slog"
 	"os/exec"
+	"sync"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
 )
@@ -11,6 +13,10 @@ import (
 // number is a fork-bomb brake, far above what a build or test pipeline keeps
 // alive at once (git-bash itself costs two processes per command).
 var confinedShellJobLimits = proc.JobLimits{ActiveProcesses: 128}
+
+// containmentLogOnce reports a degraded process job (see proc.ContainmentStatus)
+// the first time a confined command runs, not on every call.
+var containmentLogOnce sync.Once
 
 // runShellCmd runs cmd to completion. A confined command runs inside a process
 // job (proc.Job): everything it spawns — including processes that detach from
@@ -39,6 +45,11 @@ func runShellCmd(cmd *exec.Cmd, confined bool, started func(*exec.Cmd)) (runErr,
 		return cmd.Wait(), nil
 	}
 	job, err := proc.NewJob(confinedShellJobLimits)
+	containmentLogOnce.Do(func() {
+		if enforced, reason := proc.ContainmentStatus(); !enforced {
+			slog.Warn("process containment degraded", "component", "shell", "reason", reason)
+		}
+	})
 	if err != nil {
 		return nil, fmt.Errorf("confined shell: cannot create a process job, command not run: %w", err)
 	}

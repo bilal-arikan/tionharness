@@ -12,7 +12,9 @@ Bu repoda geçerli sıralama aşağıdakidir:
 - **Adı bilmiyorsun, niyeti biliyorsun** → `zvec_grep_search`.
   Doğal dil sorgusu; dosya:satır + snippet döner. Markdown/JSON/YAML de indexli.
 - **Sembol adı elinde, bağlantısını istiyorsun** → `codebase-memory-mcp`
-  (`project` = `C-Users-Bilal-Desktop-Projects-TionHarness`). Caller/callee,
+  (`project` kimliği makineye göre değişir — depo yolunun tire'lenmiş hali: Windows
+  `C-Users-Bilal-Desktop-Projects-TionHarness`, Mac `Users-monster-Desktop-tionharness`;
+  emin değilsen `list_projects`). Caller/callee,
   impact analizi, bağımlılık zinciri. Vektör araması bunu veremez.
 - **Birebir string / dosya deseni** → `zvec_grep_rg` veya native grep. En hızlısı.
 

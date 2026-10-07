@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 )
 
 // Explicit file contracts are presence checks, not claims of functional or
@@ -28,7 +30,7 @@ func normalizeWorkerDeliverables(paths []string, cwd string) ([]string, error) {
 			path = filepath.Join(cwd, path)
 		}
 		path = filepath.Clean(path)
-		key := strings.ToLower(path)
+		key := fspath.Key(path)
 		if !seen[key] {
 			result = append(result, path)
 			seen[key] = true

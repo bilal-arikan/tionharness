@@ -93,7 +93,12 @@ func TestShellEnvironmentGuidance(t *testing.T) {
 	}
 	// Native Unix needs no block — the model already assumes that layout, so an
 	// extra section would be pure token cost on every turn.
-	if shellEnvironmentGuidance("unix", "/bin/sh") != "" || shellEnvironmentGuidance("", "") != "" {
-		t.Error("native unix / no-shell must produce no prompt block")
+	if shellEnvironmentGuidance("unix", "/bin/bash") != "" || shellEnvironmentGuidance("", "") != "" {
+		t.Error("native unix bash / no-shell must produce no prompt block")
+	}
+	// A host without bash falls back to /bin/sh (dash on Debian/Ubuntu); the model
+	// must be told bash-only syntax fails.
+	if sh := shellEnvironmentGuidance("unix", "/bin/sh"); !strings.Contains(sh, "POSIX `sh`") {
+		t.Errorf("unix /bin/sh fallback must warn about bash-only syntax, got:\n%s", sh)
 	}
 }

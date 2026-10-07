@@ -49,7 +49,7 @@ func (UpdateUserPreferencesTool) Def() providers.ToolDef {
 }`),
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"name":"Bilal","country":"Turkey"}`),
-			json.RawMessage(`{"notes_append":"Prefers PowerShell syntax for terminal commands."}`),
+			json.RawMessage(`{"notes_append":"Prefers concise answers with runnable examples."}`),
 		},
 	}
 }

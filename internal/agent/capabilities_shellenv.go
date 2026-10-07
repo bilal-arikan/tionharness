@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 
@@ -59,9 +61,18 @@ func shellEnvironmentGuidance(flavor, executable string) string {
 			"(and its PATH) is not visible here; install/run Linux builds instead.\n"+
 			"- A service listening on the Windows host's `127.0.0.1` is NOT reachable from inside "+
 			"WSL under that address. Use the `PowerShell` tool for anything Windows-native.", executable)
+	case tools.POSIXShellUnix:
+		// Native Unix with bash: the layout is exactly what the model already
+		// assumes, so an extra prompt block would be pure token cost. Only a host
+		// without bash (the tool fell back to /bin/sh, e.g. dash) needs a warning.
+		if strings.Contains(strings.ToLower(filepath.Base(executable)), "bash") {
+			return ""
+		}
+		return fmt.Sprintf("# Shell environment\n"+
+			"The `Bash` tool is backed by a plain POSIX `sh` (`%s`) because bash is not installed: "+
+			"bash-only syntax (`[[ ]]`, arrays, `{1..5}`, `set -o pipefail`, `source`, `<<<`, `&>`) fails. "+
+			"Write portable POSIX sh.", executable)
 	default:
-		// Native Unix (or no POSIX shell): the layout is exactly what the model
-		// already assumes, so an extra prompt block would be pure token cost.
 		return ""
 	}
 }

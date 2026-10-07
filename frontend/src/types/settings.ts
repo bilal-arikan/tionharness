@@ -277,6 +277,11 @@ export interface VersionInfo {
   buildDate: string
   goVersion: string
   module: string
+  // Server platform (Go runtime.GOOS / runtime.GOARCH): "windows" | "darwin" |
+  // "linux" | ... and "amd64" | "arm64" | ... The UI uses `os` to pick shell
+  // hints and path placeholders that match the machine the backend runs on.
+  os: string
+  arch: string
 }
 
 // Result of the advisory release-feed check (GET /api/version/update).

@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $siteDir = Join-Path $repoRoot 'website'
-$script = Join-Path $siteDir 'scripts\shots.mjs'
+$script = Join-Path $siteDir 'scripts/shots.mjs'
 
 if (-not (Test-Path $script)) {
     throw "shots.mjs not found at $script"
@@ -38,7 +38,7 @@ catch {
 
 # 2. Playwright is a heavy, optional dependency -- it is not in package.json so a
 #    plain `npm install` for the site stays small. Install it on demand.
-$playwrightDir = Join-Path $siteDir 'node_modules\playwright'
+$playwrightDir = Join-Path $siteDir 'node_modules/playwright'
 if (-not (Test-Path $playwrightDir)) {
     if (-not $InstallDeps) {
         throw "playwright is not installed. Re-run with -InstallDeps (downloads a Chromium build, ~150 MB)."

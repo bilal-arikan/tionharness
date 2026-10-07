@@ -123,3 +123,45 @@ func TestServeFileRelativeTraversalRejected(t *testing.T) {
 		t.Fatalf("status = %d, want 400, body = %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestServeFileAbsolutePathParam: a tool-produced image named by its absolute path
+// must be served as-is on every OS — bare and as a file:// URL. A POSIX absolute
+// path (/Users/x/a.png) keeps its leading slash; only file:///C:/... drops it.
+func TestServeFileAbsolutePathParam(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	abs := filepath.Join(t.TempDir(), "out dir", "a.png")
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(abs, []byte("\x89PNG\r\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	fileURL := (&url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}).String()
+	if !strings.HasPrefix(filepath.ToSlash(abs), "/") {
+		fileURL = (&url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(abs)}).String()
+	}
+	for _, param := range []string{abs, fileURL} {
+		req := httptest.NewRequest(http.MethodGet, "/api/files?path="+url.QueryEscape(param), nil)
+		req.Header.Set("X-Workspace-Id", wsp.ID)
+		rec := httptest.NewRecorder()
+		s.Routes().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("path=%q: status = %d, want 200, body = %s", param, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestLocalPathParam(t *testing.T) {
+	cases := map[string]string{
+		"/Users/x/a.png":             filepath.FromSlash("/Users/x/a.png"),
+		"file:///Users/x/my%20a.png": filepath.FromSlash("/Users/x/my a.png"),
+		"file:///C:/x/a.png":         filepath.FromSlash("C:/x/a.png"),
+		"/C:/x/a.png":                filepath.FromSlash("C:/x/a.png"),
+		"output/a.png":               filepath.FromSlash("output/a.png"),
+	}
+	for in, want := range cases {
+		if got := localPathParam(in); got != want {
+			t.Errorf("localPathParam(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -9,6 +9,7 @@ import {
   validateSourceLimits,
 } from '@/features/image-annotator/imageAnnotatorLimits'
 import { sharedText } from './sharedI18n'
+import { modKeyLabel } from './platform'
 
 // copyText writes `text` to the clipboard, working in BOTH secure and insecure
 // contexts. The async Clipboard API (navigator.clipboard) is only exposed on
@@ -68,7 +69,8 @@ async function copyText(text: string): Promise<boolean> {
 export async function copyToClipboard(text: string, promptLabel?: string): Promise<boolean> {
   if (!text) return false
   const ok = await copyText(text)
-  if (!ok) window.prompt(promptLabel ?? sharedText('clipboard.copyPrompt'), text)
+  if (!ok)
+    window.prompt(promptLabel ?? sharedText('clipboard.copyPrompt', { mod: modKeyLabel() }), text)
   return ok
 }
 

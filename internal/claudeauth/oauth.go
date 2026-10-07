@@ -243,6 +243,26 @@ func WriteCredentials(homeDir string, cred Credential) error {
 	if err != nil {
 		return err
 	}
+	return writeCredentialsData(homeDir, path, data)
+}
+
+// WriteCredentialsRaw stores an already-serialised credential document (as read by
+// ReadCredentialsRaw) for homeDir: file and, on macOS, Keychain. Used to seed one
+// home's login into another without dropping fields Credential does not model.
+func WriteCredentialsRaw(homeDir string, data []byte) error {
+	if homeDir == "" {
+		return fmt.Errorf("empty claude-home dir")
+	}
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		return fmt.Errorf("create claude-home: %w", err)
+	}
+	return writeCredentialsData(homeDir, filepath.Join(homeDir, ".credentials.json"), data)
+}
+
+// writeCredentialsData writes data to path atomically and, on macOS, to the
+// home's Keychain item — the CLI reads the Keychain FIRST there, so a file-only
+// write would lose to a stale item.
+func writeCredentialsData(homeDir, path string, data []byte) error {
 	// Write atomically (tmp + rename) so a crash never leaves a half-written file.
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
@@ -250,6 +270,11 @@ func WriteCredentials(homeDir string, cred Credential) error {
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("finalize credentials: %w", err)
+	}
+	if keychainActive() {
+		if err := writeKeychainRaw(homeDir, data); err != nil {
+			return fmt.Errorf("store credentials in keychain: %w", err)
+		}
 	}
 	return nil
 }

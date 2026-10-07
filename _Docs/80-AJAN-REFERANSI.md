@@ -12,8 +12,9 @@
 `mcp__codebase-memory-mcp__*` sorgu araçları (`search_code`, `search_graph`,
 `query_graph`, `trace_path`, `get_code_snippet`, `get_architecture`, `index_status`)
 **`project`** argümanı ister — bu `repo_path` değil, indeksleme çıktısındaki yol-tabanlı
-kimliktir (format: yolun tire'lenmiş hali, `C-Users-<kullanıcı>-Desktop-<repo-yolu>`). Bu
-depo için: `C-Users-Bilal-Desktop-Projects-TionHarness`.
+kimliktir (format: yolun tire'lenmiş hali — `internal/mcp/projectid.go`). Kimlik **makineye
+göre değişir**: Windows'ta `C-Users-Bilal-Desktop-Projects-TionHarness`, macOS'ta (bu Mac)
+`Users-monster-Desktop-tionharness`. Başka bir makinede `list_projects` ile doğrula.
 
 - İlk çağrıdan önce bir kez `list_projects` çalıştır; `project` değerini listeden birebir
   kopyala.
@@ -47,18 +48,33 @@ Runtime bu kökü her istekte aktif oturumun scratchpad'ine ayarlar
 
 ## 4. Go araç zinciri keşfi
 
-Ortamı tahmin etme: `printf 'shell=%s\n' "$SHELL"`, `command -v go`, `command -v gofmt`,
-`where.exe go`. `command -v` sonuç verirse o çağrıyı kullan. Yalnız `where.exe` Windows
-yolu bulursa `/c/...` biçiminin çalışacağını varsayma; `command -v powershell.exe` ile
-köprüyü doğrula ve gereken alt komutu Bash içinden ver:
+Ortamı tahmin etme: önce `uname -s` ve `printf 'shell=%s\n' "$SHELL"`, sonra
+`command -v go`, `command -v gofmt`. `command -v` sonuç verirse o çağrıyı kullan.
 
-```bash
-powershell.exe -NoProfile -Command '& (Get-Command go).Source version'
-```
+- **macOS / Linux:** `command -v go` yeterlidir (macOS'ta genelde Homebrew:
+  `/opt/homebrew/bin/go`). Bulamazsa PATH'i kontrol et; `where.exe`/PowerShell köprüsü
+  yoktur. macOS'un `/bin/bash`'i 3.2'dir: script'lerde ilişkisel dizi, `${var,,}`,
+  `wait -n` kullanma; BSD araçlarında `sed -i ''`, `xargs -r` ve GNU'ya özel bayraklar
+  farklıdır. Git, Xcode lisansı kabul edilmemişse hata verir; derlemelerde
+  `-buildvcs=false` bu yüzden kullanılır.
+- **Yalnız Windows:** `where.exe go` de dene. Yalnız `where.exe` Windows yolu bulursa
+  `/c/...` biçiminin çalışacağını varsayma; `command -v powershell.exe` ile köprüyü
+  doğrula ve gereken alt komutu Bash içinden ver:
+
+  ```bash
+  powershell.exe -NoProfile -Command '& (Get-Command go).Source version'
+  ```
 
 `GOROOT` değerini sabit yazma; `go env GOROOT` çağır. Araç yoksa biçimlendirme/test
-yapılmış gibi raporlama. Windows'a özel kod için
-`GOOS=windows go test ./...` (Git Bash'te ortam atamasını komutun önüne koy).
+yapılmış gibi raporlama. Başka bir işletim sistemine özel kod için
+`GOOS=windows go test ./...` / `GOOS=windows go vet ./...` (Windows dışında test
+binary'si çalışmaz, `go vet` ve `go build` derleme kontrolü verir; ortam atamasını
+komutun önüne koy).
+
+Başlatıcı karşılıkları: `scripts/serve.ps1` ↔ `scripts/serve.sh`, `scripts/dev.ps1` ↔
+`scripts/dev.sh` (macOS/Linux; ortak yardımcılar `scripts/lib/common.sh`). Diğer `.ps1`
+script'lerinin (build, install, e2e-smoke, shots, worktree, tailscale-serve) bash
+karşılığı yoktur; `pwsh` kuruluysa bir kısmı çalışır.
 
 `frontend/go.mod` boş bir **işaret modülüdür**: `frontend/node_modules` içindeki Go
 kaynaklarını (örn. `flatted/golang`) kök modülün `./...` taramasından çıkarır; silme,
@@ -86,6 +102,10 @@ cp /tmp/dosya.full <dosya>
 
 `--no-verify` çözüm değildir: hook `gofmt` ve BOM soyma görevini de yapar.
 
+Hook klon başına `git config core.hooksPath .githooks` ile açılır. macOS/Linux'ta git
+yalnız çalıştırılabilir hook'u koşturur: dosya depoda `100755` modundadır; eski bir
+klonda çalışmıyorsa `chmod +x .githooks/pre-commit`.
+
 ## 6. Test koşturma ayrıntıları
 
 - Harici araç isteyen testler `t.Skip` ile geçitlenir (rg, python, node, claude CLI, ağ).
@@ -106,9 +126,11 @@ cp /tmp/dosya.full <dosya>
 - `//go:embed`'lenen varlıklar LF kalmalı; `.gitattributes`
   `internal/*/defaults/** text eol=lf` bunu sabitler. Yeni gömülü dizin eklersen kalıbın
   kapsadığından emin ol.
-- Sandbox grep aracı `--no-ignore-parent` ile koşar: `%TEMP%\.gitignore` gibi üst dizin
+- Sandbox grep aracı `--no-ignore-parent` ile koşar: `%TEMP%\.gitignore` (macOS/Linux: `$TMPDIR/.gitignore`) gibi üst dizin
   ignore dosyaları sonuçları gizleyemez (2026-09-03, `internal/tools/grep_rg.go`).
-- `-race` bu makinede CGO kapalı olduğu için koşmaz; CI (linux) koşar.
+- `-race` cgo ve C derleyicisi ister: Windows geliştirme makinesinde CGO kapalı olduğu
+  için koşmaz; macOS'ta Xcode Command Line Tools (Linux'ta gcc) varsa yerelde koşar
+  (`go env CGO_ENABLED` → `1`). CI (linux) her durumda koşar.
 - CI: `.github/workflows/` (release + Pages) ve `.gitea/workflows/ci.yml` (yalnız
   doğrulama). Paket alt-kümesi geçidi kurma; en çok değişen paketler dışarıda kalır.
 

@@ -171,7 +171,7 @@
     "releaseNotes": "Sürüm notları",
     "goTo": "Git",
     "replyReady": "Yanıt hazır",
-    "copyPathPrompt": "Yolu kopyalayın (Ctrl+C, Enter):",
+    "copyPathPrompt": "Yolu kopyalayın ({{mod}}+C, Enter):",
     "workspaceCreated": "Workspace oluşturuldu",
     "workspaceAttached": "Workspace eklendi",
     "workspaceDeleted": "Workspace silindi",

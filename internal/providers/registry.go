@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -57,7 +56,7 @@ type Registry struct {
 // (claude, codex) on PATH so they work out of the box as the fallback binary
 // path when an instance leaves its own cliPath field empty.
 func NewRegistry() *Registry {
-	claudePath, _ := exec.LookPath("claude")
+	claudePath := lookupClaudeBinary()
 	codexPath := lookupCodexBinary()
 	return &Registry{
 		claudeCLIPath: claudePath,

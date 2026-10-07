@@ -23,12 +23,24 @@ export type MenuItem = {
   artifact?: Artifact
 }
 
+// SLASH_COMMAND_RE matches text that starts with a slash command: "/" then a
+// command name (no whitespace, no further "/") ending at whitespace or the end.
+// Command names never contain "/", so an absolute POSIX path such as
+// "/Users/me/app/main.go fails" or "/tmp/x" is prose, not a command.
+const SLASH_COMMAND_RE = /^\/[^\s/]+(?:\s|$)/
+
+/** True when `text` (already trimmed by the caller if needed) starts with a slash command. */
+export function isSlashCommandText(text: string): boolean {
+  return SLASH_COMMAND_RE.test(text)
+}
+
 // detectTrigger inspects the text before the caret and reports which autocomplete
 // menu (if any) should be open.
 export function detectTrigger(value: string, caret: number): Trigger {
   const before = value.slice(0, caret)
-  // "/" command palette — only when the whole input is a single "/word".
-  if (before.startsWith('/') && !before.includes(' ')) {
+  // "/" command palette — only when the whole input is a single "/word". A token
+  // with a second "/" (/tmp/x, /Users/me/...) is a POSIX path being typed.
+  if (before.startsWith('/') && !before.includes(' ') && !before.slice(1).includes('/')) {
     return { mode: 'command', query: before.slice(1) }
   }
   // "@" agent name reference — last token at the caret starting with "@".

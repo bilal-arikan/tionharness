@@ -14,7 +14,7 @@ import (
 // but /mnt/c/... under WSL. Callers use it to tell the agent which one it got.
 const (
 	POSIXShellNone    = ""        // no POSIX shell on this host (Bash tool not offered)
-	POSIXShellUnix    = "unix"    // native /bin/sh
+	POSIXShellUnix    = "unix"    // native bash (or /bin/sh when bash is absent)
 	POSIXShellGitBash = "gitbash" // git-bash on Windows: drives at /c/, /d/
 	POSIXShellWSL     = "wsl"     // wsl.exe -e bash: drives at /mnt/c/, /mnt/d/
 )
@@ -49,13 +49,22 @@ func POSIXShellExecutable() string {
 }
 
 // resolvePOSIXShell finds the POSIX shell backing the Bash tool and the args that
-// must precede "-c <command>". On Unix it is plain /bin/sh. On Windows it prefers
-// a real git-bash and deliberately avoids C:\Windows\System32\bash.exe — see
-// isWSLBashLauncher for why. Returns ok=false on Windows when no usable shell is
-// found, so the Bash tool is simply not offered there (PowerShell is).
+// must precede "-c <command>". On Unix it is bash — the tool is advertised as
+// "Bash" and models write bash syntax ([[ ]], arrays, pipefail), which /bin/sh
+// rejects where it is dash (Debian/Ubuntu) — falling back to /bin/sh only when no
+// bash exists. On Windows it prefers a real git-bash and deliberately avoids
+// C:\Windows\System32\bash.exe — see isWSLBashLauncher for why. Returns ok=false
+// when no usable shell is found, so the Bash tool is simply not offered (on
+// Windows PowerShell is).
 func resolvePOSIXShell() (exe string, preArgs []string, ok bool) {
 	if runtime.GOOS != "windows" {
-		return "/bin/sh", nil, true
+		if p, found := lookInterpreter("bash"); found {
+			return p, nil, true
+		}
+		if _, err := os.Stat("/bin/sh"); err == nil {
+			return "/bin/sh", nil, true
+		}
+		return "", nil, false
 	}
 	// A bash on PATH is fine as long as it is not the WSL launcher.
 	if p, found := lookInterpreter("bash"); found && !isWSLBashLauncher(p) {

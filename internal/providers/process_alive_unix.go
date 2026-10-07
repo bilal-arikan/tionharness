@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 func processIsAlive(pid int) bool {
@@ -22,6 +24,9 @@ func processIsAlive(pid int) bool {
 }
 
 func processStartTime(pid int) (time.Time, bool) {
+	if runtime.GOOS == "darwin" {
+		return psStartTime(pid)
+	}
 	if runtime.GOOS != "linux" {
 		return time.Time{}, false
 	}
@@ -58,4 +63,24 @@ func processStartTime(pid int) (time.Time, bool) {
 	}
 	// Linux exposes process start ticks in the fixed USER_HZ ABI unit (100 Hz).
 	return time.Unix(bootSeconds, startTicks*(int64(time.Second)/100)), true
+}
+
+// psStartTime reads a process start time from `ps -o lstart=` (macOS has no
+// /proc). lstart has one-second resolution, inside processStartTimeTolerance.
+// LC_ALL=C pins the English day/month names the layout below expects.
+func psStartTime(pid int) (time.Time, bool) {
+	cmd := proc.Command("/bin/ps", "-o", "lstart=", "-p", strconv.Itoa(pid))
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	out, err := cmd.Output()
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsePSLstart(string(out))
+}
+
+// parsePSLstart parses lstart ("Tue Oct  7 03:23:12 2026"); the day's padding
+// space is collapsed first, so one layout covers one- and two-digit days.
+func parsePSLstart(s string) (time.Time, bool) {
+	t, err := time.ParseInLocation("Mon Jan 2 15:04:05 2006", strings.Join(strings.Fields(s), " "), time.Local)
+	return t, err == nil
 }

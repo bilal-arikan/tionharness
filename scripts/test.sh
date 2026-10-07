@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Repository test runner (Git Bash). Two modes:
+# Repository test runner (Windows'ta Git Bash; macOS/Linux'ta yerel bash). Two modes:
 #   scripts/test.sh fast   -> Go packages touched by the working tree + staged/committed-
 #                             since-main changes, plus frontend vitest when frontend/ changed
 #   scripts/test.sh full   -> go test ./... -count=1 + frontend vitest (the delivery gate)
@@ -40,11 +40,23 @@ case "$mode" in
     bash scripts/tests/depcheck_test.sh || status=$?
     ;;
   fast)
-    # Changed files = uncommitted + committed on this branch since main (falls back
-    # to uncommitted only when main is not available).
+    # Changed files = uncommitted (incl. untracked) + committed on this branch since
+    # main (falls back to uncommitted only when main is not available).
     base="$(git merge-base HEAD main 2>/dev/null || true)"
-    changed="$( { git diff --name-only; git diff --name-only --cached; [ -n "$base" ] && git diff --name-only "$base" HEAD; } | sort -u )"
-    pkgs="$(printf '%s\n' "$changed" | grep -E '\.go$' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' || true)"
+    # if-block, not `[ -n "$base" ] && ...`: without a local main that list would
+    # end in status 1 and set -e/pipefail would exit the script silently.
+    changed="$( {
+      git diff --name-only
+      git diff --name-only --cached
+      git ls-files --others --exclude-standard
+      if [ -n "$base" ]; then git diff --name-only "$base" HEAD; fi
+    } | sort -u )"
+    # A while-read loop instead of `xargs -r` (GNU-only; BSD xargs on macOS lacks
+    # it). Directories that no longer exist (deleted packages) are skipped.
+    pkgs="$(printf '%s\n' "$changed" | grep -E '\.go$' | while IFS= read -r f; do
+      d=$(dirname "$f")
+      if [ -d "$d" ]; then printf './%s\n' "$d"; fi
+    done | sort -u || true)"
     if [ -n "$pkgs" ]; then
       # shellcheck disable=SC2086
       run_go $pkgs

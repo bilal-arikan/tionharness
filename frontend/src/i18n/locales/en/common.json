@@ -171,7 +171,7 @@
     "releaseNotes": "Release notes",
     "goTo": "Go to",
     "replyReady": "Reply ready",
-    "copyPathPrompt": "Copy the path (Ctrl+C, Enter):",
+    "copyPathPrompt": "Copy the path ({{mod}}+C, Enter):",
     "workspaceCreated": "Workspace created",
     "workspaceAttached": "Workspace attached",
     "workspaceDeleted": "Workspace deleted",

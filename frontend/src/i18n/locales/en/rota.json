@@ -91,8 +91,8 @@
     "noArmedSchedules": "No armed schedules."
   },
   "chips": {
-    "title_one": "{{label}}: {{count}} lane — Ctrl: select only this, Shift: invert the others",
-    "title_other": "{{label}}: {{count}} lanes — Ctrl: select only this, Shift: invert the others",
+    "title_one": "{{label}}: {{count}} lane — {{mod}}: select only this, Shift: invert the others",
+    "title_other": "{{label}}: {{count}} lanes — {{mod}}: select only this, Shift: invert the others",
     "resetTitle_one": "{{count}} filter is off — restore all",
     "resetTitle_other": "{{count}} filters are off — restore all",
     "reset": "reset filters"
@@ -113,7 +113,7 @@
     "logDurationTitle": "Show long durations on a logarithmic scale so short sessions remain readable while start and end points stay exact"
   },
   "zoom": {
-    "title": "Zoom the time axis (Ctrl + wheel)",
+    "title": "Zoom the time axis ({{mod}} + wheel)",
     "label": "zoom",
     "out": "Zoom out",
     "fit": "Fit to panel",

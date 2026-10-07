@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"runtime"
 )
 
 // gitCmdTimeout bounds each git invocation so a slow/hung repo can't stall a
@@ -25,9 +26,19 @@ var errGitMissing = errors.New("git bulunamadı (PATH'te git yok)")
 // gitInstalled reports whether a git binary is resolvable on PATH (honouring
 // PATHEXT on Windows). Not cached: git may be installed while the app runs, and
 // LookPath is cheap enough for the handful of endpoints that ask.
+//
+// On macOS /usr/bin/git always exists but is an xcrun shim: without the Xcode
+// Command Line Tools every call fails ("invalid active developer path"). There
+// the shim is accepted only once `xcode-select -p` reports a developer dir.
 func gitInstalled() bool {
-	_, err := exec.LookPath("git")
-	return err == nil
+	p, err := exec.LookPath("git")
+	if err != nil {
+		return false
+	}
+	if runtime.GOOS == "darwin" && p == "/usr/bin/git" {
+		return proc.Command("/usr/bin/xcode-select", "-p").Run() == nil
+	}
+	return true
 }
 
 // runGit runs `git -C dir args...` with a timeout and returns trimmed stdout.

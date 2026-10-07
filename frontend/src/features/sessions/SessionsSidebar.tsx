@@ -59,6 +59,7 @@ import { sessionMatchesQuery } from './sessionSearch'
 import { countLiveDescendantWorkers } from './liveWorkerCounts'
 import { sessionListModel } from './sessionListModel'
 import { useTranslation } from 'react-i18next'
+import { modKeyLabel } from '@/shared/lib/platform'
 
 const SIDEBAR_WIDTH_KEY = 'tionharness.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 200
@@ -427,6 +428,7 @@ export function SessionsSidebar({
                 title={t('sidebar.filterTitle', {
                   label: f.label,
                   count: chipCounts.get(f.key) ?? 0,
+                  mod: modKeyLabel(),
                 })}
                 aria-pressed={on}
                 data-chip={f.key}

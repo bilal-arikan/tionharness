@@ -10,8 +10,9 @@ haritası, deferred araçlar, Playwright, kısmi commit, BOM/LF, `website/`) →
 - Go araçlarının yerini tahmin etme (`command -v go`, `command -v gofmt`); Go dosyası
   değişince `gofmt -w <dosya>`. Ayrıntı `_Docs/80` §4.
 - Arama: niyet → `zvec_grep_search`, sembol ilişkisi → `codebase-memory-mcp`, birebir
-  string → `Grep`/`Glob`. codebase-memory `project` =
-  `C-Users-Bilal-Desktop-Projects-TionHarness`.
+  string → `Grep`/`Glob`. codebase-memory `project` kimliği **makineye göre değişir**
+  (depo yolunun ayraçları `-` yapılmış hali): Windows `C-Users-Bilal-Desktop-Projects-TionHarness`,
+  bu Mac `Users-monster-Desktop-tionharness`. Emin değilsen `list_projects` ile bak.
 - Edit `old_string` eşleşmezse kısa, benzersiz bir ASCII parça hedefle.
 
 ## Git

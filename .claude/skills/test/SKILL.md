@@ -9,7 +9,7 @@ description: >
 
 # Test runner
 
-Always go through `scripts/test.sh` (Git Bash). It sets `TIONHARNESS_ENABLE_SHELL=1`,
+Always go through `scripts/test.sh` (Git Bash on Windows; the native bash on macOS/Linux). It sets `TIONHARNESS_ENABLE_SHELL=1`,
 filters provider log noise, and ends with `git diff --check`.
 
 ```bash
@@ -26,7 +26,9 @@ Interpreting output:
   (`_Docs/80-AJAN-REFERANSI.md` §6).
 - `invalid BOM in the middle of the file` = a `.go` file was written with a BOM.
 - Tests needing rg/python/node/claude/network skip with `t.Skip`; a skip is not a failure.
-- `-race` does not run on this machine (CGO off); CI runs it on linux.
+- `-race` needs cgo and a C toolchain. On the Windows dev machine CGO is off, so it does
+  not run there; on macOS with the Xcode Command Line Tools (and on Linux with gcc) it
+  works locally. CI runs it on linux either way. Check with `go env CGO_ENABLED`.
 
 Never narrow the gate to a package subset when reporting completion: `full` is the
 contract. If `full` cannot run, say so explicitly instead of reporting green.

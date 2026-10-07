@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -14,8 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // Hook execution policy. Hooks run arbitrary shell commands, so they are bounded
@@ -353,8 +356,23 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = proc.CommandContext(runCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", h.Command)
+	} else if climcp.IsPowerShellSource(h.Command) {
+		// A hook authored on Windows (PowerShell source) in a workspace now run on
+		// macOS/Linux: bash would only report a syntax error. Run it in PowerShell 7
+		// when installed; otherwise fail with the fix instead of a parse error.
+		pwsh, ok := climcp.PowerShellHost()
+		if !ok {
+			return hookDecision{}, errors.New(climcp.PwshMissingMessage)
+		}
+		cmd = proc.CommandContext(runCtx, pwsh, "-NoProfile", "-NonInteractive", "-Command", h.Command)
 	} else {
-		cmd = proc.CommandContext(runCtx, "/bin/sh", "-c", h.Command)
+		// Same interpreter as the Bash tool: bash when installed (Claude Code runs
+		// hooks with bash too, so hook packs use bash syntax), else /bin/sh.
+		sh := tools.POSIXShellExecutable()
+		if sh == "" {
+			sh = "/bin/sh"
+		}
+		cmd = proc.CommandContext(runCtx, sh, "-c", h.Command)
 	}
 	// A hook is a shell line: killing the shell alone on timeout orphans whatever
 	// it launched, and any survivor keeps the output pipes open so the run below

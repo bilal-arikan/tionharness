@@ -20,12 +20,14 @@ interface RawItem {
 const isInlineData = (s: string) => /^(data:|blob:)/i.test(s)
 
 // Resolve a path/URL to something the <img> can load: external/data/blob URLs
-// and already-built /api/files URLs pass through; a bare local image path is
-// routed through the backend file server.
+// and already-built /api/ URLs pass through; any local image path — Windows
+// (C:\...), absolute POSIX (/Users/..., /home/...) or relative — is routed
+// through the backend file server. An absolute POSIX path must NOT pass through
+// as-is: the browser would resolve it against the app origin and 404.
 function resolveSrc(raw: string): string {
   const s = raw.trim()
   if (!s) return s
-  if (isExternalUrl(s) || isInlineData(s) || s.startsWith('/api/') || s.startsWith('/')) return s
+  if (isExternalUrl(s) || isInlineData(s) || s.startsWith('/api/')) return s
   return isMediaPath(s) ? mediaUrl(s) : s
 }
 

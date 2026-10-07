@@ -3,6 +3,7 @@
 // toggles one chip, Ctrl/Cmd-click solos it, Shift-click inverts the rest.
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { modKeyLabel } from '@/shared/lib/platform'
 import { Archive, Sparkles, Users } from 'lucide-react'
 import {
   ARCHIVED_CHIP,
@@ -57,7 +58,11 @@ export function RotaChipFilter({ chipSet, counts, onClickChip, onReset, offCount
               key={f.key}
               type="button"
               onClick={(e) => click(f.key, e)}
-              title={t('chips.title', { label: f.label, count: counts.get(f.key) ?? 0 })}
+              title={t('chips.title', {
+                label: f.label,
+                count: counts.get(f.key) ?? 0,
+                mod: modKeyLabel(),
+              })}
               aria-pressed={on}
               data-chip={f.key}
               className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] transition ${

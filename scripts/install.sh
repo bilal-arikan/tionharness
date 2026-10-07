@@ -25,7 +25,11 @@ cleanup() {
     rm -rf "$work_dir"
   fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+# A bare `trap cleanup INT` would run cleanup and then RESUME the script; exit
+# instead and let the EXIT trap clean up.
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # --- required tools -----------------------------------------------------------
 
@@ -83,9 +87,11 @@ version=$(json_string "${feed_body%%\"artifacts\"*}" version)
 [ -n "$version" ] || fail "malformed feed: no version field in $feed_url/latest.json"
 
 # Split the artifact array into one object per line so each can be matched.
+# awk, not sed: a "\n" in a sed replacement is a GNU extension (BSD sed on older
+# macOS emits a literal "n"); awk's gsub handles it everywhere.
 artifact=$(
-  printf '%s' "$feed_body" |
-    sed 's/},/}\n/g' |
+  printf '%s\n' "$feed_body" |
+    awk '{ gsub(/},/, "}\n"); print }' |
     grep '"os"[[:space:]]*:[[:space:]]*"'"$host_os"'"' |
     grep '"arch"[[:space:]]*:[[:space:]]*"'"$host_arch"'"' |
     head -n 1

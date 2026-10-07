@@ -29,6 +29,10 @@ type Job struct {
 // call is the only way to resume it.
 var ntResumeProcess = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtResumeProcess")
 
+// ContainmentStatus reports that Jobs fully enforce containment: a job object
+// holds the whole tree and its process cap on every supported Windows version.
+func ContainmentStatus() (enforced bool, reason string) { return true, "" }
+
 // NewJob creates an anonymous job object with the given limits and
 // kill-on-close set. The caller must Close it.
 func NewJob(limits JobLimits) (*Job, error) {

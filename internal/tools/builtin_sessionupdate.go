@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -57,7 +58,7 @@ func (UpdateSessionTool) Def() providers.ToolDef {
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"title":"Refactor tool registry"}`),
 			json.RawMessage(`{"add":["loop"]}`),
-			json.RawMessage(`{"working_dir":"C:\\Users\\user\\Desktop\\Projects\\TionHarness"}`),
+			json.RawMessage(`{"working_dir":` + exampleWorkingDirJSON() + `}`),
 			json.RawMessage(`{"archive":true}`),
 		},
 	}
@@ -201,4 +202,17 @@ func applyTagDelta(cur, add, remove []string) []string {
 		appendTag(t)
 	}
 	return out
+}
+
+// exampleWorkingDirJSON is a host-appropriate absolute path for the schema
+// example, so the model is not nudged toward C:\ paths on macOS/Linux.
+func exampleWorkingDirJSON() string {
+	switch runtime.GOOS {
+	case "windows":
+		return `"C:\\Users\\user\\Desktop\\Projects\\TionHarness"`
+	case "darwin":
+		return `"/Users/user/Projects/TionHarness"`
+	default:
+		return `"/home/user/projects/TionHarness"`
+	}
 }

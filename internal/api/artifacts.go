@@ -20,6 +20,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/artifacts"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 	"github.com/bilal-arikan/tionharness/internal/textutil"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
@@ -220,19 +221,36 @@ func workspaceArtifactPath(wsp *workspace.Workspace, rel string) (string, bool) 
 	}
 	root := filepath.Clean(wsp.SandboxRoot())
 	abs := filepath.Clean(filepath.Join(root, filepath.FromSlash(rel)))
-	if resolvedRoot, err := filepath.EvalSymlinks(root); err == nil {
-		root = resolvedRoot
-	}
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		abs = resolved
-	} else if resolvedParent, parentErr := filepath.EvalSymlinks(filepath.Dir(abs)); parentErr == nil {
-		abs = filepath.Join(resolvedParent, filepath.Base(abs))
-	}
-	within, err := filepath.Rel(root, abs)
-	if err != nil || within == ".." || strings.HasPrefix(within, ".."+string(filepath.Separator)) {
+	root = evalExistingPrefix(root)
+	abs = evalExistingPrefix(abs)
+	if !fspath.Within(root, abs) {
 		return "", false
 	}
 	return abs, true
+}
+
+// evalExistingPrefix resolves symlinks in the deepest existing ancestor of p and
+// appends the not-yet-existing remainder lexically. Resolving only p or its parent
+// is not enough: when a whole subtree is still missing, p would keep its lexical
+// spelling while the root is resolved — on macOS /var/... vs /private/var/... —
+// and a path inside the root would look like an escape.
+func evalExistingPrefix(p string) string {
+	cur := p
+	var tail []string
+	for {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			for i := len(tail) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, tail[i])
+			}
+			return filepath.Clean(resolved)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p
+		}
+		tail = append(tail, filepath.Base(cur))
+		cur = parent
+	}
 }
 
 func artifactImageMIME(header []byte) (string, string, bool) {

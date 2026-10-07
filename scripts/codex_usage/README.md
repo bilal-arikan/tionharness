@@ -7,14 +7,18 @@ Yeni sağlayıcı kodu yalnız ilgili denemede rollout dosyasına eklenen model
 
 ## Çalıştırma
 
-Git Bash ve Python 3 kullanılır. Önce `--apply` olmadan çalıştırılır:
+Python 3 ve bash kullanılır (Windows'ta Git Bash). Önce `--apply` olmadan
+çalıştırılır:
 
 ```bash
-python scripts/repair-codex-usage.py \
-  --data-dir "$USERPROFILE/.tionharness" \
+python3 scripts/repair-codex-usage.py \
+  --data-dir "${TIONHARNESS_DATA_DIR:-$HOME/.tionharness}" \
   --workspace WS30 --session SES4 \
   --rollout "$ROLLOUT_PATH"
 ```
+
+Windows'ta (Git Bash) Python genelde `python` adıyla gelir ve varsayılan veri dizini
+`"$USERPROFILE/.tionharness"` olarak verilebilir.
 
 `ROLLOUT_PATH`, ilgili `rollout-*.jsonl` dosyasının tam yoludur. Betik,
 rollout kimliğinin oturumdaki `cliSessionId` ile aynı olduğunu doğrular.

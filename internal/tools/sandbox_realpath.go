@@ -68,3 +68,17 @@ func checkRealPathUnderRoot(abs, root, rel string) error {
 	}
 	return nil
 }
+
+// realPathUnderRoot reports whether abs's real location lies inside root's real
+// location. Any resolution error counts as "not under".
+func realPathUnderRoot(abs, root string) bool {
+	realRoot, err := realPathOf(root)
+	if err != nil {
+		return false
+	}
+	realAbs, err := realPathOf(abs)
+	if err != nil {
+		return false
+	}
+	return underRoot(realAbs, realRoot)
+}

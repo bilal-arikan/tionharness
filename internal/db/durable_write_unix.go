@@ -3,8 +3,10 @@
 package db
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 func durableReplace(from, to string) error {
@@ -15,7 +17,7 @@ func durableReplace(from, to string) error {
 	if err != nil {
 		return err
 	}
-	if err := dir.Sync(); err != nil {
+	if err := syncDir(dir); err != nil {
 		_ = dir.Close()
 		return err
 	}
@@ -30,9 +32,20 @@ func durableRemove(path string) error {
 	if err != nil {
 		return err
 	}
-	if err := dir.Sync(); err != nil {
+	if err := syncDir(dir); err != nil {
 		_ = dir.Close()
 		return err
 	}
 	return dir.Close()
+}
+
+// syncDir fsyncs a directory. Some filesystems (exFAT/SMB volumes on macOS, some
+// FUSE/9p mounts on Linux) cannot fsync a directory and answer EINVAL/ENOTSUP;
+// the rename or remove has already happened, so that is not a failed write.
+func syncDir(dir *os.File) error {
+	err := dir.Sync()
+	if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EBADF) {
+		return nil
+	}
+	return err
 }

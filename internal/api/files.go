@@ -2,10 +2,12 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 )
 
 // servableExt is the allowlist of file extensions the chat UI / artifacts screen
@@ -92,10 +94,7 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "path or rel is required")
 			return
 		}
-		// Accept file:// URLs as well as bare paths.
-		raw = strings.TrimPrefix(raw, "file://")
-		raw = strings.TrimPrefix(raw, "/") // file:///C:/... → C:/...
-		path = filepath.Clean(filepath.FromSlash(raw))
+		path = localPathParam(raw)
 		// A chat reply may reference a file it produced with a workspace-relative
 		// path (![shot](output/images/a.png)). Resolve those against the active
 		// workspace sandbox instead of the server process' working directory,
@@ -165,10 +164,7 @@ func (s *Server) serveTextFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "path is required")
 		return
 	}
-	// Accept file:// URLs as well as bare paths (file:///C:/... → C:/...).
-	raw = strings.TrimPrefix(raw, "file://")
-	raw = strings.TrimPrefix(raw, "/")
-	path := filepath.Clean(raw)
+	path := localPathParam(raw)
 
 	// Whitelist boundary: only render_template output (under <store>/render/) may
 	// be read as text. This keeps as=text from reading arbitrary text files off
@@ -204,18 +200,29 @@ func (s *Server) serveTextFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, filepath.Base(path), info.ModTime(), f)
 }
 
+// localPathParam turns a ?path= value into a cleaned OS path. It accepts bare
+// paths and file:// URLs (percent-decoded). The leading slash of a URL path is
+// dropped only before a drive letter (file:///C:/x → C:/x); a POSIX absolute path
+// (/Users/x/a.png) keeps it.
+func localPathParam(raw string) string {
+	if strings.HasPrefix(raw, "file://") {
+		if u, err := url.Parse(raw); err == nil && u.Path != "" {
+			raw = u.Path
+		} else {
+			raw = strings.TrimPrefix(raw, "file://")
+		}
+	}
+	if len(raw) >= 3 && raw[0] == '/' && isASCIILetter(raw[1]) && raw[2] == ':' {
+		raw = raw[1:]
+	}
+	return filepath.Clean(filepath.FromSlash(raw))
+}
+
+func isASCIILetter(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') }
+
 // underDir reports whether target is dir itself or a descendant of it, after
-// cleaning both. On Windows the comparison is case-insensitive (NTFS is), so a
-// path echoed back with different casing still resolves inside the boundary.
+// cleaning both. On case-insensitive hosts (Windows, macOS) a path echoed back with
+// different casing still resolves inside the boundary (see fspath.Within).
 func underDir(dir, target string) bool {
-	dir = filepath.Clean(dir)
-	target = filepath.Clean(target)
-	if runtime.GOOS == "windows" {
-		dir = strings.ToLower(dir)
-		target = strings.ToLower(target)
-	}
-	if dir == target {
-		return true
-	}
-	return strings.HasPrefix(target, dir+string(filepath.Separator))
+	return fspath.Within(filepath.Clean(dir), filepath.Clean(target))
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -100,9 +101,14 @@ func (s UpdateSpec) UpdateCommandLine() string {
 	parts := []string{s.Command}
 	for _, a := range s.Args {
 		// An npm --prefix can contain spaces (C:\Users\Ad Soyad\…); quote it so
-		// the copied line still works when pasted into a shell.
+		// the copied line still works when pasted into a shell. POSIX shells still
+		// expand $ and backticks inside double quotes, so use single quotes there.
 		if strings.ContainsAny(a, " \t") {
-			a = `"` + a + `"`
+			if runtime.GOOS == "windows" {
+				a = `"` + a + `"`
+			} else {
+				a = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+			}
 		}
 		parts = append(parts, a)
 	}

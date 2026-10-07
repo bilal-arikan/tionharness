@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useServerOS } from '@/shared/hooks/useServerOS'
+import { examplePath } from '@/shared/lib/platform'
 import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { InfoPopover, toast } from '@/shared/components'
+import { SystemRoleAssignments } from '@/shared/components/agents/SystemRolePickers'
+import { SYSTEM_ROLE_GROUPS } from '@/shared/components/agents/systemRoles'
 import { NumberField, NumberValidityProvider } from '@/features/settings/primitives'
 import { useNumberValidity } from '@/features/settings/numberValidity'
 import type { InsightSettings } from '@/types'
@@ -20,6 +24,7 @@ const inputCls =
 
 export function SettingsTab({ settings, setSettings, onError, onReset }: Props) {
   const { t } = useTranslation('insight')
+  const serverOS = useServerOS()
   const [saving, setSaving] = useState(false)
   const [deep, setDeep] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -63,7 +68,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
               type="text"
               value={settings.appFixRepoPath ?? ''}
               onChange={(e) => setSettings({ ...settings, appFixRepoPath: e.target.value })}
-              placeholder="C:/Users/.../TionHarness"
+              placeholder={examplePath(serverOS, 'appRepo')}
               className={`${inputCls} w-full`}
             />
           </label>
@@ -129,6 +134,16 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
           </button>
         </div>
       </NumberValidityProvider>
+
+      {/* Which agents run the insight roles — saved at once, shared with
+          Workspace ▸ Agents (one ws-settings map). */}
+      <div className="rounded-md border border-[var(--color-border)] p-3">
+        <SystemRoleAssignments
+          roles={[...SYSTEM_ROLE_GROUPS.analysis, 'recipe-optimizer']}
+          title={t('settings.agentsTitle')}
+          hint={t('settings.agentsHint')}
+        />
+      </div>
 
       {/* Danger zone: reset all insight data for this workspace. */}
       <div className="space-y-2 rounded-md border border-[var(--color-danger)]/40 p-3">

@@ -22,6 +22,10 @@ export interface Hook {
   matcher: string // tool-name glob, "" = all tools
   type: string // "command"
   command: string
+  // Set by the server when the command cannot run on its OS — today only
+  // 'powershell-missing': PowerShell source (authored on Windows) on macOS/Linux
+  // without pwsh installed.
+  shellWarning?: string
   timeoutSec: number
   enabled: boolean
   // Archived: hidden from the default list and never run, restorable.

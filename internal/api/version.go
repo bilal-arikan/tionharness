@@ -39,6 +39,10 @@ type versionResponse struct {
 	BuildDate string `json:"buildDate"`
 	GoVersion string `json:"goVersion"`
 	Module    string `json:"module"`
+	// OS/Arch are the backend host's runtime.GOOS/GOARCH so the UI can show
+	// platform-appropriate path hints (the browser may run on another device).
+	OS   string `json:"os"`
+	Arch string `json:"arch"`
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
@@ -59,5 +63,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 		BuildDate: BuildDate,
 		GoVersion: goVer,
 		Module:    module,
+		OS:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
 	})
 }

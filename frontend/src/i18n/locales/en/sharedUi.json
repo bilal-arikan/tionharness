@@ -32,7 +32,7 @@
     "search": "Search commands…"
   },
   "copyPath": {
-    "manualPrompt": "Copy the path (Ctrl+C, Enter):",
+    "manualPrompt": "Copy the path ({{mod}}+C, Enter):",
     "title": "Copy path"
   },
   "diff": {
@@ -182,5 +182,77 @@
       "tournament": "Tournament — eliminate candidates through pairwise comparisons"
     },
     "whatDoesItDo": "What does {{name}} do?"
+  },
+  "systemRoles": {
+    "title": "Agent assignments",
+    "hint": "Choose which agent runs each system role in this workspace. Empty = the role's built-in agent.",
+    "builtin": "Built-in · {{name}}",
+    "builtinUnnamed": "Built-in agent",
+    "utilitySemantics": "The role keeps its own prompt; the chosen agent only supplies its provider and model.",
+    "workerSemantics": "The chosen agent runs as itself — its own prompt, tools and model — whenever this profile is requested.",
+    "groups": {
+      "workers": "Workers",
+      "helpers": "Conversation helpers",
+      "analysis": "Analysis",
+      "optimizers": "Observers and judges"
+    },
+    "roles": {
+      "subagent-explore": {
+        "label": "Explore worker",
+        "hint": "Read-only codebase exploration when a coordinator spawns `explore`."
+      },
+      "subagent-planner": {
+        "label": "Planner worker",
+        "hint": "Read-only planning worker behind `planner`."
+      },
+      "subagent-coder": {
+        "label": "Coder worker",
+        "hint": "The writing worker behind `coder`."
+      },
+      "subagent-reviewer": {
+        "label": "Reviewer worker",
+        "hint": "Read-only review worker behind `reviewer`."
+      },
+      "subagent-validator": {
+        "label": "Validator worker",
+        "hint": "Runs checks and tests behind `validator`."
+      },
+      "subagent-config": {
+        "label": "Config worker",
+        "hint": "Edits workspace configuration behind `config`."
+      },
+      "titler": {
+        "label": "Title generator",
+        "hint": "Writes short titles for new conversations and requests."
+      },
+      "compaction": {
+        "label": "Compactor",
+        "hint": "Folds long conversation history into a structured summary at the context limit."
+      },
+      "overview-summarizer": {
+        "label": "Overview summarizer",
+        "hint": "Summarizes on-demand board and flow overviews."
+      },
+      "insight": {
+        "label": "Insight analyzer",
+        "hint": "Analyzes session evidence for recurring, actionable findings during insight scans."
+      },
+      "lesson-extractor": {
+        "label": "Lesson extractor",
+        "hint": "Distills reusable lessons from failed agent turns."
+      },
+      "flow-optimizer": {
+        "label": "Flow observer",
+        "hint": "Watches recent flow runs and proposes measured changes to an agent's main flow."
+      },
+      "recipe-optimizer": {
+        "label": "Recipe optimizer",
+        "hint": "Proposes changes to coordinator recipes from their trajectory statistics."
+      },
+      "stall-judge": {
+        "label": "Stall judge",
+        "hint": "Checks whether a coordinator described a worker spawn it never made."
+      }
+    }
   }
 }

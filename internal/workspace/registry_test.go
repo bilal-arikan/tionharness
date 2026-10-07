@@ -103,3 +103,23 @@ func TestLoadMetasMissingRegistryIsEmpty(t *testing.T) {
 		t.Fatalf("loadMetas must not create the registry: %v", err)
 	}
 }
+
+// TestOpenRejectsForeignOSPath: a registry copied from another OS holds paths that
+// are not absolute here (C:\Users\... on macOS/Linux, /Users/... on Windows).
+// open must refuse them — so boot lists the entry as degraded — instead of
+// MkdirAll-ing a folder literally named after the path under the process cwd.
+func TestOpenRejectsForeignOSPath(t *testing.T) {
+	m := testManager(t)
+	foreign := `C:\Users\x\ws`
+	if filepath.IsAbs(foreign) {
+		foreign = "/Users/x/ws"
+	}
+	cwd, _ := os.Getwd()
+	err := m.open(Meta{ID: "WS9", Name: "foreign", Path: foreign})
+	if err == nil {
+		t.Fatal("open accepted a path that is not absolute on this OS")
+	}
+	if _, statErr := os.Stat(filepath.Join(cwd, foreign)); statErr == nil {
+		t.Fatalf("open created %q under the cwd", foreign)
+	}
+}

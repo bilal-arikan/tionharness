@@ -24,6 +24,7 @@ import type {
 } from '@/types'
 import type { HookInput } from '@/api/hooks'
 import { displayPath } from '@/shared/lib/paths'
+import { useServerOS } from '@/shared/hooks/useServerOS'
 import { ZVEC_GREP_TOOL } from '@/shared/lib/zvecGrep'
 import { ZvecGrepCallout } from './ZvecGrepCallout'
 import { SearchIndexPanel } from './SearchIndexPanel'
@@ -90,6 +91,12 @@ const TOOL_CATEGORY_LABELS: Record<string, string> = {
 
 export function ExternalToolsPanel({ onError }: Props) {
   const { t: translate } = useTranslation('settingsMain')
+  // The PowerShell tool only exists when the backend runs on Windows; on macOS/
+  // Linux the agent's shell tool is Bash (/bin/sh), so a matcher without
+  // PowerShell is correct there. Unknown (still loading / old backend) keeps the
+  // Windows behaviour.
+  const serverOS = useServerOS()
+  const needsPowerShellMatcher = serverOS === undefined || serverOS === 'windows'
   const [hooks, setHooks] = useState<Hook[]>([])
   const [tools, setTools] = useState<ExternalToolStatus[] | null>(null)
   const [checking, setChecking] = useState(false)
@@ -298,11 +305,14 @@ export function ExternalToolsPanel({ onError }: Props) {
 
   // Wired token-optimizer hooks whose matcher omits PowerShell — on Windows the
   // agent uses the PowerShell tool, so a Bash-only matcher means the hook silently
-  // never fires. Surfaced with a one-click repair in the token callout.
+  // never fires. Surfaced with a one-click repair in the token callout. Off
+  // Windows there is no PowerShell tool, so nothing needs fixing.
   const tokenHooksNeedingFix = (): Hook[] =>
-    Object.keys(TOOL_HOOK_TEMPLATES)
-      .map((name) => wiredHook(name))
-      .filter((h): h is Hook => !!h && !coversPowerShell(h.matcher))
+    !needsPowerShellMatcher
+      ? []
+      : Object.keys(TOOL_HOOK_TEMPLATES)
+          .map((name) => wiredHook(name))
+          .filter((h): h is Hook => !!h && !coversPowerShell(h.matcher))
 
   // Repair one hook's matcher: merge PowerShell into the existing matcher (or set
   // Bash,PowerShell when empty), preserving every other field.
@@ -721,7 +731,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                 {/* Token-optimizer integration: mirrors the codebase-memory callout —
                     explains the prompt-side capability injection and flags any wired
                     hook whose matcher omits PowerShell (so it would never fire on
-                    Windows), with a one-click repair. Rendered once under the group. */}
+                    a Windows server), with a one-click repair. Rendered once under the group. */}
                 {cat === 'token' && (
                   <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
                     <span className="flex items-center gap-1 font-medium text-[var(--color-text)]">
@@ -734,7 +744,11 @@ export function ExternalToolsPanel({ onError }: Props) {
                       <InfoPopover
                         text={
                           <>
-                            {translate('externalTools.token.description')}{' '}
+                            {translate(
+                              needsPowerShellMatcher
+                                ? 'externalTools.token.description'
+                                : 'externalTools.token.descriptionPosix',
+                            )}{' '}
                             <span className="font-medium text-[var(--color-text)]">
                               {translate('externalTools.token.enableBoth')}
                             </span>{' '}

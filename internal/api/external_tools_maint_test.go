@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -46,12 +47,16 @@ func TestRunToolCmd_MissingBinaryIsNotAnError(t *testing.T) {
 // code: rtk exits non-zero on success paths (3 from `rtk rewrite`), so gating on
 // status would discard perfectly good report text.
 func TestRunToolCmd_IgnoresExitStatus(t *testing.T) {
-	if _, err := exec.LookPath("cmd"); err != nil {
-		t.Skip("cmd.exe not available on this host")
+	name, args := "sh", []string{"-c", "echo REPORT; exit 3"}
+	if runtime.GOOS == "windows" {
+		name, args = "cmd", []string{"/c", "echo REPORT & exit /b 3"}
 	}
-	out, found := runToolCmd(context.Background(), "cmd", "/c", "echo REPORT & exit /b 3")
+	if _, err := exec.LookPath(name); err != nil {
+		t.Skipf("%s not available on this host", name)
+	}
+	out, found := runToolCmd(context.Background(), name, args...)
 	if !found {
-		t.Fatal("cmd resolved on PATH but was reported missing")
+		t.Fatalf("%s resolved on PATH but was reported missing", name)
 	}
 	if !strings.Contains(out, "REPORT") {
 		t.Fatalf("output must survive a non-zero exit, got %q", out)

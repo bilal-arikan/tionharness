@@ -48,15 +48,54 @@ func codexCandidatePaths(goos string) []string {
 			candidates = append(candidates, filepath.Join(appData, "npm", "codex.cmd"))
 		}
 	case "darwin", "linux":
-		if home := os.Getenv("HOME"); home != "" {
-			candidates = append(candidates, filepath.Join(home, ".local", "bin", "codex"))
-		}
-		candidates = append(candidates, "/usr/local/bin/codex")
-		if goos == "darwin" {
-			candidates = append(candidates, "/opt/homebrew/bin/codex")
-		}
+		candidates = unixCLICandidates(goos, "codex")
 	}
 
+	return candidates
+}
+
+// lookupClaudeBinary resolves the claude CLI the same way lookupCodexBinary
+// resolves codex: PATH first, then the well-known per-user install locations. The
+// fallback matters on macOS, where an app started from Finder/Dock/launchd gets a
+// minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that hides ~/.local/bin and
+// Homebrew. Returns "" if nothing resolves.
+func lookupClaudeBinary() string {
+	if path, err := exec.LookPath("claude"); err == nil {
+		return path
+	}
+	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+		var candidates []string
+		if home := os.Getenv("HOME"); home != "" {
+			// The native installer's private copy (`claude migrate-installer`).
+			candidates = append(candidates, filepath.Join(home, ".claude", "local", "claude"))
+		}
+		for _, candidate := range append(candidates, unixCLICandidates(runtime.GOOS, "claude")...) {
+			if isRegularFile(candidate) {
+				return candidate
+			}
+		}
+	}
+	return ""
+}
+
+// unixCLICandidates lists the usual macOS/Linux install locations of an npm- or
+// installer-distributed CLI named name: per-user bin dirs (native installers,
+// npm's ~/.npm-global prefix, bun, volta) first, then the system-wide ones
+// (/usr/local/bin, Homebrew). Per-user candidates are skipped when HOME is unset.
+func unixCLICandidates(goos, name string) []string {
+	var candidates []string
+	if home := os.Getenv("HOME"); home != "" {
+		for _, dir := range [][]string{{".local", "bin"}, {".npm-global", "bin"}, {".bun", "bin"}, {".volta", "bin"}} {
+			candidates = append(candidates, filepath.Join(append(append([]string{home}, dir...), name)...))
+		}
+	}
+	candidates = append(candidates, "/usr/local/bin/"+name)
+	switch goos {
+	case "darwin":
+		candidates = append(candidates, "/opt/homebrew/bin/"+name)
+	case "linux":
+		candidates = append(candidates, "/home/linuxbrew/.linuxbrew/bin/"+name)
+	}
 	return candidates
 }
 

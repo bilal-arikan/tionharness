@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -54,7 +55,9 @@ func TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe(t *testing.T) {
 			t.Errorf("find leaked test grandchild %d: %v", pid, err)
 			return
 		}
-		if err := process.Kill(); err != nil {
+		// On POSIX the grandchild shares the helper's process group, so the tree
+		// kill under test may already have reaped it: ErrProcessDone is success.
+		if err := process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			t.Errorf("kill leaked test grandchild %d: %v", pid, err)
 		}
 	})
@@ -119,7 +122,9 @@ func TestCodexRunAttemptIdleOutputTimeoutWhileGrandchildHoldsPipe(t *testing.T) 
 			t.Errorf("find leaked test grandchild %d: %v", pid, err)
 			return
 		}
-		if err := process.Kill(); err != nil {
+		// On POSIX the grandchild shares the helper's process group, so the tree
+		// kill under test may already have reaped it: ErrProcessDone is success.
+		if err := process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			t.Errorf("kill leaked test grandchild %d: %v", pid, err)
 		}
 	})

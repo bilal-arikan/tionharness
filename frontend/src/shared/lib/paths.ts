@@ -20,6 +20,16 @@ const QUOTED_PATH_SRC = /(["'`])((?:[A-Za-z]:[\\/]|\.{0,2}\/|\/)[^\r\n"'`]+)\1/.
 // cannot stop at the first space and leave only file.ts:line:column linked.
 const WINDOWS_SPACED_LOCATION_SRC = /[A-Za-z]:[\\/][^\r\n"'`<>]*?\.\w+:\d+(?::\d+)?/.source
 
+// POSIX twin of WINDOWS_SPACED_LOCATION_SRC (/Users/x/Library/Application
+// Support/foo.json:3). Prose is full of "/" and spaces, so it is fenced in:
+// only well-known absolute roots, spaces only INSIDE directory segments (never
+// at a segment edge, and the file name itself must be space-free), and the
+// :line end marker is required.
+// "/tmp/foo is bad, see bar.go:12" therefore does not glue into one chip.
+const POSIX_SPACED_LOCATION_SRC =
+  /(?<![\w.~])\/(?:Users|home|opt|tmp|var|private|Volumes|mnt)\/(?:[^\s/"'`<>](?:[^/\r\n"'`<>]*[^\s/"'`<>])?\/)*[^\s/"'`<>]+\.\w+:\d+(?::\d+)?/
+    .source
+
 // An absolute http(s) URL, or a scheme-less "www.host/..." one. Must be tried
 // BEFORE PATH_SRC: the path pattern's "(?:\.{0,2}\/)" branch happily matches the
 // "//host/path" tail of a URL, which is what used to turn a WebSearch/WebFetch
@@ -28,7 +38,7 @@ const URL_SRC = /(?:https?:\/\/|www\.)[^\s"'`<>]+/.source
 
 const URL_ONLY_RE = new RegExp(`^${URL_SRC}$`, 'i')
 const LINK_RE = new RegExp(
-  `${URL_SRC}|${QUOTED_PATH_SRC}|${WINDOWS_SPACED_LOCATION_SRC}|${PATH_SRC}`,
+  `${URL_SRC}|${QUOTED_PATH_SRC}|${WINDOWS_SPACED_LOCATION_SRC}|${POSIX_SPACED_LOCATION_SRC}|${PATH_SRC}`,
   'gi',
 )
 
@@ -148,7 +158,9 @@ export function normalizeMarkdownPaths(markdown: string): string {
 
 /** Replace the current user's home directory prefix with ~ for display. */
 const WIN_HOME_RE = /^[A-Za-z]:\\Users\\[^\\]+\\/i
-const POSIX_HOME_RE = /^\/(?:home|Users)\/[^/]+\//
+// Linux root's home is /root/ (no user segment), macOS/Linux users live under
+// /Users/<name>/ and /home/<name>/.
+const POSIX_HOME_RE = /^\/(?:(?:home|Users)\/[^/]+|root)\//
 // Git Bash mounts Windows drives at /c/... (no \Users\ literal), so a shown
 // Bash command path like /c/Users/bilal/Desktop/... needs its own pattern —
 // it would not match WIN_HOME_RE (backslashes) or POSIX_HOME_RE (/home|/Users).

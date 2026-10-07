@@ -64,6 +64,8 @@ var readOnlyHeads = map[string]bool{
 	"true": true, "false": true, "test": true, "command": true, "ps": true,
 	"sleep": true, "tr": true, "column": true, "nl": true, "md5sum": true,
 	"sha1sum": true, "sha256sum": true, "cd": true,
+	// macOS spellings of the checksum tools above.
+	"shasum": true, "md5": true,
 	// PowerShell read cmdlets (lower-cased).
 	"get-childitem": true, "get-content": true, "select-string": true,
 	"get-location": true, "test-path": true, "get-item": true, "get-process": true,

@@ -494,7 +494,8 @@
     },
     "matcherHint": "Araç olayları: araç adı glob'u (boş = tümü). SessionStart: kaynak (startup|resume). PreCompact: tetik (manual|auto). Diğer yaşam döngüsü olaylarında boş bırak.",
     "command": "Komut",
-    "commandHint": "Shell komutu (Windows: PowerShell). JSON'u stdin'den alıp stdout'a döndürür.",
+    "commandHint": "Shell komutu (macOS/Linux: bash -c, PowerShell kaynağı pwsh ile; Windows: PowerShell). JSON'u stdin'den alıp stdout'a döndürür.",
+    "pwshMissing": "Bu hook PowerShell sözdiziminde (Windows'ta yazılmış) ve bu makinede PowerShell 7 (pwsh) kurulu değil; bu yüzden çalışamaz. pwsh'ı kur (macOS: brew install powershell) ya da komutu bash ile yeniden yaz.",
     "timeout": "Zaman aşımı (saniye)",
     "timeoutHint": "1–120 arası.",
     "builtins": {
@@ -670,6 +671,7 @@
     "token": {
       "title": "Token optimizasyonu entegrasyonu:",
       "description": "rtk veya sqz bağlandığında TionHarness ajana çıktının otomatik kısaltıldığını bildirir. Hook matcher'ları Bash ve PowerShell'i kapsamalıdır.",
+      "descriptionPosix": "rtk veya sqz bağlandığında TionHarness ajana çıktının otomatik kısaltıldığını bildirir. Hook matcher'ları Bash'i (macOS/Linux'taki kabuk aracı) kapsamalıdır.",
       "enableBoth": "İkisini birden açmak önerilir",
       "enableBothDetail": "— rtk komutu çalışmadan önce şekillendirir, sqz çıktıyı sonra sıkıştırır; ölçümde birlikte kullanım en iyi sonucu verir.",
       "matcherMissing": "matcher {{matcher}} PowerShell'i kapsamıyor",

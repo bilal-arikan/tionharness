@@ -138,10 +138,21 @@ func (s *Server) handleBrowseDirs(w http.ResponseWriter, r *http.Request) {
 }
 
 // rootEntries returns the filesystem roots for the picker: drive letters on
-// Windows, "/" on POSIX.
+// Windows; on POSIX the home dir first (where projects live), then "/", and on
+// macOS /Volumes (external disks).
 func rootEntries() []browseEntry {
 	if runtime.GOOS != "windows" {
-		return []browseEntry{{Name: "/", Path: "/"}}
+		var roots []browseEntry
+		if home, err := os.UserHomeDir(); err == nil && home != "" && home != "/" {
+			roots = append(roots, browseEntry{Name: "~ (" + filepath.Base(home) + ")", Path: home})
+		}
+		roots = append(roots, browseEntry{Name: "/", Path: "/"})
+		if runtime.GOOS == "darwin" {
+			if info, err := os.Stat("/Volumes"); err == nil && info.IsDir() {
+				roots = append(roots, browseEntry{Name: "/Volumes", Path: "/Volumes"})
+			}
+		}
+		return roots
 	}
 	var roots []browseEntry
 	for c := 'A'; c <= 'Z'; c++ {

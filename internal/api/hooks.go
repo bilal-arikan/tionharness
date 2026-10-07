@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
@@ -13,13 +14,22 @@ func (s *Server) handleListHooks(w http.ResponseWriter, r *http.Request) {
 	}
 	// Archived hooks are hidden unless asked for (?archived=true lists ONLY them).
 	showArchived := r.URL.Query().Get("archived") == "true"
-	hooks := make([]db.Hook, 0, len(all))
+	hooks := make([]hookView, 0, len(all))
 	for _, h := range all {
 		if h.Archived == showArchived {
-			hooks = append(hooks, h)
+			hooks = append(hooks, hookView{Hook: h, ShellWarning: climcp.HookShellWarning(h.Command)})
 		}
 	}
 	writeJSON(w, http.StatusOK, hooks)
+}
+
+// hookView is a hook as listed to the UI. ShellWarning flags a command that
+// cannot run on this host — today: PowerShell source (authored on Windows) on
+// macOS/Linux without pwsh — so the Hooks screen can say so instead of the hook
+// failing open unnoticed on every call.
+type hookView struct {
+	db.Hook
+	ShellWarning string `json:"shellWarning,omitempty"`
 }
 
 // builtinHook describes one automatic, non-user-editable behaviour TionHarness injects
@@ -57,12 +67,12 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Description: "On the claude-cli path, native tools that can't be honoured headless are suppressed (--disallowedTools) and routed to TionHarness equivalents: AskUserQuestion→ask_user, TodoWrite/Task*→todo_write, ScheduleWakeup→schedule_wake, Skill→use_skill, Task/Agent→run_subagent.",
 		},
 		{
-			Name:        "Bash → PowerShell bridge",
+			Name:        "CLI Bash → TionHarness shell bridge",
 			Scope:       "cli",
 			Event:       "System",
 			Setting:     "enableShell",
 			Enabled:     cur.EnableShell,
-			Description: "When the built-in shell is enabled, the CLI's native Bash is suppressed so shell commands route through TionHarness's own Bash/PowerShell tool (correct Windows syntax + streaming + background shells).",
+			Description: "When the built-in shell is enabled, the CLI's native Bash is suppressed so shell commands route through TionHarness's own Bash/PowerShell tool (OS-correct shell resolution — git-bash/PowerShell on Windows, bash on macOS/Linux — plus streaming and background shells).",
 		},
 		{
 			Name:        "CLI hook passthrough",

@@ -41,3 +41,23 @@ describe('Markdown links', () => {
     expect(container.querySelector('a')).toBeNull()
   })
 })
+
+describe('Markdown gallery', () => {
+  it('routes absolute POSIX and Windows image paths through the media endpoint', () => {
+    const source = [
+      '```gallery',
+      '/Users/me/shots/one.png',
+      'C:\\Users\\me\\shots\\two.png',
+      '/api/files?path=already.png',
+      '```',
+    ].join('\n')
+    const container = renderMarkdown(source)
+    const srcs = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src'))
+
+    expect(srcs).toEqual([
+      `/api/files?path=${encodeURIComponent('/Users/me/shots/one.png')}`,
+      `/api/files?path=${encodeURIComponent('C:\\Users\\me\\shots\\two.png')}`,
+      '/api/files?path=already.png',
+    ])
+  })
+})

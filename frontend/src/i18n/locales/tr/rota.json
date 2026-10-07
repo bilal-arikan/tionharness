@@ -91,8 +91,8 @@
     "noArmedSchedules": "Kurulu zamanlayıcı yok."
   },
   "chips": {
-    "title_one": "{{label}}: {{count}} şerit — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle",
-    "title_other": "{{label}}: {{count}} şerit — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle",
+    "title_one": "{{label}}: {{count}} şerit — {{mod}}: yalnız bunu seç, Shift: diğerlerini tersle",
+    "title_other": "{{label}}: {{count}} şerit — {{mod}}: yalnız bunu seç, Shift: diğerlerini tersle",
     "resetTitle_one": "{{count}} süzgeç kapalı — hepsini geri aç",
     "resetTitle_other": "{{count}} süzgeç kapalı — hepsini geri aç",
     "reset": "süzgeci sıfırla"
@@ -113,7 +113,7 @@
     "logDurationTitle": "Uzun süreleri logaritmik ölçekte göster — kısa oturumlar okunur kalır, başlangıç ve bitiş noktaları tam yerinde durur"
   },
   "zoom": {
-    "title": "Zaman eksenini yakınlaştır (Ctrl + tekerlek)",
+    "title": "Zaman eksenini yakınlaştır ({{mod}} + tekerlek)",
     "label": "yakınlık",
     "out": "Uzaklaştır",
     "fit": "Panele sığdır",

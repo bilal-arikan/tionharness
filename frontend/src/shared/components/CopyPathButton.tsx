@@ -1,6 +1,7 @@
 import { Copy } from 'lucide-react'
 import { displayPath } from '@/shared/lib/paths'
 import { copyToClipboard } from '@/shared/lib/clipboard'
+import { modKeyLabel } from '@/shared/lib/platform'
 import { toast } from './toastStore'
 import { useTranslation } from 'react-i18next'
 
@@ -36,7 +37,8 @@ export function CopyPathButton({ path, getPath, title, testId, onError }: Props)
       // copyToClipboard falls back to a manual-copy prompt when the browser
       // blocks programmatic copy (insecure LAN/HTTP context); it returns true
       // only on a real programmatic copy, so gate the toast on it.
-      if (await copyToClipboard(text, t('copyPath.manualPrompt'))) toast.info(t('actions.copied'))
+      if (await copyToClipboard(text, t('copyPath.manualPrompt', { mod: modKeyLabel() })))
+        toast.info(t('actions.copied'))
     } catch (e) {
       onError?.(e instanceof Error ? e.message : String(e))
     }

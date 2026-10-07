@@ -18,10 +18,11 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 )
 
 // Phase is where one (tool, root) index sits in its lifecycle.
@@ -117,14 +118,11 @@ type Key struct {
 }
 
 // NewKey normalises a (tool, root) pair into a map key. Root is compared the way
-// the host filesystem does — case-insensitively on Windows, where the same
-// repository reached as C:\Repo and c:\repo must not mint two ledger entries and
-// two concurrent index runs.
+// the host filesystem does — case-insensitively on Windows and macOS, where the
+// same repository reached as C:\Repo and c:\repo (or /Users/x/Repo and
+// /users/x/repo) must not mint two ledger entries and two concurrent index runs.
 func NewKey(tool, root string) Key {
-	root = filepath.ToSlash(filepath.Clean(strings.TrimSpace(root)))
-	if runtime.GOOS == "windows" {
-		root = strings.ToLower(root)
-	}
+	root = filepath.ToSlash(fspath.Key(strings.TrimSpace(root)))
 	return Key{Tool: strings.TrimSpace(tool), Root: root}
 }
 

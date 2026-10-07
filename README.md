@@ -52,6 +52,17 @@ Geliştirme modunda (backend + Vite hot reload, tek komut):
 .\scripts\dev.ps1 -Loopback    # yalnız 127.0.0.1, güvenlik duvarı sormaz
 ```
 
+```bash
+scripts/dev.sh                 # macOS/Linux karşılığı: backend :8090 + Vite :5173
+scripts/dev.sh --loopback      # yalnız 127.0.0.1
+scripts/dev.sh --backend-only  # yalnız Go backend (Vite'i ayrıca: npm --prefix frontend run dev)
+```
+
+macOS/Linux'ta `build.ps1` + çalıştırma adımının karşılığı `scripts/serve.sh --ui`'dir:
+arayüzü derler, binary'yi `bin/tionharness`'e kurar ve `0.0.0.0:5173`'te başlatır
+(`--loopback`, `--port 8090` seçenekleri vardır; varsayılan 5173 Vite'in portuyla
+aynıdır, `dev.sh` ile aynı anda kullanmayın).
+
 Windows'ta tarayıcı yerine kendi penceresinde çalışan sürüm için
 `.\scripts\build.ps1 -Desktop` → `tionharness-desktop.exe` (WebView2, CGO yok).
 
@@ -142,14 +153,17 @@ scripts/test.sh fast  # changed Go packages; Vitest if frontend changed
 scripts/test.sh full  # delivery gate: Go + Vitest + dependency/diff checks
 ```
 
-Windows'ta test script'lerini Git Bash içinde çalıştırın. Script, kabuk testleri için
+Windows'ta test script'lerini Git Bash içinde, macOS/Linux'ta yerel bash ile çalıştırın
+(macOS'un `/bin/bash` 3.2'si yeterlidir). Script, kabuk testleri için
 `TIONHARNESS_ENABLE_SHELL=1` ayarlar. UI derlemesi ayrıca `cd frontend && npm run build`
 ile doğrulanır; tanıtım sitesi için `website/` içinde `npm run check` ve `npm run build`
 çalıştırılır. `full` bu derleme adımlarını içermez.
 
 Frontend Prettier ile formatlanır (`frontend/.prettierrc.json`): `npm run format` /
 `npm run format:check`. Pre-commit hook stage'lenmiş dosyaları otomatik formatlar; klon başına
-bir kez `git config core.hooksPath .githooks`.
+bir kez `git config core.hooksPath .githooks`. macOS/Linux'ta git yalnız çalıştırılabilir
+hook'u koşturur; hook depoda çalıştırılabilir kayıtlıdır, eski bir klonda çalışmıyorsa
+`chmod +x .githooks/pre-commit`.
 
 İlkeler: kod ve yorumlar İngilizce, dokümanlar Türkçe; CGO yok; her sorumluluk ayrı pakette.
 

@@ -5,8 +5,14 @@
 // (cmd/tionharness) with a browser, or add a CGO webview backend later.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
+// main exits non-zero so a launcher or .app wrapper reports the failure instead
+// of "succeeding" with nothing on screen.
 func main() {
-	fmt.Println("tionharness-desktop is Windows-only for now; run the headless 'tionharness' server instead.")
+	fmt.Fprintln(os.Stderr, "tionharness-desktop is Windows-only for now; run the headless 'tionharness' server instead (scripts/serve.sh --ui).")
+	os.Exit(1)
 }

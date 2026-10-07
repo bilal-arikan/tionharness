@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -87,17 +88,13 @@ func callStringArg(call providers.ToolCall, key string) string {
 }
 
 // pathContains reports whether child is parent or lies beneath it. Both must be
-// absolute. filepath.Rel compares path elements case-insensitively on Windows, so
-// a drive-letter or folder case difference does not split one directory in two.
+// absolute. On case-insensitive hosts (Windows, macOS) a drive-letter or folder
+// case difference does not split one directory in two (see fspath.Within).
 func pathContains(parent, child string) bool {
 	if !filepath.IsAbs(parent) || !filepath.IsAbs(child) {
 		return false
 	}
-	rel, err := filepath.Rel(parent, child)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+	return fspath.Within(filepath.Clean(parent), filepath.Clean(child))
 }
 
 // zvecGrepRepairInstruction renders the model-facing recovery guidance for a root

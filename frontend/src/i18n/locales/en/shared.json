@@ -38,7 +38,7 @@
     "deleted": "Deleted agent"
   },
   "clipboard": {
-    "copyPrompt": "Copy this text (Ctrl+C, Enter):"
+    "copyPrompt": "Copy this text ({{mod}}+C, Enter):"
   },
   "coordination": {
     "subCoordinator": "Sub-coordinator",

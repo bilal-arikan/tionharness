@@ -12,7 +12,7 @@ import (
 // both directories. The links under test are created by each case.
 func linkFixture(t *testing.T) (root, outside string) {
 	t.Helper()
-	base := t.TempDir()
+	base := realTempDir(t)
 	root = filepath.Join(base, "root")
 	outside = filepath.Join(base, "outside")
 	for _, d := range []string{root, outside} {

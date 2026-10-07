@@ -54,7 +54,7 @@ func TestConfinedSandbox_HonoursInRootAbsolute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("relative path rejected: %v", err)
 	}
-	if want := filepath.Join(root, "backend", "x.go"); rel != want {
+	if want := filepath.Join(sb.Root, "backend", "x.go"); rel != want {
 		t.Errorf("relative resolved = %q, want %q", rel, want)
 	}
 }
@@ -141,7 +141,7 @@ func TestConfinedSandbox_InRootCaseDiffersFromRoot(t *testing.T) {
 // opens diverge. cleanRoot resolves Root once, so naming a file by its real
 // absolute path is recognised as in-root instead of being rejected as an escape.
 func TestCleanRoot_ResolvesSymlinkedRoot(t *testing.T) {
-	base := t.TempDir()
+	base := realTempDir(t)
 	real := filepath.Join(base, "real")
 	if err := os.Mkdir(real, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -221,5 +221,48 @@ func TestUnconfinedSandbox_LeavesWindowsPathTricksAlone(t *testing.T) {
 	sb := NewSandbox(t.TempDir())
 	if _, err := sb.Resolve(`\\?\C:\x.go`); err != nil {
 		t.Errorf("unconfined sandbox rejected %q: %v", `\\?\C:\x.go`, err)
+	}
+}
+
+// realTempDir is t.TempDir with symlinks resolved. On macOS the temp dir lives
+// under /var, a symlink to /private/var, and cleanRoot stores Root resolved — tests
+// that compare Root-derived paths as strings need the resolved spelling.
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve temp dir: %v", err)
+	}
+	return dir
+}
+
+// An absolute path spelled through a symlinked ANCESTOR of Root (/tmp or /var on
+// macOS) names a file inside Root and must be honoured, while the same spelling of
+// a path outside Root stays rejected.
+func TestConfinedSandbox_AbsoluteThroughSymlinkedAncestor(t *testing.T) {
+	base := realTempDir(t)
+	real := filepath.Join(base, "real")
+	if err := os.MkdirAll(filepath.Join(real, "ws"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(real, "other"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("cannot create a directory symlink here: %v", err)
+	}
+	sb := NewConfinedSandbox(filepath.Join(link, "ws"))
+
+	in := filepath.Join(link, "ws", "a", "b.go")
+	got, err := sb.Resolve(in)
+	if err != nil {
+		t.Fatalf("in-root path through symlinked ancestor rejected: %v", err)
+	}
+	if got != in {
+		t.Errorf("Resolve = %q, want the lexical %q", got, in)
+	}
+	if _, err := sb.Resolve(filepath.Join(link, "other", "x.go")); err == nil {
+		t.Error("path outside Root through symlinked ancestor was accepted")
 	}
 }

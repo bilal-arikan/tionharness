@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -245,8 +244,8 @@ func codebaseMemoryGuidance(servers []db.MCPServer, state mcp.ServerState, provi
 		"more token-efficient. These tools are load-on-demand, NOT directly callable: " +
 		loadStep + ". That one extra step is expected — it is not a sign the server is " +
 		"missing, and it is cheaper than the grep sweep it replaces. " +
-		"Do NOT reach for raw shell greps (PowerShell Select-String, " +
-		"Get-Content -Recurse, grep, findstr) as your first move — they are the LAST resort, " +
+		"Do NOT reach for raw shell greps (grep, rg, find, PowerShell Select-String, " +
+		"Get-Content -Recurse, findstr) as your first move — they are the LAST resort, " +
 		"only when the index genuinely has no answer for a query. After code changes the " +
 		"background watcher keeps results fresh on its own. " +
 		searchIndexDirective(provider, ns("index_repository"))
@@ -292,9 +291,12 @@ var ephemeralIndexDirs = []string{".tionharness-worktrees", "scratchpad"}
 
 // isEphemeralWorkdir reports whether cwd sits inside a throwaway working copy.
 // Matching is per PATH SEGMENT (not a substring) so a legitimate repo whose name
-// merely contains one of these words is still indexed.
+// merely contains one of these words is still indexed. Both separators split on
+// every OS: a cwd recorded on Windows (C:\...\scratchpad) may be read back on
+// macOS/Linux, where filepath.ToSlash would leave its backslashes intact.
 func isEphemeralWorkdir(cwd string) bool {
-	for seg := range strings.SplitSeq(filepath.ToSlash(cwd), "/") {
+	segs := strings.FieldsFunc(cwd, func(r rune) bool { return r == '/' || r == '\\' })
+	for _, seg := range segs {
 		for _, bad := range ephemeralIndexDirs {
 			if strings.EqualFold(seg, bad) {
 				return true

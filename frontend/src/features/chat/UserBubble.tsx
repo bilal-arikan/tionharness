@@ -5,6 +5,7 @@ import { AttachmentChip } from './AttachmentChip'
 import { Lightbox } from '@/shared/components'
 import { imageURL } from '@/shared/lib/attachments'
 import { Markdown } from '@/shared/components/markdown/Markdown'
+import { isSlashCommandText } from './composer/trigger'
 
 // MENTION_RE matches an "@token" the way the composer inserts a name reference:
 // "@" then non-space, non-"@" characters. A mention is a plain reference to an
@@ -37,7 +38,7 @@ function quotedCommand(text: string): string | null {
   const close = QUOTE_PAIRS[t[0]]
   if (!close || !t.endsWith(close)) return null
   const inner = t.slice(1, -1).trim()
-  return /^\/\S/.test(inner) ? inner : null
+  return isSlashCommandText(inner) ? inner : null
 }
 
 // renderWithMentions splits a user message into plain text and highlighted
@@ -105,7 +106,7 @@ export function UserBubble({
   // plain bubble (no command style).
   const quotedCmd = quotedCommand(text)
   const hasMention = MENTION_TEST.test(text)
-  const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
+  const isCommand = !quotedCmd && isSlashCommandText(text.trim())
 
   // Every chat attachment is captured server-side as a session artifact (origin
   // "chat", keyed by sourcePath === relPath). Clicking a chip opens that artifact

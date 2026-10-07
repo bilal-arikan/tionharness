@@ -14,26 +14,6 @@
       "port": 8090
     },
     {
-      "name": "tionharness-mac",
-      "runtimeExecutable": "bash",
-      "runtimeArgs": [
-        "-c",
-        "go build -buildvcs=false -o bin/tionharness ./cmd/tionharness && TIONHARNESS_ADDR=127.0.0.1:5173 TIONHARNESS_ENABLE_SHELL=1 exec bin/tionharness"
-      ],
-      "port": 5173
-    },
-    {
-      "name": "frontend-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "frontend",
-        "run",
-        "dev"
-      ],
-      "port": 5173
-    },
-    {
       "name": "tionharness-scratch",
       "runtimeExecutable": "powershell.exe",
       "runtimeArgs": [
@@ -56,6 +36,44 @@
         "-NoKillPort"
       ],
       "port": 8090
+    },
+    {
+      "name": "frontend-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "tionharness-mac",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "v=github.com/bilal-arikan/tionharness/internal/api; c=$(git rev-parse --short HEAD 2>/dev/null || echo unknown); mkdir -p bin && go build -buildvcs=false -ldflags \"-X $v.BuildCommit=$c -X $v.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o bin/tionharness ./cmd/tionharness && TIONHARNESS_ADDR=127.0.0.1:5173 TIONHARNESS_ENABLE_SHELL=1 exec bin/tionharness"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "tionharness-mac-dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "v=github.com/bilal-arikan/tionharness/internal/api; c=$(git rev-parse --short HEAD 2>/dev/null || echo unknown); mkdir -p bin && go build -buildvcs=false -ldflags \"-X $v.BuildCommit=$c -X $v.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o bin/tionharness-dev ./cmd/tionharness && TIONHARNESS_ADDR=127.0.0.1:8090 TIONHARNESS_ENABLE_SHELL=1 exec bin/tionharness-dev"
+      ],
+      "port": 8090
+    },
+    {
+      "name": "tionharness-mac-scratch",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "v=github.com/bilal-arikan/tionharness/internal/api; c=$(git rev-parse --short HEAD 2>/dev/null || echo unknown); mkdir -p bin \"${TMPDIR:-/tmp}/th-scratch-data\" && go build -buildvcs=false -ldflags \"-X $v.BuildCommit=$c -X $v.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o bin/tionharness-scratch ./cmd/tionharness && TIONHARNESS_ADDR=127.0.0.1:8091 TIONHARNESS_DATA_DIR=\"${TMPDIR:-/tmp}/th-scratch-data\" TIONHARNESS_ENABLE_SHELL=1 exec bin/tionharness-scratch"
+      ],
+      "port": 8091
     }
   ]
 }

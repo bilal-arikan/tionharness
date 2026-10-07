@@ -38,7 +38,7 @@
     "deleted": "Silinmiş ajan"
   },
   "clipboard": {
-    "copyPrompt": "Kopyalayın (Ctrl+C, Enter):"
+    "copyPrompt": "Kopyalayın ({{mod}}+C, Enter):"
   },
   "coordination": {
     "subCoordinator": "Alt-koordinatör",

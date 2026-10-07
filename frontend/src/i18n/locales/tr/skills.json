@@ -116,7 +116,6 @@
     },
     "localFolder": "Yerel klasör",
     "localLocationLabel": "Yerel klasör yolu (ağaç taranır)",
-    "localLocationPlaceholder": "C:\\path\\to\\repo",
     "localPathRequired": "Yerel klasör yolu gerekli.",
     "reasonSeparator": "—",
     "scan": "Tara",

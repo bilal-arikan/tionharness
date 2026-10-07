@@ -32,7 +32,7 @@
     "search": "Komut ara…"
   },
   "copyPath": {
-    "manualPrompt": "Yolu kopyalayın (Ctrl+C, Enter):",
+    "manualPrompt": "Yolu kopyalayın ({{mod}}+C, Enter):",
     "title": "Yolu kopyala"
   },
   "diff": {
@@ -182,5 +182,77 @@
       "tournament": "Turnuva — adaylar ikişerli karşılaştırılarak eleme yapılır"
     },
     "whatDoesItDo": "{{name}} — ne yapar?"
+  },
+  "systemRoles": {
+    "title": "Ajan atamaları",
+    "hint": "Bu workspace'te her sistem rolünü hangi ajanın çalıştıracağını seçin. Boş = rolün yerleşik ajanı.",
+    "builtin": "Yerleşik · {{name}}",
+    "builtinUnnamed": "Yerleşik ajan",
+    "utilitySemantics": "Rol kendi promptunu korur; seçilen ajan yalnız sağlayıcısını ve modelini verir.",
+    "workerSemantics": "Bu profil istendiğinde seçilen ajan kendisi olarak çalışır — kendi promptu, araçları ve modeliyle.",
+    "groups": {
+      "workers": "Worker'lar",
+      "helpers": "Sohbet yardımcıları",
+      "analysis": "Analiz",
+      "optimizers": "Gözlemciler ve hakemler"
+    },
+    "roles": {
+      "subagent-explore": {
+        "label": "Keşif worker'ı",
+        "hint": "Koordinatör `explore` başlattığında kod tabanını salt-okunur inceler."
+      },
+      "subagent-planner": {
+        "label": "Planlayıcı worker",
+        "hint": "`planner` arkasındaki salt-okunur planlama worker'ı."
+      },
+      "subagent-coder": {
+        "label": "Kodlayıcı worker",
+        "hint": "`coder` arkasındaki, yazma yetkisi olan worker."
+      },
+      "subagent-reviewer": {
+        "label": "İnceleyici worker",
+        "hint": "`reviewer` arkasındaki salt-okunur inceleme worker'ı."
+      },
+      "subagent-validator": {
+        "label": "Doğrulayıcı worker",
+        "hint": "`validator` arkasında kontrol ve testleri çalıştırır."
+      },
+      "subagent-config": {
+        "label": "Yapılandırma worker'ı",
+        "hint": "`config` arkasında workspace yapılandırmasını düzenler."
+      },
+      "titler": {
+        "label": "Başlık oluşturucu",
+        "hint": "Yeni sohbetler ve istekler için kısa başlık yazar."
+      },
+      "compaction": {
+        "label": "Sıkıştırıcı",
+        "hint": "Bağlam sınırında uzun konuşma geçmişini yapılandırılmış özete katlar."
+      },
+      "overview-summarizer": {
+        "label": "Genel bakış özetleyici",
+        "hint": "İstek üzerine board ve akış genel bakışlarını özetler."
+      },
+      "insight": {
+        "label": "İçgörü analizcisi",
+        "hint": "İçgörü taramalarında oturum kanıtlarından tekrarlayan, eyleme dönük bulgular çıkarır."
+      },
+      "lesson-extractor": {
+        "label": "Ders çıkarıcı",
+        "hint": "Başarısız ajan turlarından yeniden kullanılabilir dersler çıkarır."
+      },
+      "flow-optimizer": {
+        "label": "Akış gözlemcisi",
+        "hint": "Son akış koşularına bakıp ajanın ana akışı için ölçülü değişiklik önerir."
+      },
+      "recipe-optimizer": {
+        "label": "Reçete iyileştirici",
+        "hint": "Koordinatör reçeteleri için rota istatistiklerinden değişiklik önerir."
+      },
+      "stall-judge": {
+        "label": "Takılma hakemi",
+        "hint": "Koordinatörün yapmadığı bir worker başlatmayı anlatıp anlatmadığını denetler."
+      }
+    }
   }
 }

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -108,7 +109,7 @@ func run(bin, home, fixtures, task, model, route string) result {
 	must(os.WriteFile(filepath.Join(dir, "evaluate.py"), tests, 0600))
 	checkCtx, checkCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer checkCancel()
-	check := proc.CommandContext(checkCtx, "python", "-I", "-c", "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('evaluate.py',run_name='__main__')")
+	check := proc.CommandContext(checkCtx, pythonExe(), "-I", "-c", "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('evaluate.py',run_name='__main__')")
 	check.Dir = dir
 	validation, checkErr := check.CombinedOutput()
 	r.Validation = string(validation)
@@ -120,4 +121,15 @@ func must(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// pythonExe picks the Python 3 interpreter: macOS (12.3+) and most Linux distros
+// ship only python3, while Windows installs python.exe.
+func pythonExe() string {
+	for _, name := range []string{"python3", "python"} {
+		if _, err := exec.LookPath(name); err == nil {
+			return name
+		}
+	}
+	return "python3"
 }

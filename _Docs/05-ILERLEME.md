@@ -9,6 +9,42 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## macOS/Linux uyumluluğu: Windows varsayımları temizlendi (2026-10-07)
+
+Proje Windows'ta geliştirildiği için yol, kabuk ve araç bulma varsayımları
+macOS/Linux'ta kırılıyordu. Kapsamlı tarama (Go, frontend, betikler) sonrası:
+
+- **Yollar:** yeni `internal/fspath` paketi — Windows ve macOS (APFS) büyük/küçük
+  harf duyarsız karşılaştırılır; macOS'ta katlanmış eşleşme `os.SameFile` ile
+  doğrulanır. `/api/files` POSIX mutlak yolların başındaki `/`'ı artık silmiyor
+  (`file:///C:/` hariç). Sandbox ve artifact sınırı `/tmp`, `/var` → `/private`
+  sembolik bağlı köklerde doğru çalışıyor. Başka OS'tan gelen workspace yolu
+  (`C:\...` Mac'te) bozuk (degraded) listelenir.
+- **Kabuk:** Bash aracı ve hook'lar Unix'te gerçek `bash` (yoksa `/bin/sh` + ajana
+  uyarı). Windows'ta yazılmış PowerShell hook'ları Mac/Linux'ta `pwsh` ile çalışır;
+  `pwsh` yoksa net hata ve Hooks ekranında uyarı (`shellWarning`).
+  `${CLAUDE_PLUGIN_ROOT}` boşluklu yolda kabuğa göre tırnaklanır.
+- **Araç bulma:** başlangıçta login-shell PATH'i + Homebrew/`~/.local/bin`/npm/bun
+  dizinleri eklenir (`proc.AugmentPATH`; Finder/launchd başlatmasında `claude`,
+  `node`, `rg` bulunur). `claude`/`codex` CLI için yedek konum listesi; STT
+  Homebrew whisper/ffmpeg'i bulur; macOS'ta süreç başlangıç zamanı `ps` ile.
+- **Kimlik:** macOS'ta claude-cli girişi Keychain'den okunur ve yazılır
+  (`internal/claudeauth/keychain.go`; servis adı `Claude Code-credentials[-sha256(dir)[:8]]`,
+  canlı makinede doğrulandı).
+- **Linux cgroup v2:** kısıtlı kabuk komutları kendi cgroup'unda; `pids.max`
+  (ActiveProcesses × 16 iş parçacığı) ve `cgroup.kill` ile `setsid` kaçağı dahil
+  tüm ağaç öldürülür; yazılamazsa süreç grubuna düşer (`proc.ContainmentStatus`).
+- **UI:** `/api/version` `os`/`arch` döner; yol placeholder'ları sunucu OS'una,
+  kısayol etiketleri tarayıcıya göre (⌘/Ctrl). `/Users/...` ile başlayan mesaj artık
+  slash komutu sayılmıyor; Galeri POSIX görsel yolları; boşluklu POSIX yol çipleri.
+- **Betikler:** `scripts/dev.sh` (dev.ps1 karşılığı), `scripts/lib/common.sh`,
+  `serve.sh` sürüm ldflags; `launch.json` mac girdileri (`tionharness-mac-dev`,
+  `tionharness-mac-scratch`); `.githooks/pre-commit` ve `.sh` dosyaları çalıştırılabilir.
+- **Doğrulama:** macOS'ta `scripts/test.sh full` Go tarafı tam geçti (önceden 7 hata);
+  vitest'te yalnız önceden var olan 20 hata. Linux cgroup entegrasyon testleri
+  derleniyor ancak Linux ortamı olmadığından çalıştırılmadı. Keychain gizli veri biçimi
+  (JSON/hex) iki biçimi de kabul edecek şekilde yazıldı; canlı okuma uygulamada doğrulanmalı.
+
 ## Sistem rolleri için workspace ajan atamaları (2026-10-07)
 
 İçgörü'deki "Analiz ajanı" seçicisi genelleştirildi: her workspace, worker

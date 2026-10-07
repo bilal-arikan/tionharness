@@ -48,7 +48,8 @@ func fileExists(p string) bool {
 }
 
 // whisperExe resolves the whisper-cli binary: TIONHARNESS_WHISPER env, then the
-// common Progs install layout, then PATH (whisper-cli or the legacy main).
+// common Progs install layout, then PATH (whisper-cli or the legacy main), then
+// the Homebrew/local bin dirs (a Finder-started app may not have them on PATH).
 func whisperExe() string {
 	if p := strings.TrimSpace(os.Getenv("TIONHARNESS_WHISPER")); p != "" && fileExists(p) {
 		return p
@@ -68,6 +69,28 @@ func whisperExe() string {
 			return p
 		}
 	}
+	return firstExisting(unixBinCandidates("whisper-cli"))
+}
+
+// unixBinCandidates lists name under the Homebrew and local bin dirs on
+// macOS/Linux; empty on Windows.
+func unixBinCandidates(name string) []string {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	c := []string{"/opt/homebrew/bin/" + name, "/usr/local/bin/" + name}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		c = append(c, filepath.Join(home, ".local", "bin", name))
+	}
+	return c
+}
+
+func firstExisting(paths []string) string {
+	for _, p := range paths {
+		if fileExists(p) {
+			return p
+		}
+	}
 	return ""
 }
 
@@ -79,7 +102,7 @@ func ffmpegExe() string {
 	if p, err := exec.LookPath("ffmpeg"); err == nil {
 		return p
 	}
-	return ""
+	return firstExisting(unixBinCandidates("ffmpeg"))
 }
 
 // modelDirs are scanned for ggml-*.bin models.
@@ -94,6 +117,20 @@ func modelDirs() []string {
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		dirs = append(dirs, filepath.Join(home, "Desktop", "Progs", "whisper", "models"))
+		if runtime.GOOS != "windows" {
+			// whisper.cpp's download script and common manual locations.
+			dirs = append(dirs,
+				filepath.Join(home, ".local", "share", "whisper-cpp", "models"),
+				filepath.Join(home, ".cache", "whisper"),
+				filepath.Join(home, "whisper.cpp", "models"))
+		}
+		if runtime.GOOS == "darwin" {
+			dirs = append(dirs, filepath.Join(home, "Library", "Application Support", "whisper", "models"))
+		}
+	}
+	if runtime.GOOS != "windows" {
+		// Homebrew's whisper-cpp formula ships its models dir under share/.
+		dirs = append(dirs, "/opt/homebrew/share/whisper-cpp", "/usr/local/share/whisper-cpp")
 	}
 	return dirs
 }

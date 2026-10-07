@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/fspath"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
@@ -388,6 +388,12 @@ func (m *Manager) open(meta Meta) error {
 	dir := meta.Path
 	if dir == "" {
 		dir = filepath.Join(m.rootDir, "workspaces", meta.ID)
+	} else if !filepath.IsAbs(dir) {
+		// A registry copied from another OS (C:\Users\... read on macOS/Linux, or
+		// /Users/... read on Windows) is not absolute here; MkdirAll would quietly
+		// create a folder literally named after it under the process cwd and open
+		// an empty workspace. Fail so the entry is listed as degraded instead.
+		return fmt.Errorf("workspace path %q is not an absolute path on this OS (registry from another machine?)", dir)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
 		return err
@@ -822,14 +828,8 @@ func workspaceNameFromDir(dir string) string {
 }
 
 // sameDir compares two directory paths for equality after cleaning, case-
-// insensitively on Windows (whose filesystem paths are case-insensitive).
-func sameDir(a, b string) bool {
-	ca, cb := filepath.Clean(a), filepath.Clean(b)
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(ca, cb)
-	}
-	return ca == cb
-}
+// insensitively on hosts whose filesystem is (Windows, macOS).
+func sameDir(a, b string) bool { return fspath.Equal(a, b) }
 
 // Delete removes a workspace and all its data. Deleting the last workspace IS
 // allowed: the manager then holds zero workspaces and the web UI falls back to

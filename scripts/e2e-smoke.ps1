@@ -66,6 +66,10 @@ function Api-Post { param($Path, $Obj) Invoke-RestMethod -Uri "$BaseUrl$Path" -M
 function Api-Put  { param($Path, $Obj) Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Put -Headers $headers -Body (ConvertTo-Utf8Body $Obj) -TimeoutSec 15 }
 function Api-Del  { param($Path) Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Delete -Headers $headers -TimeoutSec 15 }
 
+# Windows PowerShell 5.1 "curl"u Invoke-WebRequest takma adina baglar, bu yuzden orada
+# curl.exe gerekir; pwsh ile macOS/Linux'ta ikili yalniz "curl" adiyla bulunur.
+$curlExe = if ($env:OS -eq 'Windows_NT') { 'curl.exe' } else { 'curl' }
+
 # curl ile ham HTTP — Invoke-WebRequest bazı yanıtlarda (auth/redirect) NonInteractive
 # modda takılır; curl deterministiktir. Dönüş: @{ Code; Body }.
 function Curl-Raw {
@@ -83,7 +87,7 @@ function Curl-Raw {
     } elseif ($Workspace) {
         $a += @("-H", "X-Workspace-Id: $Workspace")
     }
-    $out = (& curl.exe @a) -join "`n"
+    $out = (& $curlExe @a) -join "`n"
     if ($tmp) { Remove-Item $tmp -ErrorAction SilentlyContinue }
     $code = ""
     $m = [regex]::Match($out, '__HTTP_CODE__(\d+)\s*$')
@@ -141,7 +145,7 @@ Test-Step "GET /health" {
 # 2) CORS / no-auth — tarayıcı içinden çağrılabilirlik (doc 33 §A.1)
 Test-Step "OPTIONS preflight (CORS açık, auth yok)" {
     $a = @("-s", "-i", "-X", "OPTIONS", "$BaseUrl/api/agents", "-H", "Origin: http://example.com")
-    $out = (& curl.exe @a) -join "`n"
+    $out = (& $curlExe @a) -join "`n"
     if ($out -notmatch '204') { throw "204 No Content beklenirdi" }
     if ($out -notmatch 'Access-Control-Allow-Origin:\s*\*') { throw "ACAO '*' header'i yok" }
     "204 + ACAO=*"
@@ -187,7 +191,7 @@ Test-Step "POST /api/sessions" {
 # 7) Working-directory round-trip (oturum-başına cwd, doc 26)
 Test-Step "PUT+GET /api/sessions/{id}/workdir (cwd round-trip)" {
     if (-not $script:sessionId) { throw "oturum yok" }
-    $repo = (Resolve-Path "$PSScriptRoot\..").Path     # TionHarness repo kökü (mevcut + git)
+    $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path     # TionHarness repo kökü (mevcut + git)
     $set = Api-Put "/api/sessions/$($script:sessionId)/workdir" @{ dir = $repo }
     if (-not $set.exists) { throw "set sonrası exists=false ($repo)" }
     $got = Api-Get "/api/sessions/$($script:sessionId)/workdir"

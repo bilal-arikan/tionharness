@@ -494,7 +494,8 @@
     },
     "matcherHint": "Tool events: tool-name glob (empty = all, e.g. Bash, Write, http_*). SessionStart: source (startup|resume). PreCompact: trigger (manual|auto). Other lifecycle events: leave empty.",
     "command": "Command",
-    "commandHint": "Shell command (Windows: PowerShell). Reads JSON from stdin and returns JSON on stdout.",
+    "commandHint": "Shell command (macOS/Linux: bash -c, PowerShell source via pwsh; Windows: PowerShell). Reads JSON from stdin and returns JSON on stdout.",
+    "pwshMissing": "This hook is PowerShell (written on Windows) and PowerShell 7 (pwsh) is not installed on this machine, so it cannot run. Install it (macOS: brew install powershell) or rewrite the command for bash.",
     "timeout": "Timeout (seconds)",
     "timeoutHint": "Between 1 and 120.",
     "builtins": {
@@ -670,6 +671,7 @@
     "token": {
       "title": "Token optimization integration:",
       "description": "When rtk or sqz is connected, TionHarness tells the agent that output is shortened automatically. Hook matchers must cover Bash and PowerShell.",
+      "descriptionPosix": "When rtk or sqz is connected, TionHarness tells the agent that output is shortened automatically. Hook matchers must cover Bash (the shell tool on macOS/Linux).",
       "enableBoth": "Enabling both is recommended",
       "enableBothDetail": "— rtk shapes the command before execution and sqz compresses the output afterwards; measurements show that stacking performs best.",
       "matcherMissing": "matcher {{matcher}} does not cover PowerShell",

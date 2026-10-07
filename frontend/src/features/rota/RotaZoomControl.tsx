@@ -2,6 +2,7 @@
 // in the header; the canvas itself handles ctrl/⌘-wheel zooming.
 import { Minus, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { modKeyLabel } from '@/shared/lib/platform'
 import { MAX_ZOOM, MIN_ZOOM, formatZoom, stepZoom } from './rotaZoom'
 
 interface Props {
@@ -14,7 +15,7 @@ export function RotaZoomControl({ zoom, onZoom }: Props) {
   const btn =
     'rounded px-1 py-0.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-30 disabled:hover:bg-transparent'
   return (
-    <span className="flex items-center gap-0.5" title={t('zoom.title')}>
+    <span className="flex items-center gap-0.5" title={t('zoom.title', { mod: modKeyLabel() })}>
       <span className="text-[var(--color-text-dim)]">{t('zoom.label')}</span>
       <button
         type="button"

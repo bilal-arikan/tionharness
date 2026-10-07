@@ -116,7 +116,6 @@
     },
     "localFolder": "Local folder",
     "localLocationLabel": "Local folder path (tree is scanned)",
-    "localLocationPlaceholder": "C:\\path\\to\\repo",
     "localPathRequired": "A local folder path is required.",
     "reasonSeparator": "—",
     "scan": "Scan",

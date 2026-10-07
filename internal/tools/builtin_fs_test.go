@@ -12,7 +12,7 @@ import (
 )
 
 func TestSandboxResolve(t *testing.T) {
-	root := t.TempDir()
+	root := realTempDir(t)
 	sb := NewSandbox(root)
 
 	if !sb.Ready() {

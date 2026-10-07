@@ -21,6 +21,14 @@ describe('displayPath', () => {
     expect(displayPath('/home/alex/projects/app.go')).toBe('~/projects/app.go')
   })
 
+  it('collapses a macOS home path to ~/', () => {
+    expect(displayPath('/Users/alex/Projects/app/main.go')).toBe('~/Projects/app/main.go')
+  })
+
+  it("collapses Linux root's home to ~/", () => {
+    expect(displayPath('/root/projects/app.go')).toBe('~/projects/app.go')
+  })
+
   it('collapses a Git Bash mounted drive home path to ~/', () => {
     expect(displayPath('/c/Users/alex/Desktop/Projects/TionHarness')).toBe(
       '~/Desktop/Projects/TionHarness',
@@ -117,6 +125,49 @@ describe('splitPaths', () => {
     const shown = 'C:\\Users\\user\\Desktop\\My Project\\file.ts:12:4'
     expect(splitPaths(shown)).toEqual([
       { text: shown, kind: 'path', target: 'C:\\Users\\user\\Desktop\\My Project\\file.ts' },
+    ])
+  })
+
+  it.each([
+    [
+      '/Users/x/Library/Application Support/foo.json:3',
+      '/Users/x/Library/Application Support/foo.json',
+    ],
+    ['/home/me/My Projects/app/main.go:12:4', '/home/me/My Projects/app/main.go'],
+    ['/Volumes/External Disk/src/a.ts:7', '/Volumes/External Disk/src/a.ts'],
+  ])(
+    'keeps an unquoted POSIX path with spaces and a location in one segment: %s',
+    (shown, target) => {
+      expect(splitPaths(shown)).toEqual([{ text: shown, kind: 'path', target }])
+    },
+  )
+
+  it('keeps a POSIX spaced path with a location whole inside prose', () => {
+    const segments = splitPaths('open /Users/x/Library/Application Support/foo.json:3 now')
+    expect(segments).toEqual([
+      { text: 'open ', kind: 'text' },
+      {
+        text: '/Users/x/Library/Application Support/foo.json:3',
+        kind: 'path',
+        target: '/Users/x/Library/Application Support/foo.json',
+      },
+      { text: ' now', kind: 'text' },
+    ])
+  })
+
+  it('does not glue prose after a POSIX path to a later file location', () => {
+    const segments = splitPaths('/tmp/foo is bad, see bar.go:12')
+    expect(segments.filter((s) => s.kind === 'path').map((s) => s.text)).toEqual([
+      '/tmp/foo',
+      'bar.go:12',
+    ])
+  })
+
+  it('leaves POSIX paths outside the known roots to the strict matcher', () => {
+    const segments = splitPaths('/srv/my app/x.ts:3')
+    expect(segments.filter((s) => s.kind === 'path').map((s) => s.text)).toEqual([
+      '/srv/my',
+      'app/x.ts:3',
     ])
   })
 

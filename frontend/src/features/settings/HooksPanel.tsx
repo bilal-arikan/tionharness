@@ -152,6 +152,14 @@ export function HooksPanel({ onError }: Props) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-mono text-xs">{h.command}</div>
+                  {h.shellWarning === 'powershell-missing' && (
+                    <div
+                      data-testid="hook-shell-warning"
+                      className="text-[11px] text-[var(--color-warning)]"
+                    >
+                      {t('hooks.pwshMissing')}
+                    </div>
+                  )}
                   <div className="text-[11px] text-[var(--color-text-dim)]">
                     {t('hooks.matcher')}: <code>{h.matcher || t('hooks.allTools')}</code> ·{' '}
                     {h.timeoutSec || 30}

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useServerOS } from '@/shared/hooks/useServerOS'
+import { examplePath } from '@/shared/lib/platform'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import type { GitInfo, WorkspaceTemplate } from '@/types'
@@ -27,6 +29,7 @@ interface Props {
 // and an emoji identity. The data dir always uses the app default location.
 export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   const { t } = useTranslation('workspace')
+  const serverOS = useServerOS()
   const [name, setName] = useState('')
   const [projectDir, setProjectDir] = useState('')
   const [icon, setIcon] = useState('⬡')
@@ -217,7 +220,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
           <input
             value={projectDir}
             onChange={(e) => setProjectDir(e.target.value)}
-            placeholder="C:\Users\...\Desktop\Projects\my-app"
+            placeholder={examplePath(serverOS, 'project')}
             className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <button
