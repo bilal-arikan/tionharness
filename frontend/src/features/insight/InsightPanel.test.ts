@@ -85,6 +85,14 @@ describe('InsightPanel analysis agent selection', () => {
     expect(withDefaultAnalysisAgent({}, [withArchived[0]])).toEqual({})
   })
 
+  it('never defaults to a system agent', () => {
+    const withSystem = [
+      { id: 'SYS', system: true, systemKey: 'subagent-planner' },
+      ...agents,
+    ] as Agent[]
+    expect(withDefaultAnalysisAgent({}, withSystem)).toEqual({ autoScanAgentId: 'AGT1' })
+  })
+
   it('optimistically selects and persists the complete settings payload', async () => {
     const settings: InsightSettings = { autoScanAgentId: 'AGT1', maxSessions: 25 }
     const setSettings = vi.fn()

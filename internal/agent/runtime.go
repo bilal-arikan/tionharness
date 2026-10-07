@@ -288,6 +288,11 @@ type Runtime struct {
 	// agent is the default; empty = none configured.
 	defaultAgentID atomic.Pointer[string]
 
+	// roleAssignments maps a system role (SystemKey) to the agent the user picked
+	// to run it in this workspace, mirrored from per-workspace settings
+	// (systemagent_assign.go). Nil/empty = every role runs on its built-in agent.
+	roleAssignments atomic.Pointer[map[string]string]
+
 	// codebaseMemoryEnabled gates the whole codebase-memory capability system for
 	// this workspace: the prompt hint block, the per-workspace isolated store env,
 	// the cwd auto-index, and the codebase_workspace_search tool. Default on;

@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"github.com/bilal-arikan/tionharness/internal/awareness"
+	"maps"
 	"net/http"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
@@ -93,6 +95,12 @@ type workspaceSettingsDTO struct {
 	// (_Docs/94), normalized so zero fields read as their defaults.
 	Awareness awareness.Settings `json:"awareness"`
 
+	// SystemAgentAssignments maps a system role (SystemKey) to the agent the user
+	// picked to run it here; always non-nil. AssignableRoles lists the roles the
+	// server accepts, so the client never offers a picker it would refuse.
+	SystemAgentAssignments map[string]string `json:"systemAgentAssignments"`
+	AssignableRoles        []string          `json:"assignableRoles"`
+
 	AgentCount   int `json:"agentCount"`
 	SessionCount int `json:"sessionCount"`
 	TaskCount    int `json:"taskCount"`
@@ -146,7 +154,11 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		// Non-nil for a clean empty array in JSON (nil marshals to null).
 		BoardViews:             append([]db.BoardViewDef{}, s.BoardViews...),
 		IgnoredRecommendations: append([]string{}, s.IgnoredRecommendations...),
+
+		SystemAgentAssignments: map[string]string{},
+		AssignableRoles:        agent.AssignableSystemRoles(),
 	}
+	maps.Copy(dto.SystemAgentAssignments, s.SystemAgentAssignments)
 	if agents, err := w.DB.ListAgents(ctx); err == nil {
 		dto.AgentCount = len(agents)
 	}
@@ -247,6 +259,10 @@ func (s *Server) handleUpdateWorkspaceSettings(w http.ResponseWriter, r *http.Re
 	if errors.Is(err, workspace.ErrDefaultAgentSystem) {
 		writeError(w, http.StatusBadRequest,
 			"Sistem ajanı yeni sohbetler için varsayılan ajan yapılamaz.")
+		return
+	}
+	if errors.Is(err, agent.ErrRoleAssignmentKey) || errors.Is(err, agent.ErrRoleAssignmentAgent) {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err != nil {

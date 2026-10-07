@@ -141,6 +141,8 @@
     "invalidNumber": "Invalid number — fix it before saving"
   },
   "settings": {
+    "agentsTitle": "Insight agents",
+    "agentsHint": "Which agent runs each insight role. The sidebar's Analysis agent starts the scan and is billed for it; the Insight analyzer chosen here decides the provider and model the analysis itself runs on. Empty = built-in.",
     "appFixRepoPath": "App-Fix repository path (backlog target)",
     "maxSessions": "Max sessions / scan (0 = unlimited)",
     "maxAnalyzed": "Max analyses (LLM calls) / scan (0 = unlimited)",

@@ -12,6 +12,7 @@ import type {
 import { api } from '@/api'
 import { Badge, Button, InfoPopover, type BadgeTone } from '@/shared/components'
 import { OptionPills } from '@/shared/components/OptionPills'
+import { SystemRoleAssignments } from '@/shared/components/agents/SystemRolePickers'
 import { relativeTime, fullDateTime } from '@/shared/lib/time'
 
 interface Props {
@@ -282,6 +283,14 @@ export function EvolutionTab({
             {note && (
               <p className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px]">{note}</p>
             )}
+            {/* Workspace-wide: which agent the observer runs on (saved at once). */}
+            <div className="border-t border-[var(--color-border)] pt-3">
+              <SystemRoleAssignments
+                roles={['flow-optimizer']}
+                title={t('evolution.observerAgent')}
+                hint={t('evolution.observerAgentHint')}
+              />
+            </div>
           </div>
         </Section>
 

@@ -72,6 +72,7 @@
     "title": "Workspace",
     "tabs": {
       "general": "Genel",
+      "agents": "Ajanlar",
       "appearance": "Görünüm",
       "project": "Proje",
       "logs": "Loglar",
@@ -379,6 +380,15 @@
         "desc": "{{tools}} bu cihazda kurulu — ajan geliştirme sırasında Bash ile doğrudan çağırabilir.",
         "action": "Detay"
       }
+    }
+  },
+  "agents": {
+    "intro": "Bu workspace'te her worker profilini ve sistem rolünü hangi ajanın çalıştıracağını seçin. Değişiklikler hemen kaydedilir; boş seçim yerleşik ajan demektir.",
+    "groupHints": {
+      "workers": "Koordinatör `explore` veya `coder` gibi bir profil başlattığında burada seçilen ajan çalışır — kendi promptu, araçları ve modeliyle.",
+      "helpers": "Her sohbetin arka plan yardımcıları: başlık, bağlam sıkıştırma ve genel bakış özetleri. Seçilen ajan sağlayıcı ve modeli verir; rol kendi promptunu korur.",
+      "analysis": "İçgörü taramaları ve ders çıkarma kullanır. İçgörü ▸ Ayarlar'dan da düzenlenebilir.",
+      "optimizers": "Akış gözlemcisi (Akışlar ▸ Evrim'de de), reçete iyileştirici (İçgörü ▸ Ayarlar'da da) ve koordinatör takılma hakemi."
     }
   }
 }

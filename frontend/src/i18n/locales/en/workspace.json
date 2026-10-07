@@ -72,6 +72,7 @@
     "title": "Workspace",
     "tabs": {
       "general": "General",
+      "agents": "Agents",
       "appearance": "Appearance",
       "project": "Project",
       "logs": "Logs",
@@ -379,6 +380,15 @@
         "desc": "{{tools}} is installed on this device — agents can call it directly from Bash during development.",
         "action": "Details"
       }
+    }
+  },
+  "agents": {
+    "intro": "Choose which agent runs each worker profile and system role in this workspace. Changes save immediately; an empty picker means the built-in agent.",
+    "groupHints": {
+      "workers": "When a coordinator spawns a profile such as `explore` or `coder`, the agent chosen here runs it — with its own prompt, tools and model.",
+      "helpers": "Background helpers for every conversation: titles, context compaction and overview summaries. The chosen agent supplies the provider and model; the role keeps its own prompt.",
+      "analysis": "Used by insight scans and lesson extraction. Also editable from Insight ▸ Settings.",
+      "optimizers": "Flow observer (also in Flows ▸ Evolution), recipe optimizer (also in Insight ▸ Settings) and the coordinator stall judge."
     }
   }
 }

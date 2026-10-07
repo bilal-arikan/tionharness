@@ -148,6 +148,8 @@
     "failure": "failed"
   },
   "evolution": {
+    "observerAgent": "Observer agent",
+    "observerAgentHint": "Workspace-wide: which agent the flow observer runs on for every flow. The observer keeps its own prompt; the chosen agent supplies the provider and model. Empty = built-in.",
     "policy": "Observer policy",
     "policyHint": "The observer (flow-optimizer system agent) looks at the recent runs every N runs and proposes one change. Propose: you approve. Auto: a proposal above the confidence floor is applied by itself. Every version can be reverted.",
     "everyRuns": "Every N runs",

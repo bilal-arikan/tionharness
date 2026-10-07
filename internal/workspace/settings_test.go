@@ -115,3 +115,28 @@ func TestSanitizeDefaultAgentClearsSystemAgent(t *testing.T) {
 		t.Fatalf("cleared defaultAgentId not persisted: %s", data)
 	}
 }
+
+// TestUpdateSettingsMergesRoleAssignments: each screen patches only the roles it
+// shows, so assignments merge into the stored map and "" clears one role.
+func TestUpdateSettingsMergesRoleAssignments(t *testing.T) {
+	m := testManager(t)
+	w := &Workspace{Meta: Meta{ID: "WS1", Name: "a"}, DataDir: t.TempDir()}
+	w.settings.cur = defaultWSSettings()
+	m.workspaces[w.ID] = w
+	m.order = append(m.order, w.ID)
+
+	steps := []map[string]string{
+		{"titler": "AGT-1"},
+		{"compaction": "AGT-2"},
+		{"titler": ""},
+	}
+	for _, patch := range steps {
+		if _, err := m.UpdateSettings(w.ID, WSSettingsPatch{SystemAgentAssignments: patch}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := w.Settings().SystemAgentAssignments
+	if len(got) != 1 || got["compaction"] != "AGT-2" {
+		t.Fatalf("assignments = %v, want only compaction=AGT-2", got)
+	}
+}

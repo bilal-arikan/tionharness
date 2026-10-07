@@ -5,8 +5,10 @@ export function withDefaultAnalysisAgent(
   settings: InsightSettings,
   agents: Agent[],
 ): InsightSettings {
-  // Never default to an archived agent: it cannot run the analysis.
-  const live = pickableAgents(agents)
+  // Never default to an archived agent (it cannot run the analysis) or to a
+  // system agent: a worker profile or titler is not the scan's owner — the
+  // Insight analyzer role picks its own agent in Insight ▸ Settings.
+  const live = pickableAgents(agents).filter((a) => !a.system)
   if (settings.autoScanAgentId || live.length === 0) return settings
   return { ...settings, autoScanAgentId: live[0].id }
 }

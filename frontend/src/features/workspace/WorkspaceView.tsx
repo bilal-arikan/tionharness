@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Bot,
   Boxes,
   Cpu,
   ScrollText,
@@ -19,15 +20,24 @@ import { ProjectPanel } from './ProjectPanel'
 import { ProcessPanel } from './ProcessPanel'
 import { ExportIntro, WorkspaceExportPanel } from './WorkspaceExportPanel'
 import { RecommendationsPanel } from './RecommendationsPanel'
+import { WorkspaceAgentsPanel } from './WorkspaceAgentsPanel'
 import { Button, CollapsibleListShell, InfoPopover, toast } from '@/shared/components'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import { useTranslation } from 'react-i18next'
 
 type Tab =
-  'general' | 'appearance' | 'project' | 'logs' | 'processes' | 'export' | 'recommendations'
+  | 'general'
+  | 'agents'
+  | 'appearance'
+  | 'project'
+  | 'logs'
+  | 'processes'
+  | 'export'
+  | 'recommendations'
 
 const WORKSPACE_TAB_KEYS: Tab[] = [
   'general',
+  'agents',
   'appearance',
   'project',
   'logs',
@@ -64,6 +74,7 @@ interface Props {
 
 const TABS: { key: Tab; labelKey: string; icon: LucideIcon }[] = [
   { key: 'general', labelKey: 'view.tabs.general', icon: Boxes },
+  { key: 'agents', labelKey: 'view.tabs.agents', icon: Bot },
   { key: 'appearance', labelKey: 'view.tabs.appearance', icon: Palette },
   { key: 'project', labelKey: 'view.tabs.project', icon: FolderGit2 },
   { key: 'logs', labelKey: 'view.tabs.logs', icon: ScrollText },
@@ -152,8 +163,8 @@ export function WorkspaceView({
   // İşlemler render their own PaneHeader, so the workspace header is omitted for
   // those tabs.
   const fullPane = FULL_PANE_TABS.includes(tab)
-  const showSave =
-    tab === 'appearance' || tab === 'export' || tab === 'recommendations' ? false : !fullPane
+  const selfSaving: Tab[] = ['agents', 'appearance', 'export', 'recommendations']
+  const showSave = selfSaving.includes(tab) ? false : !fullPane
   const activeMeta = TABS.find((t) => t.key === tab)
 
   // Surface unsaved workspace edits on the nav "Workspace" item + workspace label.
@@ -186,9 +197,7 @@ export function WorkspaceView({
               <span className="flex-1 truncate">{t(tabMeta.labelKey)}</span>
               {(FULL_PANE_TABS.includes(tabMeta.key)
                 ? false
-                : tabMeta.key === 'appearance' ||
-                    tabMeta.key === 'export' ||
-                    tabMeta.key === 'recommendations'
+                : selfSaving.includes(tabMeta.key)
                   ? false
                   : dirty) && (
                 <span
@@ -246,6 +255,8 @@ export function WorkspaceView({
             <div className="text-sm text-[var(--color-text-dim)]">{t('actions.loading')}</div>
           ) : tab === 'general' ? (
             <WorkspacePanel ws={ws} setWsField={setWsField} onDeleteWorkspace={onDeleteWorkspace} />
+          ) : tab === 'agents' ? (
+            <WorkspaceAgentsPanel />
           ) : tab === 'appearance' ? (
             <AppearancePanel onError={onError} onAppearanceSaved={onAppearanceSaved} />
           ) : tab === 'project' ? (

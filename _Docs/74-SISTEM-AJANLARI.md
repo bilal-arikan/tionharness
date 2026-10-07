@@ -5,6 +5,9 @@
 > sistem ajanlarıyla yürütülür. Her rolün **kilitli yerleşik** satırı (koddan dayatılır,
 > düzenlenemez) uygulamanın varsayılanıdır; özelleştirme, ondan kalıtım alan ve yalnız
 > istenen alanları override eden bir çocukla yapılır (`82-AJAN-KALITIMI.md`).
+> **2026-10-07:** her workspace, bir rolü hangi ajanın çalıştıracağını
+> `ws-settings.json` → `systemAgentAssignments` ile seçebilir (bkz. "Workspace rol
+> atamaları"); boş atama eski davranıştır.
 
 ## Kavram ve kayıt defteri
 
@@ -202,6 +205,57 @@ worker profilleri) değişmedi; hepsi etkin ajanı (kalıtım katlanmış) alır
   (`ClearAgentOverrides`): çocuk her alanı yeniden devralır. Kilitli → 409, kök ajan → 404.
   Eski "kayıt defterinden alanları geri yaz" davranışı gereksizleşti; yerleşik satır zaten
   hep kayıt defteridir.
+
+## Workspace rol atamaları (2026-10-07)
+
+İçgörü ekranındaki "Analiz ajanı" seçicisinin genelleştirilmiş hâlidir: workspace
+başına `SystemKey → ajan id` haritası (`WSSettings.SystemAgentAssignments`,
+`internal/workspace/settings.go`), Runtime'a `SetSystemRoleAssignments` ile aynalanır
+ve `ResolveSystemAgent` içinde uygulanır (`internal/agent/systemagent_assign.go`).
+Atama yoksa çözümleme eskisi gibidir (etkin özelleştirme → kilitli yerleşik → tanım).
+
+- **Yardımcı roller** (`titler`, `compaction`, `overview-summarizer`, `insight`,
+  `lesson-extractor`, `flow-optimizer`, `recipe-optimizer`, `stall-judge`): rol
+  sözleşmesi (prompt, araç listesi, id, `SystemKey`) korunur; atanan normal ajandan
+  yalnız sağlayıcı/örnek/model alınır ve `provider`+`model` override'ı olarak
+  damgalanır → `pinsProvider` doğru, çağrı tam o modelde koşar, yardımcı yönlendirme
+  atlanır. Normal ajanın kendi soul'u kullanılmaz; `{{summary}}` yer tutucuları ve
+  katı JSON çıktıları bozulurdu.
+- **Worker rolleri** (`subagent-*`): `spawn_worker`/`run_subagent` profil adı
+  (`explore`, `coder` …) atanan normal ajanı **kendisi olarak** çalıştırır (kendi
+  promptu, araçları, modeli; `resolveWorkerTarget`, `resolveSubagentTarget`). Profil
+  allowlist'i yerleşik satıra aittir; atanan ajana ne yazılır ne uygulanır. Bu yeni
+  yetki vermez — koordinatör aynı ajanı adıyla zaten hedefleyebilir.
+  `ResolveSystemAgent` worker rolleri için normal ajan atamasını yansıtmaz (profil
+  promptu ve allowlist senkronu yerleşikte kalır).
+- **Aynı rolün sistem ajanı** (yerleşik ya da özelleştirme) atanırsa o satır her rol
+  sınıfında doğrudan seçilir.
+- **Doğrulama:** `CheckSystemRoleAssignment` bilinmeyen/atanamaz rolü
+  (`ErrRoleAssignmentKey`) ve silinmiş, devre dışı, arşivli ya da **başka rolün**
+  sistem ajanını (`ErrRoleAssignmentAgent`) reddeder; API 400 döner.
+  `insight-applier` atanamaz — onu çağıran yerleşik otomasyon ajanını kendisi seçer.
+  Sonradan geçersizleşen atama (ajan arşivlendi vb.) sessizce yerleşiğe düşer.
+- **Yama birleşir:** `PUT /api/workspace-settings` gövdesindeki
+  `systemAgentAssignments` saklı haritaya birleştirilir, boş id o rolü temizler; her
+  ekran yalnız kendi rollerini gönderir. GET, `systemAgentAssignments` ve
+  `assignableRoles` döndürür.
+- **Sağlayıcı değişince boş model:** `systemAgentExecutor` sağlayıcıyı değiştirip
+  sistem ajanının modeli boşsa çağıranın modelini taşımaz (sağlayıcının kendi
+  varsayılanı koşar).
+
+UI (`shared/components/agents/SystemRolePickers.tsx`, kendiliğinden kaydeden,
+`AgentPicker` tabanlı; boş seçim "Yerleşik · <ad>" gösterir; aday listesi normal ajanlar
++ rolün kendi sistem ajanı):
+
+| Ekran | Roller |
+|---|---|
+| Workspace ▸ **Ajanlar** sekmesi | Hepsi: Worker'lar, Sohbet yardımcıları (başlık, sıkıştırma, özet), Analiz, Gözlemciler ve hakemler |
+| İçgörü ▸ Ayarlar ▸ İçgörü ajanları | `insight`, `lesson-extractor`, `recipe-optimizer` |
+| Akışlar ▸ Evrim ▸ Gözlemci politikası | `flow-optimizer` (workspace geneli) |
+
+İçgörü kenar çubuğundaki "Analiz ajanı" (`autoScanAgentId`) taramayı başlatan ve
+faturalanan ajandır; analiz modelini `insight` rol ataması belirler. Varsayılanı artık
+sistem ajanı olamaz.
 
 ## API yüzeyi
 

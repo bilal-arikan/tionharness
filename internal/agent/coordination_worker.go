@@ -50,6 +50,13 @@ func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseA
 		return a.ID, nil
 	}
 
+	// A workspace role assignment points the profile name at a regular agent,
+	// which then runs as itself (its own tools; the profile allowlist belongs to
+	// the built-in row and is neither synced onto nor applied to it).
+	if assigned, ok := r.assignedWorker(prof.ID); ok {
+		return assigned.ID, nil
+	}
+
 	systemAgent, _, err := r.ResolveSystemAgent("subagent-" + prof.ID)
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve worker profile %q system agent: %w", prof.ID, err)

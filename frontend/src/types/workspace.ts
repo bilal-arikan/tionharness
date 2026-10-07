@@ -165,6 +165,11 @@ export interface WorkspaceSettings {
   // Session briefing / per-turn pulse / end-of-turn digest layer (_Docs/94).
   // Patched as a whole object.
   awareness: AwarenessSettings
+  // System role → agent id picked to run it in this workspace (missing = the
+  // role's built-in agent). A patch MERGES; an empty id clears that role.
+  systemAgentAssignments: Record<string, string>
+  // Roles the server accepts an assignment for (read-only).
+  assignableRoles: string[]
   createdAt: number
   agentCount: number
   sessionCount: number
@@ -199,6 +204,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'boardViews'
     | 'ignoredRecommendations'
     | 'awareness'
+    | 'systemAgentAssignments'
   >
 >
 

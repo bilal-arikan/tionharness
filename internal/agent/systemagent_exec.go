@@ -36,6 +36,11 @@ func (r *Runtime) systemAgentExecutor(key string, caller db.Agent, systemAgent d
 		if !same && (pinsProvider(systemAgent) || (r.providers != nil && r.providers.Available(inst) && !r.systemRouteQuarantined(inst))) {
 			exec.Provider = systemAgent.Provider
 			exec.ProviderInstanceID = inst
+			// An empty model is "the provider's own default"; the caller's model
+			// belongs to the caller's provider and must not travel across.
+			if systemAgent.Model == "" {
+				exec.Model = ""
+			}
 		}
 	}
 	if systemAgent.Model != "" {

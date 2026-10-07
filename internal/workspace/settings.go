@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -157,6 +158,12 @@ type WSSettings struct {
 	// not re-offered. Purely UI state — no runtime effect. Manageable (review +
 	// un-ignore) from the Settings ▸ Öneriler panel.
 	IgnoredRecommendations []string `json:"ignoredRecommendations,omitempty"`
+
+	// SystemAgentAssignments picks which agent runs a system role in this
+	// workspace: SystemKey → agent id. A missing key runs the role on its
+	// built-in (or customised) system agent. Semantics per role class live in
+	// internal/agent/systemagent_assign.go.
+	SystemAgentAssignments map[string]string `json:"systemAgentAssignments,omitempty"`
 }
 
 // defaultWSSettings is the seed used before overlaying a persisted ws-settings
@@ -215,6 +222,11 @@ type WSSettingsPatch struct {
 	BoardViews *[]db.BoardViewDef `json:"boardViews"`
 
 	IgnoredRecommendations *[]string `json:"ignoredRecommendations"`
+
+	// SystemAgentAssignments MERGES into the stored map, unlike the list fields:
+	// each screen edits only the roles it shows, so a full rewrite would let two
+	// screens clobber each other. An empty agent id clears that role.
+	SystemAgentAssignments map[string]string `json:"systemAgentAssignments"`
 }
 
 // ErrDefaultAgentSystem rejects making a built-in (system) agent the default
@@ -318,6 +330,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetShellCompression(s.ShellOutputCompression)
 		w.Runtime.SetShellCommandRewrite(s.ShellCommandRewrite)
 		w.Runtime.SetAwarenessSettings(s.Awareness)
+		w.Runtime.SetSystemRoleAssignments(s.SystemAgentAssignments)
 	}
 }
 
@@ -387,6 +400,16 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.DefaultAgentId != nil {
 		if err := ws.checkDefaultAgent(*patch.DefaultAgentId); err != nil {
 			return nil, err
+		}
+	}
+
+	// Same rule for role assignments: an unknown role or an agent that cannot run
+	// it is refused before anything lands.
+	if ws.Runtime != nil {
+		for key, agentID := range patch.SystemAgentAssignments {
+			if err := ws.Runtime.CheckSystemRoleAssignment(context.Background(), key, agentID); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -479,6 +502,20 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.IgnoredRecommendations != nil {
 		ws.settings.cur.IgnoredRecommendations = *patch.IgnoredRecommendations
 	}
+	if len(patch.SystemAgentAssignments) > 0 {
+		merged := maps.Clone(ws.settings.cur.SystemAgentAssignments)
+		if merged == nil {
+			merged = map[string]string{}
+		}
+		for key, agentID := range patch.SystemAgentAssignments {
+			if agentID == "" {
+				delete(merged, key)
+			} else {
+				merged[key] = agentID
+			}
+		}
+		ws.settings.cur.SystemAgentAssignments = merged
+	}
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions
 	terseMode := ws.settings.cur.TerseMode
@@ -491,6 +528,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	shellCompression := ws.settings.cur.ShellOutputCompression
 	shellRewrite := ws.settings.cur.ShellCommandRewrite
 	awareSettings := ws.settings.cur.Awareness
+	roleAssignments := ws.settings.cur.SystemAgentAssignments
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -522,6 +560,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetShellCompression(shellCompression)
 		ws.Runtime.SetShellCommandRewrite(shellRewrite)
 		ws.Runtime.SetAwarenessSettings(awareSettings)
+		ws.Runtime.SetSystemRoleAssignments(roleAssignments)
 	}
 	return ws, nil
 }

@@ -9,6 +9,26 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Sistem rolleri için workspace ajan atamaları (2026-10-07)
+
+İçgörü'deki "Analiz ajanı" seçicisi genelleştirildi: her workspace, worker
+profillerini ve sistem yardımcılarını (başlık, sıkıştırma, özet, içgörü, ders,
+akış/reçete gözlemcisi, takılma hakemi) hangi ajanın çalıştıracağını seçebilir.
+Sözleşme [74 § Workspace rol atamaları](74-SISTEM-AJANLARI.md).
+
+- **Backend:** `ws-settings.json` → `systemAgentAssignments` (yama birleşir, boş id
+  temizler); `internal/agent/systemagent_assign.go` doğrulama + çözümleme.
+  Yardımcı rollerde atanan ajandan yalnız sağlayıcı/model ödünç alınıp sabitlenir;
+  worker rollerinde profil adı atanan ajanı kendisi olarak çalıştırır.
+  `insight-applier` atanamaz. Geçersiz atama API'de 400.
+- **UI:** Workspace'e **Ajanlar** sekmesi (tüm roller, gruplu); İçgörü ▸ Ayarlar'a
+  İçgörü ajanları kartı; Akışlar ▸ Evrim'e Gözlemci ajanı seçicisi. Ortak bileşen
+  `shared/components/agents/SystemRolePickers.tsx`. İçgörü "Analiz ajanı" varsayılanı
+  artık sistem ajanı seçmiyor.
+- **Doğrulama:** `systemagent_assign_test.go`, `TestUpdateSettingsMergesRoleAssignments`,
+  `systemRoles.test.ts`; scratch sunucuda (8091) atama/temizleme/400 reddi ve üç ekran
+  elle denendi.
+
 ## Harici araçlar: codex tek tıkla güncellenir (2026-10-07)
 
 Codex CLI, Ayarlar ▸ Harici araçlar panelinde artık "Güncelle" düğmesi ve
