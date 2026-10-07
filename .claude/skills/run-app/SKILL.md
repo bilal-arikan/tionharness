@@ -30,3 +30,21 @@ description: >
    Bearer auth isteğe bağlıdır; günlükleri `preview_logs` ile okuyun.
 
 İş sonunda yalnız bu kontrol için başlattığınız sunucuları `preview_stop` ile kapatın.
+
+## macOS makinesi: kullanıcının terminalindeki sunucu
+
+macOS'ta kullanıcı sunucuyu kendi terminalinden `scripts/serve.sh` ile çalıştırır
+(`0.0.0.0:5173`, `TIONHARNESS_ENABLE_SHELL=1`, `bin/tionharness`). Arayüz binary'ye
+gömülü olduğundan frontend değişikliği yalnız yeniden derlemeyle görünür.
+
+- **Kullanıcı izni (2026-10-05):** Doğrulama gerekiyorsa bu sunucuyu durdurup aynı portta
+  yeniden başlatabilirsiniz; yukarıdaki 4. maddedeki "çalışan sunucuyu kesmeyin" kuralının
+  bu makinedeki istisnasıdır. Durdurduğunuzu yanıtta söyleyin.
+- Yeniden başlatma: `scripts/serve.sh --ui` komutunu Bash'te arka planda
+  (`run_in_background`) çalıştırın. Script arayüzü ve Go binary'sini derler, portu tutan
+  eski süreci kendisi kapatır ve aynı adreste başlatır. Günlüğü scratchpad'e yönlendirin.
+- `preview_start` burada `serve.sh` çalıştıramaz (macOS izinleri Masaüstü dizinine
+  erişimi engeller: `Operation not permitted`); bu yüzden Bash kullanılır. `npx vite`
+  ile açılan Vite önizlemesi ise `preview_start` altında çalışır.
+- Yeniden başlatmadan sonra açık sekmeler eski chunk adlarını isteyip
+  "Failed to fetch dynamically imported module" verebilir; sayfayı tam yenileyin.

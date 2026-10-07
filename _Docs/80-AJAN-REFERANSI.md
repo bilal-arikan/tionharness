@@ -112,6 +112,11 @@ cp /tmp/dosya.full <dosya>
 - CI: `.github/workflows/` (release + Pages) ve `.gitea/workflows/ci.yml` (yalnız
   doğrulama). Paket alt-kümesi geçidi kurma; en çok değişen paketler dışarıda kalır.
 
+- **Canlı doğrulama (macOS):** Kullanıcının terminalinde `scripts/serve.sh` ile
+  `0.0.0.0:5173`'te çalışan sunucuyu test için durdurup `scripts/serve.sh --ui` ile aynı
+  portta yeniden başlatmak serbesttir (kullanıcı izni, 2026-10-05). Ayrıntı ve
+  `preview_start` kısıtı → `.claude/skills/run-app/SKILL.md` "macOS makinesi" bölümü.
+
 ## 7. `website/` — tanıtım sitesi
 
 Depoda iki ayrı npm projesi vardır. `frontend/` uygulamanın arayüzüdür ve binary'ye

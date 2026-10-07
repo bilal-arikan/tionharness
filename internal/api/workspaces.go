@@ -1,8 +1,12 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -186,30 +190,71 @@ type pickFolderResp struct {
 }
 
 // handlePickFolder opens the OS native folder-selection dialog on the machine
-// running the backend (a local desktop app) and returns the chosen path. On
-// Windows it uses a PowerShell FolderBrowserDialog; on other platforms it
-// returns an error so the UI falls back to manual path entry.
+// running the backend (a local desktop app) and returns the chosen path:
+// PowerShell FolderBrowserDialog on Windows, AppleScript `choose folder` on
+// macOS, zenity/kdialog on Linux. When no picker is available it returns an
+// error so the UI falls back to manual path entry.
 func (s *Server) handlePickFolder(w http.ResponseWriter, r *http.Request) {
-	const script = `Add-Type -AssemblyName System.Windows.Forms | Out-Null
-$d = New-Object System.Windows.Forms.FolderBrowserDialog
-$d.Description = 'TionHarness workspace klasörü seç'
-$d.ShowNewFolderButton = $true
-$top = New-Object System.Windows.Forms.Form
-$top.TopMost = $true
-if ($d.ShowDialog($top) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }`
-
-	// HideConsole (not proc.Command): suppress the PowerShell console flash but
-	// keep the FolderBrowserDialog visible. proc.Command's HideWindow (SW_HIDE)
-	// would hide the dialog too.
-	cmd := exec.CommandContext(r.Context(), "powershell.exe", "-NoProfile", "-STA", "-Command", script)
-	proc.HideConsole(cmd)
-	out, err := cmd.Output()
+	cmd, err := folderPickerCommand(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "folder picker unavailable: "+err.Error())
 		return
 	}
+	out, err := cmd.Output()
+	if err != nil {
+		// Every picker signals "user canceled" with exit status 1 (osascript also
+		// prints error -128); treat that as a cancel, not a failure.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			writeJSON(w, http.StatusOK, pickFolderResp{Canceled: true})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "folder picker unavailable: "+err.Error())
+		return
+	}
 	path := strings.TrimSpace(string(out))
+	if path != "" {
+		// AppleScript's POSIX path of a folder ends with "/".
+		path = filepath.Clean(path)
+	}
 	writeJSON(w, http.StatusOK, pickFolderResp{Path: path, Canceled: path == ""})
+}
+
+const pickFolderPrompt = "TionHarness workspace klasörü seç"
+
+// folderPickerCommand builds the platform's native folder-dialog command. Its
+// stdout is the chosen path; exit status 1 means the user canceled.
+func folderPickerCommand(ctx context.Context) (*exec.Cmd, error) {
+	switch runtime.GOOS {
+	case "windows":
+		const script = `Add-Type -AssemblyName System.Windows.Forms | Out-Null
+$d = New-Object System.Windows.Forms.FolderBrowserDialog
+$d.Description = '` + pickFolderPrompt + `'
+$d.ShowNewFolderButton = $true
+$top = New-Object System.Windows.Forms.Form
+$top.TopMost = $true
+if ($d.ShowDialog($top) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }`
+		// HideConsole (not proc.Command): suppress the PowerShell console flash but
+		// keep the FolderBrowserDialog visible. proc.Command's HideWindow (SW_HIDE)
+		// would hide the dialog too.
+		cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-STA", "-Command", script)
+		proc.HideConsole(cmd)
+		return cmd, nil
+	case "darwin":
+		// `activate` brings osascript's own dialog to the front without needing
+		// Automation permission for another app.
+		return exec.CommandContext(ctx, "osascript",
+			"-e", "activate",
+			"-e", `POSIX path of (choose folder with prompt "`+pickFolderPrompt+`")`), nil
+	default:
+		if p, err := exec.LookPath("zenity"); err == nil {
+			return exec.CommandContext(ctx, p, "--file-selection", "--directory", "--title="+pickFolderPrompt), nil
+		}
+		if p, err := exec.LookPath("kdialog"); err == nil {
+			return exec.CommandContext(ctx, p, "--getexistingdirectory", "", "--title", pickFolderPrompt), nil
+		}
+		return nil, errors.New("zenity or kdialog not found")
+	}
 }
 
 func (s *Server) handleDeleteWorkspace(w http.ResponseWriter, r *http.Request) {

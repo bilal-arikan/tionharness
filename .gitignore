@@ -38,6 +38,10 @@ credential-secret
 # Local dev logs + scratch (not part of the project)
 # _devlogs/: dev.ps1 lifecycle log + captured backend stderr (crash traces).
 /_devlogs/
+
+# Root binary built by scripts/serve.sh (macOS/Linux)
+/tionharness
+
 # .scratch/: agent scratchpad (task dumps, API responses) - local only.
 /.scratch/
 *.log
