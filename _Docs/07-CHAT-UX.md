@@ -157,8 +157,8 @@ Ton; ince kenarlık, hafif yüzey rengi ve ikon renginde uygulanır. Etiket ve i
 değişmediği için anlam yalnız renge bağlı değildir. Codex native işbirliği olaylarında
 generic `collab_tool_call` adı yerine yapısal `operation` alanı sınıflandırılır.
 Kart kökü test ve otomasyon için `data-agent-action-tone` (`create | stop | message`)
-işaretini taşır. Görsel kaynak ve çıktı `_Docs/design/chat-agent-step-colors.*`
-dosyalarındadır.
+işaretini taşır. Görsel çıktı `_Docs/design/chat-agent-step-colors.png`
+dosyasındadır.
 
 `tool_delta` kind sabiti ve frontend okuma dalı yalnız daha önce kalıcılaştırılmış
 eski oturumlar için korunur; yeni üretim yolu değildir.

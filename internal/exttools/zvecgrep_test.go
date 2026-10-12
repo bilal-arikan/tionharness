@@ -40,6 +40,15 @@ func writeExe(t *testing.T, path string) {
 	}
 }
 
+// isolateHome points os.UserHomeDir at an empty temp dir so install-layout
+// candidates under the developer's real home cannot match.
+func isolateHome(t *testing.T) {
+	t.Helper()
+	tmp := t.TempDir()
+	t.Setenv("USERPROFILE", tmp) // windows
+	t.Setenv("HOME", tmp)        // unix
+}
+
 // offPath simulates a backend whose PATH does not contain zg, with an empty home
 // and APPDATA so that only what the test creates can match. Returns the home dir.
 func offPath(t *testing.T) string {

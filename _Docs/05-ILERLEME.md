@@ -9,6 +9,22 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## OpenPencil desteği kaldırıldı (2026-10-10)
+
+OpenPencil (`op` CLI) ile ilgili her şey projeden çıkarıldı:
+
+- **Harici araçlar:** `openpencil` katalog girdisi, `op`/1Password ad çakışması
+  koruması (`openPencilExe`, `TIONHARNESS_OPENPENCIL`) ve testleri silindi. Panelde
+  **Tasarım** kategorisi artık yok (`externalTools.categories.design` anahtarı da).
+- **Prerelease akışı:** yalnız OpenPencil için var olan `Tool.PreRelease`,
+  `LatestPreRelease` ve `/releases` listesine düşüş kaldırıldı; sürüm kontrolü
+  yalnız `releases/latest` kullanır. Eski önbellekteki `repo#pre` kayıtları zararsızdır.
+- **Varsayılan talimatlar:** `openpencil-design` skill'ini yükle notu çıkarıldı. Daha
+  önce oluşturulmuş workspace'lerin kayıtlı talimatları değişmez.
+- **Dokümanlar:** `_Docs/design/` ve arşivdeki `.op` belgeleri ile OpenPencil JS
+  kaynakları silindi, PNG önizlemeleri duruyor; [54](54-CAPABILITY-PROBE.md)
+  bölümü kaldırıldı.
+
 ## macOS/Linux uyumluluğu: Windows varsayımları temizlendi (2026-10-07)
 
 Proje Windows'ta geliştirildiği için yol, kabuk ve araç bulma varsayımları

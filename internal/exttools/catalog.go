@@ -12,7 +12,6 @@ package exttools
 
 import (
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -30,14 +29,6 @@ const ClaudeToolName = "claude"
 // ClaudeToolName above: named after the executable ("codex"), not the provider
 // id "codex-cli" that wraps it.
 const CodexToolName = "codex"
-
-// OpenPencilToolName is the catalog key for OpenPencil. Deliberately NOT the
-// executable name: the binary is `op`, which is ALSO the 1Password CLI. Keying
-// the catalog on "openpencil" keeps Find/Detect/the update endpoint unambiguous,
-// and openPencilExe() below refuses to claim a bare PATH `op` that is not
-// OpenPencil's — reporting 1Password's version against OpenPencil's release feed
-// would produce a confident, wrong "outdated" verdict.
-const OpenPencilToolName = "openpencil"
 
 // ZvecGrepToolName is the catalog key for zvec-grep. Named after the executable
 // (`zg`) like ClaudeToolName, because that is what PATH resolution and the version
@@ -90,11 +81,6 @@ type Tool struct {
 	Wire        string
 	VersionArgs []string
 	Update      UpdateSpec
-	// PreRelease opts this tool into LatestPreRelease: the project marks every
-	// release as a GitHub prerelease, so releases/latest 404s and the version
-	// check would report "no published release" forever. Leave false unless the
-	// repo was checked — see LatestPreRelease for why this is not a global rule.
-	PreRelease bool
 	// ResolveUpdate, when set, inspects the detected install and returns the
 	// update that fits HOW it was installed (npm vs Homebrew …); false falls back
 	// to Update. Use EffectiveUpdate rather than reading Update directly.
@@ -400,21 +386,6 @@ var Catalog = []Tool{
 		},
 	},
 	{
-		Name:        OpenPencilToolName,
-		Desc:        "OpenPencil — açık kaynak, ajan-yerlisi vektör tasarım aracı (Rust + GPU-Skia). Ajan `op` CLI'ı ile UI tasarlar, PNG/deck export eder ve tasarımı React/Vue/Svelte/Flutter/SwiftUI koduna çevirir; belgeler git dostu `.op` JSON'udur. `openpencil-design` skill'i bunu sürer. İkilinin adı `op`, ama 1Password CLI de aynı adı kullandığı için PATH'ten körlemesine alınmaz (bkz. Detect).",
-		URL:         "https://github.com/ZSeven-W/openpencil",
-		Category:    "design",
-		Wire:        "cli",
-		VersionArgs: []string{"--version"},
-		// Every OpenPencil release is tagged prerelease (v0.8.0…v0.8.4, checked
-		// 2026-08-15) even though they are the shipped downloads.
-		PreRelease: true,
-		Update: UpdateSpec{
-			Kind: UpdateManual,
-			Note: "Release iki ayrı arşiv taşır (`op-cli-*` + `openpencil-desktop-*`) ve ikisi de aynı sürümde olmalı; TionHarness bunu kendisi yapmaz. Önce **`op stop`** ile çalışan sunucuyu kapat — açık MCP sunucusu `op.exe`'yi kilitler. Sonra release'ten yeni zip'leri indirip mevcut `openpencil` klasörünün üzerine aç (checksum'lar `SHA256SUMS.txt`'te). Paket yöneticisiyle kurduysan `scoop update openpencil` (Windows) ya da `brew upgrade --cask openpencil` (macOS).",
-		},
-	},
-	{
 		Name:        "whisper-cli",
 		Desc:        "whisper.cpp — yerel/offline STT (ses→metin, 100+ dil, Türkçe dahil). TionHarness sunucu-tarafı sesle yazma (dikte) için kullanır; ffmpeg + bir ggml-*.bin model gerekir. Progs\\whisper altına kurulur veya PATH'te bulunur.",
 		URL:         "https://github.com/ggml-org/whisper.cpp",
@@ -527,11 +498,6 @@ func Detect(name string) (bool, string) {
 			return true, p
 		}
 		return false, ""
-	case OpenPencilToolName:
-		if p := openPencilExe(); p != "" {
-			return true, p
-		}
-		return false, ""
 	case ZvecGrepToolName:
 		// PATH first, then npm global bin directories that only some shells put on
 		// PATH (see zvecGrepExe).
@@ -544,50 +510,4 @@ func Detect(name string) (bool, string) {
 		return true, p
 	}
 	return false, ""
-}
-
-// openPencilExeName is OpenPencil's CLI binary. Shared by every candidate below.
-func openPencilExeName() string {
-	if runtime.GOOS == "windows" {
-		return "op.exe"
-	}
-	return "op"
-}
-
-// openPencilExe resolves OpenPencil's `op` CLI: an env override, the Progs
-// install layout, then PATH — but the PATH result is ACCEPTED ONLY when its
-// resolved path names openpencil.
-//
-// That last clause is the whole point. `op` is also the 1Password CLI, which is
-// widely installed and answers `--version` with a plain semver. Accepting it
-// would make the panel report 1Password's version, compare it against
-// ZSeven-W/openpencil's releases, and tell the user their design tool is years
-// out of date — the same "confident and meaningless verdict" the node/npm entries
-// above refuse to produce. Package-manager installs (scoop apps\openpencil\…,
-// brew Cellar/openpencil/…) still match; anything else needs TIONHARNESS_OPENPENCIL.
-func openPencilExe() string {
-	if p := strings.TrimSpace(os.Getenv("TIONHARNESS_OPENPENCIL")); p != "" {
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
-			return p
-		}
-		// An override that points at nothing means "not installed", exactly as in
-		// Detect: silently falling through would run a different binary than the
-		// one the user configured.
-		return ""
-	}
-	exe := openPencilExeName()
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		for _, c := range []string{
-			filepath.Join(home, "Desktop", "Progs", "openpencil", "cli", exe),
-			filepath.Join(home, "Desktop", "Progs", "openpencil", exe),
-		} {
-			if st, err := os.Stat(c); err == nil && !st.IsDir() {
-				return c
-			}
-		}
-	}
-	if p, err := lookPath("op"); err == nil && strings.Contains(strings.ToLower(p), "openpencil") {
-		return p
-	}
-	return ""
 }

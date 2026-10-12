@@ -24,7 +24,6 @@
 | Python | 3.13.7 | 3.13.15; mevcut 3.13 hattı korundu |
 | codebase-memory-mcp | 0.11.0 | Zaten güncel |
 | zvec-grep | 0.2.2 | Zaten güncel; yeni nvm ortamına taşındı |
-| OpenPencil | 0.8.4 | op-real.exe zaten güncel; özel op.exe başlatıcısı korundu |
 | Piper | 1.7.0 | 1.8.0; mevcut sanal ortamda |
 | whisper.cpp | 1.9.2 | 1.9.4; resmî sürümün işaret ettiği b5130 Windows paketi |
 | FFmpeg | 8.1.1 | 9.0.2 |

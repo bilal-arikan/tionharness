@@ -85,7 +85,6 @@ const TOOL_CATEGORY_LABELS: Record<string, string> = {
   token: 'externalTools.categories.token',
   dev: 'externalTools.categories.dev',
   render: 'externalTools.categories.render',
-  design: 'externalTools.categories.design',
   voice: 'externalTools.categories.voice',
 }
 

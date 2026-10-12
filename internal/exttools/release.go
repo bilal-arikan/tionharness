@@ -96,37 +96,13 @@ var githubAPI = "https://api.github.com"
 // stale=true rather than an error, because a missed update check must never make
 // the external-tools screen look broken. Only a miss with no cache at all errors.
 func LatestRelease(ctx context.Context, repo string) (rel Release, stale bool, err error) {
-	return latestRelease(ctx, repo, false)
-}
-
-// LatestPreRelease is LatestRelease for projects that publish EVERY release as a
-// GitHub prerelease, so releases/latest answers 404 forever and the honest-but-
-// useless verdict is "yayımlanmış release yok".
-//
-// OpenPencil is the case this exists for (verified 2026-08-15: v0.8.0…v0.8.4 all
-// carry prerelease=true while being the shipped downloads). Opt-in per tool
-// rather than a global fallback: for a project that publishes real betas
-// alongside stable builds, silently comparing against the beta would flag every
-// stable user as outdated — the exact wrong-verdict failure the node/npm entries
-// refuse to produce.
-func LatestPreRelease(ctx context.Context, repo string) (rel Release, stale bool, err error) {
-	return latestRelease(ctx, repo, true)
-}
-
-func latestRelease(ctx context.Context, repo string, allowPre bool) (rel Release, stale bool, err error) {
 	if repo == "" {
 		return Release{}, false, fmt.Errorf("bu araç için GitHub release akışı yok")
-	}
-	// Separate cache slot: the two modes can legitimately answer differently for
-	// the same repo, and a shared key would let whichever ran first win for 6h.
-	key := repo
-	if allowPre {
-		key = repo + "#pre"
 	}
 	releaseCache.Lock()
 	loadCacheLocked()
 	gen := releaseCache.generation
-	cached, hit := releaseCache.entries[key]
+	cached, hit := releaseCache.entries[repo]
 	releaseCache.Unlock()
 	if err := ctx.Err(); err != nil {
 		return Release{}, false, err
@@ -134,8 +110,8 @@ func latestRelease(ctx context.Context, repo string, allowPre bool) (rel Release
 	if hit && cached.Fresh(time.Now()) {
 		return cached, false, nil
 	}
-	result, err := releaseRequests.do(ctx, fmt.Sprintf("%d:%s", gen, key), 2*releaseHTTPTimeout, func(work context.Context) (releaseResult, error) {
-		value, stale, err := loadRelease(work, repo, key, allowPre, gen)
+	result, err := releaseRequests.do(ctx, fmt.Sprintf("%d:%s", gen, repo), 2*releaseHTTPTimeout, func(work context.Context) (releaseResult, error) {
+		value, stale, err := loadRelease(work, repo, gen)
 		return releaseResult{release: value, stale: stale}, err
 	})
 	return result.release, result.stale, err
@@ -148,11 +124,11 @@ type releaseResult struct {
 
 var releaseRequests sharedRequests[releaseResult]
 
-func loadRelease(ctx context.Context, repo, key string, allowPre bool, gen uint64) (rel Release, stale bool, err error) {
+func loadRelease(ctx context.Context, repo string, gen uint64) (rel Release, stale bool, err error) {
 
 	releaseCache.Lock()
 	loadCacheLocked()
-	cached, hit := releaseCache.entries[key]
+	cached, hit := releaseCache.entries[repo]
 	releaseCache.Unlock()
 
 	if hit && cached.Fresh(time.Now()) {
@@ -160,13 +136,6 @@ func loadRelease(ctx context.Context, repo, key string, allowPre bool, gen uint6
 	}
 
 	fetched, fetchErr := fetchLatest(ctx, repo)
-	if fetchErr != nil && allowPre {
-		// Only the 404 ("no stable release") is worth a second call; a rate-limit
-		// or network failure would fail identically on the list endpoint.
-		if listed, listErr := fetchNewestIncludingPre(ctx, repo); listErr == nil {
-			fetched, fetchErr = listed, nil
-		}
-	}
 	if fetchErr != nil {
 		if hit {
 			return cached, true, nil // stale but usable
@@ -176,7 +145,7 @@ func loadRelease(ctx context.Context, repo, key string, allowPre bool, gen uint6
 
 	releaseCache.Lock()
 	if releaseCache.generation == gen {
-		releaseCache.entries[key] = fetched
+		releaseCache.entries[repo] = fetched
 		// The fetched value is correct regardless of whether it persists; a failed
 		// write only costs a refetch next process. Recorded (under the same lock) so
 		// a broken data dir shows up in the API layer's log instead of vanishing.
@@ -258,54 +227,4 @@ func fetchLatest(ctx context.Context, repo string) (Release, error) {
 		PublishedAt: body.PublishedAt,
 		FetchedAt:   time.Now(),
 	}, nil
-}
-
-// fetchNewestIncludingPre lists the repo's releases and returns the newest
-// non-draft one, prereleases included. GitHub returns the list newest-first, so
-// the first non-draft entry is the answer. Drafts are still skipped: they are
-// unpublished and their assets are not downloadable.
-func fetchNewestIncludingPre(ctx context.Context, repo string) (Release, error) {
-	ctx, cancel := context.WithTimeout(ctx, releaseHTTPTimeout)
-	defer cancel()
-
-	url := githubAPI + "/repos/" + repo + "/releases?per_page=10"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return Release{}, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "TionHarness")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return Release{}, fmt.Errorf("GitHub'a ulaşılamadı: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return Release{}, fmt.Errorf("GitHub %s döndü", resp.Status)
-	}
-
-	var body []struct {
-		TagName     string `json:"tag_name"`
-		HTMLURL     string `json:"html_url"`
-		PublishedAt string `json:"published_at"`
-		Draft       bool   `json:"draft"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return Release{}, fmt.Errorf("GitHub yanıtı okunamadı: %w", err)
-	}
-	for _, r := range body {
-		if r.Draft || r.TagName == "" {
-			continue
-		}
-		return Release{
-			Repo:        repo,
-			Tag:         r.TagName,
-			URL:         r.HTMLURL,
-			PublishedAt: r.PublishedAt,
-			FetchedAt:   time.Now(),
-		}, nil
-	}
-	return Release{}, fmt.Errorf("%s için yayımlanmış release yok", repo)
 }

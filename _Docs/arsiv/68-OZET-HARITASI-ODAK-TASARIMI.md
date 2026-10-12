@@ -40,8 +40,7 @@ yeni lineage'ı ezmesini önler. Köke bağlanamayan zincir görünür hata üre
 Bu bir API veya veri sınırı değildir: model tam, sıralı remainder listesini korur;
 parent ve child tarafında ayrı `+N` sentetik düğüm üretir. Düğüm tüm kalan handle'ları
 scroll edilebilir drawer içinde açar; listedeki tek tık seçer, çift tık odağı değiştirir.
-Self-loop yeni bir düğüm üretmez. Tasarım kaynağı `_Docs/design/explore-focus-graph.js`,
-Forge belgesi `_Docs/design/explore-focus-graph.op`, görsel kanıt
+Self-loop yeni bir düğüm üretmez. Görsel kanıt
 `_Docs/design/explore-focus-graph.png` altındadır.
 
 - **Kütüphane kararı:** yeni ağır bağımlılık YOK. **React Flow** (Akış builder'da zaten

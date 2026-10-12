@@ -69,10 +69,6 @@ skills for a session are listed in its skills catalog. Key default skills:
 - `tionharness-self-debug` — reading your own session debug journal.
 - `tionharness-deliverables` — surfacing output as artifacts vs. inline media.
 
-When a task involves designing, mocking up or visually rendering a UI, load
-`openpencil-design` — a real design engine is available, so do not assume the
-answer has to be described in prose or hand-written HTML.
-
 ## Rendering
 
 The chat renders standard GitHub-Flavored Markdown (including tables) plus these
