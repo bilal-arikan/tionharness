@@ -6,7 +6,6 @@ import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { InfoPopover, toast } from '@/shared/components'
 import { SystemRoleAssignments } from '@/shared/components/agents/SystemRolePickers'
-import { SYSTEM_ROLE_GROUPS } from '@/shared/components/agents/systemRoles'
 import { NumberField, NumberValidityProvider } from '@/features/settings/primitives'
 import { useNumberValidity } from '@/features/settings/numberValidity'
 import type { InsightSettings } from '@/types'
@@ -139,7 +138,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
           Workspace ▸ Agents (one ws-settings map). */}
       <div className="rounded-md border border-[var(--color-border)] p-3">
         <SystemRoleAssignments
-          roles={[...SYSTEM_ROLE_GROUPS.analysis, 'recipe-optimizer']}
+          roles={['lesson-extractor', 'recipe-optimizer']}
           title={t('settings.agentsTitle')}
           hint={t('settings.agentsHint')}
         />

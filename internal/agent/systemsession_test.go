@@ -108,6 +108,13 @@ func TestInsightScanSkipsSystemAgentSession(t *testing.T) {
 	assertRunInsightScanOwnsSystemSessionFilter(t)
 	rt, provider, session := createSystemSessionTestFixture(t, true)
 	addInsightEvidence(t, rt, session.ID)
+	// Scans run as the insight system agent (systemRoleCaller); seed its row.
+	if _, err := rt.db.CreateAgent(context.Background(), db.Agent{
+		Name: "Insight Analyzer", System: true, SystemKey: "insight", Provider: "system-session-test",
+		ProviderInstanceID: "system-session-test-instance", Model: "test-model",
+	}); err != nil {
+		t.Fatalf("create insight agent: %v", err)
+	}
 	result, err := rt.RunInsightScan(context.Background(), insight.ScanScope{LensIDs: []string{"tool-errors"}}, session.AgentID)
 	if err != nil {
 		t.Fatalf("run insight scan: %v", err)

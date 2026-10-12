@@ -102,22 +102,18 @@ func (r *Runtime) TitleFor(ctx context.Context, preferredAgentID, source string)
 	return title, nil
 }
 
-// resolveTitlerAgent picks an agent to perform titling with: the preferred
-// agent when it exists, otherwise the most recently created agent.
+// resolveTitlerAgent picks the identity a title is generated (and billed) as:
+// the preferred agent — the session/task owner whose work is being titled —
+// when it exists, otherwise the titler system agent itself (2026-10-07; this
+// used to be whichever agent was created last, possibly a disabled or system
+// one the user never chose).
 func (r *Runtime) resolveTitlerAgent(ctx context.Context, preferredAgentID string) (db.Agent, error) {
 	if preferredAgentID != "" {
 		if a, err := r.db.GetAgent(ctx, preferredAgentID); err == nil {
 			return a, nil
 		}
 	}
-	agents, err := r.db.ListAgents(ctx)
-	if err != nil {
-		return db.Agent{}, err
-	}
-	if len(agents) == 0 {
-		return db.Agent{}, errors.New("no agent available for titling")
-	}
-	return agents[0], nil
+	return r.systemRoleCaller(ctx, "titler")
 }
 
 // SanitizeTitle normalizes a raw model reply into a single clean title line:

@@ -192,7 +192,7 @@ func (InsightScanTool) Def() providers.ToolDef {
   "type": "object",
   "properties": {
     "lensIds":         { "type": "array", "items": { "type": "string" }, "description": "Lens ids to run (default: every enabled lens). Each session is analyzed once per lens, so more lenses means proportionally more LLM calls." },
-    "analysisAgentId": { "type": "string", "description": "Agent whose model runs the analysis (default: the workspace insight setting, else the first agent)." },
+    "analysisAgentId": { "type": "string", "description": "Optional: one of the Insight analyzer system agents to run as. Other agents are ignored; default is the workspace's assigned Insight analyzer." },
     "sessionAgentId":  { "type": "string", "description": "Only scan sessions owned by this agent (default: all)." },
     "includeArchived": { "type": "boolean", "description": "Include archived sessions (default false)." },
     "maxSessions":     { "type": "integer", "description": "Override the workspace session cap for this run. Omit (or 0) to use the workspace setting, which defaults to 10 — 0 does NOT mean unlimited here. Cost: each scanned session costs one LLM call per lens, so raising this multiplies spend; raise it only deliberately, in small steps." }

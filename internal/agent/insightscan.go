@@ -103,12 +103,9 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		scope.SinceUnix = time.Now().Unix() - int64(settings.ScanSinceDays)*86400
 	}
 
-	// Analysis agent: an explicit caller agentID wins; otherwise the persistent
-	// setting (so the manual "Tara" button and the cron share one default);
-	// otherwise pickInsightAgent's fallback (first agent).
-	if agentID == "" {
-		agentID = settings.AutoScanAgentID
-	}
+	// Analysis identity: the insight role's own system agent (2026-10-07). An
+	// explicit agentID is honoured only when it names one of those; the legacy
+	// settings.AutoScanAgentID (an ordinary agent) is no longer consulted.
 	analysisAgent, err := r.pickInsightAgent(ctx, agentID)
 	if err != nil {
 		return insight.ScanResult{}, err
@@ -303,27 +300,15 @@ func (r *Runtime) promoteMinedLessons(produced []insight.Finding) {
 	}
 }
 
-// pickInsightAgent resolves the agent whose provider/model runs the analysis.
-// A blank id selects the workspace's default (newest) agent.
+// pickInsightAgent resolves the agent a scan runs and is billed as: the
+// "insight" system agent (systemRoleCaller). A caller-supplied id is accepted
+// only when it is one of that role's own system agents.
 func (r *Runtime) pickInsightAgent(ctx context.Context, agentID string) (db.Agent, error) {
 	if agentID != "" {
-		return r.db.GetAgent(ctx, agentID)
-	}
-	// The workspace's default agent is the user's stated choice of transport and
-	// credentials; only when none is set does the newest agent stand in (that
-	// used to be the sole rule, and it could pick a system agent that happened
-	// to be created last).
-	if id := r.DefaultAgentID(); id != "" {
-		if a, err := r.db.GetAgent(ctx, id); err == nil && !a.Disabled && !a.Deleted {
+		if a, err := r.db.GetAgent(ctx, agentID); err == nil && roleAgentErr("insight", a) == nil {
 			return a, nil
 		}
+		r.logger.Info("insight: ignoring non-insight analysis agent; using the system agent", "agent", agentID)
 	}
-	agents, err := r.db.ListAgents(ctx)
-	if err != nil {
-		return db.Agent{}, err
-	}
-	if len(agents) == 0 {
-		return db.Agent{}, errors.New("insight: no agent available to run analysis")
-	}
-	return agents[0], nil
+	return r.systemRoleCaller(ctx, "insight")
 }

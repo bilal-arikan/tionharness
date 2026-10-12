@@ -214,7 +214,9 @@ func (r *Runtime) RunRecipeOptimizer(ctx context.Context, slug, trigger string) 
 	if len(recent) == 0 {
 		return finish("no summarized runs yet", 0)
 	}
-	base, err := r.pickInsightAgent(ctx, "")
+	// Runs and is billed as the recipe-optimizer system agent itself, not an
+	// arbitrary ordinary agent.
+	base, err := r.systemRoleCaller(ctx, optimizerSystemKey)
 	if err != nil {
 		return finish("no agent available", 0)
 	}

@@ -185,11 +185,9 @@
   },
   "systemRoles": {
     "title": "Agent assignments",
-    "hint": "Choose which agent runs each system role in this workspace. Empty = the role's built-in agent.",
-    "builtin": "Built-in · {{name}}",
+    "hint": "Which system agent runs each role in this workspace. Only the role's own system agents are offered: the built-in, or a customisation derived from it in Settings ▸ Agent library. Empty = built-in.",
     "builtinUnnamed": "Built-in agent",
-    "utilitySemantics": "The role keeps its own prompt; the chosen agent only supplies its provider and model.",
-    "workerSemantics": "The chosen agent runs as itself — its own prompt, tools and model — whenever this profile is requested.",
+    "builtinBadge": "built-in",
     "groups": {
       "workers": "Workers",
       "helpers": "Conversation helpers",

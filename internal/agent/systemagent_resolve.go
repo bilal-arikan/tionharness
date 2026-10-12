@@ -7,25 +7,13 @@ import (
 )
 
 // ResolveSystemAgent returns the agent that serves system role key: the
-// workspace's role assignment when one is set (systemagent_assign.go), otherwise
-// the enabled workspace agent for key, falling back to the canonical built-in
-// definition when the workspace agent is unavailable.
-//
-// A worker role assigned to a regular agent is NOT reflected here — callers use
-// this for the profile's prompt and allowlist contract; the spawn paths consult
-// assignedWorker themselves.
+// workspace's role assignment when one is set and usable (always a system agent
+// of this role, systemagent_assign.go), otherwise the enabled workspace agent for
+// key, falling back to the canonical built-in definition when the workspace
+// agent is unavailable.
 func (r *Runtime) ResolveSystemAgent(key string) (db.Agent, bool, error) {
 	if assigned, ok := r.assignedRoleAgent(key); ok {
-		if assigned.System {
-			return assigned, false, nil
-		}
-		if !isWorkerRole(key) {
-			role, fallback, err := r.resolveRoleAgent(key)
-			if err != nil {
-				return db.Agent{}, false, err
-			}
-			return withRoleExecutor(role, assigned), fallback, nil
-		}
+		return assigned, false, nil
 	}
 	return r.resolveRoleAgent(key)
 }

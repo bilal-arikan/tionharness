@@ -185,11 +185,9 @@
   },
   "systemRoles": {
     "title": "Ajan atamaları",
-    "hint": "Bu workspace'te her sistem rolünü hangi ajanın çalıştıracağını seçin. Boş = rolün yerleşik ajanı.",
-    "builtin": "Yerleşik · {{name}}",
+    "hint": "Bu workspace'te her rolü hangi sistem ajanının çalıştıracağı. Yalnız rolün kendi sistem ajanları sunulur: yerleşik ajan ya da Ayarlar ▸ Ajan kütüphanesi'nde ondan türetilen özelleştirme. Boş = yerleşik.",
     "builtinUnnamed": "Yerleşik ajan",
-    "utilitySemantics": "Rol kendi promptunu korur; seçilen ajan yalnız sağlayıcısını ve modelini verir.",
-    "workerSemantics": "Bu profil istendiğinde seçilen ajan kendisi olarak çalışır — kendi promptu, araçları ve modeliyle.",
+    "builtinBadge": "yerleşik",
     "groups": {
       "workers": "Worker'lar",
       "helpers": "Sohbet yardımcıları",

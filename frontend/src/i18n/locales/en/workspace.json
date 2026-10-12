@@ -383,11 +383,11 @@
     }
   },
   "agents": {
-    "intro": "Choose which agent runs each worker profile and system role in this workspace. Changes save immediately; an empty picker means the built-in agent.",
+    "intro": "Choose which system agent runs each worker profile and system role in this workspace. Only our system agents can be picked — the built-in or a customisation you derived from it in Settings ▸ Agent library; ordinary agents never run these jobs. Changes save immediately.",
     "groupHints": {
-      "workers": "When a coordinator spawns a profile such as `explore` or `coder`, the agent chosen here runs it — with its own prompt, tools and model.",
-      "helpers": "Background helpers for every conversation: titles, context compaction and overview summaries. The chosen agent supplies the provider and model; the role keeps its own prompt.",
-      "analysis": "Used by insight scans and lesson extraction. Also editable from Insight ▸ Settings.",
+      "workers": "The system agent that runs when a coordinator spawns a profile such as `explore` or `coder`. The profile's tool list always applies.",
+      "helpers": "Background helpers for every conversation: titles, context compaction and overview summaries.",
+      "analysis": "Used by insight scans and lesson extraction. Also editable from Insight.",
       "optimizers": "Flow observer (also in Flows ▸ Evolution), recipe optimizer (also in Insight ▸ Settings) and the coordinator stall judge."
     }
   }

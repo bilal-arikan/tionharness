@@ -560,6 +560,7 @@ func (m *Manager) open(meta Meta) error {
 	ws.loadSettings() // apply persisted per-workspace overrides (e.g. autonomy pause)
 	// Self-heal a defaultAgentId written before system agents were barred from it.
 	ws.sanitizeDefaultAgent(m.logger)
+	ws.sanitizeRoleAssignments(m.logger)
 	ws.syncConfigFiles() // seed config/ tree + adopt instructions.md (file is authoritative)
 
 	// One board dispatcher fans out to automation and the card-owned worktree

@@ -13,8 +13,8 @@ describe('roleCandidates', () => {
     agent({ id: 'gone', deleted: true }),
   ]
 
-  it('offers regular agents and the role own system agent only', () => {
-    expect(roleCandidates(agents, 'compaction').map((a) => a.id)).toEqual(['mine', 'compactor'])
+  it("offers only the role's own system agents", () => {
+    expect(roleCandidates(agents, 'compaction').map((a) => a.id)).toEqual(['compactor'])
   })
 
   it('keeps the saved value visible even when it is no longer eligible', () => {

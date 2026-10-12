@@ -45,6 +45,35 @@ macOS/Linux'ta kırılıyordu. Kapsamlı tarama (Go, frontend, betikler) sonras�
   derleniyor ancak Linux ortamı olmadığından çalıştırılmadı. Keychain gizli veri biçimi
   (JSON/hex) iki biçimi de kabul edecek şekilde yazıldı; canlı okuma uygulamada doğrulanmalı.
 
+## Sahipsiz iç işler sistem ajanı kimliğiyle (2026-10-07)
+
+Denetimin ardından kullanıcı kararları (1, 2, 3 evet; 4 hayır; 5 olduğu gibi):
+içgörü taraması (oturumu dahil) ve reçete iyileştirici artık `insight` /
+`recipe-optimizer` sistem ajanı olarak koşup ona faturalanıyor; sahipsiz başlıklar
+(otomasyon/zamanlayıcı/sahipsiz görev) en yeni ajan yerine `titler` sistem ajanıyla;
+`run_subagent` profilleri, profilin sistem ajanı sağlayıcı (sabitlenmiş) veya model
+belirtiyorsa onları kullanıyor. Sistem ajanının sağlayıcısı sunulamazsa yalnız
+taşıyıcı varsayılan ajandan ödünç alınır. `/handoff` sıkıştırma rolünde, karar modeli
+maliyeti çağıranda kaldı. Yeni dosya `internal/agent/systemagent_caller.go`; testler
+`systemagent_caller_test.go`. Ayrıntı [74 § Sahipsiz işlerin kimliği](74-SISTEM-AJANLARI.md).
+
+## Rol atamaları yalnız sistem ajanlarına (2026-10-07)
+
+Kullanıcı kararıyla rol seçicileri yalnız rolün kendi sistem ajanlarını (yerleşik +
+türetilen özelleştirme) sunar; normal ajan atamaları backend'de de reddedilir ve eski
+kayıtlarda yok sayılır. "Normal ajandan model ödünç alma" ve "worker profilini normal
+ajana yönlendirme" kaldırıldı. Seçim boşken yerleşik ajan avatar/ad/modelle "yerleşik"
+rozetiyle görünür. İçgörü kenar çubuğundaki "Analiz ajanı" artık `insight` rol
+seçicisidir (`insightAgentSelection.ts` silindi). Sözleşme
+[74 § Workspace rol atamaları](74-SISTEM-AJANLARI.md).
+
+Denetim (aynı gün): arka plan LLM işlerinin çoğu sistem ajanının prompt+modelini
+kullanır ama kimlik/faturalama çağıran normal ajandadır; normal ajana bağlı kalan yerler
+`pickInsightAgent` (içgörü taraması — tarama oturumu da o ajana ait — ve reçete
+optimizer'ı), `TitleFor`/`resolveTitlerAgent` (otomasyon/zamanlayıcı/görev başlıkları,
+en yeni ajanı seçer), `run_subagent` profilleri (yalnız prompt sistem ajanından; model
+çağırandan), `/handoff` (rolü yok) ve karar modeli çağrıları (çağırana faturalanır).
+
 ## Sistem rolleri için workspace ajan atamaları (2026-10-07)
 
 İçgörü'deki "Analiz ajanı" seçicisi genelleştirildi: her workspace, worker

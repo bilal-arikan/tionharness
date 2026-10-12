@@ -279,6 +279,41 @@ func (w *Workspace) sanitizeDefaultAgent(logger *slog.Logger) {
 	}
 }
 
+// sanitizeRoleAssignments drops persisted role assignments the runtime would
+// refuse — an ordinary agent (allowed by the first 2026-10-07 build), another
+// role's agent, or one disabled/archived/deleted since — so the pickers never
+// show an agent that is not actually running the role. Resolution already
+// ignores such entries; this keeps the file and the UI honest.
+func (w *Workspace) sanitizeRoleAssignments(logger *slog.Logger) {
+	if w.Runtime == nil {
+		return
+	}
+	w.settings.mu.Lock()
+	cur := w.settings.cur.SystemAgentAssignments
+	kept := make(map[string]string, len(cur))
+	for key, agentID := range cur {
+		if err := w.Runtime.CheckSystemRoleAssignment(context.Background(), key, agentID); err != nil {
+			if logger != nil {
+				logger.Warn("dropped invalid system role assignment", "workspace", w.ID, "role", key, "agent", agentID, "error", err)
+			}
+			continue
+		}
+		kept[key] = agentID
+	}
+	changed := len(kept) != len(cur)
+	if changed {
+		w.settings.cur.SystemAgentAssignments = kept
+	}
+	w.settings.mu.Unlock()
+	if !changed {
+		return
+	}
+	w.Runtime.SetSystemRoleAssignments(kept)
+	if err := w.saveSettings(); err != nil && logger != nil {
+		logger.Warn("persist sanitized role assignments failed", "workspace", w.ID, "error", err)
+	}
+}
+
 // settingsHolder is embedded in Workspace to guard concurrent settings access.
 type settingsHolder struct {
 	mu  sync.RWMutex

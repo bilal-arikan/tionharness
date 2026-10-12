@@ -19,15 +19,14 @@ export const SYSTEM_ROLE_GROUPS = {
 
 export type SystemRoleGroup = keyof typeof SYSTEM_ROLE_GROUPS
 
-export const isWorkerRole = (key: string) => key.startsWith('subagent-')
-
-// roleCandidates lists the agents that may run `key`: any live regular agent, or
-// the role's own built-in/customisation. Another role's system agent is refused
-// by the server, so it is never offered. The saved value stays visible even when
-// it is no longer eligible, so the picker does not silently go blank.
+// roleCandidates lists the agents that may run `key`: only the role's own system
+// agents — the locked built-in and the customisations derived from it. Ordinary
+// agents are never offered (nor accepted by the server): a background job must
+// not run on an agent the user did not set up for it. The saved value stays
+// visible even when it is no longer eligible, so the picker does not go blank.
 export function roleCandidates(agents: Agent[], key: string, currentId = ''): Agent[] {
   return agents.filter(
-    (a) => a.id === currentId || (!a.deleted && !a.disabled && (!a.system || a.systemKey === key)),
+    (a) => a.id === currentId || (!!a.system && a.systemKey === key && !a.deleted && !a.disabled),
   )
 }
 

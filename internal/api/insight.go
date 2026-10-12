@@ -132,7 +132,7 @@ func (s *Server) handleListInsightLenses(w http.ResponseWriter, r *http.Request)
 type insightScanReq struct {
 	LensIDs         []string `json:"lensIds"`         // empty = all enabled lenses
 	SessionAgentID  string   `json:"sessionAgentId"`  // filter scanned sessions by owning agent ("" = all)
-	AnalysisAgentID string   `json:"analysisAgentId"` // agent whose model runs analysis ("" = default)
+	AnalysisAgentID string   `json:"analysisAgentId"` // an "insight" system agent to run as; anything else (or "") = the role's assigned/built-in agent
 	IncludeArchived bool     `json:"includeArchived"`
 	MaxSessions     int      `json:"maxSessions"`
 }

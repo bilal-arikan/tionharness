@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -506,11 +507,6 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 	// reference for backwards compatibility.
 	if target == strings.ToLower(strings.TrimSpace(target)) {
 		if p, ok := r.subagentProfile(target); ok {
-			// The workspace assigned this profile to a regular agent: run it as
-			// itself, exactly as if the caller had named it.
-			if assigned, ok := r.assignedWorker(p.ID); ok {
-				return assigned, false, nil
-			}
 			return r.ephemeralSubagent(caller, p), true, nil
 		}
 	}
@@ -523,9 +519,6 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 		return db.Agent{}, false, err
 	}
 	if p, ok := r.subagentProfile(target); ok {
-		if assigned, ok := r.assignedWorker(p.ID); ok {
-			return assigned, false, nil
-		}
 		return r.ephemeralSubagent(caller, p), true, nil
 	}
 	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer|validator|config)", target)
@@ -543,6 +536,26 @@ func (r *Runtime) ephemeralSubagent(caller db.Agent, p SubagentProfile) db.Agent
 	} else {
 		b, _ := json.Marshal(p.AllowedTools)
 		eph.AllowedTools = string(b)
+	}
+	// Transport (2026-10-07): the profile's system agent decides provider and
+	// model wherever it actually names them — a provider the user pinned on a
+	// customisation, a non-empty model. The built-in profiles name neither (their
+	// seeded claude-cli is a display placeholder and an empty model means "follow
+	// the caller"), so an uncustomised profile still runs on the caller's
+	// transport. Billing stays on the caller, whose turn this subagent serves.
+	if sa, _, err := r.ResolveSystemAgent("subagent-" + p.ID); err == nil {
+		pinned := pinsProvider(sa)
+		if pinned {
+			eph.Provider = sa.Provider
+			eph.ProviderInstanceID = cmp.Or(sa.ProviderInstanceID, sa.Provider)
+			eph.Model = ""
+		}
+		if sa.Model != "" {
+			eph.Model = adoptSystemAgentModel(r.logger, sa.SystemKey, eph.Provider, eph.Model, sa.Model)
+		}
+		if pinned {
+			eph = nativeAuxModel(eph)
+		}
 	}
 	return eph
 }

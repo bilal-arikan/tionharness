@@ -383,11 +383,11 @@
     }
   },
   "agents": {
-    "intro": "Bu workspace'te her worker profilini ve sistem rolünü hangi ajanın çalıştıracağını seçin. Değişiklikler hemen kaydedilir; boş seçim yerleşik ajan demektir.",
+    "intro": "Bu workspace'te her worker profilini ve sistem rolünü hangi sistem ajanının çalıştıracağını seçin. Yalnız bizim sistem ajanlarımız seçilebilir — yerleşik ajan ya da Ayarlar ▸ Ajan kütüphanesi'nde ondan türettiğiniz özelleştirme; normal ajanlar bu işleri asla çalıştırmaz. Değişiklikler hemen kaydedilir.",
     "groupHints": {
-      "workers": "Koordinatör `explore` veya `coder` gibi bir profil başlattığında burada seçilen ajan çalışır — kendi promptu, araçları ve modeliyle.",
-      "helpers": "Her sohbetin arka plan yardımcıları: başlık, bağlam sıkıştırma ve genel bakış özetleri. Seçilen ajan sağlayıcı ve modeli verir; rol kendi promptunu korur.",
-      "analysis": "İçgörü taramaları ve ders çıkarma kullanır. İçgörü ▸ Ayarlar'dan da düzenlenebilir.",
+      "workers": "Koordinatör `explore` veya `coder` gibi bir profil başlattığında çalışan sistem ajanı. Profilin araç listesi her zaman uygulanır.",
+      "helpers": "Her sohbetin arka plan yardımcıları: başlık, bağlam sıkıştırma ve genel bakış özetleri.",
+      "analysis": "İçgörü taramaları ve ders çıkarma kullanır. İçgörü ekranından da düzenlenebilir.",
       "optimizers": "Akış gözlemcisi (Akışlar ▸ Evrim'de de), reçete iyileştirici (İçgörü ▸ Ayarlar'da da) ve koordinatör takılma hakemi."
     }
   }

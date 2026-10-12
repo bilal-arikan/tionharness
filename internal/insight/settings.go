@@ -26,10 +26,10 @@ type Settings struct {
 	// AutoScanCron is a standard 5-field cron expression (minute hour dom month dow)
 	// that drives automatic scans. Empty disables automatic scanning (manual only).
 	AutoScanCron string `json:"autoScanCron,omitempty"`
-	// AutoScanAgentID selects the agent whose provider+model runs scans (both the
-	// manual "Tara" button and the cron, unless a scan passes an explicit agent).
-	// An explicitly selected agent runs on ITS OWN model; empty = the workspace's
-	// first agent with the cheap title-model override.
+	// AutoScanAgentID is LEGACY (2026-10-07): scans now run as the "insight"
+	// system agent (the workspace role assignment picks which one). A stored id
+	// is honoured only when it names an insight system agent; an ordinary agent
+	// written by older builds is ignored. Kept so old files round-trip.
 	AutoScanAgentID string `json:"autoScanAgentId,omitempty"`
 	// AutoVerifyDays: an APPLIED finding not seen for this many days (and not
 	// regressed) is auto-marked VERIFIED during maintenance. 0 = default (14).

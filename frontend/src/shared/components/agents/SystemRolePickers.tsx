@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { Agent } from '@/types'
 import { agentApi } from '@/api/agents'
 import { workspaceApi } from '@/api/workspaces'
 import { SIGNAL_AGENTS } from '@/app/eventToRefreshSignals'
@@ -8,7 +9,93 @@ import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { InfoPopover } from '../InfoPopover'
 import { toast } from '../toastStore'
 import { AgentPicker } from './AgentPicker'
-import { builtinRoleAgent, isWorkerRole, roleCandidates } from './systemRoles'
+import { builtinRoleAgent, roleCandidates } from './systemRoles'
+
+// useRoleAgents loads the workspace roster; roleCandidates keeps only each
+// role's own system agents.
+function useRoleAgents(): Agent[] {
+  const agentsTick = useRefreshTrigger(SIGNAL_AGENTS)
+  const { data } = useAsync(() => agentApi.listAgents(), [agentsTick])
+  return data ?? []
+}
+
+// useRoleAssignments loads this workspace's role assignments and saves each pick
+// at once as a one-role merge patch, so screens never overwrite each other.
+function useRoleAssignments() {
+  const [assignments, setAssignments] = useState<Record<string, string> | null>(null)
+  const [assignable, setAssignable] = useState<string[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    workspaceApi
+      .getWorkspaceSettings()
+      .then((s) => {
+        if (!alive) return
+        setAssignments(s.systemAgentAssignments ?? {})
+        setAssignable(s.assignableRoles ?? null)
+      })
+      .catch((e: Error) => toast.error(e.message))
+    return () => {
+      alive = false
+    }
+  }, [])
+  const change = async (role: string, agentId: string) => {
+    const prev = assignments ?? {}
+    setAssignments({ ...prev, [role]: agentId })
+    try {
+      const saved = await workspaceApi.updateWorkspaceSettings({
+        systemAgentAssignments: { [role]: agentId },
+      })
+      setAssignments(saved.systemAgentAssignments ?? {})
+    } catch (e) {
+      setAssignments(prev)
+      toast.error((e as Error).message)
+    }
+  }
+  return { assignments, assignable, change }
+}
+
+interface RolePickerProps {
+  role: string
+  agents: Agent[]
+  value: string
+  onChange: (agentId: string) => void
+}
+
+// RoleAgentPicker offers only the role's own system agents (built-in and its
+// customisations). With nothing assigned the trigger still shows the agent that
+// runs the role — avatar, name, model — marked "built-in".
+function RoleAgentPicker({ role, agents, value, onChange }: RolePickerProps) {
+  const { t } = useTranslation('sharedUi')
+  return (
+    <div className="min-w-0 [&>div]:w-full [&_[data-testid=agent-picker-trigger]]:w-full [&_[data-testid=agent-picker-trigger]]:min-w-0">
+      <AgentPicker
+        agents={roleCandidates(agents, role, value)}
+        value={value}
+        onChange={onChange}
+        placeholder={t('systemRoles.builtinUnnamed')}
+        defaultAgent={builtinRoleAgent(agents, role)}
+        defaultLabel={t('systemRoles.builtinBadge')}
+        clearable
+      />
+    </div>
+  )
+}
+
+// SystemRoleSelect is a single self-saving role picker without a label, for a
+// screen that names the role itself (the Insight rail's analysis agent).
+export function SystemRoleSelect({ role }: { role: string }) {
+  const agents = useRoleAgents()
+  const { assignments, change } = useRoleAssignments()
+  if (!assignments) return null
+  return (
+    <RoleAgentPicker
+      role={role}
+      agents={agents}
+      value={assignments[role] ?? ''}
+      onChange={(id) => change(role, id)}
+    />
+  )
+}
 
 interface PickersProps {
   roles: readonly string[]
@@ -16,52 +103,31 @@ interface PickersProps {
   onChange: (role: string, agentId: string) => void
 }
 
-// SystemRolePickers renders one "which agent runs this role" row per system
-// role — the Insight screen's analysis-agent picker, generalised. Clearing a row
-// returns the role to its built-in agent, which the placeholder names.
+// SystemRolePickers renders one labelled "which system agent runs this role"
+// row per role.
 export function SystemRolePickers({ roles, assignments, onChange }: PickersProps) {
   const { t } = useTranslation('sharedUi')
-  const agentsTick = useRefreshTrigger(SIGNAL_AGENTS)
-  const { data: agents } = useAsync(() => agentApi.listAgents(), [agentsTick])
-  const all = agents ?? []
+  const agents = useRoleAgents()
   return (
     <div className="flex flex-col gap-2" data-testid="system-role-pickers">
-      {roles.map((role) => {
-        const value = assignments[role] ?? ''
-        const builtin = builtinRoleAgent(all, role)
-        return (
-          <div
-            key={role}
-            data-testid={`system-role-${role}`}
-            className="grid grid-cols-1 items-center gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] sm:gap-3"
-          >
-            <span className="flex min-w-0 items-center gap-1 text-sm">
-              <span className="truncate">{t(`systemRoles.roles.${role}.label`)}</span>
-              <InfoPopover
-                mode="icon"
-                text={`${t(`systemRoles.roles.${role}.hint`)} ${t(
-                  isWorkerRole(role)
-                    ? 'systemRoles.workerSemantics'
-                    : 'systemRoles.utilitySemantics',
-                )}`}
-              />
-            </span>
-            <div className="min-w-0 [&>div]:w-full [&_[data-testid=agent-picker-trigger]]:w-full [&_[data-testid=agent-picker-trigger]]:min-w-0">
-              <AgentPicker
-                agents={roleCandidates(all, role, value)}
-                value={value}
-                onChange={(id) => onChange(role, id)}
-                placeholder={
-                  builtin
-                    ? t('systemRoles.builtin', { name: builtin.name })
-                    : t('systemRoles.builtinUnnamed')
-                }
-                clearable
-              />
-            </div>
-          </div>
-        )
-      })}
+      {roles.map((role) => (
+        <div
+          key={role}
+          data-testid={`system-role-${role}`}
+          className="grid grid-cols-1 items-center gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] sm:gap-3"
+        >
+          <span className="flex min-w-0 items-center gap-1 text-sm">
+            <span className="truncate">{t(`systemRoles.roles.${role}.label`)}</span>
+            <InfoPopover mode="icon" text={t(`systemRoles.roles.${role}.hint`)} />
+          </span>
+          <RoleAgentPicker
+            role={role}
+            agents={agents}
+            value={assignments[role] ?? ''}
+            onChange={(id) => onChange(role, id)}
+          />
+        </div>
+      ))}
     </div>
   )
 }
@@ -83,27 +149,10 @@ interface CardProps {
 }
 
 // SystemRoleAssignments is the self-saving form used inside feature screens
-// (Workspace ▸ Agents, Insight settings, Flows ▸ Evolution): each pick is persisted
-// at once as a one-role merge patch, so screens never overwrite each other's
-// roles.
+// (Workspace ▸ Agents, Insight settings, Flows ▸ Evolution).
 export function SystemRoleAssignments({ roles, title, hint, sections }: CardProps) {
   const { t } = useTranslation('sharedUi')
-  const [assignments, setAssignments] = useState<Record<string, string> | null>(null)
-  const [assignable, setAssignable] = useState<string[] | null>(null)
-  useEffect(() => {
-    let alive = true
-    workspaceApi
-      .getWorkspaceSettings()
-      .then((s) => {
-        if (!alive) return
-        setAssignments(s.systemAgentAssignments ?? {})
-        setAssignable(s.assignableRoles ?? null)
-      })
-      .catch((e: Error) => toast.error(e.message))
-    return () => {
-      alive = false
-    }
-  }, [])
+  const { assignments, assignable, change } = useRoleAssignments()
   if (!assignments) return null
   const list: SystemRoleSection[] = sections ?? [
     {
@@ -120,19 +169,6 @@ export function SystemRoleAssignments({ roles, title, hint, sections }: CardProp
     }))
     .filter((sec) => sec.roles.length > 0)
   if (visible.length === 0) return null
-  const change = async (role: string, agentId: string) => {
-    const prev = assignments
-    setAssignments({ ...prev, [role]: agentId })
-    try {
-      const saved = await workspaceApi.updateWorkspaceSettings({
-        systemAgentAssignments: { [role]: agentId },
-      })
-      setAssignments(saved.systemAgentAssignments ?? {})
-    } catch (e) {
-      setAssignments(prev)
-      toast.error((e as Error).message)
-    }
-  }
   return (
     <div className="flex flex-col gap-5" data-testid="system-role-assignments">
       {visible.map((sec) => (

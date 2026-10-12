@@ -16,6 +16,7 @@ const hooks: Hook[] = [
     shellWarning: 'powershell-missing',
     timeoutSec: 30,
     enabled: true,
+    createdAt: 0,
   },
   {
     id: 'H2',
@@ -25,6 +26,7 @@ const hooks: Hook[] = [
     command: 'sqz hook claude',
     timeoutSec: 30,
     enabled: true,
+    createdAt: 0,
   },
 ]
 

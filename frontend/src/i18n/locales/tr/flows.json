@@ -149,7 +149,7 @@
   },
   "evolution": {
     "observerAgent": "Gözlemci ajanı",
-    "observerAgentHint": "Workspace geneli: tüm akışlarda akış gözlemcisinin hangi ajan üzerinde koşacağı. Gözlemci kendi promptunu korur; seçilen ajan sağlayıcı ve modeli verir. Boş = yerleşik.",
+    "observerAgentHint": "Workspace geneli: tüm akışlarda akış gözlemcisinin hangi sistem ajanında koşacağı. Yalnız Akış Gözlemcisi sistem ajanları sunulur.",
     "policy": "Gözlemci politikası",
     "policyHint": "Gözlemci (flow-optimizer sistem ajanı) her N koşuda son koşulara bakar ve bir değişiklik önerir. Öner: sen onaylarsın. Otomatik: güven eşiğini geçen öneri kendiliğinden uygulanır. Her sürüm geri alınabilir.",
     "everyRuns": "Her N koşuda",

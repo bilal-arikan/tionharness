@@ -15,6 +15,11 @@ interface Props {
   // in the trigger and a "clear" option at the top of the list. Use it wherever
   // the assignment is optional (e.g. board tasks, flow agent nodes).
   clearable?: boolean
+  // What runs when nothing is selected (e.g. a system role's built-in agent).
+  // Shown in the trigger as a full agent identity with `defaultLabel` as a badge
+  // instead of the placeholder text; the same badge marks it in the list.
+  defaultAgent?: Agent
+  defaultLabel?: string
 }
 
 // AgentPicker is a custom dropdown that, unlike a native <select>, renders each
@@ -22,7 +27,15 @@ interface Props {
 // both in the trigger and the option list. Closes on outside click. Archived
 // agents are never offered as a new choice; a currently-selected archived agent
 // stays visible, marked "(arşivli)", so editing a record does not drop it.
-export function AgentPicker({ agents, value, onChange, placeholder, clearable = false }: Props) {
+export function AgentPicker({
+  agents,
+  value,
+  onChange,
+  placeholder,
+  clearable = false,
+  defaultAgent,
+  defaultLabel,
+}: Props) {
   const { t } = useTranslation('sharedUi')
   const resolvedPlaceholder = placeholder ?? t('agents.select')
   const [open, setOpen] = useState(false)
@@ -34,6 +47,23 @@ export function AgentPicker({ agents, value, onChange, placeholder, clearable = 
       <span data-testid="agent-picker-archived" className="ml-1 text-[var(--color-text-dim)]">
         {archivedAgentLabel()}
       </span>
+    ) : undefined
+
+  const defaultMark = (a: Agent) =>
+    defaultAgent && defaultLabel && a.id === defaultAgent.id ? (
+      <span
+        data-testid="agent-picker-default"
+        className="ml-1.5 rounded bg-[var(--color-surface-2)] px-1.5 py-px text-[10px] font-normal text-[var(--color-text-dim)]"
+      >
+        {defaultLabel}
+      </span>
+    ) : undefined
+  const marks = (a: Agent) =>
+    a.archived || defaultMark(a) ? (
+      <>
+        {archivedMark(a)}
+        {defaultMark(a)}
+      </>
     ) : undefined
 
   const clear = () => {
@@ -50,11 +80,13 @@ export function AgentPicker({ agents, value, onChange, placeholder, clearable = 
         className="flex min-w-40 items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none hover:border-[var(--color-accent)]"
       >
         {selected ? (
+          <AgentIdentity agent={selected} size="sm" subtitle="model" nameSuffix={marks(selected)} />
+        ) : defaultAgent ? (
           <AgentIdentity
-            agent={selected}
+            agent={defaultAgent}
             size="sm"
             subtitle="model"
-            nameSuffix={archivedMark(selected)}
+            nameSuffix={defaultMark(defaultAgent)}
           />
         ) : (
           <span className="text-[var(--color-text-dim)]">{resolvedPlaceholder}</span>
@@ -117,7 +149,7 @@ export function AgentPicker({ agents, value, onChange, placeholder, clearable = 
                 a.id === value ? 'bg-[var(--color-accent-soft)]' : ''
               }`}
             >
-              <AgentIdentity agent={a} size="sm" subtitle="model" nameSuffix={archivedMark(a)} />
+              <AgentIdentity agent={a} size="sm" subtitle="model" nameSuffix={marks(a)} />
             </button>
           ))}
         </div>

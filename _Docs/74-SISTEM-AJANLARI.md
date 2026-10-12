@@ -53,8 +53,8 @@ anda çağıranın kendi sağlayıcısında yeniden denenir (`auxRouteFallback`)
 yardımcı çağrılar CLI sağlayıcıda kalır (`noteAuxRouteFailure`, `auxRouteQuarantined`).
 Yalnız CLI kullanan bir kurulumda kalıcı çözüm: Ayarlar ▸ Sağlayıcılar'da anthropic
 örneğini devre dışı bırakmak ya da anahtarını silmek — o zaman yönlendirme hiç
-tetiklenmez. Boş id ile çağrılan `pickInsightAgent` de artık en yeni ajanı değil
-workspace varsayılan ajanını alır. Model, sistem ajanının alias'ından
+tetiklenmez. (`pickInsightAgent` 2026-10-07'den beri normal ajan değil `insight`
+sistem ajanının kendisini döndürür; bkz. "Sahipsiz işlerin kimliği".) Model, sistem ajanının alias'ından
 API id'sine çevrilir (`providers.NativeClaudeModel`: haiku →
 `claude-haiku-4-5-20251001`). Koşullar sağlanmazsa davranış eskisi gibidir;
 native anthropic bir çağıranda yalnız alias çevrilir. Faturalama çağıran ajanın
@@ -118,7 +118,12 @@ araç listesi ise `defaultSubagentProfiles[<id>].AllowedTools` alanından gelir
   (`frontend/src/features/agents/AgentToolsSection.tsx`, `locked` prop'u).
 - **Model ve sağlayıcı dinamiktir.** Tanımda `SuggestedModel` boştur; worker,
   spawn anında koordinatörün provider/instance/model/permission değerlerini
-  klonlar (`SpawnSession`, `RuntimeBaseAgentID`).
+  klonlar (`SpawnSession`, `RuntimeBaseAgentID`). **`run_subagent` (2026-10-07):**
+  geçici profil ajanı, profilin sistem ajanı bunları gerçekten belirtiyorsa onun
+  sağlayıcısını (yalnız `provider` override'ı = kullanıcı sabitlediyse) ve modelini
+  (boş değilse) alır; yerleşik profiller ikisini de belirtmez (`claude-cli` yalnız
+  görüntü tohumudur), bu yüzden özelleştirilmemiş profil çağıranın taşıyıcısında
+  kalır. Faturalama çağırandadır (`ephemeralSubagent`).
 - **Eski `worker:<profil>` ajanları göç ettirilir.** `EnsureSystemAgents`, aynı
   adlı kalıcı ajanı bulursa onu yerinde sistem ajanına dönüştürür (id korunur,
   oturumları çözülmeye devam eder); sistem ajanı zaten varsa eski kaydı devre dışı
@@ -208,54 +213,65 @@ worker profilleri) değişmedi; hepsi etkin ajanı (kalıtım katlanmış) alır
 
 ## Workspace rol atamaları (2026-10-07)
 
-İçgörü ekranındaki "Analiz ajanı" seçicisinin genelleştirilmiş hâlidir: workspace
-başına `SystemKey → ajan id` haritası (`WSSettings.SystemAgentAssignments`,
-`internal/workspace/settings.go`), Runtime'a `SetSystemRoleAssignments` ile aynalanır
-ve `ResolveSystemAgent` içinde uygulanır (`internal/agent/systemagent_assign.go`).
-Atama yoksa çözümleme eskisi gibidir (etkin özelleştirme → kilitli yerleşik → tanım).
+Her workspace, bir rolü **o rolün hangi sistem ajanının** çalıştıracağını seçebilir:
+`SystemKey → ajan id` haritası (`WSSettings.SystemAgentAssignments`,
+`internal/workspace/settings.go`), Runtime'a `SetSystemRoleAssignments` ile aynalanır ve
+`ResolveSystemAgent` içinde uygulanır (`internal/agent/systemagent_assign.go`). Atama
+yoksa çözümleme eskisi gibidir (etkin özelleştirme → kilitli yerleşik → tanım).
 
-- **Yardımcı roller** (`titler`, `compaction`, `overview-summarizer`, `insight`,
-  `lesson-extractor`, `flow-optimizer`, `recipe-optimizer`, `stall-judge`): rol
-  sözleşmesi (prompt, araç listesi, id, `SystemKey`) korunur; atanan normal ajandan
-  yalnız sağlayıcı/örnek/model alınır ve `provider`+`model` override'ı olarak
-  damgalanır → `pinsProvider` doğru, çağrı tam o modelde koşar, yardımcı yönlendirme
-  atlanır. Normal ajanın kendi soul'u kullanılmaz; `{{summary}}` yer tutucuları ve
-  katı JSON çıktıları bozulurdu.
-- **Worker rolleri** (`subagent-*`): `spawn_worker`/`run_subagent` profil adı
-  (`explore`, `coder` …) atanan normal ajanı **kendisi olarak** çalıştırır (kendi
-  promptu, araçları, modeli; `resolveWorkerTarget`, `resolveSubagentTarget`). Profil
-  allowlist'i yerleşik satıra aittir; atanan ajana ne yazılır ne uygulanır. Bu yeni
-  yetki vermez — koordinatör aynı ajanı adıyla zaten hedefleyebilir.
-  `ResolveSystemAgent` worker rolleri için normal ajan atamasını yansıtmaz (profil
-  promptu ve allowlist senkronu yerleşikte kalır).
-- **Aynı rolün sistem ajanı** (yerleşik ya da özelleştirme) atanırsa o satır her rol
-  sınıfında doğrudan seçilir.
+- **Yalnız aynı rolün sistem ajanları** (kullanıcı kararı, 2026-10-07): kilitli yerleşik
+  ya da ondan `BindRole` ile türetilen özelleştirme. Normal ajanlar ne listelenir ne kabul
+  edilir — arka plan işleri kullanıcının o iş için kurmadığı bir ajanda koşmamalı. Rolü
+  başka bir modelde çalıştırmak için Ayarlar ▸ Ajan kütüphanesi'nde sistem ajanını
+  özelleştirip özelleştirmeyi atayın. (İlk sürümdeki "normal ajandan sağlayıcı/model
+  ödünç alma" ve "worker profilini normal ajana yönlendirme" aynı gün kaldırıldı.)
+- Atanan satır her rol sınıfında olduğu gibi döner; worker profillerinde
+  `resolveWorkerTarget` allowlist sözleşmesini o satıra da dayatır.
 - **Doğrulama:** `CheckSystemRoleAssignment` bilinmeyen/atanamaz rolü
-  (`ErrRoleAssignmentKey`) ve silinmiş, devre dışı, arşivli ya da **başka rolün**
-  sistem ajanını (`ErrRoleAssignmentAgent`) reddeder; API 400 döner.
-  `insight-applier` atanamaz — onu çağıran yerleşik otomasyon ajanını kendisi seçer.
-  Sonradan geçersizleşen atama (ajan arşivlendi vb.) sessizce yerleşiğe düşer.
-- **Yama birleşir:** `PUT /api/workspace-settings` gövdesindeki
-  `systemAgentAssignments` saklı haritaya birleştirilir, boş id o rolü temizler; her
-  ekran yalnız kendi rollerini gönderir. GET, `systemAgentAssignments` ve
-  `assignableRoles` döndürür.
-- **Sağlayıcı değişince boş model:** `systemAgentExecutor` sağlayıcıyı değiştirip
-  sistem ajanının modeli boşsa çağıranın modelini taşımaz (sağlayıcının kendi
-  varsayılanı koşar).
+  (`ErrRoleAssignmentKey`) ve normal, silinmiş, devre dışı, arşivli ya da başka rolün
+  ajanını (`ErrRoleAssignmentAgent`) reddeder; API 400 döner. `insight-applier`
+  atanamaz — onu çağıran yerleşik otomasyon ajanını kendisi seçer. Sonradan geçersizleşen
+  atama (ör. eski bir dosyada normal ajan, devre dışı özelleştirme) sessizce yerleşiğe
+  düşer.
+- **Yama birleşir:** `PUT /api/workspace-settings` gövdesindeki `systemAgentAssignments`
+  saklı haritaya birleştirilir, boş id o rolü temizler; her ekran yalnız kendi rollerini
+  gönderir. GET, `systemAgentAssignments` ve `assignableRoles` döndürür.
+- **Sağlayıcı değişince boş model:** `systemAgentExecutor` sağlayıcıyı değiştirip sistem
+  ajanının modeli boşsa çağıranın modelini taşımaz (sağlayıcının kendi varsayılanı koşar).
 
-UI (`shared/components/agents/SystemRolePickers.tsx`, kendiliğinden kaydeden,
-`AgentPicker` tabanlı; boş seçim "Yerleşik · <ad>" gösterir; aday listesi normal ajanlar
-+ rolün kendi sistem ajanı):
+UI (`shared/components/agents/SystemRolePickers.tsx`, kendiliğinden kaydeden, `AgentPicker`
+tabanlı): seçim boşken tetikleyici rolü fiilen çalıştıran ajanı avatar + ad + modelle ve
+"yerleşik" rozetiyle gösterir (`AgentPicker` `defaultAgent`/`defaultLabel`).
 
 | Ekran | Roller |
 |---|---|
 | Workspace ▸ **Ajanlar** sekmesi | Hepsi: Worker'lar, Sohbet yardımcıları (başlık, sıkıştırma, özet), Analiz, Gözlemciler ve hakemler |
-| İçgörü ▸ Ayarlar ▸ İçgörü ajanları | `insight`, `lesson-extractor`, `recipe-optimizer` |
+| İçgörü kenar çubuğu ▸ Analiz ajanı | `insight` (eski "herhangi bir ajan" seçicisinin yerine) |
+| İçgörü ▸ Ayarlar ▸ İçgörü ajanları | `lesson-extractor`, `recipe-optimizer` |
 | Akışlar ▸ Evrim ▸ Gözlemci politikası | `flow-optimizer` (workspace geneli) |
 
-İçgörü kenar çubuğundaki "Analiz ajanı" (`autoScanAgentId`) taramayı başlatan ve
-faturalanan ajandır; analiz modelini `insight` rol ataması belirler. Varsayılanı artık
-sistem ajanı olamaz.
+### Sahipsiz işlerin kimliği (2026-10-07)
+
+Kendi sahibi olmayan iç işler artık rolün **sistem ajanı olarak** koşar ve ona
+faturalanır (`systemRoleCaller`, `internal/agent/systemagent_caller.go`):
+
+| İş | Önce | Şimdi |
+|---|---|---|
+| İçgörü taraması (elle, cron, `insight_scan` aracı) + tarama oturumu | `autoScanAgentId` → varsayılan → en yeni ajan | `insight` sistem ajanı; açık id yalnız bir insight sistem ajanıysa kabul edilir, `autoScanAgentId` artık eski alan |
+| Reçete iyileştirici | varsayılan/en yeni ajan | `recipe-optimizer` sistem ajanı |
+| Sahipsiz başlık (otomasyon, zamanlayıcı, sahipsiz görev) | en yeni ajan (devre dışı/sistem olabilirdi) | `titler` sistem ajanı; sahibi olan işin başlığı sahibine faturalanmaya devam eder |
+
+Yalnız **taşıyıcı** ödünç alınabilir: sistem ajanının sağlayıcısı burada sunulamıyorsa
+(ör. yalnız codex kurulu, yerleşik `claude-cli` diyor) workspace varsayılan ajanının,
+yoksa sağlayıcısı kullanılabilir ilk canlı normal ajanın sağlayıcı/örnek/modeli alınır;
+kimlik ve faturalama sistem ajanında kalır. Satırı olmayan (tohumlanmamış) rolde ödünç
+veren ajan çağrıyı taşır ve uyarı loglanır — gerçek workspace'lerde sistem ajanları her
+açılışta tohumlandığı için bu yalnız test depolarında görülür.
+
+Kullanıcının kendi oturumu için çalışan işler (sıkıştırma, sohbet başlığı, ders,
+akış gözlemcisi, takılma hakemi, `/summary`) sistem ajanının prompt+modeliyle ama
+oturum ajanına faturalanarak koşmaya devam eder (bilinçli). `/handoff` sıkıştırma
+rolünde kalır; karar modeli çağrıları çağırana faturalanır.
 
 ## API yüzeyi
 

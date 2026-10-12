@@ -129,7 +129,7 @@
   "validation": { "invalidNumber": "Geçersiz sayı değeri — düzeltmeden kaydedilemez" },
   "settings": {
     "agentsTitle": "İçgörü ajanları",
-    "agentsHint": "Her içgörü rolünü hangi ajanın çalıştıracağı. Kenar çubuğundaki Analiz ajanı taramayı başlatır ve faturalanır; burada seçilen İçgörü analizcisi analizin hangi sağlayıcı ve modelde koşacağını belirler. Boş = yerleşik.",
+    "agentsHint": "Her içgörü rolünü hangi sistem ajanının çalıştıracağı. Yalnız rolün kendi sistem ajanları sunulur. İçgörü analizcisi kenar çubuğunda seçilir.",
     "appFixRepoPath": "App-Fix repo yolu (backlog hedefi)",
     "maxSessions": "Maks. oturum / tarama (0 = sınırsız)",
     "maxAnalyzed": "Maks. analiz (LLM çağrısı) / tarama (0 = sınırsız)",
