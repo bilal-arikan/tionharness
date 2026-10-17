@@ -48,6 +48,9 @@ export interface SessionsControllerParams {
   // client-side meant a page of 100 could hold three visible chats and the
   // "Daha fazla yükle" button looked broken.
   chipsParam: string
+  // The sidebar tab ('main' | 'other'), sent with every list request so the
+  // server pages the tab's rows only (see sessionGroup.ts).
+  group: string
   showArchived: boolean
   // The sidebar's free-text title / id search, already debounced by the sidebar.
   // Sent as ?q= so the server filters BEFORE paging: without it a search only
@@ -60,6 +63,7 @@ export interface SessionsControllerParams {
 export function useSessionsController({
   activeWorkspaceId,
   chipsParam,
+  group,
   showArchived,
   searchQuery = '',
   setError,
@@ -87,9 +91,12 @@ export function useSessionsController({
   // response. The filtered page cannot answer "how many does this unticked chip
   // hide" by itself, so badges use this map.
   const [sessionChipCounts, setSessionChipCounts] = useState<Record<string, number>>({})
+  // Sidebar tab → row count under the current chips, for the tab badges.
+  const [sessionGroupCounts, setSessionGroupCounts] = useState<Record<string, number>>({})
   // The chip selection the in-flight/last request used, kept in a ref so the
   // refresh and load-more callbacks stay stable across chip changes.
   const chipsParamRef = useRef(chipsParam)
+  const groupRef = useRef(group)
   const listState = showArchived ? 'archived' : 'active'
   const listStateRef = useRef<'active' | 'archived'>(listState)
   // The search the in-flight/last request used; undefined when blank so the
@@ -101,7 +108,7 @@ export function useSessionsController({
   }, [searchQuery])
   const activeWorkspaceIdRef = useRef(activeWorkspaceId)
   const listQueryIdentityRef = useRef(
-    sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState),
+    sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState, group),
   )
   // Latest-value mirrors for the stable callbacks below. Synced in a layout
   // effect rather than during render (which the compiler lint rejects): it runs
@@ -109,14 +116,16 @@ export function useSessionsController({
   // continuation can observe a stale identity.
   useLayoutEffect(() => {
     chipsParamRef.current = chipsParam
+    groupRef.current = group
     listStateRef.current = listState
     activeWorkspaceIdRef.current = activeWorkspaceId
     listQueryIdentityRef.current = sessionListQueryIdentity(
       activeWorkspaceId,
       chipsParam,
       listState,
+      group,
     )
-  }, [activeWorkspaceId, chipsParam, listState])
+  }, [activeWorkspaceId, chipsParam, listState, group])
   const listRequestGuardRef = useRef(createSessionListRequestGuard())
   const listReplacePendingRef = useRef(false)
   const listRefreshQueuedRef = useRef(false)
@@ -275,13 +284,13 @@ export function useSessionsController({
   // one and does not require loading the whole workspace.
   // A new list identity (workspace or chip set) is bootstrapping again from the
   // first paint; the fetch below lands its page through callbacks.
-  useKeyedReset(sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState), () => {
+  useKeyedReset(sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState, group), () => {
     if (activeWorkspaceId) setBootstrapping(true)
   })
   useEffect(() => {
     if (!activeWorkspaceId) return
     listReplacePendingRef.current = true
-    const identity = sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState)
+    const identity = sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState, group)
     const token = listRequestGuardRef.current.begin(identity)
     const want = pendingRouteRef.current
     const drafted = draftSessionIds()
@@ -307,6 +316,7 @@ export function useSessionsController({
       api.listSessions({
         limit: SESSIONS_PAGE_SIZE,
         chips: chipsParam,
+        group,
         state: listState,
         q: searchQueryRef.current,
       }),
@@ -343,6 +353,7 @@ export function useSessionsController({
         setSessionsTotal(page.total)
         setSessionsHasMore(page.hasMore)
         setSessionChipCounts(page.chipCounts ?? {})
+        setSessionGroupCounts(page.groupCounts ?? {})
         sessionsLimitRef.current = SESSIONS_PAGE_SIZE
         loadedPageSizeRef.current = page.items.length
       })
@@ -358,7 +369,7 @@ export function useSessionsController({
           runQueuedSessionRefresh()
         }
       })
-  }, [activeWorkspaceId, chipsParam, listState, runQueuedSessionRefresh, setError])
+  }, [activeWorkspaceId, chipsParam, listState, group, runQueuedSessionRefresh, setError])
 
   // Agent CRUD events refresh only the roster. Re-running the workspace bootstrap
   // would unnecessarily clear the active session and transcript.
@@ -460,6 +471,7 @@ export function useSessionsController({
       const page = await api.listSessions({
         limit: sessionsLimitRef.current,
         chips: chipsParamRef.current,
+        group: groupRef.current,
         state: listStateRef.current,
         q: searchQueryRef.current,
       })
@@ -469,6 +481,7 @@ export function useSessionsController({
       setSessionsHasMore(page.hasMore)
       loadedPageSizeRef.current = page.items.length
       if (page.chipCounts) setSessionChipCounts(page.chipCounts)
+      if (page.groupCounts) setSessionGroupCounts(page.groupCounts)
       return true
     } catch {
       return false
@@ -531,12 +544,14 @@ export function useSessionsController({
         limit: SESSIONS_PAGE_SIZE,
         offset,
         chips: chipsParamRef.current,
+        group: groupRef.current,
         state: listStateRef.current,
         q: searchQueryRef.current,
       })
       .then((page) => {
         if (!listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) return
         if (page.chipCounts) setSessionChipCounts(page.chipCounts)
+        if (page.groupCounts) setSessionGroupCounts(page.groupCounts)
         if (page.items.length === 0) {
           setSessionsHasMore(false)
           return
@@ -991,6 +1006,7 @@ export function useSessionsController({
     sessionsTotal,
     sessionsHasMore,
     sessionChipCounts,
+    sessionGroupCounts,
     loadMoreSessions,
     messages,
     setMessages,

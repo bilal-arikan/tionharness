@@ -1,6 +1,6 @@
 # Faz — Zengin Sohbet Arayüzü (Chat UX)
 
-> **Özet (2026-09-22):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), DeepSeek V4.x ve GLM-5.3 için kaba-effort (`effort`) düşünme sınıfı — `low/high/max`, Anthropic-uyumlu uçta `output_config.effort`, GLM-5.3'te kapatılamayan düşünme (2026-09-22), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/features/chat/`.
+> **Özet (2026-10-17):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), DeepSeek V4.x ve GLM-5.3 için kaba-effort (`effort`) düşünme sınıfı — `low/high/max`, Anthropic-uyumlu uçta `output_config.effort`, GLM-5.3'te kapatılamayan düşünme (2026-09-22), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Oturumlar kenar çubuğu 2026-10-17'den beri iki sekmelidir: **Konuşmalar** (kişinin başlattığı + spawn/handoff sohbetleri) ve **Arka plan** (worker, subagent, görev, otomasyon, insight, ajan mesaj kutuları, sistem ajanı); sekme `group=main|other` ile sunucuda sayfalamadan önce uygulanır. Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/features/chat/`.
 
 > Sohbet ekranı, [external-agent-oss](https://github.com/external-agent-project/external-agent-oss)
 > referans alınarak External Agent benzeri zengin bir render katmanına kavuşturuldu:
@@ -1188,6 +1188,25 @@ Sonuçlar:
   Satır yine de listede görünmez: istemci aynı yüklemi tekrar uygular.
 - `chips` parametresinin **verilmemesi** "filtre yok" demektir; **boş** verilmesi
   gerçek bir seçimdir (hiçbir çip açık değil) ve hiçbir şeyle eşleşmez.
+
+**İki sekme: Konuşmalar / Arka plan (2026-10-17).** Liste, çiplerin üstünde iki
+sekmeye ayrılır. **Konuşmalar** (`main`) kişinin başlattığı sohbetleri ve onlardan
+açılan `spawn_session` / `/handoff` sohbetlerini tutar; **Arka plan** (`other`) geri
+kalan her şeyi: koordinatör worker'ları (`spawn_worker`), subagent'lar, görev,
+zamanlama, otomasyon, insight, ajanlar arası mesaj kutuları (`💬 … — Mesajlar`,
+`sourceId` `agent-messages:` ile başlar) ve sistem ajanı oturumları. Worker ile spawn ayrı
+kavramlardır: worker koordinatöre bağlıdır (`coordinatorSessionId`), spawn bağımsız
+bir sohbettir ve Konuşmalar'da kalır. Sınıflandırma `internal/api/sessions_groups.go`
+(`sessionGroup`) ile istemci ikizi `features/sessions/sessionGroup.ts`
+(`sessionGroupOf`) arasında aynıdır: `Kind` ∈ {`chat`, `spawned`, boş}, worker değil,
+`visibility` `internal` değil, `category`/`executionType` sohbet/etkileşimli, `system:`
+etiketi ve mesaj kutusu kaynağı yok, köken (`Lineage().Kind`) `user`/`spawn`/`handoff`
+ise `main`. Çip anahtarı
+yerine `Kind` bakılır, çünkü `normalizeSessionMeta` her türden yeni oturuma `category:
+chat` damgalar. Sekme de çipler gibi istekle gider (`group=main|other`) ve sayfalamadan
+önce uygulanır; zarf `groupCounts` ile iki sekmenin mevcut çip seçimi altındaki satır
+sayısını döner, `chipCounts` yalnız seçili sekmeyi anlatır. Seçim `localStorage`'da
+(`tionharness.sessionGroup`) saklanır; "Yeni sohbet" Konuşmalar sekmesine geçer.
 
 ### Prompt-cache görünürlüğü (2026-08-11)
 

@@ -61,6 +61,7 @@ describe('session-start agent wiring', () => {
       controller = useSessionsController({
         activeWorkspaceId: 'WS1',
         chipsParam: '',
+        group: 'main',
         showArchived: false,
         setError,
         setView: calls.noop,

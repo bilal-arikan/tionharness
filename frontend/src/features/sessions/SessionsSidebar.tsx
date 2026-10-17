@@ -58,6 +58,7 @@ import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 import { sessionMatchesQuery } from './sessionSearch'
 import { countLiveDescendantWorkers } from './liveWorkerCounts'
 import { sessionListModel } from './sessionListModel'
+import { SESSION_GROUPS, sessionGroupOf, type SessionGroup } from './sessionGroup'
 import { useTranslation } from 'react-i18next'
 import { modKeyLabel } from '@/shared/lib/platform'
 
@@ -101,6 +102,14 @@ interface Props {
   // The two live chips stay counted over loaded rows because liveness is
   // client state.
   chipCountsFromServer?: Record<string, number>
+  // The selected tab: the conversations a person started ('main') or every
+  // worker / subagent / task / automation / insight run ('other'). Owned above
+  // the sidebar because the list request carries it; without onChangeGroup the
+  // tab strip is hidden and every row shows.
+  group?: SessionGroup
+  onChangeGroup?: (group: SessionGroup) => void
+  // Tab → row count under the current chips, from the list response.
+  groupCounts?: Record<string, number>
   // messageId is set when the user clicks a message-content search result, so the
   // transcript can scroll to that exact turn.
   onSelectSession: (id: string, messageId?: string) => void
@@ -143,6 +152,9 @@ export function SessionsSidebar({
   showArchived,
   onToggleArchived,
   chipCountsFromServer,
+  group,
+  onChangeGroup,
+  groupCounts,
   onSelectSession,
   onNewSession,
   onRefresh,
@@ -232,6 +244,9 @@ export function SessionsSidebar({
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
       if ((s.state === 'archived') !== showArchived) continue
+      // The server already pages the tab; this keeps a row merged in behind the
+      // filter (the open worker, say) off the conversations tab.
+      if (group && sessionGroupOf(s) !== group) continue
       if (!sessionMatchesChips(chipShapeOf(s), chipSet)) continue
       if (!sessionMatchesQuery(s, query)) continue
       // Pinned rows leave the recency buckets entirely and form their own group,
@@ -243,7 +258,7 @@ export function SessionsSidebar({
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions, query, chipSet, chipShapeOf, showArchived])
+  }, [sessions, query, chipSet, chipShapeOf, showArchived, group])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The ordered id list is the
   // flattened visible render order so Shift+Click can span recency buckets.
@@ -360,6 +375,45 @@ export function SessionsSidebar({
           {onCollapse && <CollapseListButton onClick={onCollapse} />}
         </div>
       </div>
+
+      {/* Two tabs: conversations a person started vs. background runs. */}
+      {group && onChangeGroup && (
+        <div className="px-3 pb-1 pt-1">
+          <div
+            role="tablist"
+            aria-label={t('sidebar.groups.label')}
+            data-testid="session-group-tabs"
+            className="flex overflow-hidden rounded-md border border-[var(--color-border)] text-xs"
+          >
+            {SESSION_GROUPS.map((g) => {
+              const on = group === g
+              const count = groupCounts?.[g]
+              return (
+                <button
+                  key={g}
+                  role="tab"
+                  aria-selected={on}
+                  data-testid={`session-group-${g}`}
+                  title={t(`sidebar.groups.${g}Hint`)}
+                  onClick={() => {
+                    if (on) return
+                    sel.clear()
+                    onChangeGroup(g)
+                  }}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-1.5 py-1.5 transition ${
+                    on
+                      ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-text)]'
+                      : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+                  }`}
+                >
+                  <span className="truncate">{t(`sidebar.groups.${g}`)}</span>
+                  {count !== undefined && <span className="opacity-60">{count}</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {showArchived ? (
         <ArchiveViewBanner

@@ -79,7 +79,8 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Filters: kind (legacy producer kind), category, executionType, state
-	// (active|archived) and chips (the sidebar's chip selection). With any of
+	// (active|archived), group (the sidebar tab: main|other) and chips (the
+	// sidebar's chip selection). With any of
 	// limit/offset/sort present the response is the standard
 	// {items,total,offset,limit,hasMore} envelope; without them it stays the
 	// legacy full unwrapped list so existing UI clients keep working.
@@ -96,6 +97,11 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	search := sessionSearchNeedle(q.Get("q"))
 	rawChips, chipsGiven := q["chips"]
 	chipSel, chipFilter := parseChips(strings.Join(rawChips, ","), chipsGiven)
+	group, err := parseSessionGroup(strings.TrimSpace(q.Get("group")))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// Build the caller's non-chip scope first. Chip badges describe this scope,
 	// not unrelated kinds/categories/states excluded by the same query. The chip
 	// selection itself is applied afterwards so an unticked badge still reports
@@ -126,17 +132,37 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	// count here like every other chip, so total/hasMore describe what the list
 	// can actually show when "running" is ticked.
 	live := s.liveSessions(ws(r))
+	visible := func(s db.Session) bool {
+		// Exact IDs and explicit state/chip requests may open archived history.
+		if !chipFilter && state == "" && ids == nil && s.State == "archived" {
+			return false
+		}
+		return !chipFilter || sessionMatchesChips(s, chipSel, live)
+	}
+	// Tab badges count what each tab would show under the current chips, so they
+	// are taken before the group narrows the scope. The chip badges below then
+	// describe the selected tab only.
+	var groupCounts map[string]int
+	if group != "" {
+		groupCounts = map[string]int{sessionGroupMain: 0, sessionGroupOther: 0}
+		inGroup := scope[:0]
+		for _, s := range scope {
+			g := sessionGroup(s)
+			if visible(s) {
+				groupCounts[g]++
+			}
+			if g == group {
+				inGroup = append(inGroup, s)
+			}
+		}
+		scope = inGroup
+	}
 	chipCounts := sessionChipCounts(scope, live)
 	matches := make([]db.Session, 0, len(scope))
 	for _, s := range scope {
-		// Exact IDs and explicit state/chip requests may open archived history.
-		if !chipFilter && state == "" && ids == nil && s.State == "archived" {
-			continue
+		if visible(s) {
+			matches = append(matches, s)
 		}
-		if chipFilter && !sessionMatchesChips(s, chipSel, live) {
-			continue
-		}
-		matches = append(matches, s)
 	}
 
 	if !listing {
@@ -162,13 +188,16 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		Limit      int            `json:"limit"`
 		HasMore    bool           `json:"hasMore"`
 		ChipCounts map[string]int `json:"chipCounts"`
+		// Per-tab totals; only sent when the request named a group.
+		GroupCounts map[string]int `json:"groupCounts,omitempty"`
 	}{
-		Items:      page,
-		Total:      total,
-		Offset:     offset,
-		Limit:      limit,
-		HasMore:    offset+limit < total,
-		ChipCounts: chipCounts,
+		Items:       page,
+		Total:       total,
+		Offset:      offset,
+		Limit:       limit,
+		HasMore:     offset+limit < total,
+		ChipCounts:  chipCounts,
+		GroupCounts: groupCounts,
 	})
 }
 

@@ -36,6 +36,9 @@ export interface SessionPage {
   // Counted before the chips filter, so an unticked badge still reports what it
   // hides. Absent on the legacy unwrapped response.
   chipCounts?: Record<string, number>
+  // Sidebar tab → how many rows that tab shows under the current chips. Sent
+  // only when the request named a group.
+  groupCounts?: Record<string, number>
 }
 
 // asSessionPage normalizes either wire shape (unwrapped legacy array or paged
@@ -66,6 +69,9 @@ export interface SessionListParams {
   // filtered out client-side and "load more" looks broken. An empty string is a
   // real selection (nothing ticked) and matches nothing.
   chips?: string
+  // Sidebar tab ('main' | 'other', see sessionGroup.ts), applied before paging
+  // like the chips.
+  group?: string
 }
 
 export const sessionApi = {
@@ -85,6 +91,7 @@ export const sessionApi = {
     if (params?.state) p.set('state', params.state)
     if (params?.q) p.set('q', params.q)
     if (params?.chips !== undefined) p.set('chips', params.chips)
+    if (params?.group) p.set('group', params.group)
     const qs = p.toString()
     return req<Session[] | SessionPage>(qs ? `/api/sessions?${qs}` : '/api/sessions', {
       signal,

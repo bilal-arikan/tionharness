@@ -457,6 +457,13 @@
     "filterTitle_other": "{{label}}: {{count}} sessions — {{mod}}: select only this, Shift: invert the others",
     "filters": "Filters",
     "generating": "Generating a response",
+    "groups": {
+      "label": "Session group",
+      "main": "Conversations",
+      "mainHint": "Conversations you started and the chats spawned or handed off from them",
+      "other": "Background",
+      "otherHint": "Worker, subagent, task, automation, schedule, insight, agent message inbox and system sessions"
+    },
     "handoff": "handoff",
     "inMessages": "In messages",
     "list": "List",

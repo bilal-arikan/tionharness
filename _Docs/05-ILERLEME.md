@@ -9,6 +9,28 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Oturumlar paneli iki sekme: Konuşmalar / Arka plan (2026-10-17)
+
+- **Neden:** sohbet listesi worker, subagent, sistem ajanı ve otomasyon oturumlarıyla
+  doluyor, kişinin kendi konuşmaları aralarında kayboluyordu.
+- **Ne değişti:** kenar çubuğu çiplerin üstünde iki sekme gösterir. **Konuşmalar**
+  kişinin başlattığı sohbetleri ve onlardan açılan `spawn_session` / `/handoff`
+  sohbetlerini, **Arka plan** koordinatör worker'larını, subagent, görev, zamanlama,
+  otomasyon, insight, ajanlar arası mesaj kutularını (`💬 … — Mesajlar`) ve `system:`
+  etiketli sistem ajanı oturumlarını tutar. Spawn
+  oturumları bilinçli olarak Konuşmalar'da kalır (worker ≠ spawn). Kural ve gerekçesi
+  [07 §çipler](07-CHAT-UX.md)'de.
+- **Sunucu:** `GET /api/sessions` `group=main|other` alır, sekmeyi sayfalamadan önce
+  uygular ve zarfta `groupCounts` döner (`internal/api/sessions_groups.go`,
+  `sessions.go`). Geçersiz değer 400.
+- **Ön yüz:** `features/sessions/sessionGroup.ts` (istemci ikizi + kalıcı seçim),
+  `SessionsSidebar.tsx` (sekme şeridi), `useSessionsController.ts` / `App.tsx`
+  (`group` istek kimliğine ve üç liste isteğine eklendi), `api/sessions.ts`.
+- **Doğrulama:** `sessions_groups_test.go` ve `sessionGroup.test.ts` eklendi;
+  `LC_ALL=tr_TR.UTF-8 scripts/test.sh full` yeşil. Gerçek veride (FootballOracle):
+  Konuşmalar 47 (8 kullanıcı + 39 spawn), Arka plan 54 (24 sistem ajanı, 23 subagent,
+  2 mesaj kutusu, 2 worker, insight/otomasyon/zamanlama birer).
+
 ## opencode-cli örneği açılışta tohumlanıyor, eski API anahtarları opencode'a taşınıyor (2026-10-17)
 
 - **Sağlayıcılar sayfası çöküyordu:** sunucu güncel Go koduyla 7 Ekim tarihli gömülü

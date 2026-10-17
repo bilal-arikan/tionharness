@@ -457,6 +457,13 @@
     "filterTitle_other": "{{label}}: {{count}} oturum — {{mod}}: yalnız bunu seç, Shift: diğerlerini tersle",
     "filters": "Filtreler",
     "generating": "Yanıt üretiliyor",
+    "groups": {
+      "label": "Oturum grubu",
+      "main": "Konuşmalar",
+      "mainHint": "Senin başlattığın konuşmalar ve onlardan açılan (spawn / handoff) sohbetler",
+      "other": "Arka plan",
+      "otherHint": "Worker, subagent, görev, otomasyon, zamanlama, analiz, ajan mesaj kutuları ve sistem oturumları"
+    },
     "handoff": "handoff",
     "inMessages": "Mesajlarda",
     "list": "Liste",

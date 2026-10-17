@@ -10,8 +10,9 @@ export function sessionListQueryIdentity(
   workspaceId: string | null,
   chips: string,
   state: 'active' | 'archived' = 'active',
+  group = '',
 ): string {
-  return `${workspaceId ?? ''}\u0000${chips}\u0000${state}`
+  return `${workspaceId ?? ''}\u0000${chips}\u0000${state}\u0000${group}`
 }
 
 // One epoch owns every session-list request: bootstrap, chip replacement,

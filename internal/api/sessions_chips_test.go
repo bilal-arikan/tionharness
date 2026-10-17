@@ -12,10 +12,11 @@ import (
 )
 
 type chipPage struct {
-	Items      []db.Session   `json:"items"`
-	Total      int            `json:"total"`
-	HasMore    bool           `json:"hasMore"`
-	ChipCounts map[string]int `json:"chipCounts"`
+	Items       []db.Session   `json:"items"`
+	Total       int            `json:"total"`
+	HasMore     bool           `json:"hasMore"`
+	ChipCounts  map[string]int `json:"chipCounts"`
+	GroupCounts map[string]int `json:"groupCounts"`
 }
 
 func TestParseSessionIDsIsBounded(t *testing.T) {

@@ -64,6 +64,7 @@ import {
 import { useChatStream } from '@/features/chat/useChatStream'
 import { writeSessionDraft } from '@/features/chat/useSessionDraft'
 import { SessionsSidebar } from '@/features/sessions/SessionsSidebar'
+import { useSessionGroup } from '@/features/sessions/sessionGroup'
 import { useSessionChips } from '@/features/sessions/useSessionChips'
 
 import { useTranslation } from 'react-i18next'
@@ -302,6 +303,8 @@ export default function App() {
   // session list request carries it: the server applies the chip filter before
   // paging, so the same selection drives the fetch and the rendered rows.
   const sessionChips = useSessionChips()
+  // Sidebar tab (main conversations vs. workers/runs); also a server filter.
+  const [sessionGroup, setSessionGroup] = useSessionGroup()
   const [showArchivedSessions, setShowArchivedSessions] = useState(false)
   // The sidebar's title/id search (debounced there); the controller sends it to
   // the server so the filter reaches unloaded pages.
@@ -310,6 +313,7 @@ export default function App() {
   const ctl = useSessionsController({
     activeWorkspaceId,
     chipsParam: sessionChips.chipsParam,
+    group: sessionGroup,
     showArchived: showArchivedSessions,
     searchQuery: sessionSearch,
     setError,
@@ -648,11 +652,16 @@ export default function App() {
               showArchived={showArchivedSessions}
               onToggleArchived={() => setShowArchivedSessions((value) => !value)}
               chipCountsFromServer={ctl.sessionChipCounts}
+              group={sessionGroup}
+              onChangeGroup={setSessionGroup}
+              groupCounts={ctl.sessionGroupCounts}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
                 if (isMobile) sessionsList.setOpen(false)
               }}
               onNewSession={() => {
+                // A new conversation belongs to the main tab; show it there.
+                setSessionGroup('main')
                 ctl.newSession()
                 if (isMobile) sessionsList.setOpen(false)
               }}
