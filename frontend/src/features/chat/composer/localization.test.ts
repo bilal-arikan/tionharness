@@ -5,7 +5,7 @@ import { STT_LANGUAGES } from './sttLanguages'
 
 const initialLanguage = i18next.language
 
-describe.sequential('chat control localization', () => {
+describe('chat control localization', { concurrent: false }, () => {
   afterAll(async () => {
     await i18next.changeLanguage(initialLanguage)
   })
