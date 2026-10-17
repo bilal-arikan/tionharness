@@ -1047,8 +1047,12 @@ demek** olurdu. Üç parçalı çözüm (`coordination_tree.go`):
    worker görünümünde** taşınır: `subCoordinatorBusy` bu bayrağı (veya canlı
    worker sayacını) okur, düğüm `Delegating` olarak işaretlenir ve durum
    bloğunda `DELEGATING` görünür — "finished" değil.
-   **Başarısız/kill turlarda ertelenmez** (dal bozuk, ebeveyn hemen bilmeli) ve
-   alt ağaç cascade durdurulur.
+   **Başarısız/kill/zaman aşımı turlarda ertelenmez** (dal bozuk, ebeveyn hemen
+   bilmeli) ve alt ağaç cascade durdurulur. **`incomplete` tur tamamlanmış gibi
+   ertelenir (2026-10-17):** teslim bekçisi, beklenen sonuç dosyası henüz yokken
+   turu `incomplete` işaretler; o dosyayı yazacak worker ise tam o anda başlatılmış
+   olur. Eski kural bu durumda yeni doğrulayıcıyı 2 sn içinde öldürüyordu
+   (SES314 → SES317, iki kez).
 2. **Açık rapor** — `report_to_coordinator(summary, status)` aracı: sentezini
    bitiren düğüm görevini kendisi kapatır. Kendi worker'ları çalışırken
    `completed` raporu **reddedilir**. Doğrulamalar çağrı anında koşar, ama not

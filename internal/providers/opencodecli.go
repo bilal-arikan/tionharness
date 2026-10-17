@@ -442,6 +442,15 @@ readLoop:
 			reportWatchdogKill(req, WatchdogKill{Provider: "opencode-cli", Model: model, Reason: WatchdogReasonStartup, Window: opencodeStartupTimeout, Detail: stdoutCrashTail(tail)})
 			break readLoop
 		case <-idle.C:
+			// A tool is running (a bridged run_subagent waiting on its child, a
+			// slow command): silence is expected. The turn's semantic watchdog, the
+			// hard cap and a human stop still end it through ctx.
+			if p.toolInFlight() {
+				if idleWindow > 0 {
+					idle.Reset(idleWindow)
+				}
+				continue
+			}
 			idleHang = true
 			proc.KillTree(cmd)
 			reportWatchdogKill(req, WatchdogKill{Provider: "opencode-cli", Model: model, Reason: WatchdogReasonIdle, Window: idleWindow, Detail: stdoutCrashTail(tail)})

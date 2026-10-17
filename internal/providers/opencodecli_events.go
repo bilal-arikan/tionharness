@@ -104,18 +104,27 @@ type opencodeStreamParser struct {
 
 	notedParseDrop bool
 	parseDropCount int
+	// toolsActive holds the callIDs of tool parts seen pending/running and not
+	// yet completed or failed: opencode is silent while a tool runs, so the
+	// stdout watchdog asks toolInFlight before reading that as a hang (same
+	// contract as the codex parser).
+	toolsActive map[string]bool
 }
 
 func newOpenCodeParser(model string, serverKeys []string, onEvent func(TraceStep)) *opencodeStreamParser {
 	return &opencodeStreamParser{
-		resp:       &Response{Model: model},
-		onEvent:    onEvent,
-		serverKeys: serverKeys,
-		partIdx:    map[string]int{},
-		partStart:  map[string]time.Time{},
-		emitted:    map[int]bool{},
+		resp:        &Response{Model: model},
+		onEvent:     onEvent,
+		serverKeys:  serverKeys,
+		partIdx:     map[string]int{},
+		partStart:   map[string]time.Time{},
+		emitted:     map[int]bool{},
+		toolsActive: map[string]bool{},
 	}
 }
+
+// toolInFlight reports whether a tool part has started and not yet finished.
+func (p *opencodeStreamParser) toolInFlight() bool { return len(p.toolsActive) > 0 }
 
 func (p *opencodeStreamParser) emit(i int) {
 	if p.onEvent == nil || p.emitted[i] || i < 0 || i >= len(p.resp.Trace) {
@@ -257,6 +266,16 @@ func (p *opencodeStreamParser) feedTool(part *opencodePart) {
 	}
 	if step.Tool == "todo_list" {
 		step.Output = summarizeOpenCodeTodos(step.Input)
+	}
+	if key != "" {
+		if final {
+			delete(p.toolsActive, key)
+		} else {
+			if p.toolsActive == nil {
+				p.toolsActive = map[string]bool{}
+			}
+			p.toolsActive[key] = true
+		}
 	}
 	p.setPart(key, final, step)
 }

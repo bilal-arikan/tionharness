@@ -768,6 +768,17 @@ readLoop:
 				}
 				continue
 			}
+			// A tool is running: codex is waiting on it, not wedged. A bridged
+			// run_subagent routinely outlasts the window while its child works (the
+			// SES287 → SES294 kill), so silence here is not a hang signal at all.
+			// The turn's semantic watchdog (which sees the child's progress), the
+			// hard cap and a human stop still end it through ctx.
+			if p.toolInFlight() {
+				if idleWindow > 0 {
+					idle.Reset(idleWindow)
+				}
+				continue
+			}
 			idleHang = true
 			proc.KillTree(cmd)
 			reportWatchdogKill(req, WatchdogKill{

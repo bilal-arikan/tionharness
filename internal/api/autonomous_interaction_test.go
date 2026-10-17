@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -113,5 +114,23 @@ func TestAutonomousInteractionWithoutSessionSkipsGrants(t *testing.T) {
 	}
 	if tools.GrantsFrom(ctx) != nil {
 		t.Fatal("context carries grants for a session-less turn")
+	}
+}
+
+// The background turn's idle tracker must be registered on the run: bridged
+// calls (run_subagent) report the child's progress into it through
+// interactionBackend.Call, so a long delegation keeps the turn alive.
+func TestAutonomousInteractionRegistersTurnTracker(t *testing.T) {
+	s, rt := newAutonomousTestServer(t)
+	turnCtx, stop := agent.WithActivityTimeout(context.Background(), 0, time.Hour)
+	defer stop()
+	_, done := s.autonomousInteraction(rt)(turnCtx, db.Agent{ID: "AG1", Provider: "codex-cli"}, "SES1")
+	defer done()
+	run := activeRun(t, s)
+	if run.activityTracker() == nil || run.activityTracker() != agent.ActivityTrackerFrom(turnCtx) {
+		t.Fatal("autonomous run does not carry the turn's activity tracker")
+	}
+	if run.idleLimitFor() != s.tun.SpawnIdleTimeout() {
+		t.Fatalf("idle limit = %s, want the spawn idle window %s", run.idleLimitFor(), s.tun.SpawnIdleTimeout())
 	}
 }

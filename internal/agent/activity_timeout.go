@@ -292,6 +292,17 @@ func ActivityTrackerFrom(ctx context.Context) *ActivityTracker {
 	return t
 }
 
+// WithActivityTracker attaches an existing run's tracker to ctx. A bridged tool
+// call arrives on the Interaction MCP HTTP request, whose context knows nothing of
+// the CLI turn it serves; attaching the turn's tracker lets work done inside the
+// call (a run_subagent child's steps) count as that turn's progress.
+func WithActivityTracker(ctx context.Context, t *ActivityTracker) context.Context {
+	if t == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, activityTrackerKey{}, t)
+}
+
 // ObserveActivityStep reports one step to the run-scoped semantic tracker.
 func ObserveActivityStep(ctx context.Context, st TurnStep) bool {
 	t := ActivityTrackerFrom(ctx)

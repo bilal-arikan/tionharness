@@ -9,6 +9,31 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Yarıda kalan oturumlar: CLI bekçisi uzun araç çağrısında turu öldürüyordu (2026-10-17)
+
+- **Belirti:** bazı oturumlar "yarım kaldı" ya da "durduruldu" görünüyordu. Tarama
+  sonucu üç neden çıktı: (1) 2–12 Ekim arası codex/claude CLI oturum açma hataları
+  ve erişilemeyen köprü (ortam sorunu, bugün tekrarlanmıyor); (2) bugün 22:34'te
+  canlı doğrulama için sunucunun yeniden başlatılması SES288, SES289 ve SES297'yi
+  kesti; (3) asıl kod hatası: codex-cli köprü üzerinden `run_subagent` çağırıp
+  alt ajanı beklerken 90 sn stdout'a yazmıyor, stdout bekçisi bunu takılma sanıp
+  codex'i öldürüyor, iptal edilen köprü isteği de alt ajanı "killed" bırakıyordu
+  (SES287 → SES294, SES255).
+- **Düzeltme:** codex ve opencode ayrıştırıcıları açık araç öğelerini sayar; araç
+  sürerken stdout bekçisi turu öldürmez. Turun anlamsal idle bekçisi (spawn 5 dk,
+  sohbet 3 dk) alt ajanın ilerlemesini artık görür: köprü çağrısı turun
+  izleyicisini taşır, otonom turlar izleyicilerini run'a kaydeder, alt ajan
+  adımları bu izleyiciye düşer. Ayrıntı [69](69-CODEX-CLI-SAGLAYICI.md).
+- **Canlı denemede bulunan ikinci neden:** alt koordinatör turu `incomplete` (teslim
+  bekçisi: beklenen sonuç dosyası henüz yok) bitince `deferWorkerReport` bunu bozuk
+  dal sayıp `stopSubtree` ile az önce başlattığı doğrulayıcıyı öldürüyordu
+  (SES314 → SES317, iki kez). Artık `incomplete`, `completed` gibi ertelenir; cascade
+  yalnız failed/killed/timeout'ta. Ayrıntı [47](47-KOORDINATOR-COKLU-AJAN.md).
+- **Kalan risk:** claude-cli kalıcı oturum bekçisi (15 dk) araç takibi yapmıyor;
+  15 dakikadan uzun alt ajanlarda aynı kesinti olabilir.
+- **Doğrulama:** `codexcli_toolidle_test.go`, `subagent_activity_test.go`,
+  `TestAutonomousInteractionRegistersTurnTracker`; `scripts/test.sh full` yeşil.
+
 ## Sohbet ajan seçicilerinden worker ve sistem ajanları çıkarıldı (2026-10-17)
 
 - **Neden:** yeni konuşma açarken ve composer'daki ajan listesinde `Worker: Coder`

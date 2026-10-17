@@ -156,6 +156,13 @@ func TestDeferWorkerReportWithholdsWhileDelegating(t *testing.T) {
 		t.Error("withholding the report must record that one is still owed")
 	}
 
+	// An INCOMPLETE turn (the delivery guard: its result file does not exist yet,
+	// because the worker it just spawned writes it) is still delegating, not
+	// broken: withhold the report and leave the branch running.
+	if !rt.deferWorkerReport(ctx, mid, turnStatusIncomplete) {
+		t.Fatal("an incomplete sub-coordinator with running workers must keep delegating")
+	}
+
 	// A FAILED turn is different: the branch is broken, so the parent must hear
 	// about it immediately rather than waiting for a synthesis that will not come.
 	if rt.deferWorkerReport(ctx, mid, turnStatusFailed) {

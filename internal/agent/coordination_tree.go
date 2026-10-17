@@ -172,15 +172,19 @@ func formatWorkerTree(ws []SubtreeWorker) string {
 // subCoordinatorBusy), and the node closes its task later via
 // report_to_coordinator (or the settle backstop).
 //
-// Only a clean turn is deferred. A failed/killed sub-coordinator reports
-// immediately — its branch is broken and the parent must be able to react — and
-// its subtree is cancelled so nothing keeps burning budget under a node nobody is
-// waiting on any more.
+// A completed or incomplete turn is deferred the same way. "incomplete" is the
+// normal shape of a delegating turn, not a broken branch: the delivery guard
+// marks a turn whose expected result file does not exist yet as incomplete —
+// and the worker this node just spawned is the one that will write it (the
+// SES314 → SES317 kill, twice). A failed/killed/timed-out sub-coordinator
+// reports immediately — its branch is broken and the parent must be able to
+// react — and its subtree is cancelled so nothing keeps burning budget under a
+// node nobody is waiting on any more.
 func (r *Runtime) deferWorkerReport(ctx context.Context, sess db.Session, status string) bool {
 	if !sess.IsCoordinator() {
 		return false // a leaf worker's turn IS its result
 	}
-	if status != turnStatusCompleted {
+	if status != turnStatusCompleted && status != turnStatusIncomplete {
 		r.stopSubtree(ctx, sess.ID, "sub-coordinator turn ended with status "+status)
 		return false
 	}

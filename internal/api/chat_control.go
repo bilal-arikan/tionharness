@@ -835,6 +835,12 @@ func (r *chatRun) setActivityTracker(tracker *agent.ActivityTracker, idle time.D
 	r.mu.Unlock()
 }
 
+func (r *chatRun) activityTracker() *agent.ActivityTracker {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.activity
+}
+
 func (r *chatRun) activitySnapshot() agent.ActivitySnapshot {
 	r.mu.Lock()
 	tracker := r.activity

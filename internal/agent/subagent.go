@@ -163,6 +163,28 @@ func subStepSinkFrom(ctx context.Context) *subStepSink {
 	return s
 }
 
+// subagentStepObserver builds the child run's onStep. In-process (native tool
+// loop) the caller's step sink collects the child's steps and republishes its
+// live card; the turn's tracker sees that card. A bridged call (CLI turn, over
+// the Interaction MCP) has no sink, only the turn's tracker the bridge attached:
+// the child's steps go straight to it. Without that the child's work is
+// invisible to the parent's idle watchdog, which then cuts the parent — and
+// with it this child — while the child is busy (the SES287 → SES294 kill).
+// nil when neither is present.
+func subagentStepObserver(ctx context.Context, liveInput json.RawMessage) func(TurnStep) {
+	if sink := subStepSinkFrom(ctx); sink != nil {
+		sink.emitLive(liveInput)
+		return func(st TurnStep) {
+			sink.addSteps(st)
+			sink.emitLive(liveInput)
+		}
+	}
+	if tracker := ActivityTrackerFrom(ctx); tracker != nil {
+		return func(st TurnStep) { tracker.ObserveStep(st) }
+	}
+	return nil
+}
+
 // withRunAgent wires the run_subagent tool for one completion. It seeds the
 // per-turn call-graph position (top-level: depth 0, the caller marked visited, a
 // fresh budget counter) or inherits it from a parent run, then attaches a runner
@@ -336,15 +358,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// chat shows nothing at all until the subagent's final reply lands. The card
 	// carries the resolved target + task so the header reads like the final one.
 	sink := subStepSinkFrom(ctx)
-	liveInput := subagentCardInput(agent.Name, task)
-	var onStep func(TurnStep)
-	if sink != nil {
-		sink.emitLive(liveInput)
-		onStep = func(st TurnStep) {
-			sink.addSteps(st)
-			sink.emitLive(liveInput)
-		}
-	}
+	onStep := subagentStepObserver(ctx, subagentCardInput(agent.Name, task))
 
 	// Run in an isolated trace. autonomous=true keeps it headless (interactive
 	// tools like ask_user no-op) and enforces the caller's daily budget.

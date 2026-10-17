@@ -182,15 +182,23 @@ type codexStreamParser struct {
 	// through compactionInFlight before killing. Written by feed and read by the
 	// same read-loop goroutine, so it needs no lock.
 	compactionActive int
+	// toolsActive holds the ids of tool items (shell, patch, MCP, web search,
+	// collab) that started without a matching completion. Codex prints nothing
+	// while a tool runs, so a long one — a bridged run_subagent waiting on its
+	// child, a slow build — looks exactly like a wedged process to the stdout
+	// watchdog. runAttempt asks through toolInFlight before killing. Same
+	// single-goroutine ownership as compactionActive.
+	toolsActive map[string]bool
 }
 
 func newCodexParser(model string, onEvent func(TraceStep)) *codexStreamParser {
 	return &codexStreamParser{
-		resp:      &Response{Model: model},
-		onEvent:   onEvent,
-		itemIdx:   map[string]int{},
-		itemStart: map[string]time.Time{},
-		emitted:   map[int]bool{},
+		resp:        &Response{Model: model},
+		onEvent:     onEvent,
+		itemIdx:     map[string]int{},
+		itemStart:   map[string]time.Time{},
+		toolsActive: map[string]bool{},
+		emitted:     map[int]bool{},
 	}
 }
 
@@ -310,6 +318,7 @@ func (p *codexStreamParser) feed(line string) {
 // created and emitted in that single call.
 func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 	final := evType == "item.completed"
+	p.trackToolItem(it, final)
 
 	switch it.Type {
 	case "agent_message":
@@ -422,6 +431,35 @@ func (p *codexStreamParser) feedContextCompaction(evType string, it *codexItem) 
 	}
 	p.setStep(it, true, step)
 }
+
+// codexToolItemTypes are the item kinds that execute something and stay silent
+// until it returns.
+var codexToolItemTypes = map[string]bool{
+	"command_execution": true,
+	"file_change":       true,
+	"mcp_tool_call":     true,
+	"web_search":        true,
+	"collab_tool_call":  true,
+}
+
+// trackToolItem keeps toolsActive in step with one item event. An item without
+// an id cannot be paired with its completion, so it is not tracked.
+func (p *codexStreamParser) trackToolItem(it *codexItem, final bool) {
+	if !codexToolItemTypes[it.Type] || it.ID == "" {
+		return
+	}
+	if final {
+		delete(p.toolsActive, it.ID)
+		return
+	}
+	if p.toolsActive == nil {
+		p.toolsActive = map[string]bool{}
+	}
+	p.toolsActive[it.ID] = true
+}
+
+// toolInFlight reports whether a tool item has started and not yet completed.
+func (p *codexStreamParser) toolInFlight() bool { return len(p.toolsActive) > 0 }
 
 // compactionInFlight reports whether a native context_compaction has started and
 // not yet completed. The stdout-silence watchdog uses it to tell a compaction

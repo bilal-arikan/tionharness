@@ -969,6 +969,10 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	// Single stamping point for every bridged tool: beginCall only makes the ctx
 	// cancellable, so without this the session id is missing on every branch below.
 	ctx = stampRunSession(callCtx, run)
+	// The call runs on the bridge's HTTP request context; carry the turn's idle
+	// tracker so progress made inside it (a run_subagent child) keeps the turn
+	// alive instead of reading as silence.
+	ctx = agent.WithActivityTracker(ctx, run.activityTracker())
 	bare := bareToolName(name)
 	// Deliver user replies as separate MCP content blocks, preserving structured
 	// tool results. Permission callbacks have a strict JSON contract and are skipped.

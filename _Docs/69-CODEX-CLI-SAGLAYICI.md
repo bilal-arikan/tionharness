@@ -1128,6 +1128,21 @@ Codex turunun kendi zaman aşımı katmanı bunlara ek bir savunma sağlar:
   hiç tamamlanmayan bir compaction en geç 3× idle penceresinde ölür; hata mesajı
   kaç grace penceresi kullanıldığını yazar. Regresyon: SES2570 — compaction
   duyurulduktan sonra gelen sessizlik turu öldürüyor, oturum `blocked` kalıyordu.
+- **Süren araç sessizliği de idle sayılmaz (2026-10-17).** Codex bir araç öğesini
+  (`command_execution`, `file_change`, `mcp_tool_call`, `web_search`,
+  `collab_tool_call`) `item.started` ile açar ve araç dönene kadar susar. Köprü
+  üzerinden çağrılan `run_subagent` alt ajan çalıştığı sürece dakikalarca
+  sürebilir; 90 sn'lik bekçi bunu takılma sanıp codex'i öldürüyor, iptal edilen
+  köprü isteği de alt ajanı "killed" bırakıyordu (SES287 → SES294, SES255).
+  Parser açık araçları sayar (`toolsActive` / `toolInFlight`); araç açıkken read
+  loop pencereyi yeniler ve öldürmez. Bitirme yetkisi turun anlamsal idle
+  bekçisinde, hard cap'te ve kullanıcı durdurmasındadır. O bekçinin alt ajan
+  ilerlemesini görebilmesi için köprü çağrısı turun izleyicisini taşır
+  (`agent.WithActivityTracker`, `interactionBackend.Call`); otonom turlar da
+  izleyicilerini run'a kaydeder (`autonomousInteraction`), alt ajan adımları
+  `subagentStepObserver` ile bu izleyiciye düşer. Aynı koruma opencode-cli'da da
+  vardır. Testler: `codexcli_toolidle_test.go`, `subagent_activity_test.go`,
+  `TestAutonomousInteractionRegistersTurnTracker`.
 - **Tek atışlık fold çağrıları (`/handoff`, `/compact`, reaktif ara-döngü
   sıkıştırması) bu pencereyi 10 dakikaya yükseltir.** Bir tur içinde codex
   sürekli tool/step olayı yayar, dolayısıyla 90 saniyelik sessizlik gerçekten
