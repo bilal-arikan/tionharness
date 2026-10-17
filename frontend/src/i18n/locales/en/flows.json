@@ -187,7 +187,10 @@
     "lastObserved": "The observer last looked {{when}}.",
     "confidenceBase": "{{pct}}% confidence · v{{v}}",
     "optimizeHeld": "A proposal was filed; {{reason}}. You can apply it below.",
-    "avgGrade": "average grade {{avg}}/5 ({{n}} runs)"
+    "avgGrade": "average grade {{avg}}/5 ({{n}} runs)",
+    "workspaceAutoAccept": "Auto-accept evolution in every flow of this workspace",
+    "workspaceAutoAcceptHint": "Workspace-wide (saved at once): a flow on Propose applies a proposal above its confidence floor by itself, through the same proposal gate as Auto. Pending proposals are applied when you turn this on. Flows set to Off stay off.",
+    "workspaceAutoAcceptActive": "Workspace auto-accept is on: this flow behaves as Auto."
   },
   "policy": {
     "off": "Off",
@@ -202,6 +205,10 @@
     "applied": "applied",
     "rejected": "rejected",
     "invalid": "invalid"
+  },
+  "autoApplied": {
+    "flow": "auto-accepted · flow policy",
+    "workspace": "auto-accepted · workspace"
   },
   "author": {
     "user": "user",

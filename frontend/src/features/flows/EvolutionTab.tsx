@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, History, RotateCcw, Sparkles, X } from 'lucide-react'
 import type {
@@ -10,6 +10,7 @@ import type {
   FlowVersion,
 } from '@/types'
 import { api } from '@/api'
+import { workspaceApi } from '@/api/workspaces'
 import { Badge, Button, InfoPopover, type BadgeTone } from '@/shared/components'
 import { OptionPills } from '@/shared/components/OptionPills'
 import { SystemRoleAssignments } from '@/shared/components/agents/SystemRolePickers'
@@ -88,6 +89,40 @@ function describeOps(ops: unknown[] | null | undefined): string[] {
   })
 }
 
+// useWorkspaceAutoAccept loads and saves the workspace-wide auto-accept switch
+// (saved at once, like the observer-agent picker). null until loaded, so the
+// checkbox never shows a state the server does not hold.
+function useWorkspaceAutoAccept(onChanged: () => void, onError: (msg: string) => void) {
+  const [on, setOn] = useState<boolean | null>(null)
+  useEffect(() => {
+    let alive = true
+    workspaceApi
+      .getWorkspaceSettings()
+      .then((s) => {
+        if (alive) setOn(!!s.flowAutoAccept)
+      })
+      .catch((e: Error) => onError(e.message))
+    return () => {
+      alive = false
+    }
+  }, [onError])
+  const change = (next: boolean) => {
+    const prev = on
+    setOn(next)
+    workspaceApi
+      .updateWorkspaceSettings({ flowAutoAccept: next })
+      .then((s) => {
+        setOn(!!s.flowAutoAccept)
+        onChanged()
+      })
+      .catch((e: Error) => {
+        setOn(prev)
+        onError(e.message)
+      })
+  }
+  return [on, change] as const
+}
+
 function Section({
   title,
   icon: Icon,
@@ -130,6 +165,7 @@ export function EvolutionTab({
   const [optimizing, setOptimizing] = useState(false)
   const [openPrompt, setOpenPrompt] = useState<number | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [wsAutoAccept, setWsAutoAccept] = useWorkspaceAutoAccept(onChanged, onError)
 
   const setPol = (patch: Partial<FlowPolicy>) => {
     setPolicy((p) => ({ ...p, ...patch }))
@@ -241,6 +277,14 @@ export function EvolutionTab({
                 />
               </label>
             </div>
+            {wsAutoAccept && policy.mode === 'propose' && (
+              <p
+                className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px]"
+                data-testid="flow-ws-auto-accept-active"
+              >
+                {t('evolution.workspaceAutoAcceptActive')}
+              </p>
+            )}
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -283,6 +327,20 @@ export function EvolutionTab({
             {note && (
               <p className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px]">{note}</p>
             )}
+            {/* Workspace-wide: auto-accept on every propose flow (saved at once). */}
+            <div className="flex items-center gap-2 border-t border-[var(--color-border)] pt-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={wsAutoAccept ?? false}
+                  disabled={wsAutoAccept === null || busy}
+                  onChange={(e) => setWsAutoAccept(e.target.checked)}
+                  data-testid="flow-ws-auto-accept"
+                />
+                <span>{t('evolution.workspaceAutoAccept')}</span>
+              </label>
+              <InfoPopover text={t('evolution.workspaceAutoAcceptHint')} fixed />
+            </div>
             {/* Workspace-wide: which agent the observer runs on (saved at once). */}
             <div className="border-t border-[var(--color-border)] pt-3">
               <SystemRoleAssignments
@@ -304,6 +362,11 @@ export function EvolutionTab({
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={proposalTone(p.status)}>{t(`proposal.${p.status}`)}</Badge>
                     <Badge tone={authorTone(p.author)}>{authorLabel(p.author, t)}</Badge>
+                    {p.autoApplied && (
+                      <span data-testid="flow-proposal-auto">
+                        <Badge tone="accent">{t(`autoApplied.${p.autoApplied}`)}</Badge>
+                      </span>
+                    )}
                     <span className="text-[var(--color-text-dim)]">
                       {t('evolution.confidenceBase', {
                         pct: Math.round(p.confidence * 100),

@@ -248,16 +248,16 @@ func (r *Runtime) OptimizeFlow(ctx context.Context, flowID, trigger string) (Flo
 		r.emitFlowChanged(f.ID, "🧬 Akış gözlemcisi geçersiz bir öneri üretti — "+f.Name, prop.Error)
 		return res, nil
 	}
-	if pol.Mode == db.FlowPolicyAuto && prop.Confidence >= pol.MinConfidence {
-		if ok, hold := r.gateFlowProposal(ctx, exec, f, g, prop); !ok {
+	if source := r.flowAutoSource(pol); source != "" && prop.Confidence >= pol.MinConfidence {
+		applied, hold, aerr := r.autoApplyFlowProposal(ctx, exec, f, g, prop, source)
+		switch {
+		case hold != "":
 			res.Held = hold
 			r.emitFlowChanged(f.ID, "🧬 Akış için öneri bekliyor (kapı tuttu) — "+f.Name, hold+": "+prop.Reason)
 			return res, nil
-		}
-		applied, aerr := r.ApplyFlowProposal(ctx, prop.ID, db.FlowAuthor{Kind: db.FlowAuthorObserver, ID: exec.ID})
-		if aerr != nil {
+		case aerr != nil:
 			r.logger.Warn("flow observer: auto-apply failed", "flow", flowID, "proposal", prop.ID, "error", aerr)
-		} else {
+		default:
 			res.Applied = true
 			res.Proposal = &applied
 			r.emitFlowChanged(f.ID, "🧬 Akış evrildi — "+f.Name, fmt.Sprintf("v%d: %s", applied.AppliedVersion, applied.Reason))

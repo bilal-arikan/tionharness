@@ -418,6 +418,11 @@ type Runtime struct {
 	// settings, like codebaseMemoryEnabled.
 	promptEpochEnabled atomic.Bool
 
+	// flowAutoAccept is the workspace-wide "auto-accept flow evolution" switch
+	// (flow_autoaccept.go): when on, a flow whose policy is propose behaves as
+	// auto. Set from per-workspace settings.
+	flowAutoAccept atomic.Bool
+
 	// epochMu guards epochCache, the in-memory per-session prompt-epoch snapshots
 	// (sessionID → agentID → entry), backed by the prompt_epoch.json sidecar.
 	epochMu    sync.Mutex

@@ -178,9 +178,15 @@ func (s *Server) handleUpdateFlowMeta(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	wsp := ws(r)
+	prev, _ := wsp.DB.GetFlow(ctx, r.PathValue("id"))
 	f, err := wsp.DB.UpdateFlowMeta(ctx, r.PathValue("id"), req.Name, req.Note, req.Policy)
 	if writeDBError(w, err, "flow not found") {
 		return
+	}
+	// Moving a flow to auto makes its pending proposals eligible: apply them
+	// the same way the observer would have.
+	if req.Policy != nil && f.Policy.Normalized().Mode == db.FlowPolicyAuto && prev.Policy.Normalized().Mode != db.FlowPolicyAuto {
+		wsp.Runtime.SweepFlowProposals(f.ID)
 	}
 	writeJSON(w, http.StatusOK, s.flowItem(ctx, wsp, f, s.pendingProposalCounts(ctx, wsp)))
 }

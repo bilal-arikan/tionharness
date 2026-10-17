@@ -144,6 +144,9 @@ export interface WorkspaceSettings {
   // background index of the session repository (see _Docs/54).
   zvecGrepEnabled: boolean
   promptEpochEnabled: boolean
+  // Auto-accept flow evolution: flows on the propose policy apply confident
+  // observer proposals by themselves, like the auto policy (_Docs/93).
+  flowAutoAccept: boolean
   // Codex plugin support: the master switch plus the configured sources and the
   // enabled "<plugin>@<marketplace>" selectors. Both lists are always present
   // (possibly empty) — TionHarness ships no marketplace of its own.
@@ -195,6 +198,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'codebaseMemoryEnabled'
     | 'zvecGrepEnabled'
     | 'promptEpochEnabled'
+    | 'flowAutoAccept'
     | 'codexPluginsEnabled'
     | 'codexMarketplaces'
     | 'codexPlugins'

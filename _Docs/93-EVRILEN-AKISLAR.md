@@ -1,6 +1,6 @@
 # 93 — Evrilen Akışlar (Ajan-Başına Ana Akış)
 
-> **Özet (2026-10-04):** Orkestrasyon akışları (bağımsız flow varlığı, 13 node tipi, koşu
+> **Özet (2026-10-17):** Orkestrasyon akışları (bağımsız flow varlığı, 13 node tipi, koşu
 > ağacı, flow-backed schedule/automation/task, market flow paketleri) **kaldırıldı**; yerine
 > **her ajanın tek bir ana akışı** var ve ajanın **her turu** o akıştan geçer. Varsayılan akış
 > `girdi → yanıt → çıktı`'dır ve düz sohbet turuyla bire bir aynıdır. Akış sürümlüdür; kullanıcı
@@ -14,7 +14,10 @@
 > mekanizmaları — `criteria` yönlendirme modu (`flow-criteria`), koşu puanlama
 > (`flow-grade`), öneri kapısı (`flow-proposal-gate`) — ve otomasyon bağlantısı:
 > `trigger` düğümü (akış içinden herhangi bir otomasyonu ateşler) + `flow` türü otomasyon
-> (koşu bitince ateşlenir). Beyin fırtınası ve uygulanmayan fikirler §8.
+> (koşu bitince ateşlenir). Beyin fırtınası ve uygulanmayan fikirler §8. **Ek (2026-10-17):**
+> workspace geneli **otomatik kabul** (`flowAutoAccept`): açıkken `propose` akışları da güven
+> eşiği + öneri kapısından geçen öneriyi elle kabulle aynı yoldan uygular, açıldığında bekleyen
+> öneriler taranır, uygulanan öneriye `autoApplied` yazılır (§3).
 
 ## 1. Model
 
@@ -99,6 +102,20 @@ yeteneklerini (araçlar, izinler, prompt cache, resume) korur. Yardımcı çağr
   sistem oturumuna kaydedilir. "Değişiklik yok" iyi bir cevaptır. Kanıtta koşu puanları ve
   ölçüt kapısı ayrıntıları da vardır; pencere içindeki tüm koşular başarılı, puanı ≥ 4 ve
   👎'siz ise geçiş atlanır ve işaret ilerletilir (`flowRunsHealthy`).
+- **Otomatik kabul** (`internal/agent/flow_autoaccept.go`, 2026-10-17): bir öneri iki
+  durumda insansız uygulanır: akışın kendi politikası `auto` ise, ya da workspace
+  ayarı `flowAutoAccept` açık ve akışın politikası `propose` ise (`off` kapalı kalır;
+  `flowAutoSource`). İki yol da aynı `autoApplyFlowProposal`'dan geçer: güven eşiği
+  → öneri kapısı → Uygula düğmesiyle aynı `ApplyFlowProposal` → öneriye
+  `autoApplied: flow | workspace` yazılır (`MarkFlowProposalAutoApplied`); sürüm
+  yazarı gözlemcidir. Anahtar kapalıyken açıldığında (`UpdateSettings`) ya da bir akış
+  `auto`'ya alındığında (`PUT /api/flows/{id}/meta`) `SweepFlowProposals` arka planda
+  bekleyen önerileri akış başına en eskiden yeniye işler: eşik altındakiler ve
+  `allowPromptChanges` kapalıyken prompt değiştirenler atlanır, kapının tuttukları
+  `pending` kalır, uygulanamayanlar `invalid` olur. Tarama gözlemcinin akış kilidini
+  (`flowOptimizerFlights`) tutar; geçiş sürerken o akış atlanır. Açılışta ayar
+  yüklenirken tarama yapılmaz, böylece kapının önceden tuttuğu öneriler her
+  açılışta yeniden sorulmaz. Varsayılan kapalı.
 
 ## 4. API
 
@@ -123,7 +140,10 @@ kenarlar (geri besleme kenarı kesikli/sarı), düğüm ekleme/otomatik dizme/s�
 seçili düğüm/kenar için inceleyici, istemci tarafı lint, canlı düğüm durumu (çalışıyor/bitti/hata
 halkası). İnceleyici `criteria` modunda satır başına bir ölçüt alanı, `trigger` düğümünde
 otomasyon seçici + yük şablonu sunar; koşu listesi ve ayrıntısı puan rozetini (★ n/5) ve
-adım `detail` satırını gösterir. Kaydet gerekçe ister ve yeni sürüm açar; yalnız yerleşim
+adım `detail` satırını gösterir. Evrim sekmesindeki politika kartında workspace geneli
+**"tüm akışlarda evrimi otomatik kabul et"** anahtarı vardır (hemen kaydedilir; açıkken
+`propose` akışında "Otomatik gibi davranır" notu çıkar); otomatik uygulanan öneri
+"otomatik kabul · akış politikası / workspace" rozeti taşır. Kaydet gerekçe ister ve yeni sürüm açar; yalnız yerleşim
 değiştiyse sürüm açılmaz.
 **Yerleşim:** geniş yatay ekranda liste · kanvas · sağda sabit inceleyici; dar / kare / dikey
 ekranda liste çekmece, inceleyici alt sayfa (bottom sheet), Koşular sekmesi liste → ayrıntı
@@ -150,7 +170,12 @@ eleştiri döngüsü uçtan uca, düğüm hatası, sürümleme + bütçe + geri 
 gözlemci öner/otomatik/geçersiz, geri bildirim aynası),
 `internal/agent/flowturn_decider_test.go` (karar stub'ıyla ölçüt kapısı, puanlama + akış
 otomasyonu + kendi oturumunu ateşlememe, tetikleyici düğüm + kapalı otomasyon, öneri kapısı
-tut/geçir, sağlıklı pencere atlama), `internal/db/automation_core_test.go` (`flow` türü
+tut/geçir, sağlıklı pencere atlama), `internal/agent/flow_autoaccept_test.go` (workspace
+anahtarı ile `propose` akışı uygular ve `autoApplied` yazar, `auto` politikası `flow` yazar,
+`off` kapalı kalır; tarama eşik altını bırakır, kapının "hayır"ını dinler),
+`internal/workspace/settings_test.go` (`flowAutoAccept` varsayılan kapalı, kalıcı),
+`frontend/src/features/flows/EvolutionTab.test.tsx` (anahtar kaydı/geri alma, rozet),
+`internal/db/automation_core_test.go` (`flow` türü
 şekil denetimi), `internal/api` (koşu/panel/görünüm fixture'ları),
 `frontend/src/features/flows/flowGraph.test.ts`, `automationPayload.test.ts`. Canlı
 doğrulama: 2026-10-04 "Flow Lab" workspace'inde gerçek sağlayıcılarla (bkz. `05-ILERLEME.md`).

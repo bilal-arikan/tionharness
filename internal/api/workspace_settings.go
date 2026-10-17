@@ -58,6 +58,10 @@ type workspaceSettingsDTO struct {
 	// system for this workspace (see promptepoch.go).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
 
+	// FlowAutoAccept auto-accepts flow evolution proposals workspace-wide on
+	// flows whose policy is propose (see workspace.WSSettings.FlowAutoAccept).
+	FlowAutoAccept bool `json:"flowAutoAccept"`
+
 	// CodexPluginsEnabled toggles codex-cli plugin support for this workspace.
 	CodexPluginsEnabled bool `json:"codexPluginsEnabled"`
 
@@ -137,6 +141,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 		ZvecGrepEnabled:       s.ZvecGrepEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,
+		FlowAutoAccept:        s.FlowAutoAccept,
 		Awareness:             s.Awareness.Normalized(),
 
 		CodexPluginsEnabled: s.CodexPluginsEnabled,

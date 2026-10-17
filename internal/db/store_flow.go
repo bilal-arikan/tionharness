@@ -537,6 +537,22 @@ func (d *DB) ResolveFlowProposal(ctx context.Context, id, status string, applied
 	return p, d.persistProposalLocked(p)
 }
 
+// MarkFlowProposalAutoApplied records which setting applied an applied
+// proposal without a human (see FlowProposal.AutoApplied).
+func (d *DB) MarkFlowProposalAutoApplied(ctx context.Context, id, source string) (FlowProposal, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	p, ok := d.flowProposals[id]
+	if !ok {
+		return FlowProposal{}, ErrNotFound
+	}
+	if p.Status != ProposalApplied {
+		return p, fmt.Errorf("proposal %s is %s, not applied", id, p.Status)
+	}
+	p.AutoApplied = source
+	return p, d.persistProposalLocked(p)
+}
+
 // GetFlowProposal loads a proposal.
 func (d *DB) GetFlowProposal(ctx context.Context, id string) (FlowProposal, error) {
 	return dbGet(d, d.flowProposals, id)

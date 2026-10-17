@@ -180,6 +180,9 @@ export interface FlowProposal {
   status: FlowProposalStatus
   appliedVersion?: number
   error?: string
+  // Which setting applied it without a human: the flow's auto policy or the
+  // workspace auto-accept switch. Absent = applied by hand / not applied.
+  autoApplied?: 'flow' | 'workspace'
   createdAt: number
   resolvedAt?: number
 }

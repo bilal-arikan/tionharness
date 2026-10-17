@@ -32,6 +32,14 @@ const (
 	ProposalInvalid  = "invalid"
 )
 
+// Which setting auto-applied a proposal (FlowProposal.AutoApplied): the flow's
+// own auto policy, or the workspace-wide auto-accept switch acting on a flow
+// whose policy is propose.
+const (
+	FlowAutoAppliedFlow      = "flow"
+	FlowAutoAppliedWorkspace = "workspace"
+)
+
 // FlowAuthor records who made a change: the kind plus the agent id when an
 // agent or the observer did it.
 type FlowAuthor struct {
@@ -197,8 +205,12 @@ type FlowProposal struct {
 	// AppliedVersion is the flow version the proposal produced when applied.
 	AppliedVersion int    `json:"appliedVersion,omitempty"`
 	Error          string `json:"error,omitempty"` // why it is invalid / failed to apply
-	CreatedAt      int64  `json:"createdAt"`
-	ResolvedAt     int64  `json:"resolvedAt,omitempty"`
+	// AutoApplied names the setting that applied the proposal without a human
+	// (FlowAutoAppliedFlow / FlowAutoAppliedWorkspace); empty = applied by hand
+	// or not applied.
+	AutoApplied string `json:"autoApplied,omitempty"`
+	CreatedAt   int64  `json:"createdAt"`
+	ResolvedAt  int64  `json:"resolvedAt,omitempty"`
 }
 
 // AgentPromptVersion is one snapshot of an agent's soul + identity, kept so

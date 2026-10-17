@@ -140,3 +140,29 @@ func TestUpdateSettingsMergesRoleAssignments(t *testing.T) {
 		t.Fatalf("assignments = %v, want only compaction=AGT-2", got)
 	}
 }
+
+// TestFlowAutoAcceptPersists: the workspace auto-accept switch defaults off,
+// is set by a patch and survives a reload from ws-settings.json.
+func TestFlowAutoAcceptPersists(t *testing.T) {
+	if defaultWSSettings().FlowAutoAccept {
+		t.Fatal("flow auto-accept must default off")
+	}
+	m := testManager(t)
+	dir := t.TempDir()
+	w := &Workspace{Meta: Meta{ID: "WS1", Name: "a"}, DataDir: dir}
+	w.settings.cur = defaultWSSettings()
+	m.workspaces[w.ID] = w
+	m.order = append(m.order, w.ID)
+	on := true
+	if _, err := m.UpdateSettings(w.ID, WSSettingsPatch{FlowAutoAccept: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if !w.Settings().FlowAutoAccept {
+		t.Fatal("patch did not set flowAutoAccept")
+	}
+	loaded := &Workspace{DataDir: dir}
+	loaded.loadSettings()
+	if !loaded.Settings().FlowAutoAccept {
+		t.Fatal("flowAutoAccept not persisted")
+	}
+}

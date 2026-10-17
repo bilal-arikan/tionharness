@@ -9,6 +9,26 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Akış evrimleri için workspace geneli otomatik kabul (2026-10-17)
+
+- **Neden:** ajan akışlarının gözlemci önerileri Evrim sekmesinde onay bekliyordu; tüm
+  akışlar varsayılan `propose` politikasındaydı ve ajan başına `auto` modu akış akış
+  açılmak zorundaydı, açılınca da bekleyen öneriler beklemede kalıyordu.
+- **Ne değişti:** workspace ayarı `flowAutoAccept` (varsayılan kapalı) eklendi. Açıkken
+  `propose` politikalı akışlar `auto` gibi davranır, `off` olanlar kapalı kalır. Otomatik
+  kabul güven eşiği ve `flow-proposal-gate` kapısından geçer, sonra Uygula düğmesiyle aynı
+  `ApplyFlowProposal` yolunu kullanır. Öneriye uygulayan ayar `autoApplied: flow | workspace`
+  olarak yazılır. Anahtar açılınca ya da bir akış `auto`'ya alınınca bekleyen öneriler arka
+  planda en eskiden başlayarak uygulanır (`SweepFlowProposals`). UI: Evrim ▸ politika
+  kartında hemen kaydedilen anahtar, `propose` akışında "Otomatik gibi davranır" notu ve
+  öneri listesinde "otomatik kabul" rozeti. Dosyalar: `internal/agent/flow_autoaccept.go`,
+  `flow_optimizer.go`, `internal/workspace/settings.go`, `internal/api/flows.go`,
+  `internal/api/workspace_settings.go`, `internal/db/models_flow.go`, `store_flow.go`,
+  `frontend/src/features/flows/EvolutionTab.tsx`; ayrıntı [93](93-EVRILEN-AKISLAR.md) §3.
+- **Doğrulama:** `flow_autoaccept_test.go` (workspace anahtarı, akış politikası, `off`,
+  bekleyenleri tarama, eşik, kapı), `settings_test.go` (`flowAutoAccept` kalıcılığı) ve
+  `EvolutionTab.test.tsx` eklendi; `LC_ALL=tr_TR.UTF-8 scripts/test.sh full` yeşil.
+
 ## "Bitti" sesi worker'lar çalışırken çalmıyor (2026-10-17)
 
 - **Neden:** koordinatör turu, worker'ları hâlâ çalışırken bittiğinde "yanıt hazır"

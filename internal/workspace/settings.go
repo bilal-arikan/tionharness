@@ -99,6 +99,14 @@ type WSSettings struct {
 	// Default on; off = every turn recomposes from live state (pre-epoch behaviour).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
 
+	// FlowAutoAccept auto-accepts flow evolution workspace-wide: an observer
+	// proposal on a flow whose policy is propose is applied the way the flow's
+	// own auto policy would apply it (confidence floor + flow-proposal-gate,
+	// then the same ApplyFlowProposal road as the Apply button). Off-policy
+	// flows stay off. Turning it on also sweeps the pending proposals. Default
+	// off. See _Docs/93.
+	FlowAutoAccept bool `json:"flowAutoAccept"`
+
 	// CodexPluginsEnabled toggles codex-cli plugin support for this workspace: the
 	// configured marketplaces and plugins are rendered into every turn's
 	// config.toml and installed once per durable conversation home. Default on;
@@ -201,6 +209,7 @@ type WSSettingsPatch struct {
 	CodebaseMemoryEnabled  *bool   `json:"codebaseMemoryEnabled"`
 	ZvecGrepEnabled        *bool   `json:"zvecGrepEnabled"`
 	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
+	FlowAutoAccept         *bool   `json:"flowAutoAccept"`
 	ShellOutputCompression *string `json:"shellOutputCompression"`
 	ShellCommandRewrite    *string `json:"shellCommandRewrite"`
 
@@ -359,6 +368,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 		w.Runtime.SetZvecGrep(s.ZvecGrepEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
+		w.Runtime.SetFlowAutoAccept(s.FlowAutoAccept)
 		// settings.mu is not held here (loadSettings owns w.settings exclusively
 		// during boot), so read the spec through the same helper UpdateSettings uses.
 		w.Runtime.SetCodexPlugins(w.codexPluginSpecLocked())
@@ -513,6 +523,12 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.PromptEpochEnabled != nil {
 		ws.settings.cur.PromptEpochEnabled = *patch.PromptEpochEnabled
 	}
+	// Off → on is the moment the pending proposals become eligible; the sweep
+	// runs after the setting is durably saved.
+	sweepFlows := patch.FlowAutoAccept != nil && *patch.FlowAutoAccept && !ws.settings.cur.FlowAutoAccept
+	if patch.FlowAutoAccept != nil {
+		ws.settings.cur.FlowAutoAccept = *patch.FlowAutoAccept
+	}
 	if patch.CodexPluginsEnabled != nil {
 		ws.settings.cur.CodexPluginsEnabled = *patch.CodexPluginsEnabled
 	}
@@ -559,6 +575,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	zvecEnabled := ws.settings.cur.ZvecGrepEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
+	flowAutoAccept := ws.settings.cur.FlowAutoAccept
 	codexPlugins := ws.codexPluginSpecLocked()
 	shellCompression := ws.settings.cur.ShellOutputCompression
 	shellRewrite := ws.settings.cur.ShellCommandRewrite
@@ -591,11 +608,15 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 		ws.Runtime.SetZvecGrep(zvecEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)
+		ws.Runtime.SetFlowAutoAccept(flowAutoAccept)
 		ws.Runtime.SetCodexPlugins(codexPlugins)
 		ws.Runtime.SetShellCompression(shellCompression)
 		ws.Runtime.SetShellCommandRewrite(shellRewrite)
 		ws.Runtime.SetAwarenessSettings(awareSettings)
 		ws.Runtime.SetSystemRoleAssignments(roleAssignments)
+		if sweepFlows {
+			ws.Runtime.SweepFlowProposals("")
+		}
 	}
 	return ws, nil
 }

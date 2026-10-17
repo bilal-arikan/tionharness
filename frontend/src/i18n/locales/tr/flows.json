@@ -187,7 +187,10 @@
     "lastObserved": "Gözlemci en son {{when}} baktı.",
     "confidenceBase": "%{{pct}} güven · v{{v}}",
     "optimizeHeld": "Öneri dosyalandı; {{reason}}. Aşağıdan uygulayabilirsin.",
-    "avgGrade": "ortalama puan {{avg}}/5 ({{n}} koşu)"
+    "avgGrade": "ortalama puan {{avg}}/5 ({{n}} koşu)",
+    "workspaceAutoAccept": "Bu workspace'teki tüm akışlarda evrimi otomatik kabul et",
+    "workspaceAutoAcceptHint": "Workspace geneli (hemen kaydedilir): Öner modundaki bir akış, güven eşiğini geçen öneriyi Otomatik moddaki gibi öneri kapısından geçirip kendisi uygular. Açtığında bekleyen öneriler de uygulanır. Kapalı akışlar kapalı kalır.",
+    "workspaceAutoAcceptActive": "Workspace otomatik kabulü açık: bu akış Otomatik gibi davranır."
   },
   "policy": {
     "off": "Kapalı",
@@ -202,6 +205,10 @@
     "applied": "uygulandı",
     "rejected": "reddedildi",
     "invalid": "geçersiz"
+  },
+  "autoApplied": {
+    "flow": "otomatik kabul · akış politikası",
+    "workspace": "otomatik kabul · workspace"
   },
   "author": {
     "user": "kullanıcı",
