@@ -26,6 +26,7 @@ import {
   todoDismissalKey,
 } from './todos'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
+import { selectableChatAgents } from '@/app/startableAgents'
 import { dropGuardNotes, useGuardNoteVisible } from '@/shared/lib/coordinationGuardNote'
 import type { useChatStream } from './useChatStream'
 import { CoordinatorBreadcrumb } from '@/features/sessions/CoordinatorBreadcrumb'
@@ -153,6 +154,13 @@ export function ChatView({
     return () => ro.disconnect()
   }, [activeSessionId, bootstrapping, readOnly])
 
+  // Composer agent dropdown: never offers worker profiles or service system
+  // agents, but keeps the open session's own agent so a background session
+  // still shows who answers there.
+  const selectableAgents = useMemo(
+    () => selectableChatAgents(sessionStartAgents, agents, activeAgentId),
+    [sessionStartAgents, agents, activeAgentId],
+  )
   // The active session's current checklist (latest todo_write across the
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodo = useMemo(
@@ -487,6 +495,7 @@ export function ChatView({
             agentId={activeAgentId ?? ''}
             onAgentChange={onAgentChange}
             agents={agents}
+            selectableAgents={selectableAgents}
             commands={chat.chatCommands}
             artifacts={artifacts}
           />

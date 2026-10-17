@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Agent } from '@/types'
-import { isStartableAgent, startableAgents } from './startableAgents'
+import { isStartableAgent, selectableChatAgents, startableAgents } from './startableAgents'
 
 function agent(over: Partial<Agent>): Agent {
   return { id: 'a', name: 'A', ...over } as Agent
@@ -21,14 +21,14 @@ describe('isStartableAgent', () => {
     expect(isStartableAgent(agent({ id: 'dev', archived: true }))).toBe(false)
   })
 
-  it('accepts a worker profile even though it is a system agent', () => {
-    expect(isStartableAgent(agent({ system: true, systemKey: 'subagent-coder' }))).toBe(true)
-    expect(isStartableAgent(agent({ system: true, systemKey: 'subagent-explore' }))).toBe(true)
+  it('rejects a worker profile (a background executor, not a conversation partner)', () => {
+    expect(isStartableAgent(agent({ system: true, systemKey: 'subagent-coder' }))).toBe(false)
+    expect(isStartableAgent(agent({ system: true, systemKey: 'subagent-explore' }))).toBe(false)
   })
 
-  it('accepts a workspace customisation bound to a worker role', () => {
+  it('rejects a workspace customisation bound to a worker role', () => {
     const custom = agent({ system: true, locked: false, systemKey: 'subagent-config' })
-    expect(isStartableAgent(custom)).toBe(true)
+    expect(isStartableAgent(custom)).toBe(false)
   })
 
   it('rejects a customisation bound to a service role', () => {
@@ -38,7 +38,7 @@ describe('isStartableAgent', () => {
 })
 
 describe('startableAgents', () => {
-  it('keeps user agents and workers, drops service agents, preserving order', () => {
+  it('keeps user agents, drops workers and service agents, preserving order', () => {
     const roster = [
       agent({ id: 'AGT101', system: true, systemKey: 'subagent-explore' }),
       agent({ id: 'AGT198' }),
@@ -46,11 +46,30 @@ describe('startableAgents', () => {
       agent({ id: 'AGT232', system: true, systemKey: 'compaction' }),
       agent({ id: 'AGT266' }),
     ]
-    expect(startableAgents(roster).map((a) => a.id)).toEqual(['AGT101', 'AGT198', 'AGT266'])
+    expect(startableAgents(roster).map((a) => a.id)).toEqual(['AGT198', 'AGT266'])
   })
 
   it('returns an empty list rather than throwing when every agent is a service agent', () => {
     const roster = [agent({ id: 'AGT200', system: true, systemKey: 'titler' })]
     expect(startableAgents(roster)).toEqual([])
+  })
+})
+
+describe('selectableChatAgents', () => {
+  const pm = agent({ id: 'PM' })
+  const coder = agent({ id: 'W', system: true, systemKey: 'subagent-coder' })
+  const all = [pm, coder]
+
+  it('offers only the startable agents in a conversation', () => {
+    expect(selectableChatAgents([pm], all, 'PM')).toEqual([pm])
+    expect(selectableChatAgents([pm], all, null)).toEqual([pm])
+  })
+
+  it("keeps a background session's own agent in front", () => {
+    expect(selectableChatAgents([pm], all, 'W')).toEqual([coder, pm])
+  })
+
+  it('ignores a current agent the roster no longer has', () => {
+    expect(selectableChatAgents([pm], all, 'GONE')).toEqual([pm])
   })
 })

@@ -9,6 +9,19 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Sohbet ajan seçicilerinden worker ve sistem ajanları çıkarıldı (2026-10-17)
+
+- **Neden:** yeni konuşma açarken ve composer'daki ajan listesinde `Worker: Coder`
+  gibi worker profilleri ile servis sistem ajanları seçilebiliyordu.
+- **Ne değişti:** `isStartableAgent` artık hiçbir sistem ajanını kabul etmiyor (worker
+  profilleri için istisna kalktı). Composer'daki ajan seçici `selectableChatAgents`
+  ile aynı listeyi gösterir; açık oturumun ajanı listede yoksa (Arka plan'dan açılmış
+  worker/sistem oturumu) başa eklenir. "@" otomatik tamamlama tam listeyi korur.
+  Dosyalar: `frontend/src/app/startableAgents.ts`, `features/chat/ChatView.tsx`,
+  `features/chat/Composer.tsx`; ayrıntı [74](74-SISTEM-AJANLARI.md).
+- **Doğrulama:** `startableAgents.test.ts` güncellendi ve genişletildi;
+  `LC_ALL=tr_TR.UTF-8 scripts/test.sh full` yeşil.
+
 ## Oturumlar paneli iki sekme: Konuşmalar / Arka plan (2026-10-17)
 
 - **Neden:** sohbet listesi worker, subagent, sistem ajanı ve otomasyon oturumlarıyla

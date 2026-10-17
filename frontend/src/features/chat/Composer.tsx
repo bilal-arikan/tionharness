@@ -98,6 +98,10 @@ interface Props {
   permissionMode?: string
   onPermissionModeChange?: (v: string) => void
   agents: Agent[]
+  // The agent dropdown's choices: conversation agents only (no worker profiles or
+  // service system agents), plus the session's current agent. Defaults to
+  // `agents`; the "@" autocomplete keeps the full roster either way.
+  selectableAgents?: Agent[]
   // The agent that receives the message (mandatory). Chosen from the composer
   // dropdown — the "@mention" routing was removed. '' = none selected (send is
   // blocked until an agent is picked).
@@ -132,6 +136,7 @@ export function Composer({
   permissionMode = '',
   onPermissionModeChange,
   agents,
+  selectableAgents,
   agentId,
   onAgentChange,
   commands,
@@ -931,7 +936,7 @@ export function Composer({
             send cluster drops to its own line instead of overflowing the viewport. */}
           <div className="flex flex-wrap items-center gap-1.5">
             <AgentSelect
-              agents={agents}
+              agents={selectableAgents ?? agents}
               value={agentId}
               onChange={onAgentChange}
               disabled={!sessionId}

@@ -135,6 +135,14 @@ araç listesi ise `defaultSubagentProfiles[<id>].AllowedTools` alanından gelir
   oturumları çözülmeye devam eder); sistem ajanı zaten varsa eski kaydı devre dışı
   bırakır, böylece çift hedef kalmaz (`internal/db/store_agent_system.go`).
 
+**Sohbet ajanı olarak seçilemezler (2026-10-17).** Oturum başlatma ekranı ve
+composer'daki ajan seçici yalnız workspace'in kendi ajanlarını sunar; servis
+rolleri gibi worker profilleri de (`Worker: Coder` vb.) listede yoktur
+(`isStartableAgent`, `frontend/src/app/startableAgents.ts`). Arka plan sekmesinden
+açılan bir worker/sistem oturumunda seçici, o oturumun mevcut ajanını yine gösterir
+(`selectableChatAgents`). Kısıt yalnız ön yüzdedir; API worker profiline oturum
+açmayı reddetmez.
+
 Kayıt defteri promptları `prompts.Default(<anahtar>)` ile alır. Rol çözümlemesi
 başarısız olduğunda kullanılan `readPrompt(<anahtar>)` aynı anahtara gider; böylece
 özelleştirme yokken yerleşik ve eski gömülü davranış aynı promptu kullanır. Örneğin
