@@ -172,6 +172,15 @@ event'i). Refactor bunu tek kaynağa topladı:
 `chat` ve `prompt` artık gerçek susturulabilir tip: türü kapatmak yalnız OS toast'ı
 susturur; ses uyarısı Ses ekranındaki "Ses efektleri" tercihini izlemeye devam eder.
 
+**"Bitti" sesi worker'lar bitince çalar (2026-10-17).** Bir koordinatör turu, altındaki
+worker'lar hâlâ çalışırken bitebilir; o an oturum bitmiş değildir, worker raporları bir
+drain turu daha başlatacaktır. `Runtime.publish`, `chat` tamamlanma olayına
+(`phase` boş ya da `done`) oturumun bekleyen koordinasyon işini `target.liveWorkers`
+olarak ekler (`annotateChatCompletion`: koordinatör slotundaki canlı/ayrılmış worker
+sayısı + borçlu drain turu için 1). Ön yüz bu değer > 0 ise `emitToast({silent:true})`
+ile sesi atlar, toast'ı yine gösterir (`chatTurnLeavesWorkersRunning`). Ses, hiçbir iş
+kalmadan biten turda (genelde son worker raporunun drain turu) çalar.
+
 ## Yeni bir bildirim tipi eklemek
 
 1. Backend'de `internal/events/types.go`: sabiti tanımla ve toastable ise

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppEventDeps } from './useAppEvents'
-import { handleAutonomousCompletion, workerBusKeys } from './useAppEvents'
+import {
+  chatTurnLeavesWorkersRunning,
+  handleAutonomousCompletion,
+  workerBusKeys,
+} from './useAppEvents'
 import type { AppEvent } from '@/types'
 
 vi.mock('@/api', () => ({
@@ -58,5 +62,21 @@ describe('workerBusKeys', () => {
 
   it('yields nothing when the event carries no coordinator', () => {
     expect(workerBusKeys(workerEvent({ sessionId: 'SES2' }))).toEqual([])
+  })
+})
+
+describe('chatTurnLeavesWorkersRunning', () => {
+  it('holds the chime while workers are outstanding', () => {
+    expect(chatTurnLeavesWorkersRunning({ target: { sessionId: 'S1', liveWorkers: '2' } })).toBe(
+      true,
+    )
+  })
+
+  it('lets the chime play when nothing is outstanding', () => {
+    expect(chatTurnLeavesWorkersRunning({ target: { sessionId: 'S1' } })).toBe(false)
+    expect(chatTurnLeavesWorkersRunning({ target: { sessionId: 'S1', liveWorkers: '0' } })).toBe(
+      false,
+    )
+    expect(chatTurnLeavesWorkersRunning({})).toBe(false)
   })
 })

@@ -9,6 +9,19 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## "Bitti" sesi worker'lar çalışırken çalmıyor (2026-10-17)
+
+- **Neden:** koordinatör turu, worker'ları hâlâ çalışırken bittiğinde "yanıt hazır"
+  sesi çalıyordu; oturum ise bitmemişti.
+- **Ne değişti:** sunucu `chat` tamamlanma olayına bekleyen worker/drain sayısını
+  `target.liveWorkers` olarak ekler (`internal/agent/coordination.go`,
+  `annotateChatCompletion`; `Runtime.publish` tek giriş noktası). Ön yüz bu sayı > 0
+  iken sesi çalmaz, toast'ı gösterir (`notifyBus.emitToast` `silent`,
+  `useAppEvents.chatTurnLeavesWorkersRunning`). Ses, oturum ve tüm worker'ları
+  bittiğinde, yani son drain turu bitince çalar. Ayrıntı [29](29-BILDIRIM-SINYALLERI.md).
+- **Doğrulama:** `chat_completion_annotate_test.go`, `notifyBus.test.ts`,
+  `useAppEvents.test.ts`; `scripts/test.sh full` yeşil.
+
 ## Yarıda kalan oturumlar: CLI bekçisi uzun araç çağrısında turu öldürüyordu (2026-10-17)
 
 - **Belirti:** bazı oturumlar "yarım kaldı" ya da "durduruldu" görünüyordu. Tarama

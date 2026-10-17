@@ -1598,6 +1598,7 @@ func (r *Runtime) CancelWake(ctx context.Context, sessionID string) (int, error)
 
 // publish stamps the workspace identity onto an event and pushes it to the bus.
 func (r *Runtime) publish(e events.Event) {
+	e = r.annotateChatCompletion(e)
 	e.WorkspaceID = r.wsID
 	e.WorkspaceName = r.wsName
 	r.bus.Publish(e) // nil-safe

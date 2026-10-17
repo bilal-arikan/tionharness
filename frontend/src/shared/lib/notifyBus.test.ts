@@ -78,3 +78,11 @@ describe('emitToast', () => {
     expect(playPermissionPrompt).not.toHaveBeenCalled()
   })
 })
+
+describe('emitToast silent', () => {
+  it('raises the toast but skips the chime for a turn whose workers run on', () => {
+    emitToast({ type: 'chat', enabled: true, title: 'Yanıt hazır', silent: true })
+    expect(playTurnDone).not.toHaveBeenCalled()
+    expect(notify).toHaveBeenCalledOnce()
+  })
+})

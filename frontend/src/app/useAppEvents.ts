@@ -235,6 +235,10 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       if (!phase || phase === 'done') {
         emitToast({
           type: 'chat',
+          // The server stamps liveWorkers when the session's workers are still
+          // running (or a drain turn is owed): this turn ended, the session did
+          // not. The chime plays on the turn that ends with nothing outstanding.
+          silent: chatTurnLeavesWorkersRunning(e),
           enabled: d.notifyEnabled.current,
           title: e.title || i18next.t('shell.replyReady'),
           body: e.body || '',
@@ -409,4 +413,10 @@ function onFlowNode(e: AppEvent) {
     sessionId: e.target?.sessionId,
     event: e.node as FlowNodeEvent,
   })
+}
+
+// chatTurnLeavesWorkersRunning reports whether a chat completion event belongs to
+// a session that still has workers running below it (target.liveWorkers > 0).
+export function chatTurnLeavesWorkersRunning(e: Pick<AppEvent, 'target'>): boolean {
+  return Number(e.target?.liveWorkers ?? 0) > 0
 }

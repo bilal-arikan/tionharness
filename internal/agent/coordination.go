@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 	"github.com/bilal-arikan/tionharness/internal/tools"
@@ -421,6 +423,57 @@ func formatWorkerList(ws []WorkerInfo) string {
 }
 
 // coordSlotFor returns (creating if needed) the slot for a coordinator session.
+// outstandingWorkers reports how much coordination work is still owed below a
+// session: workers running (or reserved) under it, plus one when a drain turn is
+// already owed by a worker note. 0 for a session that never coordinated.
+func (r *Runtime) outstandingWorkers(sessionID string) int64 {
+	v, ok := r.coordSlots.Load(sessionID)
+	if !ok {
+		return 0
+	}
+	slot, _ := v.(*coordSlot)
+	if slot == nil {
+		return 0
+	}
+	n := slot.workers.Load()
+	slot.mu.Lock()
+	if slot.pending || slot.workerPending {
+		n++
+	}
+	slot.mu.Unlock()
+	return n
+}
+
+// annotateChatCompletion stamps target.liveWorkers on a turn-completion chat
+// event whose session still has coordination work outstanding. The turn ended,
+// but the session is not done: its workers run on and their reports will drive
+// another turn. The client keeps the "done" chime for the event that arrives
+// once nothing is outstanding. Wake lifecycle phases are not completions and
+// pass through untouched; the caller's target map is never mutated.
+func (r *Runtime) annotateChatCompletion(e events.Event) events.Event {
+	if e.Type != events.TypeChat || e.Target == nil {
+		return e
+	}
+	sid := e.Target["sessionId"]
+	if sid == "" {
+		return e
+	}
+	if phase := e.Target["phase"]; phase != "" && phase != "done" {
+		return e
+	}
+	n := r.outstandingWorkers(sid)
+	if n <= 0 {
+		return e
+	}
+	target := make(map[string]string, len(e.Target)+1)
+	for k, v := range e.Target {
+		target[k] = v
+	}
+	target["liveWorkers"] = strconv.FormatInt(n, 10)
+	e.Target = target
+	return e
+}
+
 func (r *Runtime) coordSlotFor(coordSessionID string) *coordSlot {
 	created := &coordSlot{
 		admission: make(chan struct{}, 1),
