@@ -21,7 +21,7 @@ func TestHubDecideRespectsSwitches(t *testing.T) {
 		t.Fatalf("decide = %+v, %v", resp, err)
 	}
 	if resp.Instance != "DM1" || srv.lastAuth.Load() != "Bearer key-PRV1" {
-		t.Errorf("instance = %q auth = %v; want the seeded model on the borrowed key", resp.Instance, srv.lastAuth.Load())
+		t.Errorf("instance = %q auth = %v; want the seeded model on its own key", resp.Instance, srv.lastAuth.Load())
 	}
 	if srv.lastPath.Load() != "/api/alpha/decisions" {
 		t.Errorf("path = %v", srv.lastPath.Load())
@@ -52,36 +52,35 @@ func TestHubDecideRespectsSwitches(t *testing.T) {
 	}
 }
 
-func TestHubBorrowedCredentialsPickAndCache(t *testing.T) {
+// TestHubClientIsCachedUntilModelChanges pins the client cache: repeated
+// decisions reuse one client, and saving the model rebuilds it.
+func TestHubClientIsCachedUntilModelChanges(t *testing.T) {
 	srv := newDecisionServer(t)
-	h, src := newTestHub(t, srv,
-		InstanceInfo{ID: "anth", Kind: "anthropic", Enabled: true, Available: true},
-		InstanceInfo{ID: "PRV9", Kind: "openai-compat", BaseURL: "https://openrouter.ai/api/v1", Enabled: true, Available: true},
-		InstanceInfo{ID: "PRV2", Kind: "openrouter", BaseURL: srv.URL + "/api/v1", Enabled: true, Available: true},
-		InstanceInfo{ID: "PRV1", Kind: "openrouter", BaseURL: srv.URL + "/api/v1", Enabled: false, Available: true},
-	)
-	if c := h.ProviderCandidates(OpenRouterBackendID); len(c) != 2 || c[0].ID != "PRV2" || c[1].ID != "PRV9" {
-		t.Fatalf("candidates = %+v, want the enabled openrouter instance first, then the openai-compat one", c)
-	}
-	if c := h.ProviderCandidates(LogprobsBackendID); len(c) != 2 {
-		t.Errorf("logprobs candidates = %+v, want both chat-completions instances", c)
-	}
+	h, m := newTestHub(t, srv)
 	for range 3 {
 		if _, err := h.Decide(context.Background(), testGate, yesNo()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if n := src.resolved.Load(); n != 1 {
-		t.Errorf("endpoint resolved %d times, want 1 (client cached)", n)
+	h.clientMu.Lock()
+	first := h.clients[m.ID]
+	h.clientMu.Unlock()
+	if first.d == nil {
+		t.Fatal("no cached client after decisions")
 	}
-	src.bump() // providers re-saved: the client must be rebuilt
+	if _, err := h.UpsertModel(ModelInput{ID: m.ID, Backend: m.Backend, Label: "renamed", Enabled: true, Model: m.Model, BaseURL: m.BaseURL, TimeoutMs: m.TimeoutMs}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := h.Decide(context.Background(), testGate, yesNo()); err != nil {
 		t.Fatal(err)
 	}
-	if n := src.resolved.Load(); n != 2 {
-		t.Errorf("endpoint resolved %d times after a generation bump, want 2", n)
+	h.clientMu.Lock()
+	second := h.clients[m.ID]
+	h.clientMu.Unlock()
+	if second.key == first.key {
+		t.Error("saving the model did not rebuild its client")
 	}
-	if st := h.ModelStatus("DM1"); !st.Ready || st.Provider != "PRV2" {
+	if st := h.ModelStatus("DM1"); !st.Ready || st.Endpoint == "" {
 		t.Errorf("status = %+v", st)
 	}
 }
@@ -130,7 +129,7 @@ func TestHubOwnCredentialsAndModelBinding(t *testing.T) {
 }
 
 func TestHubNoEndpointAndNoModel(t *testing.T) {
-	h := NewHub(HubOptions{Source: &fakeSource{}, Secrets: fakeBox{}})
+	h := NewHub(HubOptions{Secrets: fakeBox{}})
 	cfg := h.Config()
 	cfg.Enabled = true
 	_, _ = h.Update(cfg)
@@ -154,7 +153,7 @@ func TestHubNoEndpointAndNoModel(t *testing.T) {
 func TestHubQuarantineIsPerModel(t *testing.T) {
 	srv := newDecisionServer(t)
 	good := newDecisionServer(t)
-	h, src := newTestHub(t, srv)
+	h, _ := newTestHub(t, srv)
 	ownModel(t, h, "local", good.URL+"/v1")
 	setAuthority(t, h, testExplicit, func(ac *AuthorityConfig) { ac.Model = "local" })
 	srv.status.Store(http.StatusUnauthorized)
@@ -175,12 +174,14 @@ func TestHubQuarantineIsPerModel(t *testing.T) {
 	if _, err := h.Decide(context.Background(), testExplicit, yesNo()); err != nil {
 		t.Errorf("healthy model refused while another is quarantined: %v", err)
 	}
-	// Re-saving the providers (new generation) lifts the quarantine of a model
-	// borrowing their key.
+	// Saving the model (a new key, say) lifts its quarantine.
 	srv.status.Store(0)
-	src.bump()
+	seed, _ := h.Model("DM1")
+	if _, err := h.UpsertModel(ModelInput{ID: seed.ID, Backend: seed.Backend, Label: seed.Label, Enabled: true, Model: seed.Model, BaseURL: seed.BaseURL, TimeoutMs: seed.TimeoutMs, Secrets: map[string]string{SecretAPIKey: "key-new"}}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := h.Decide(context.Background(), testGate, yesNo()); err != nil {
-		t.Errorf("after re-saving providers: %v", err)
+		t.Errorf("after re-saving the model: %v", err)
 	}
 }
 
@@ -348,8 +349,8 @@ func TestHubRedactsAndBoundsState(t *testing.T) {
 
 func TestHubUpdatePersistsAndChecksModels(t *testing.T) {
 	dir := t.TempDir()
-	h := NewHub(HubOptions{DataDir: dir, Source: &fakeSource{}, Secrets: fakeBox{}})
-	if ms := h.Models(); len(ms) != 1 || ms[0].ID != "DM1" || ms[0].Credentials != CredentialsProvider {
+	h := NewHub(HubOptions{DataDir: dir, Secrets: fakeBox{}})
+	if ms := h.Models(); len(ms) != 1 || ms[0].ID != "DM1" || ms[0].Credentials != CredentialsOwn {
 		t.Fatalf("seeded models = %+v", ms)
 	}
 	m := ownModel(t, h, "", "http://127.0.0.1:9/v1")
@@ -362,7 +363,7 @@ func TestHubUpdatePersistsAndChecksModels(t *testing.T) {
 	if _, err := h.Update(cfg); err != nil {
 		t.Fatal(err)
 	}
-	again := NewHub(HubOptions{DataDir: dir, Source: &fakeSource{}, Secrets: fakeBox{}})
+	again := NewHub(HubOptions{DataDir: dir, Secrets: fakeBox{}})
 	if c := again.Config(); !c.Enabled || c.DefaultModel != m.ID || c.Authorities[testGate].Challenger != "DM1" {
 		t.Errorf("reloaded config = %+v", c)
 	}
@@ -395,7 +396,7 @@ func TestHubUpdatePersistsAndChecksModels(t *testing.T) {
 	if len(users) != 1 || users[0] != "default" || h.Config().DefaultModel != "" {
 		t.Errorf("users = %v default = %q", users, h.Config().DefaultModel)
 	}
-	if ms := NewHub(HubOptions{DataDir: dir, Source: &fakeSource{}}).Models(); len(ms) != 0 {
+	if ms := NewHub(HubOptions{DataDir: dir}).Models(); len(ms) != 0 {
 		t.Errorf("an emptied model list was re-seeded: %+v", ms)
 	}
 
@@ -412,14 +413,14 @@ func TestHubConvertsVersionOneConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, configFileName), []byte(v1), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h := NewHub(HubOptions{DataDir: dir, Source: &fakeSource{}})
+	h := NewHub(HubOptions{DataDir: dir})
 	ms := h.Models()
 	if len(ms) != 1 {
 		t.Fatalf("models = %+v", ms)
 	}
 	m := ms[0]
-	if m.ID != "DM1" || m.Backend != OpenRouterBackendID || m.Credentials != CredentialsProvider ||
-		m.ProviderInstanceID != "PRV3" || m.Model != JevLatestModel || m.TimeoutMs != 4500 || !m.Enabled {
+	if m.ID != "DM1" || m.Backend != OpenRouterBackendID || m.Credentials != CredentialsOwn ||
+		m.Model != JevLatestModel || m.TimeoutMs != 4500 || !m.Enabled {
 		t.Errorf("converted model = %+v", m)
 	}
 	c := h.Config()
@@ -431,7 +432,7 @@ func TestHubConvertsVersionOneConfig(t *testing.T) {
 		t.Errorf("config not rewritten as version 2:\n%s", raw)
 	}
 	// Loading again converts nothing twice.
-	if again := NewHub(HubOptions{DataDir: dir, Source: &fakeSource{}}); len(again.Models()) != 1 {
+	if again := NewHub(HubOptions{DataDir: dir}); len(again.Models()) != 1 {
 		t.Errorf("second load changed the models: %+v", again.Models())
 	}
 }

@@ -109,18 +109,11 @@ func glmLargeWindow(m string) bool {
 // accepted for future disambiguation. Unknown families return 0 so the caller
 // falls back to the provider default.
 func MaxOutputFor(provider, model string) int {
-	m := strings.ToLower(strings.TrimSpace(model))
+	m := strings.ToLower(strings.TrimSpace(BareModelForKind(provider, model)))
 	if m == "" {
 		// claude-cli "default": the CLI manages its own output cap, so the value
 		// is moot — return unknown and let the caller leave MaxTokens unset.
 		return 0
-	}
-	// A locally served open-weight model must fit prompt and generation in one
-	// loaded context, so it gets its own (much smaller) cap — checked before the
-	// hosted families, which would otherwise claim a hosted ceiling for a distill
-	// whose slug contains "deepseek" or "qwen".
-	if _, out, ok := localWindowFor(provider, m); ok {
-		return out
 	}
 	switch {
 	case gptFamily(m):
@@ -151,15 +144,10 @@ func MaxOutputFor(provider, model string) int {
 // Order matters: the more specific tier (haiku) is checked before the broad
 // opus/sonnet/claude rules.
 func ContextWindowFor(provider, model string) int {
-	m := strings.ToLower(strings.TrimSpace(model))
+	m := strings.ToLower(strings.TrimSpace(BareModelForKind(provider, model)))
 	if m == "" {
 		// claude-cli "default": resolves to the live session model — unknown here.
 		return 0
-	}
-	// Same precedence as MaxOutputFor: a local endpoint serves the window it was
-	// loaded with, not the family maximum a hosted provider would grant.
-	if win, _, ok := localWindowFor(provider, m); ok {
-		return win
 	}
 	switch {
 	case gptFamily(m):
@@ -215,16 +203,9 @@ func ContextWindowFor(provider, model string) int {
 // Returns 0 for unknown families so the caller falls back to its own default; for
 // those the window is also unknown (0), so the fraction is moot anyway.
 func AdaptiveBudgetFraction(provider, model string) float64 {
-	m := strings.ToLower(strings.TrimSpace(model))
+	m := strings.ToLower(strings.TrimSpace(BareModelForKind(provider, model)))
 	if m == "" {
 		return 0
-	}
-	// Local windows are small (32K, not 1M), so the raw-transcript share must be
-	// larger than the long-context families' 0.35 or compaction would fire after
-	// barely 11K tokens and thrash. 0.50 leaves half the loaded context for the
-	// system prompt, tool schemas and the generation itself.
-	if _, _, ok := localWindowFor(provider, m); ok {
-		return 0.50
 	}
 	switch {
 	case gptFamily(m):

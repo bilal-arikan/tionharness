@@ -16,18 +16,6 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 	var out []ProviderInstance
 	now := currentTime()
 
-	if s.AnthropicKeyEnc != "" {
-		out = append(out, ProviderInstance{
-			ID:         "anthropic",
-			KindID:     "anthropic",
-			Label:      "Anthropic",
-			Enabled:    true,
-			Config:     map[string]string{},
-			SecretsEnc: map[string]string{"key": s.AnthropicKeyEnc},
-			CreatedAt:  now,
-		})
-	}
-
 	// claude-cli migrates unconditionally: it runs keyless against the ambient
 	// or configured CLI login, so "no fields set" is still a valid, usable
 	// instance (_Docs/71 §3).
@@ -102,5 +90,29 @@ func (s *ProviderStore) EnsureMigrated(sett Settings, decrypt func(string) strin
 		return false, err
 	}
 	s.cur = instances
+	return true, nil
+}
+
+// EnsureKindInstance adds a default instance for kindID (id == kindID, like
+// the migrated built-ins) when providers.json holds no instance of that kind
+// yet. It runs on every boot — unlike EnsureMigrated, which is one-shot — so a
+// keyless CLI transport added after the first boot (opencode-cli, _Docs/95)
+// still shows up for an existing install once its binary is found. A kind the
+// user deliberately removed comes back only if they removed every instance of
+// it, which is the same contract claude-cli has had since migration. Returns
+// whether an instance was added.
+func (s *ProviderStore) EnsureKindInstance(kindID, label string) (bool, error) {
+	s.mu.Lock()
+	for _, p := range s.cur {
+		if p.KindID == kindID {
+			s.mu.Unlock()
+			return false, nil
+		}
+	}
+	s.mu.Unlock()
+	_, err := s.Upsert(ProviderInstanceInput{ID: kindID, KindID: kindID, Label: label, Enabled: true, Config: map[string]string{}})
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }

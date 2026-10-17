@@ -341,10 +341,6 @@ type Runtime struct {
 	spawnWake   chan struct{}
 	spawnStop   chan struct{}
 	spawnDone   chan struct{}
-	// auxRouteBad quarantines anthropic instances whose key was rejected on the
-	// auxiliary route (systemagent_route.go): instance id → the provider
-	// configuration generation the rejection was seen under.
-	auxRouteBad sync.Map
 	// Unpinned system transports rejected by authentication sit out until their
 	// provider configuration changes. Explicit user pins always remain visible.
 	systemRouteBad sync.Map

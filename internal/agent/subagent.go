@@ -553,9 +553,6 @@ func (r *Runtime) ephemeralSubagent(caller db.Agent, p SubagentProfile) db.Agent
 		if sa.Model != "" {
 			eph.Model = adoptSystemAgentModel(r.logger, sa.SystemKey, eph.Provider, eph.Model, sa.Model)
 		}
-		if pinned {
-			eph = nativeAuxModel(eph)
-		}
 	}
 	return eph
 }

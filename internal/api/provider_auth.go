@@ -38,7 +38,7 @@ func (s *Server) resolveProviderAuthTarget(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusNotFound, "provider instance not found")
 		return providerAuthTarget{}, false
 	}
-	if inst.KindID != "claude-cli" && inst.KindID != "codex-cli" {
+	if inst.KindID != "claude-cli" && inst.KindID != "codex-cli" && inst.KindID != "opencode-cli" {
 		writeError(w, http.StatusBadRequest, "provider instance is not a CLI kind")
 		return providerAuthTarget{}, false
 	}
@@ -53,9 +53,12 @@ func (s *Server) resolveProviderAuthTarget(w http.ResponseWriter, r *http.Reques
 	}
 	binPath := strings.TrimSpace(inst.Config[providers.FieldKeyCLIPath])
 	if binPath == "" {
-		if inst.KindID == "claude-cli" {
+		switch inst.KindID {
+		case "claude-cli":
 			binPath = s.providers.ClaudeCLIPath()
-		} else {
+		case "opencode-cli":
+			binPath = s.providers.OpenCodeCLIPath()
+		default:
 			binPath = s.providers.CodexCLIPath()
 		}
 	}
@@ -70,6 +73,10 @@ func (s *Server) handleProviderAuth(w http.ResponseWriter, r *http.Request) {
 	if target.kind == "claude-cli" {
 		status := s.claudeAuthStatus(r, target.homeDir, target.binPath)
 		writeJSON(w, http.StatusOK, providerAuthDTO{Kind: target.kind, LoggedIn: status.LoggedIn, Installed: status.Installed, HomeDir: target.homeDir, Detail: status.Detail})
+		return
+	}
+	if target.kind == "opencode-cli" {
+		writeJSON(w, http.StatusOK, opencodeAuthStatus(target.homeDir, target.binPath))
 		return
 	}
 	status := s.codexAuthStatus(r, target.homeDir, target.binPath)

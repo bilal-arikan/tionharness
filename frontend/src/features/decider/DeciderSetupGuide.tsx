@@ -1,6 +1,6 @@
 // The three-step setup of the decision layer, shown on both screens until every
-// step is done: a credential (a provider account to borrow, or a decision
-// provider's own key), a ready decision provider, the master switch. Each step
+// step is done: a credential (the decision provider's own key, none for a
+// local server), a ready decision provider, the master switch. Each step
 // carries the action that finishes it on the current screen, or a link to the
 // screen that does; the step's how-to text sits behind an (ⓘ) next to its title.
 import type { ReactNode } from 'react'

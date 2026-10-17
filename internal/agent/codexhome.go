@@ -32,6 +32,8 @@ func appCLIHomeDir(dataDir, kindID string) string {
 		return filepath.Join(dataDir, "claude-home")
 	case "codex-cli":
 		return filepath.Join(dataDir, "codex-home")
+	case "opencode-cli":
+		return filepath.Join(dataDir, "opencode-home")
 	default:
 		return ""
 	}
@@ -44,6 +46,9 @@ func appCodexHomeDir(dataDir string) string {
 
 // codexHomeDir returns this runtime's app-global codex-cli config home.
 func (r *Runtime) codexHomeDir() string { return appCodexHomeDir(r.dataDir) }
+
+// opencodeHomeDir resolves the shared app-global opencode-cli home.
+func (r *Runtime) opencodeHomeDir() string { return appCLIHomeDir(r.dataDir, "opencode-cli") }
 
 // CodexHomeDir exposes the app-global codex-cli config home for out-of-loop
 // call sites that need it outside the per-turn seam.
@@ -60,7 +65,34 @@ func (r *Runtime) PinCLIHome(provider providers.Provider) error {
 	if _, err := r.PinClaudeHome(provider); err != nil {
 		return err
 	}
-	return r.PinCodexHome(provider)
+	if err := r.PinCodexHome(provider); err != nil {
+		return err
+	}
+	return r.PinOpenCodeHome(provider)
+}
+
+// PinOpenCodeHome is the opencode-cli sibling of PinCodexHome: an instance
+// with its own configDir keeps it, otherwise the app-global
+// <dataDir>/opencode-home is pinned and created. The home must exist before a
+// turn runs because the subprocess's XDG directories are derived from it.
+func (r *Runtime) PinOpenCodeHome(provider providers.Provider) error {
+	oc, ok := provider.(*providers.OpenCodeCLI)
+	if !ok {
+		return nil
+	}
+	home := oc.ConfigDir()
+	if home == "" {
+		resolved, err := ResolveCLIHomeDir(r.dataDir, "opencode-cli", "")
+		if err != nil {
+			return err
+		}
+		home = resolved
+		oc.SetConfigDir(home)
+	}
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		return fmt.Errorf("create opencode home %s: %w", home, err)
+	}
+	return nil
 }
 
 // PinCodexHome is the codex-cli sibling of PinClaudeHome and the single place

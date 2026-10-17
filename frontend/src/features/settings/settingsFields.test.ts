@@ -8,12 +8,12 @@ const original = {
   enableShell: false,
   desktopNotifications: false,
   toolGuardWarnings: true,
-  anthropicWebTools: false,
+  enableCliHooks: false,
 } as AppSettings
 
 describe('settings draft ownership', () => {
   it('marks only the categories with editable changes', () => {
-    const draft = { ...original, userName: 'Grace', anthropicWebTools: true }
+    const draft = { ...original, userName: 'Grace', enableCliHooks: true }
     expect([...dirtyCategories(draft, original)]).toEqual(['profile', 'providers'])
     expect(categoryPatch('profile', draft, original)).toEqual({ userName: 'Grace' })
     expect(categoryPatch('reference', draft, original)).toEqual({})

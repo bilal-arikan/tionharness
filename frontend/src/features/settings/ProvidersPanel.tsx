@@ -48,7 +48,11 @@ function ProviderInstances() {
 
   useEffect(() => {
     for (const instance of instances) {
-      if (instance.kindId === 'claude-cli' || instance.kindId === 'codex-cli') {
+      if (
+        instance.kindId === 'claude-cli' ||
+        instance.kindId === 'codex-cli' ||
+        instance.kindId === 'opencode-cli'
+      ) {
         void refreshAuth(instance)
       }
     }

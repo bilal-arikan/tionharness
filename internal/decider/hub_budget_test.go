@@ -18,16 +18,15 @@ func stateBudgetTestModel(t *testing.T, h *Hub, id, url string, tokens int) {
 	}
 }
 
-func stateBudgetTestHub(t *testing.T, tokens int) (*Hub, *decisionServer, *fakeSource) {
+func stateBudgetTestHub(t *testing.T, tokens int) (*Hub, *decisionServer) {
 	t.Helper()
 	srv := newDecisionServer(t)
-	src := &fakeSource{}
-	h := NewHub(HubOptions{Source: src, Secrets: fakeBox{}})
+	h := NewHub(HubOptions{Secrets: fakeBox{}})
 	stateBudgetTestModel(t, h, "budget-primary", srv.URL+"/v1", tokens)
 	setAuthority(t, h, testGate, func(ac *AuthorityConfig) {
 		ac.Model, ac.Mode = "budget-primary", ModeOff
 	})
-	return h, srv, src
+	return h, srv
 }
 
 // These windows are above the existing state floor. Calculate question bytes
@@ -42,7 +41,7 @@ func expectedWorkflowStateBudget(t *testing.T, questions map[string]Question, co
 }
 
 func TestHubStateBudgetUsesSmallestConfiguredFallbackWindow(t *testing.T) {
-	h, srv, src := stateBudgetTestHub(t, 24000)
+	h, srv := stateBudgetTestHub(t, 24000)
 	stateBudgetTestModel(t, h, "budget-fallback", srv.URL+"/v1", 6400)
 	stateBudgetTestModel(t, h, "budget-challenger", srv.URL+"/v1", 10000)
 	setAuthority(t, h, testGate, func(ac *AuthorityConfig) {
@@ -52,13 +51,13 @@ func TestHubStateBudgetUsesSmallestConfiguredFallbackWindow(t *testing.T) {
 	if got, want := h.StateBudget(testGate, questions), expectedWorkflowStateBudget(t, questions, 6400); got != want {
 		t.Fatalf("fallback-limited budget = %d, want %d", got, want)
 	}
-	if srv.calls.Load() != 0 || src.resolved.Load() != 0 || h.Spend(7).Totals.Calls != 0 {
+	if srv.calls.Load() != 0 || h.Spend(7).Totals.Calls != 0 {
 		t.Fatal("budget inspection executed a backend or resolved credentials")
 	}
 }
 
 func TestHubStateBudgetUsesSmallerChallengerBeforePrimaryAndFallback(t *testing.T) {
-	h, srv, _ := stateBudgetTestHub(t, 24000)
+	h, srv := stateBudgetTestHub(t, 24000)
 	stateBudgetTestModel(t, h, "budget-fallback", srv.URL+"/v1", 12000)
 	stateBudgetTestModel(t, h, "budget-challenger", srv.URL+"/v1", 6000)
 	setAuthority(t, h, testGate, func(ac *AuthorityConfig) {
@@ -71,7 +70,7 @@ func TestHubStateBudgetUsesSmallerChallengerBeforePrimaryAndFallback(t *testing.
 }
 
 func TestHubStateBudgetUsesBackendContextWhenModelOverrideIsUnset(t *testing.T) {
-	h, srv, _ := stateBudgetTestHub(t, 40000)
+	h, srv := stateBudgetTestHub(t, 40000)
 	stateBudgetTestModel(t, h, "budget-fallback", srv.URL+"/v1", 0)
 	setAuthority(t, h, testGate, func(ac *AuthorityConfig) { ac.Fallback = "budget-fallback" })
 	backend, ok := Lookup(SystemOneBackendID)
@@ -85,7 +84,7 @@ func TestHubStateBudgetUsesBackendContextWhenModelOverrideIsUnset(t *testing.T) 
 }
 
 func TestHubStateBudgetReservesQuestionBytesAndWorkflowSafety(t *testing.T) {
-	h, _, _ := stateBudgetTestHub(t, 24000)
+	h, _ := stateBudgetTestHub(t, 24000)
 	small := yesNo().Questions
 	rich := map[string]Question{"q": Noul(strings.Repeat("context criterion ", 200), "keep", "discard")}
 	smallRaw, _ := json.Marshal(small)
@@ -100,7 +99,7 @@ func TestHubStateBudgetReservesQuestionBytesAndWorkflowSafety(t *testing.T) {
 }
 
 func TestHubStateBudgetWorksWithDisabledHubAuthorityModelAndNoCredentials(t *testing.T) {
-	h, srv, src := stateBudgetTestHub(t, 8000)
+	h, srv := stateBudgetTestHub(t, 8000)
 	model, ok := h.Model("budget-primary")
 	if !ok || model.Enabled || h.Config().Enabled || h.Mode(testGate) != ModeOff {
 		t.Fatal("test fixture must have model, master switch and authority disabled")
@@ -109,7 +108,7 @@ func TestHubStateBudgetWorksWithDisabledHubAuthorityModelAndNoCredentials(t *tes
 	if got, want := h.StateBudget(testGate, questions), expectedWorkflowStateBudget(t, questions, 8000); got != want {
 		t.Fatalf("offline budget = %d, want %d", got, want)
 	}
-	if srv.calls.Load() != 0 || src.resolved.Load() != 0 || h.Spend(7).Totals.Calls != 0 {
+	if srv.calls.Load() != 0 || h.Spend(7).Totals.Calls != 0 {
 		t.Fatal("disabled budget inspection performed billable work")
 	}
 }

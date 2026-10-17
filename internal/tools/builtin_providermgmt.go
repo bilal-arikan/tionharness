@@ -32,7 +32,7 @@ func (ListProvidersTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_providers",
 		Description: "List the provider instances configured in this app (the entries on the Settings → Providers screen). " +
-			"Returns id, kindId (anthropic | openai-compat | claude-cli | codex-cli | ...), label, enabled, defaultModel, " +
+			"Returns id, kindId (claude-cli | codex-cli | opencode-cli | openai-compat | ...), label, enabled, defaultModel, " +
 			"the instance's model list and whether it is currently usable (available: kind registered and credentials/binary " +
 			"present). API keys are never returned. Use the `id` here as the `provider` value of create_agent / update_agent " +
 			"to bind an agent to that instance. Provider instances themselves are created, edited and deleted only from the " +

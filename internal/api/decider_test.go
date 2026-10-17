@@ -43,15 +43,15 @@ func TestDeciderSettingsRoundTrip(t *testing.T) {
 	if view.Config.Enabled || len(view.Authorities) != 17 || len(view.Backends) != 3 || len(view.Groups) == 0 {
 		t.Errorf("initial view = %+v", view)
 	}
-	// The first run seeds one model: Jev through the first OpenRouter account.
-	if len(view.Models) != 1 || view.Models[0].ID != "DM1" || view.Models[0].Credentials != decider.CredentialsProvider {
+	// The first run seeds one model: Jev through OpenRouter, own credentials.
+	if len(view.Models) != 1 || view.Models[0].ID != "DM1" || view.Models[0].Credentials != decider.CredentialsOwn {
 		t.Fatalf("seeded models = %+v", view.Models)
 	}
-	if view.Stats == nil || view.Recent == nil || view.Models[0].UsedBy == nil || view.ProviderCandidates[decider.OpenRouterBackendID] == nil {
+	if view.Stats == nil || view.Recent == nil || view.Models[0].UsedBy == nil {
 		t.Error("list fields must serialise as [] not null")
 	}
 	if view.Status.Ready || view.Models[0].Status.Ready {
-		t.Error("no OpenRouter instance is configured, the default model cannot be ready")
+		t.Error("no OpenRouter key is stored, the default model cannot be ready")
 	}
 
 	cfg := view.Config
@@ -123,8 +123,9 @@ func TestDeciderModelsCRUD(t *testing.T) {
 	if rec := deciderRequest(t, s, http.MethodPost, "/api/decider/models", `{"id":"DM2","backend":"systemone"}`); rec.Code != http.StatusConflict {
 		t.Errorf("create over an existing id: %d", rec.Code)
 	}
-	if rec := deciderRequest(t, s, http.MethodPost, "/api/decider/models", `{"backend":"openrouter","credentials":"own"}`); rec.Code != http.StatusBadRequest ||
-		!strings.Contains(rec.Body.String(), "API key") {
+	// A hosted model saves without a key but is not ready until one is entered.
+	if rec := deciderRequest(t, s, http.MethodPost, "/api/decider/models", `{"backend":"openrouter","credentials":"own"}`); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), "no API key") {
 		t.Errorf("hosted model without a key: %d %s", rec.Code, rec.Body.String())
 	}
 
@@ -146,7 +147,7 @@ func TestDeciderModelsCRUD(t *testing.T) {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
 	}
 	del := decodeInto[deciderModelDeleted](t, rec)
-	if !del.Deleted || len(del.UsedBy) != 1 || del.View.Config.Authorities["stall-judge"].Challenger != "" || len(del.View.Models) != 1 {
+	if !del.Deleted || len(del.UsedBy) != 1 || del.View.Config.Authorities["stall-judge"].Challenger != "" || len(del.View.Models) != 2 {
 		t.Errorf("delete = %+v", del)
 	}
 
@@ -166,8 +167,8 @@ func TestDeciderTestReportsMissingInstance(t *testing.T) {
 		t.Fatalf("test: %d %s", rec.Code, rec.Body.String())
 	}
 	res := decodeInto[deciderTestResult](t, rec)
-	if res.OK || !strings.Contains(res.Error, "no provider instance") {
-		t.Errorf("result = %+v, want a clear no-instance failure", res)
+	if res.OK || !strings.Contains(res.Error, "no API key") {
+		t.Errorf("result = %+v, want a clear no-key failure", res)
 	}
 	rec = deciderRequest(t, s, http.MethodGet, "/api/decider/stats?days=3", "")
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"statsDays":3`) {

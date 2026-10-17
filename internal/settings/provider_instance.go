@@ -6,11 +6,11 @@ import (
 )
 
 // ProviderInstance is a user-configured provider: a kind (the built-in
-// behaviour it runs — "anthropic", "claude-cli", "openai-compat", ...) plus a
-// label and the concrete fields that kind needs (open config + encrypted
-// secrets). Unlike a ProviderKind, instances are created and deleted by users
-// and there can be many of the same kind (e.g. two "anthropic" instances with
-// different API keys). SecretsEnc is never serialized to the API (json tag
+// behaviour it runs — "claude-cli", "codex-cli", "opencode-cli") plus a label
+// and the concrete fields that kind needs (open config + encrypted secrets).
+// Unlike a ProviderKind, instances are created and deleted by users and there
+// can be many of the same kind (e.g. two "claude-cli" instances with different
+// login homes). SecretsEnc is never serialized to the API (json tag
 // "-"); DTO exposes only which secret keys are set.
 type ProviderInstance struct {
 	ID           string            `json:"id"`

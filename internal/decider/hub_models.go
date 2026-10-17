@@ -80,71 +80,6 @@ func (h *Hub) ModelUsers(id string) []string {
 	return authorities
 }
 
-// ProviderCandidates lists the enabled provider instances a model of backend
-// can borrow credentials from, in the order the automatic pick prefers them.
-func (h *Hub) ProviderCandidates(backend string) []InstanceInfo {
-	b, ok := Lookup(backend)
-	if !ok || h.opts.Source == nil {
-		return nil
-	}
-	return providerCandidates(b, h.opts.Source.Instances())
-}
-
-func providerCandidates(b Backend, all []InstanceInfo) []InstanceInfo {
-	kinds := b.Manifest().ProviderKinds
-	rank := func(kind string) int {
-		if i := slices.Index(kinds, kind); i >= 0 {
-			return i
-		}
-		return len(kinds)
-	}
-	var out []InstanceInfo
-	for _, inst := range all {
-		if inst.Enabled && inst.Available && b.Accepts(inst.Kind, inst.BaseURL) {
-			out = append(out, inst)
-		}
-	}
-	slices.SortStableFunc(out, func(a, b InstanceInfo) int {
-		less := func(a, b InstanceInfo) bool {
-			if ri, rj := rank(a.Kind), rank(b.Kind); ri != rj {
-				return ri < rj
-			}
-			return a.ID < b.ID
-		}
-		switch {
-		case less(a, b):
-			return -1
-		case less(b, a):
-			return 1
-		}
-		return 0
-	})
-	return out
-}
-
-// providerFor resolves the provider account a borrowing model uses: its named
-// one, else the first candidate. "" when there is none.
-func (h *Hub) providerFor(m ModelInstance, b Backend) string {
-	if m.ProviderInstanceID != "" {
-		return m.ProviderInstanceID
-	}
-	if h.opts.Source == nil {
-		return ""
-	}
-	if c := providerCandidates(b, h.opts.Source.Instances()); len(c) > 0 {
-		return c[0].ID
-	}
-	return ""
-}
-
-// providerGeneration is the provider configuration generation (0 without a source).
-func (h *Hub) providerGeneration() uint64 {
-	if h.opts.Source == nil {
-		return 0
-	}
-	return h.opts.Source.Generation()
-}
-
 // clientFor returns the cached client of a decision model, building it when
 // the model or the provider configuration it borrows from changed.
 func (h *Hub) clientFor(m ModelInstance) (Decider, Manifest, error) {
@@ -153,28 +88,18 @@ func (h *Hub) clientFor(m ModelInstance) (Decider, Manifest, error) {
 		return nil, Manifest{}, fmt.Errorf("unknown decision backend %q", m.Backend)
 	}
 	manifest := b.Manifest()
-	provider := ""
-	var gen uint64
-	if m.Credentials == CredentialsProvider {
-		if h.opts.Source == nil {
-			return nil, manifest, ErrNoEndpoint
-		}
-		gen = h.providerGeneration()
-		provider = h.providerFor(m, b)
-		if provider == "" {
-			return nil, manifest, ErrNoEndpoint
-		}
+	// A hosted backend without a key cannot be reached: fail here with the
+	// setup error instead of sending an unauthenticated request.
+	if manifest.KeyRequired && h.models.Secret(m.ID, SecretAPIKey) == "" {
+		return nil, manifest, ErrNoEndpoint
 	}
-	key := fmt.Sprintf("%d|%s|%d", m.UpdatedAt.UnixNano(), provider, gen)
+	key := fmt.Sprintf("%d", m.UpdatedAt.UnixNano())
 	h.clientMu.Lock()
 	defer h.clientMu.Unlock()
 	if c, ok := h.clients[m.ID]; ok && c.key == key {
 		return c.d, c.manifest, nil
 	}
-	ep, err := h.endpointFor(m, b, provider)
-	if err != nil {
-		return nil, manifest, err
-	}
+	ep := h.endpointFor(m)
 	d, err := b.New(ep, ClientOptions{Model: m.Model, Timeout: m.Timeout(), Config: m.Config, HTTPClient: h.opts.HTTPClient})
 	if err != nil {
 		return nil, manifest, err
@@ -183,23 +108,13 @@ func (h *Hub) clientFor(m ModelInstance) (Decider, Manifest, error) {
 	return d, manifest, nil
 }
 
-// endpointFor resolves where a model's requests go and with which credential.
-func (h *Hub) endpointFor(m ModelInstance, b Backend, provider string) (Endpoint, error) {
-	if m.Credentials == CredentialsProvider {
-		ep, err := h.opts.Source.Endpoint(provider)
-		if err != nil {
-			return Endpoint{}, fmt.Errorf("%w: %v", ErrNoEndpoint, err)
-		}
-		if !b.Accepts(ep.Kind, ep.BaseURL) {
-			return Endpoint{}, fmt.Errorf("%w: provider %q (%s) cannot reach %s", ErrNoEndpoint, provider, ep.Kind, b.Manifest().Label)
-		}
-		return ep, nil
-	}
+// endpointFor resolves where a model\'s requests go and with which credential.
+func (h *Hub) endpointFor(m ModelInstance) Endpoint {
 	ep := Endpoint{BaseURL: m.BaseURL}
 	if key := h.models.Secret(m.ID, SecretAPIKey); key != "" {
 		ep.Authorize = func(hd http.Header) { hd.Set("Authorization", "Bearer "+key) }
 	}
-	return ep, nil
+	return ep
 }
 
 func (h *Hub) dropClient(id string) {

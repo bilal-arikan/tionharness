@@ -28,7 +28,7 @@ func earlyPruneTurn(t *testing.T) (*toolLoopTurn, *Runtime, db.Session) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 	agentRow, err := rt.db.CreateAgent(ctx, db.Agent{
-		Name: "Native", Provider: "anthropic", Model: "claude-sonnet-4-5-20250929",
+		Name: "Native", Provider: "test-native", Model: "claude-sonnet-4-5-20250929",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func earlyPruneTurn(t *testing.T) (*toolLoopTurn, *Runtime, db.Session) {
 		r:          rt,
 		ctx:        WithSessionID(ctx, session.ID),
 		agent:      agentRow,
-		provider:   providers.NewAnthropic("k"),
+		provider:   &fakeProvider{},
 		keepRecent: 2,
 		emit:       func(TurnStep) {},
 		req: providers.Request{Messages: []providers.Message{

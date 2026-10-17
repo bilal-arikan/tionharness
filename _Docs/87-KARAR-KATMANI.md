@@ -115,6 +115,11 @@ düşünme bloğu içindeki harfler cevap sayılmaz. Sorular paralel koşar (var
 
 ### 3.4 Ödünç alınan uç nokta kuralı
 
+> **Kaldırıldı (2026-10-13):** sağlayıcı hesabı ödünç alma (`credentials: provider`,
+> `providerInstanceId`, `EndpointSource`, `Backend.Accepts`) silindi; her karar modeli
+> kendi `baseUrl` + anahtarıyla çalışır, eski kayıtlar `own` olarak yüklenir ve anahtar
+> bekler. Aşağıdaki kural ve test tarihseldir ([95 §7](95-OPENCODE-CLI-SAGLAYICI.md)).
+
 Bir model sağlayıcı hesabını ödünç alırsa anahtar yalnız o sağlayıcının kendi uç
 noktasına gider: formda taban URL alanı gizlenir ve sunucu da temizler. Sağlayıcı
 örneği taban URL'yi boş bıraktıysa kind'ın varsayılanı kullanılır (`openrouter` →

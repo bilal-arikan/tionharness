@@ -37,7 +37,6 @@ func (systemOneBackend) Manifest() Manifest {
 		ID:             SystemOneBackendID,
 		Label:          "System One API (TypeSafe · OpenJev)",
 		Description:    "TypeSafe's native decision API and every server that speaks it: TypeSafe itself, OpenRouter's System One endpoint, and open OpenJev servers running a decision model on your own hardware.",
-		ProviderKinds:  []string{"openrouter", "openai-compat"},
 		DefaultBaseURL: typeSafeDefaultBase,
 		// TypeSafe needs a key, a local OpenJev server usually does not; the
 		// TypeSafe preset is the one that asks for it.
@@ -71,8 +70,9 @@ func (systemOneBackend) Manifest() Manifest {
 			{
 				ID:            "jev-openrouter-systemone",
 				Label:         "Jev · OpenRouter (System One)",
-				Description:   "OpenRouter's System One endpoint through the key of an OpenRouter provider you already have.",
-				Credentials:   CredentialsProvider,
+				Description:   "OpenRouter's System One endpoint with your OpenRouter API key.",
+				Credentials:   CredentialsOwn,
+				BaseURL:       openRouterDefaultBase,
 				Model:         JevPinnedModel,
 				ContextTokens: 32000,
 			},
@@ -90,20 +90,8 @@ func (systemOneBackend) Manifest() Manifest {
 	}
 }
 
-// Accepts lends OpenRouter credentials only: OpenRouter serves the System One
-// path under its own API base, and no other provider kind is known to.
-func (systemOneBackend) Accepts(kind, baseURL string) bool {
-	return acceptsOpenRouter(kind, baseURL)
-}
-
 func (b systemOneBackend) New(ep Endpoint, opts ClientOptions) (Decider, error) {
-	if ep.Kind != "" && !b.Accepts(ep.Kind, ep.BaseURL) {
-		return nil, fmt.Errorf("provider instance %q (%s) cannot reach a System One API", ep.InstanceID, ep.Kind)
-	}
-	root, err := endpointBase(ep)
-	if err != nil {
-		return nil, err
-	}
+	root := endpointBase(ep)
 	endpoint, err := SystemOneURL(root)
 	if err != nil {
 		return nil, err
@@ -121,7 +109,7 @@ func (b systemOneBackend) New(ep Endpoint, opts ClientOptions) (Decider, error) 
 			timeout:   timeoutOrDefault(opts.Timeout),
 			model:     model,
 		},
-		billing: billingProviderFor(endpoint, ep.Kind),
+		billing: billingProviderFor(endpoint, ""),
 	}, nil
 }
 

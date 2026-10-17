@@ -9,6 +9,62 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## opencode-cli örneği açılışta tohumlanıyor, eski API anahtarları opencode'a taşınıyor (2026-10-17)
+
+- **Sağlayıcılar sayfası çöküyordu:** sunucu güncel Go koduyla 7 Ekim tarihli gömülü
+  ön yüzü çalıştırıyordu; `npm --prefix frontend run build` sonrası düzeldi. Derleme
+  `modelDraft.keyMissing` içindeki kullanılmayan `draft` parametresini yakaladı
+  (vitest tip denetimi yapmadığı için `full` kapısı görmemişti); parametre kaldırıldı.
+- **opencode-cli listede yoktu:** `providers.json` tek seferlik göçten önce oluştuğu
+  için örnek yoktu. `ProviderStore.EnsureKindInstance` eklendi; `app.go` açılışta
+  `opencode` ikilisi bulunursa varsayılan `opencode-cli` örneğini ekler.
+- **Eski anahtarlar:** `ProviderStore.ExportLegacyKeysToOpenCode` kayıtsız kind
+  örneklerinin API anahtarlarını `<dataDir>/opencode-home/data/opencode/auth.json`
+  içine kopyalar; mevcut vendor girdisi korunur ([95 §7](95-OPENCODE-CLI-SAGLAYICI.md)).
+
+## OpenCode CLI sağlayıcısı eklendi, native Anthropic kaldırıldı (2026-10-13)
+
+Proje "üç CLI" modeline geçti: `claude-cli`, `codex-cli` ve yeni `opencode-cli`
+([95](95-OPENCODE-CLI-SAGLAYICI.md)).
+
+- **Yeni taşıyıcı:** `internal/providers/opencodecli*.go` + `kind_opencodecli.go`.
+  Tur başına `opencode run --format json --agent tionharness` alt süreci; prompt
+  stdin'den, sistem promptu ve MCP sunucuları tur dizinindeki `opencode.json`
+  (`OPENCODE_CONFIG`) üzerinden, ev `XDG_*` ile izole (`<dataDir>/opencode-home` veya
+  örneğin `configDir`'i). Olay ayrıştırıcı `step_*`/`text`/`reasoning`/`tool_use`/
+  `error` olaylarını `TraceStep`'e çevirir; `todowrite` → `todo_list`, köprü araçları
+  `mcp__<server>__<tool>`. Resume `ScopedCLIResumer` + `<home>/scopes` kaydıyla;
+  `planCodexResume` paylaşılır. Model id'leri `vendor/model`; aile tabloları
+  `BareModelForKind` ile çalışır. Canlı doğrulama (opencode 1.19.0, ücretsiz
+  `opencode/big-pickle`): düz tur, köprülü `todo_write` turu, ikinci turda önbellek
+  okuması; birim testleri `opencodecli_test.go`.
+- **Ajan/API:** `PinOpenCodeHome`, `usesServerSpec` (codex + opencode aynı MCP spec
+  yolunu kullanır), `provider_auth` durum satırı (giriş `opencode auth login` ile),
+  katalog `cliVersion`/`subscription`, `chat_resume` eşlemesi, `debug_journal` ve
+  thinking varsayılanı. Frontend: metadata/i18n/`ProviderInstanceList` durum satırı.
+- **Kaldırılan:** `anthropic.go` ve Anthropic-protokollü kind'lar (`anthropic`,
+  `anthropic-compat`, `minimax-anthropic`, `deepseek-anthropic`, `zai`),
+  `TokenCounter`, registry betaları, Anthropic ayar anahtarları (`anthropicKey`,
+  `extendedPromptCache`, `anthropicContextEditing`, `anthropicNativeToolSearch`,
+  `anthropicProgrammaticTools`, `anthropicWebTools`, `anthropicServerCompaction`,
+  `anthropicRefusalFallback`, `autonomousTaskBudgetTokens`), `auxNativeRouting` ve
+  `systemagent_route.go`, `prefix_calibration.go`, `AnthropicOptions.tsx`,
+  `ANTHROPIC_API_KEY` tohumlaması. Market "anthropic" türü sağlayıcı paketleri artık
+  açıklayıcı hatayla reddedilir.
+- **İkinci adım (aynı gün, [95 §7](95-OPENCODE-CLI-SAGLAYICI.md)):** karar katmanı
+  sağlayıcı örneklerinden anahtar ödünç almayı bıraktı (her karar modeli kendi
+  `baseUrl` + anahtarıyla; eski "provider" kayıtları `own` olarak yüklenir, şablonlar
+  OpenRouter anahtarını doğrudan ister) ve OpenAI-uyumlu HTTP ailesi (`openrouter`,
+  `deepseek`, `minimax`, `lmstudio`, `openai-compat`) istemcileriyle birlikte silindi.
+  Kalan kind'lar yalnız `claude-cli`, `codex-cli`, `opencode-cli`. Market "provider"
+  paketleri artık reddedilir; `/api/providers` `reachable` alanını bıraktı. Native
+  tool loop test altyapısı nedeniyle duruyor (95 §6/2).
+- **Ajan formu:** `ask` izin modunda codex-cli/opencode-cli için "köprü onayı" notu
+  (`settings.bridgeApprovalNote`).
+- **Testler:** kaldırılan kind'lara dayanan testler `openrouter`/`deepseek`'e
+  taşındı; `TestInstallProviderPack_AnthropicKindRejected` eklendi; frontend
+  `settingsFields`/`providerMetadata` testleri güncellendi.
+
 ## OpenPencil desteği kaldırıldı (2026-10-10)
 
 OpenPencil (`op` CLI) ile ilgili her şey projeden çıkarıldı:

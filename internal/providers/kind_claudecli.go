@@ -12,7 +12,6 @@ func init() {
 			AppliesToolHooks: true,
 			Label:            "Claude CLI (abonelik · anahtarsız)",
 			NeedsKey:         false,
-			NeedsBaseURL:     false,
 			AllowCustomModel: true,
 			Order:            0,
 			Transport:        TransportCLI,

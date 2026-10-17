@@ -71,41 +71,6 @@
     "unavailable": "unavailable",
     "empty": "Create a workspace to assign agents."
   },
-  "anthropic": {
-    "description": "These options apply only to supported Anthropic API models, not Claude CLI.",
-    "extendedCache": {
-      "label": "Extended prompt cache (1 hour)",
-      "hint": "Keep reusable prompt prefixes cached for longer."
-    },
-    "contextEditing": {
-      "label": "Server-side context editing",
-      "hint": "Trim older tool results while preserving the cached prefix."
-    },
-    "toolSearch": {
-      "label": "Native tool search",
-      "hint": "Let supported Anthropic models discover deferred tools on the server."
-    },
-    "programmaticTools": {
-      "label": "Programmatic tool calls",
-      "hint": "Run tool orchestration in the provider container. Local code mode is a separate capability; permission checks still apply."
-    },
-    "webTools": {
-      "label": "Server-side web tools",
-      "hint": "Enable provider-hosted search and page retrieval for agents with tools enabled. Usage may incur additional charges."
-    },
-    "compaction": {
-      "label": "Server-side compaction",
-      "hint": "Compact long tool loops on the server. Client-side conversation compaction remains separate."
-    },
-    "refusalFallback": {
-      "label": "Refusal fallback",
-      "hint": "Use the configured API fallback for supported Fable/Mythos requests."
-    },
-    "taskBudget": {
-      "label": "Autonomous task budget (tokens)",
-      "hint": "0 disables the API task budget. Supported adaptive models use at least 20,000 tokens when enabled."
-    }
-  },
   "tools": {
     "shell": {
       "label": "Shell access",
@@ -234,10 +199,6 @@
     "researchAgents": {
       "label": "Claude CLI research agents",
       "hint": "Allow native Explore and Plan agents. Delegation to TionHarness agents stays separate."
-    },
-    "auxRouting": {
-      "label": "Use Anthropic API for auxiliary calls",
-      "hint": "Route supported title, summary and other tool-free system calls through an available Anthropic API instance. These calls use API billing instead of the CLI subscription."
     }
   },
   "commands": {

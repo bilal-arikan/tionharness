@@ -50,10 +50,7 @@ export function DeciderProviderCard({
     u === 'default' ? t('providers.usedByDefault') : authorityLabel(u),
   )
   const local = !!model.status.endpoint && isLocalUrl(`http://${model.status.endpoint}`)
-  const where =
-    model.credentials === 'provider'
-      ? model.status.provider && t('providers.viaProvider', { id: model.status.provider })
-      : model.status.endpoint
+  const where = model.status.endpoint
 
   const runTest = async () => {
     setTesting(true)

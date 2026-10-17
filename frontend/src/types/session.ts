@@ -195,7 +195,7 @@ export interface ExecutionRuntimeRow {
 // each with a token estimate. Backed by GET /api/sessions/{id}/context-preview.
 export interface SessionContextPreview {
   agentName: string
-  // Agent provider ('claude-cli' | 'anthropic' | 'minimax' | …) — drives
+  // Agent provider ('claude-cli' | 'codex-cli' | 'opencode-cli') — drives
   // provider-aware UI notes (tool delivery, dynamic placement).
   provider: string
   multiAgent: boolean
@@ -277,7 +277,7 @@ export interface CLIOverhead {
 // on); claude-cli --resume keeps System + the first cachedMsgCount messages warm
 // server-side and sends only the newest delta. mode "none" = nothing cached.
 interface CachePreview {
-  mode: 'anthropic' | 'claude-resume' | 'none'
+  mode: 'claude-resume' | 'none'
   note: string
   systemCached: boolean
   dynamicCached: boolean

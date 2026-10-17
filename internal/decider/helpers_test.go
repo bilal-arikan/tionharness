@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -53,44 +52,6 @@ func (fakeBox) Encrypt(s string) (string, error) {
 func (fakeBox) Decrypt(s string) (string, error) {
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(s, "enc:"))
 	return string(raw), err
-}
-
-// fakeSource is an EndpointSource over a fixed instance list.
-type fakeSource struct {
-	mu        sync.Mutex
-	instances []InstanceInfo
-	gen       uint64
-	resolved  atomic.Int32
-}
-
-func (f *fakeSource) Endpoint(id string) (Endpoint, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.resolved.Add(1)
-	for _, inst := range f.instances {
-		if inst.ID == id {
-			return Endpoint{InstanceID: id, Kind: inst.Kind, BaseURL: inst.BaseURL, Authorize: bearer("key-" + id)}, nil
-		}
-	}
-	return Endpoint{}, fmt.Errorf("unknown provider instance: %q", id)
-}
-
-func (f *fakeSource) Instances() []InstanceInfo {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]InstanceInfo(nil), f.instances...)
-}
-
-func (f *fakeSource) Generation() uint64 {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.gen
-}
-
-func (f *fakeSource) bump() {
-	f.mu.Lock()
-	f.gen++
-	f.mu.Unlock()
 }
 
 // decisionServer speaks the System One wire format on any path. It answers
@@ -155,22 +116,35 @@ func newDecisionServer(t *testing.T) *decisionServer {
 }
 
 // newTestHub is an in-memory hub, switched on, whose seeded default model
-// (DM1: Jev through OpenRouter, borrowed credentials) reaches srv through one
-// openrouter provider instance unless other instances are given.
-func newTestHub(t *testing.T, srv *decisionServer, instances ...InstanceInfo) (*Hub, *fakeSource) {
+// (DM1: Jev through OpenRouter) is re-pointed at srv with the test key
+// "key-PRV1". The second value is that model.
+func newTestHub(t *testing.T, srv *decisionServer) (*Hub, ModelInstance) {
 	t.Helper()
 	noRetryPause(t)
-	if len(instances) == 0 {
-		instances = []InstanceInfo{{ID: "PRV1", Kind: "openrouter", BaseURL: srv.URL + "/api/v1", Enabled: true, Available: true}}
-	}
-	src := &fakeSource{instances: instances}
-	h := NewHub(HubOptions{Source: src, Secrets: fakeBox{}})
+	h := NewHub(HubOptions{Secrets: fakeBox{}})
+	m := pointSeedAt(t, h, srv)
 	cfg := h.Config()
 	cfg.Enabled = true
 	if _, err := h.Update(cfg); err != nil {
 		t.Fatal(err)
 	}
-	return h, src
+	return h, m
+}
+
+// pointSeedAt re-points the seeded DM1 model at srv with the test key
+// "key-PRV1" and returns the saved model.
+func pointSeedAt(t *testing.T, h *Hub, srv *decisionServer) ModelInstance {
+	t.Helper()
+	seed, ok := h.Model("DM1")
+	if !ok {
+		t.Fatal("hub did not seed DM1")
+	}
+	m, err := h.UpsertModel(ModelInput{ID: seed.ID, Backend: seed.Backend, Label: seed.Label, Enabled: true, Model: seed.Model,
+		BaseURL: srv.URL + "/api/v1", TimeoutMs: seed.TimeoutMs, Secrets: map[string]string{SecretAPIKey: "key-PRV1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
 }
 
 // ownModel adds a decision model with its own endpoint (System One at srv).

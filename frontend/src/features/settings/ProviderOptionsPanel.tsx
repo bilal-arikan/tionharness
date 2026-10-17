@@ -1,5 +1,4 @@
 import { InfoPopover } from '@/shared/components/InfoPopover'
-import { AnthropicOptions } from './AnthropicOptions'
 import { CliOptions } from './CliOptions'
 import { SettingsDisclosure } from './SettingsDisclosure'
 import { SettingsSaveBar, type SettingsSaveBarProps } from './SettingsSaveBar'
@@ -17,9 +16,6 @@ export function ProviderOptionsPanel({
         {t('providerOptions.title')}
         <InfoPopover text={t('providerOptions.description')} />
       </h3>
-      <SettingsDisclosure title={t('providerOptions.anthropic')}>
-        <AnthropicOptions {...props} />
-      </SettingsDisclosure>
       <SettingsDisclosure title={t('providerOptions.cli')}>
         <CliOptions {...props} />
       </SettingsDisclosure>

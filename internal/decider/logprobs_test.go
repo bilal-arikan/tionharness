@@ -245,7 +245,4 @@ func TestChatCompletionsURLAndOptions(t *testing.T) {
 	if err := (logprobsBackend{}).ValidateConfig(map[string]string{fieldParallel: "0"}); err == nil {
 		t.Error("parallel=0 accepted")
 	}
-	if !(logprobsBackend{}).Accepts("lmstudio", "") || (logprobsBackend{}).Accepts("anthropic", "") {
-		t.Error("wrong provider kinds accepted")
-	}
 }

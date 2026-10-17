@@ -10,14 +10,14 @@ import (
 
 func TestClaude55AgentCreateAndUpdate(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
-	for _, provider := range []string{"anthropic", "claude-cli", "openrouter"} {
+	for _, provider := range []string{"claude-cli", "opencode-cli"} {
 		providerRef := provider
 		if provider != "claude-cli" {
 			var instance struct {
 				ID string `json:"id"`
 			}
 			created := doJSON(t, s.Routes(), http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-				KindID: provider, Label: "Local Claude55 test", Secrets: map[string]string{"key": "local-test-key"},
+				KindID: provider, Label: "Local Claude55 test", Config: map[string]string{"cliPath": "/usr/local/bin/opencode"},
 			}, &instance)
 			if created.Code != http.StatusOK || instance.ID == "" {
 				t.Fatalf("provider registration: %d %s", created.Code, created.Body.String())
@@ -25,12 +25,9 @@ func TestClaude55AgentCreateAndUpdate(t *testing.T) {
 			providerRef = instance.ID
 		}
 		for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5"} {
-			if provider == "openrouter" {
-				if model == "claude-opus-5-5" {
-					model = "anthropic/claude-opus-5.5"
-				} else {
-					model = "anthropic/claude-sonnet-5.5"
-				}
+			if provider == "opencode-cli" {
+				// opencode model ids are vendor-prefixed.
+				model = "anthropic/" + model
 			}
 			t.Run(provider+"/"+model, func(t *testing.T) {
 				created := postAgent(t, s, wsp, `{"name":"Claude55","provider":"`+providerRef+`","model":"`+model+`","thinkingLevel":"high"}`)

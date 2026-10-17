@@ -46,8 +46,5 @@ func (r *Runtime) systemAgentExecutor(key string, caller db.Agent, systemAgent d
 	if systemAgent.Model != "" {
 		exec.Model = adoptSystemAgentModel(r.logger, key, exec.Provider, exec.Model, systemAgent.Model)
 	}
-	if pinsProvider(systemAgent) {
-		return nativeAuxModel(exec)
-	}
-	return r.routeAuxAgent(exec, systemAgent)
+	return exec
 }

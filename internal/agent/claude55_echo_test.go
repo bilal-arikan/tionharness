@@ -11,12 +11,8 @@ import (
 func TestClaude55NativeLoopPreservesThinking(t *testing.T) {
 	for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-sonnet-5"} {
 		t.Run(model, func(t *testing.T) {
-			rt, tun := newTestRuntime(t, t.TempDir())
+			rt, _ := newTestRuntime(t, t.TempDir())
 			defer drainSpawns(t, rt)
-			tun.SetNativeToolSearch(false)
-			tun.SetProgrammaticTools(false)
-			tun.SetWebTools(false)
-			tun.SetServerCompaction(false)
 			turn := toolLoopTurn{r: rt, ctx: context.Background(), agent: db.Agent{ID: "a1", Model: model}, provider: &fakeProvider{}}
 			if _, _, err, done := turn.prepareNativeLoop(); err != nil || done {
 				t.Fatalf("prepare: err=%v done=%v", err, done)

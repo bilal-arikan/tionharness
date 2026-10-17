@@ -1,6 +1,11 @@
 # 71 — Sağlayıcı Örnekleri (Provider Instances): Uygulama Planı
 
 > **Durum: BİTTİ (Faz 0-5, 2026-08-18) — K1/K2/K3 kararları onaylandı, K4 kapsam dışı bırakıldı (bkz. §8).**
+> **Güncelleme (2026-10-13):** `anthropic`, `anthropic-compat`, `minimax-anthropic`,
+> `deepseek-anthropic` ve `zai` kind'ları kaldırıldı; boot migrasyonu artık `anthropic`
+> örneği üretmez ve market "anthropic" paketleri reddedilir. Üçüncü CLI kind'ı
+> `opencode-cli` eklendi ([95](95-OPENCODE-CLI-SAGLAYICI.md)). Aşağıdaki tablolarda bu
+> kind'lara yapılan atıflar tarihseldir.
 > Plan sonrası eklenen kind'lar bu dokümanda yaşamaya devam eder: yerel (local)
 > sağlayıcılar için **LM Studio** kind'ı ve anahtarsız/muhafazakâr-pencere
 > davranışı §12'de (2026-09-04).

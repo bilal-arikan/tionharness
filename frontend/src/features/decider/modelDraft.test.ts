@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { DeciderBackend, DeciderModelInstance } from '@/types/decider'
 import {
   API_KEY,
-  canBorrow,
   draftFromBackend,
   draftFromModel,
   draftFromPreset,
@@ -14,7 +13,6 @@ import {
 const systemOne: DeciderBackend = {
   id: 'systemone',
   label: 'System One API',
-  providerKinds: ['openrouter'],
   defaultBaseUrl: 'https://api.typesafe.ai/v1',
   keyRequired: false,
   models: [{ id: 'jev-latest', label: 'Jev', inputPerMTok: 0.042, outputPerMTok: 0 }],
@@ -37,7 +35,8 @@ const systemOne: DeciderBackend = {
     {
       id: 'jev-openrouter-systemone',
       label: 'Jev · OpenRouter',
-      credentials: 'provider',
+      credentials: 'own',
+      baseUrl: 'https://openrouter.ai/api/v1',
       model: 'jev-1.13',
     },
   ],
@@ -51,7 +50,6 @@ describe('drafts', () => {
       enabled: true,
       model: 'jev-latest',
       credentials: 'own',
-      providerInstanceId: '',
       baseUrl: 'https://api.typesafe.ai/v1',
       timeoutMs: 3000,
       contextTokens: 0,
@@ -68,8 +66,12 @@ describe('drafts', () => {
       timeoutMs: 10000,
       contextTokens: 16000,
     })
-    const borrowed = draftFromPreset(systemOne, systemOne.presets![1])
-    expect(borrowed).toMatchObject({ credentials: 'provider', baseUrl: '', model: 'jev-1.13' })
+    const hosted = draftFromPreset(systemOne, systemOne.presets![1])
+    expect(hosted).toMatchObject({
+      credentials: 'own',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'jev-1.13',
+    })
   })
 
   it('edits a model without its secrets', () => {
@@ -80,7 +82,6 @@ describe('drafts', () => {
       enabled: true,
       model: 'openjev-latest',
       credentials: 'own',
-      providerInstanceId: '',
       baseUrl: 'http://127.0.0.1:8080/v1',
       timeoutMs: 5000,
       contextTokens: 0,
@@ -100,35 +101,24 @@ describe('drafts', () => {
 })
 
 describe('request body', () => {
-  const draft = { ...draftFromBackend(systemOne), providerInstanceId: 'PRV1' }
+  const draft = draftFromBackend(systemOne)
 
   it('sends a typed key, a clear request, or nothing', () => {
     expect(toInput(draft, ' sk-1 ', false).secrets).toEqual({ [API_KEY]: 'sk-1' })
     expect(toInput(draft, '', true).secrets).toEqual({ [API_KEY]: '' })
     expect(toInput(draft, '', false).secrets).toBeUndefined()
-    expect(toInput(draft, '', false).providerInstanceId).toBe('')
-  })
-
-  it('sends no base URL or key with borrowed credentials', () => {
-    const body = toInput({ ...draft, credentials: 'provider' }, 'sk-1', false)
-    expect(body.baseUrl).toBe('')
-    expect(body.secrets).toBeUndefined()
-    expect(body.providerInstanceId).toBe('PRV1')
   })
 
   it('flags a hosted backend saved without a key', () => {
     const hosted = { ...systemOne, keyRequired: true }
-    expect(keyMissing(hosted, draft, '', false, false)).toBe(true)
-    expect(keyMissing(hosted, draft, 'k', false, false)).toBe(false)
-    expect(keyMissing(hosted, draft, '', true, false)).toBe(false)
-    expect(keyMissing(hosted, draft, '', true, true)).toBe(true)
-    expect(keyMissing(systemOne, draft, '', false, false)).toBe(false)
-    expect(keyMissing(hosted, { ...draft, credentials: 'provider' }, '', false, false)).toBe(false)
+    expect(keyMissing(hosted, '', false, false)).toBe(true)
+    expect(keyMissing(hosted, 'k', false, false)).toBe(false)
+    expect(keyMissing(hosted, '', true, false)).toBe(false)
+    expect(keyMissing(hosted, '', true, true)).toBe(true)
+    expect(keyMissing(systemOne, '', false, false)).toBe(false)
   })
 
-  it('knows which backends can borrow and which URLs are local', () => {
-    expect(canBorrow(systemOne)).toBe(true)
-    expect(canBorrow({ ...systemOne, providerKinds: [] })).toBe(false)
+  it('knows which URLs are local', () => {
     expect(isLocalUrl('http://127.0.0.1:8080/v1')).toBe(true)
     expect(isLocalUrl('http://192.168.1.4:11434/v1')).toBe(true)
     expect(isLocalUrl('http://gpu.local:8000/v1')).toBe(true)

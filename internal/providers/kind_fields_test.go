@@ -43,9 +43,9 @@ func TestManifestKeyFieldMatchesNeedsKey(t *testing.T) {
 			continue
 		}
 		t.Run(m.Kind, func(t *testing.T) {
-			f, ok := m.FieldByKey(FieldKeyAPIKey)
+			f, ok := m.FieldByKey("key")
 			if !ok {
-				t.Fatalf("NeedsKey=true but no %q field declared", FieldKeyAPIKey)
+				t.Fatal("NeedsKey=true but no key field declared")
 			}
 			if !f.Required {
 				t.Error("key field is not Required")

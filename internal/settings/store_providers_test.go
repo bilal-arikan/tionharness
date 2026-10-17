@@ -40,7 +40,7 @@ func openTestStore(t *testing.T) *ProviderStore {
 func TestProviderStore_UpsertGeneratesPRVID(t *testing.T) {
 	s := openTestStore(t)
 
-	first, err := s.Upsert(ProviderInstanceInput{KindID: "anthropic", Label: "A"})
+	first, err := s.Upsert(ProviderInstanceInput{KindID: "claude-cli", Label: "A"})
 	if err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestProviderStore_UpsertGeneratesPRVID(t *testing.T) {
 		t.Fatalf("expected PRV1, got %q", first.ID)
 	}
 
-	second, err := s.Upsert(ProviderInstanceInput{KindID: "anthropic", Label: "B"})
+	second, err := s.Upsert(ProviderInstanceInput{KindID: "claude-cli", Label: "B"})
 	if err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -58,10 +58,10 @@ func TestProviderStore_UpsertGeneratesPRVID(t *testing.T) {
 
 	// Explicit kind-id-shaped ids (as migration produces) must never collide
 	// with or be reused by the PRV<n> generator.
-	if _, err := s.Upsert(ProviderInstanceInput{ID: "anthropic", KindID: "anthropic", Label: "C"}); err != nil {
+	if _, err := s.Upsert(ProviderInstanceInput{ID: "openrouter", KindID: "claude-cli", Label: "C"}); err != nil {
 		t.Fatalf("Upsert with explicit id: %v", err)
 	}
-	third, err := s.Upsert(ProviderInstanceInput{KindID: "anthropic", Label: "D"})
+	third, err := s.Upsert(ProviderInstanceInput{KindID: "claude-cli", Label: "D"})
 	if err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -74,53 +74,53 @@ func TestProviderStore_UpsertSecretsWriteOnly(t *testing.T) {
 	s := openTestStore(t)
 
 	inst, err := s.Upsert(ProviderInstanceInput{
-		ID:     "anthropic",
-		KindID: "anthropic",
+		ID:     "openrouter",
+		KindID: "claude-cli",
 		Label:  "Anthropic",
 		Secrets: map[string]string{
-			"key": "sk-live-123",
+			"authToken": "sk-live-123",
 		},
 	})
 	if err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
-	if got := s.Secret(inst.ID, "key"); got != "sk-live-123" {
+	if got := s.Secret(inst.ID, "authToken"); got != "sk-live-123" {
 		t.Fatalf("Secret roundtrip: got %q", got)
 	}
 
-	// Update WITHOUT mentioning "key" at all → must be preserved.
-	if _, err := s.Upsert(ProviderInstanceInput{ID: "anthropic", KindID: "anthropic", Label: "Anthropic v2"}); err != nil {
+	// Update WITHOUT mentioning "authToken" at all → must be preserved.
+	if _, err := s.Upsert(ProviderInstanceInput{ID: "openrouter", KindID: "claude-cli", Label: "Anthropic v2"}); err != nil {
 		t.Fatalf("Upsert (no secrets field): %v", err)
 	}
-	if got := s.Secret("anthropic", "key"); got != "sk-live-123" {
+	if got := s.Secret("openrouter", "authToken"); got != "sk-live-123" {
 		t.Fatalf("expected key preserved when omitted, got %q", got)
 	}
 
-	// Update WITH "key" present but empty → must clear.
+	// Update WITH "authToken" present but empty → must clear.
 	if _, err := s.Upsert(ProviderInstanceInput{
-		ID: "anthropic", KindID: "anthropic", Label: "Anthropic v3",
-		Secrets: map[string]string{"key": ""},
+		ID: "openrouter", KindID: "claude-cli", Label: "Anthropic v3",
+		Secrets: map[string]string{"authToken": ""},
 	}); err != nil {
 		t.Fatalf("Upsert (clear key): %v", err)
 	}
-	if got := s.Secret("anthropic", "key"); got != "" {
+	if got := s.Secret("openrouter", "authToken"); got != "" {
 		t.Fatalf("expected key cleared, got %q", got)
 	}
-	dto, ok := s.Get("anthropic")
+	dto, ok := s.Get("openrouter")
 	if !ok {
 		t.Fatal("expected instance to still exist after clearing key")
 	}
-	if dto.ToDTO().SecretsSet["key"] {
+	if dto.ToDTO().SecretsSet["authToken"] {
 		t.Fatal("expected secretsSet[key] false after clearing")
 	}
 }
 
 func TestProviderStore_UpsertRejectsKindChange(t *testing.T) {
 	s := openTestStore(t)
-	if _, err := s.Upsert(ProviderInstanceInput{ID: "anthropic", KindID: "anthropic"}); err != nil {
+	if _, err := s.Upsert(ProviderInstanceInput{ID: "openrouter", KindID: "claude-cli"}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
-	if _, err := s.Upsert(ProviderInstanceInput{ID: "anthropic", KindID: "openai-compat"}); err == nil {
+	if _, err := s.Upsert(ProviderInstanceInput{ID: "openrouter", KindID: "codex-cli"}); err == nil {
 		t.Fatal("expected error changing kindId on an existing instance")
 	}
 }
@@ -135,8 +135,8 @@ func TestProviderStore_UpsertRejectsEmptyKind(t *testing.T) {
 func TestProviderStore_DTONeverLeaksSecret(t *testing.T) {
 	s := openTestStore(t)
 	if _, err := s.Upsert(ProviderInstanceInput{
-		ID: "anthropic", KindID: "anthropic",
-		Secrets: map[string]string{"key": "sk-super-secret"},
+		ID: "openrouter", KindID: "claude-cli",
+		Secrets: map[string]string{"authToken": "sk-super-secret"},
 	}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestProviderStore_DTONeverLeaksSecret(t *testing.T) {
 
 	// Also verify marshaling the raw ProviderInstance (not just the DTO)
 	// cannot leak the secret either — SecretsEnc must carry json:"-".
-	inst, _ := s.Get("anthropic")
+	inst, _ := s.Get("openrouter")
 	raw, err := json.Marshal(inst)
 	if err != nil {
 		t.Fatalf("Marshal ProviderInstance: %v", err)
@@ -173,16 +173,16 @@ func TestProviderStore_DTONeverLeaksSecret(t *testing.T) {
 
 func TestProviderStore_Delete(t *testing.T) {
 	s := openTestStore(t)
-	if _, err := s.Upsert(ProviderInstanceInput{ID: "anthropic", KindID: "anthropic"}); err != nil {
+	if _, err := s.Upsert(ProviderInstanceInput{ID: "openrouter", KindID: "claude-cli"}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
-	if err := s.Delete("anthropic"); err != nil {
+	if err := s.Delete("openrouter"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, ok := s.Get("anthropic"); ok {
+	if _, ok := s.Get("openrouter"); ok {
 		t.Fatal("expected instance gone after Delete")
 	}
-	if err := s.Delete("anthropic"); err == nil {
+	if err := s.Delete("openrouter"); err == nil {
 		t.Fatal("expected error deleting an already-deleted instance")
 	}
 }
@@ -192,7 +192,7 @@ func TestOpenProviderStore_RepairsDuplicateIDsOnLoad(t *testing.T) {
 	path := filepath.Join(dir, providersFileName)
 
 	files := []providerInstanceFile{
-		{ID: "openrouter", KindID: "openrouter", Label: "OpenRouter", Config: map[string]string{"baseUrl": ""}, SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+		{ID: "openrouter", KindID: "claude-cli", Label: "OpenRouter", Config: map[string]string{"baseUrl": ""}, SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
 		{ID: "openrouter", KindID: "openai-compat", Label: "My OpenRouter", Config: map[string]string{"baseUrl": "https://openrouter.ai/api/v1"}, SecretsEnc: map[string]string{"key": "enc:custom-key"}, CreatedAt: time.Now()},
 	}
 	data, err := json.MarshalIndent(files, "", "  ")
@@ -395,8 +395,8 @@ func TestOpenProviderStore_LegacyConfigDirRepairIsIdempotent(t *testing.T) {
 func TestProviderStore_PersistRejectsDuplicateID(t *testing.T) {
 	s := openTestStore(t)
 	dup := []ProviderInstance{
-		{ID: "anthropic", KindID: "anthropic", SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
-		{ID: "anthropic", KindID: "anthropic-compat", SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+		{ID: "openrouter", KindID: "claude-cli", SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+		{ID: "openrouter", KindID: "anthropic-compat", SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
 	}
 	if err := s.persist(dup); err == nil {
 		t.Fatal("expected persist to reject a list containing a duplicate id")
@@ -410,9 +410,9 @@ func TestProviderStore_AtomicWriteRoundTrip(t *testing.T) {
 		t.Fatalf("OpenProviderStore: %v", err)
 	}
 	if _, err := s.Upsert(ProviderInstanceInput{
-		ID: "anthropic", KindID: "anthropic", Label: "Anthropic",
-		Config:  map[string]string{"baseUrl": "https://api.anthropic.com"},
-		Secrets: map[string]string{"key": "sk-live-xyz"},
+		ID: "openrouter", KindID: "claude-cli", Label: "Anthropic",
+		Config:  map[string]string{"configDir": "/tmp/claude-home-xyz"},
+		Secrets: map[string]string{"authToken": "sk-live-xyz"},
 	}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -426,14 +426,14 @@ func TestProviderStore_AtomicWriteRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-open: %v", err)
 	}
-	inst, ok := reopened.Get("anthropic")
+	inst, ok := reopened.Get("openrouter")
 	if !ok {
 		t.Fatal("expected instance to survive reopen")
 	}
-	if inst.Config["baseUrl"] != "https://api.anthropic.com" {
+	if inst.Config["configDir"] != "/tmp/claude-home-xyz" {
 		t.Fatalf("config not persisted: %+v", inst.Config)
 	}
-	if reopened.Secret("anthropic", "key") != "sk-live-xyz" {
-		t.Fatalf("secret not persisted correctly: %q", reopened.Secret("anthropic", "key"))
+	if reopened.Secret("openrouter", "authToken") != "sk-live-xyz" {
+		t.Fatalf("secret not persisted correctly: %q", reopened.Secret("openrouter", "authToken"))
 	}
 }

@@ -34,12 +34,6 @@ func (s *Server) registryInstances() []providers.Instance {
 			DefaultModel: inst.DefaultModel,
 			Models:       inst.Models,
 			Values:       values,
-			// Reasoning/PromptCache carry the legacy CustomProvider capability flags
-			// forward for a migrated openai-compat instance (_Docs/71 §3); config
-			// keys "reasoning"/"promptCache" are not standard FieldSpec keys so they
-			// are read directly off Config rather than through Values.
-			Reasoning:   inst.Config["reasoning"] == "true",
-			PromptCache: inst.Config["promptCache"],
 		})
 	}
 	return out
@@ -127,12 +121,6 @@ func (s *Server) handleListProviderKinds(w http.ResponseWriter, _ *http.Request)
 // of the running system, so the two are joined here rather than in the store.
 type providerInstanceResp struct {
 	settings.ProviderInstanceDTO
-	// Reachable reports whether a LOCAL model server is answering right now.
-	// A pointer so the UI can tell "not reachable" from "not applicable": it is
-	// nil (omitted) for every hosted kind, whose liveness is not probed. A local
-	// instance can be fully configured yet unusable because the app behind it is
-	// closed, and no stored field can express that.
-	Reachable *bool `json:"reachable,omitempty"`
 }
 
 // handleListProviders returns every configured provider instance (secrets
@@ -142,7 +130,7 @@ func (s *Server) handleListProviders(w http.ResponseWriter, _ *http.Request) {
 	dtos := s.providerStore.DTOs()
 	out := make([]providerInstanceResp, len(dtos))
 	for i, d := range dtos {
-		out[i] = providerInstanceResp{ProviderInstanceDTO: d, Reachable: s.providers.Reachable(d.ID)}
+		out[i] = providerInstanceResp{ProviderInstanceDTO: d}
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -295,7 +283,7 @@ func (s *Server) handleUpsertProvider(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if creating && (inst.KindID == "claude-cli" || inst.KindID == "codex-cli") && strings.TrimSpace(inst.Config[providers.FieldKeyConfigDir]) == "" {
+	if creating && (inst.KindID == "claude-cli" || inst.KindID == "codex-cli" || inst.KindID == "opencode-cli") && strings.TrimSpace(inst.Config[providers.FieldKeyConfigDir]) == "" {
 		home := filepath.Join(filepath.Dir(s.providerStore.Path()), "provider-homes", inst.ID)
 		if err := os.MkdirAll(home, 0o700); err != nil {
 			_ = s.providerStore.Delete(inst.ID)

@@ -125,12 +125,6 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		lock.release()
 		return nil, err
 	}
-	if settingsStore.Get().AnthropicKeyEnc == "" && cfg.AnthropicAPIKey != "" {
-		key := cfg.AnthropicAPIKey
-		if _, err := settingsStore.Apply(settings.Patch{AnthropicKey: &key}); err != nil {
-			logger.Warn("migrate env anthropic key failed", "error", err)
-		}
-	}
 
 	// Provider instances (Faz 2, _Docs/71 §2.4/§3): a second, independent
 	// file-backed store from settings.json. EnsureMigrated derives the initial
@@ -154,8 +148,26 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 
 	registry := providers.NewRegistry()
 	logger.Info("providers",
-		"anthropic_api", settingsStore.AnthropicKey() != "",
-		"claude_cli", registry.ClaudeCLIAvailable())
+		"claude_cli", registry.ClaudeCLIAvailable(),
+		"codex_cli", registry.CodexCLIPath() != "",
+		"opencode_cli", registry.OpenCodeCLIPath() != "")
+	// opencode-cli arrived after many installs' one-shot migration ran; seed its
+	// default instance whenever the binary is present and none exists yet.
+	if registry.OpenCodeCLIPath() != "" {
+		if added, err := providerStore.EnsureKindInstance("opencode-cli", "OpenCode CLI"); err != nil {
+			ln.Close()
+			lock.release()
+			return nil, err
+		} else if added {
+			logger.Info("providers.json: added default opencode-cli instance", "binary", registry.OpenCodeCLIPath())
+		}
+		// Keys of the removed HTTP kinds move into opencode's credential store
+		// (never overwriting a vendor the user already logged in to).
+		registered := func(kindID string) bool { return providers.TransportOf(kindID) != "" }
+		if _, err := providerStore.ExportLegacyKeysToOpenCode(cfg.DataDir, registered); err != nil {
+			logger.Warn("legacy provider keys were not copied into the opencode auth store", "err", err)
+		}
+	}
 
 	// Process-wide tunables (autonomy pause, title-model override) shared by
 	// every workspace runtime and updated from the settings screen.

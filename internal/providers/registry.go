@@ -2,7 +2,6 @@ package providers
 
 import (
 	"cmp"
-	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -26,11 +25,6 @@ type Instance struct {
 	// Values holds every field the instance's kind declares (Manifest.Fields),
 	// both open config and decrypted secrets, keyed by FieldSpec.Key.
 	Values map[string]string
-	// Reasoning/PromptCache are the openai-compat-only capability flags carried
-	// over from the legacy CustomSpec (_Docs/71 §3's openai-compat migration);
-	// not a standard FieldSpec key because no built-in kind uses them.
-	Reasoning   bool
-	PromptCache string
 }
 
 // Registry builds providers by instance id, resolving each instance's config
@@ -39,13 +33,9 @@ type Instance struct {
 type Registry struct {
 	mu sync.RWMutex
 
-	claudeCLIPath string // autodetected `claude` binary path fallback, or "" if absent
-	codexCLIPath  string // autodetected `codex` binary path fallback, or "" if absent
-
-	betaExtendedCache    bool // anthropic extended prompt-cache TTL beta
-	betaContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
-	betaServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
-	betaRefusalFallback  bool // anthropic server-side refusal fallback (Fable-class requests)
+	claudeCLIPath   string // autodetected `claude` binary path fallback, or "" if absent
+	codexCLIPath    string // autodetected `codex` binary path fallback, or "" if absent
+	opencodeCLIPath string // autodetected `opencode` binary path fallback, or "" if absent
 
 	instances map[string]Instance // provider instances, keyed by ID (Faz 2, _Docs/71 §2.3)
 	// generation increments on every SetInstances (see Generation).
@@ -58,10 +48,12 @@ type Registry struct {
 func NewRegistry() *Registry {
 	claudePath := lookupClaudeBinary()
 	codexPath := lookupCodexBinary()
+	opencodePath := lookupOpenCodeBinary()
 	return &Registry{
-		claudeCLIPath: claudePath,
-		codexCLIPath:  codexPath,
-		instances:     map[string]Instance{},
+		claudeCLIPath:   claudePath,
+		codexCLIPath:    codexPath,
+		opencodeCLIPath: opencodePath,
+		instances:       map[string]Instance{},
 	}
 }
 
@@ -103,18 +95,6 @@ func (r *Registry) SetCodexCLIPath(path string) {
 	}
 	r.mu.Lock()
 	r.codexCLIPath = path
-	r.mu.Unlock()
-}
-
-// SetAnthropicBetas toggles the optional Anthropic beta capabilities applied to
-// anthropic provider instances. These stay app-wide (not per-instance): they
-// are experimental API behaviour switches, not credentials.
-func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompaction, refusalFallback bool) {
-	r.mu.Lock()
-	r.betaExtendedCache = extendedCache
-	r.betaContextEditing = contextEditing
-	r.betaServerCompaction = serverCompaction
-	r.betaRefusalFallback = refusalFallback
 	r.mu.Unlock()
 }
 
@@ -248,6 +228,21 @@ func (r *Registry) CodexCLIPath() string {
 	return r.codexCLIPath
 }
 
+// OpenCodeCLIPath returns the resolved path to the `opencode` binary, or ""
+// when it was not found.
+func (r *Registry) OpenCodeCLIPath() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.opencodeCLIPath
+}
+
+// SetOpenCodeCLIPath overrides the autodetected opencode binary path fallback.
+func (r *Registry) SetOpenCodeCLIPath(path string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.opencodeCLIPath = path
+}
+
 // resolveInstance returns the registered instance for id and its kind (looked
 // up by the instance's KindID), or an error if either is missing. The empty
 // id maps to the keyless "claude-cli" default instance, matching the
@@ -305,73 +300,24 @@ func (r *Registry) resolve(inst Instance) ResolvedConfig {
 	if codexPath == "" {
 		codexPath = r.codexCLIPath
 	}
+	opencodePath := v[FieldKeyCLIPath]
+	if opencodePath == "" {
+		opencodePath = r.opencodeCLIPath
+	}
 	return ResolvedConfig{
-		Key:              v[FieldKeyAPIKey],
-		BaseURL:          v[FieldKeyBaseURL],
-		CLIPath:          cliPath,
-		CLIConfigDir:     v[FieldKeyConfigDir],
-		CLIAuthKind:      v[FieldKeyAuthKind],
-		CLIAuthToken:     v[FieldKeyAuthToken],
-		CodexPath:        codexPath,
-		CodexConfigDir:   v[FieldKeyConfigDir],
-		ExtendedCache:    r.betaExtendedCache,
-		ContextEditing:   r.betaContextEditing,
-		ServerCompaction: r.betaServerCompaction,
-		RefusalFallback:  r.betaRefusalFallback,
-		InstanceID:       inst.ID,
-		DefaultModel:     inst.DefaultModel,
-		Models:           inst.Models,
-		Reasoning:        inst.Reasoning,
-		PromptCache:      inst.PromptCache,
-		Values:           v,
+		CLIPath:           cliPath,
+		CLIConfigDir:      v[FieldKeyConfigDir],
+		CLIAuthKind:       v[FieldKeyAuthKind],
+		CLIAuthToken:      v[FieldKeyAuthToken],
+		CodexPath:         codexPath,
+		CodexConfigDir:    v[FieldKeyConfigDir],
+		OpenCodePath:      opencodePath,
+		OpenCodeConfigDir: v[FieldKeyConfigDir],
+		InstanceID:        inst.ID,
+		DefaultModel:      inst.DefaultModel,
+		Models:            inst.Models,
+		Values:            v,
 	}
-}
-
-// Available reports whether the provider instance id is registered and usable
-// with its current configuration (key set / CLI present). Used by the catalog
-// handler. An unregistered id reports false rather than erroring — the
-// catalog only needs a yes/no badge.
-// FirstAvailableOfKind returns the id of the first ENABLED, available provider
-// instance of the given kind (ids sorted, so the pick is deterministic), or ""
-// when none is usable. Auxiliary-call routing uses it to find a configured
-// first-party API instance without hard-coding the instance id.
-func (r *Registry) FirstAvailableOfKind(kind string) string {
-	r.mu.RLock()
-	var ids []string
-	for _, inst := range r.instances {
-		if inst.KindID == kind && inst.Enabled {
-			ids = append(ids, inst.ID)
-		}
-	}
-	r.mu.RUnlock()
-	slices.Sort(ids)
-	for _, id := range ids {
-		if r.Available(id) {
-			return id
-		}
-	}
-	return ""
-}
-
-// Reachable probes a local instance's server and returns the verdict, or nil
-// when the instance is not a local endpoint (every hosted kind). Probes are
-// cached, so listing providers repeatedly costs one request per server per few
-// seconds rather than one per call.
-//
-// It is separate from Available on purpose: Available is a synchronous, pure
-// configuration check called on every catalog build and must never do I/O,
-// while a local instance can be fully configured (Available) yet unusable
-// because the app behind it is closed.
-func (r *Registry) Reachable(id string) *bool {
-	inst, k, err := r.resolveInstance(id)
-	if err != nil {
-		return nil
-	}
-	got, ok := LocalEndpointReachable(context.Background(), k.Manifest().Kind, r.resolve(inst))
-	if !ok {
-		return nil
-	}
-	return &got
 }
 
 func (r *Registry) Available(id string) bool {
@@ -393,14 +339,6 @@ func (r *Registry) Get(id string) (Provider, error) {
 	prov, err := k.Build(r.resolve(inst))
 	if err != nil {
 		return nil, err
-	}
-	// Apply the kind's declared per-request budget override (0 = leave the
-	// model-class default). Threading it here keeps every kind's build function
-	// free of timeout plumbing; clients that support it implement the interface.
-	if secs := k.Manifest().RequestTimeoutSecs; secs > 0 {
-		if tc, ok := prov.(requestTimeoutConfigurable); ok {
-			tc.setRequestTimeout(secs)
-		}
 	}
 	return prov, nil
 }

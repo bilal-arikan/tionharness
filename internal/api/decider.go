@@ -43,18 +43,15 @@ type deciderModelView struct {
 
 // deciderView is everything the settings page renders.
 type deciderView struct {
-	Config      decider.Config      `json:"config"`
-	Status      decider.Status      `json:"status"`
-	Backends    []decider.Manifest  `json:"backends"`
-	Groups      []string            `json:"groups"`
-	Authorities []decider.Authority `json:"authorities"`
-	Models      []deciderModelView  `json:"models"`
-	// ProviderCandidates lists, per backend, the provider accounts whose
-	// credentials a model of that backend can borrow.
-	ProviderCandidates map[string][]decider.InstanceInfo `json:"providerCandidates"`
-	Stats              []decider.AuthorityStats          `json:"stats"`
-	Recent             []decider.Record                  `json:"recent"`
-	StatsDays          int                               `json:"statsDays"`
+	Config      decider.Config           `json:"config"`
+	Status      decider.Status           `json:"status"`
+	Backends    []decider.Manifest       `json:"backends"`
+	Groups      []string                 `json:"groups"`
+	Authorities []decider.Authority      `json:"authorities"`
+	Models      []deciderModelView       `json:"models"`
+	Stats       []decider.AuthorityStats `json:"stats"`
+	Recent      []decider.Record         `json:"recent"`
+	StatsDays   int                      `json:"statsDays"`
 }
 
 func (s *Server) deciderHubOrError(w http.ResponseWriter) *decider.Hub {
@@ -80,23 +77,33 @@ func (s *Server) deciderView(hub *decider.Hub, days int) deciderView {
 		}
 		views = append(views, v)
 	}
-	backends := decider.Manifests()
-	candidates := make(map[string][]decider.InstanceInfo, len(backends))
-	for _, b := range backends {
-		candidates[b.ID] = nonNil(hub.ProviderCandidates(b.ID))
-	}
 	return deciderView{
-		Config:             hub.Config(),
-		Status:             hub.Status(),
-		Backends:           backends,
-		Groups:             decider.Groups(),
-		Authorities:        decider.Authorities(),
-		Models:             views,
-		ProviderCandidates: candidates,
-		Stats:              nonNil(hub.Stats(window)),
-		Recent:             nonNil(hub.Recent(deciderRecentLimit)),
-		StatsDays:          days,
+		Config:      hub.Config(),
+		Status:      hub.Status(),
+		Backends:    decider.Manifests(),
+		Groups:      decider.Groups(),
+		Authorities: decider.Authorities(),
+		Models:      views,
+		Stats:       nonNil(hub.Stats(window)),
+		Recent:      nonNil(hub.Recent(deciderRecentLimit)),
+		StatsDays:   days,
 	}
+}
+
+// initDecider builds the process-wide decision-model hub and hands it to the
+// shared tunables, where every workspace runtime finds it. Its settings live in
+// <dataDir>/decider.json and its models in <dataDir>/decider/models.json, apart
+// from settings.json; a model's API key is sealed with the provider-secret cipher.
+func (s *Server) initDecider() {
+	var secrets decider.SecretBox
+	if s.providerStore != nil {
+		secrets = s.providerStore.Cipher()
+	}
+	s.tun.SetDecider(decider.NewHub(decider.HubOptions{
+		DataDir: s.dataDir,
+		Secrets: secrets,
+		Logger:  s.logger.With("subsystem", "decider"),
+	}))
 }
 
 func (s *Server) handleGetDecider(w http.ResponseWriter, r *http.Request) {

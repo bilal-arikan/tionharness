@@ -88,24 +88,12 @@ func (s *decisionStub) set(fn func(s *decisionStub)) {
 	s.mu.Unlock()
 }
 
-type stubSource struct{ url string }
-
-func (f stubSource) Endpoint(id string) (decider.Endpoint, error) {
-	return decider.Endpoint{InstanceID: id, Kind: "openrouter", BaseURL: f.url + "/api/v1", Authorize: func(http.Header) {}}, nil
-}
-
-func (f stubSource) Instances() []decider.InstanceInfo {
-	return []decider.InstanceInfo{{ID: "PRV1", Kind: "openrouter", BaseURL: f.url + "/api/v1", Enabled: true, Available: true}}
-}
-
-func (stubSource) Generation() uint64 { return 1 }
-
 // wireDecider enables the decider on tun against stub, with the given
 // authorities at mode. The hub's seeded default model (Jev through OpenRouter)
-// borrows the stub's provider credentials.
+// is re-pointed at the stub with a test key.
 func wireDecider(t *testing.T, tun *Tunables, stub *decisionStub, modes map[string]decider.Mode) *decider.Hub {
 	t.Helper()
-	hub := decider.NewHub(decider.HubOptions{Source: stubSource{url: stub.URL}})
+	hub := newStubDeciderHub(t, stub.URL)
 	cfg := hub.Config()
 	cfg.Enabled = true
 	for id, m := range modes {
@@ -117,6 +105,29 @@ func wireDecider(t *testing.T, tun *Tunables, stub *decisionStub, modes map[stri
 		t.Fatal(err)
 	}
 	tun.SetDecider(hub)
+	return hub
+}
+
+// plainSecretBox stores decision-model keys unencrypted; tests only need the
+// key to round-trip into the Authorization header.
+type plainSecretBox struct{}
+
+func (plainSecretBox) Encrypt(s string) (string, error) { return s, nil }
+func (plainSecretBox) Decrypt(s string) (string, error) { return s, nil }
+
+// newStubDeciderHub builds an in-memory hub whose seeded DM1 model answers
+// from the decision stub at url (own credentials, test key).
+func newStubDeciderHub(t *testing.T, url string) *decider.Hub {
+	t.Helper()
+	hub := decider.NewHub(decider.HubOptions{Secrets: plainSecretBox{}})
+	seed, ok := hub.Model("DM1")
+	if !ok {
+		t.Fatal("hub did not seed DM1")
+	}
+	if _, err := hub.UpsertModel(decider.ModelInput{ID: seed.ID, Backend: seed.Backend, Label: seed.Label, Enabled: true, Model: seed.Model,
+		BaseURL: url + "/api/v1", TimeoutMs: seed.TimeoutMs, Secrets: map[string]string{decider.SecretAPIKey: "test-key"}}); err != nil {
+		t.Fatal(err)
+	}
 	return hub
 }
 

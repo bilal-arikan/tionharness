@@ -12,7 +12,7 @@ var systemAgentModelSkipLogs sync.Map
 // calling provider can serve it. Claude aliases and IDs are specific to the
 // Anthropic API and Claude CLI providers.
 func adoptSystemAgentModel(logger *slog.Logger, systemKey, provider, currentModel, suggestedModel string) string {
-	if !isClaudeModel(suggestedModel) || provider == "" || provider == "anthropic" || provider == "claude-cli" {
+	if !isClaudeModel(suggestedModel) || provider == "" || provider == "claude-cli" {
 		return suggestedModel
 	}
 

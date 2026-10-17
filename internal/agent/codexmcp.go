@@ -29,7 +29,18 @@ import (
 // (toServerConfig, mcp.SplitNamespaced, the interaction tier keys) are reused
 // directly.
 
-// codexMCPSpec builds the CLIMCPSpec for one codex turn.
+// usesServerSpec reports whether provider consumes its MCP delegation as a
+// structured CLIMCPSpec.Servers map rendered into its own config file (codex
+// config.toml, opencode opencode.json) rather than claude's --mcp-config path.
+func usesServerSpec(provider providers.Provider) bool {
+	switch provider.(type) {
+	case *providers.CodexCLI, *providers.OpenCodeCLI:
+		return true
+	}
+	return false
+}
+
+// codexMCPSpec builds the CLIMCPSpec for one codex (or opencode) turn.
 //
 // It wires exactly the same TionHarness bridge climcp.go wires:
 //   - every enabled external MCP server (when mcpEnabled), keyed by its

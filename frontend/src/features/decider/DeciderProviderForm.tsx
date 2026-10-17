@@ -11,12 +11,10 @@ import type {
   DeciderModelInput,
   DeciderModelInstance,
   DeciderPreset,
-  DeciderProviderInstance,
 } from '@/types/decider'
 import { isCustomModel, modelPrice } from './deciderModel'
 import {
   API_KEY,
-  canBorrow,
   draftFromBackend,
   draftFromPreset,
   isLocalUrl,
@@ -29,7 +27,6 @@ import { fieldInputCls, formCls, primaryButtonCls, secondaryButtonCls } from './
 
 interface Props {
   backends: DeciderBackend[]
-  candidates: Record<string, DeciderProviderInstance[]>
   initial: DeciderModelInput
   editing?: DeciderModelInstance
   onCancel: () => void
@@ -41,14 +38,7 @@ const CUSTOM = '__custom__'
 // presetKey identifies a preset across backends in the template select.
 const presetKey = (b: DeciderBackend, p: DeciderPreset) => `${b.id}/${p.id}`
 
-export function DeciderProviderForm({
-  backends,
-  candidates,
-  initial,
-  editing,
-  onCancel,
-  onSave,
-}: Props) {
+export function DeciderProviderForm({ backends, initial, editing, onCancel, onSave }: Props) {
   const { t } = useTranslation('decider')
   const [draft, setDraft] = useState<DeciderModelInput>(initial)
   const [template, setTemplate] = useState('')
@@ -70,13 +60,9 @@ export function DeciderProviderForm({
   const backendLabel = (b: DeciderBackend) => t(`backend.${b.id}.label`, { defaultValue: b.label })
   const presetLabel = (p: DeciderPreset) => t(`preset.${p.id}.label`, { defaultValue: p.label })
   const keyStored = !!editing?.secretsSet[API_KEY]
-  const providers = candidates[draft.backend] ?? []
-  const staleProvider =
-    draft.providerInstanceId !== '' && !providers.some((p) => p.id === draft.providerInstanceId)
   const price = modelPrice(backend, draft.model)
-  const local =
-    draft.credentials === 'own' && isLocalUrl(draft.baseUrl || backend?.defaultBaseUrl || '')
-  const missingKey = keyMissing(backend, draft, keyText, keyStored, clearKey)
+  const local = isLocalUrl(draft.baseUrl || backend?.defaultBaseUrl || '')
+  const missingKey = keyMissing(backend, keyText, keyStored, clearKey)
   const set = <K extends keyof DeciderModelInput>(key: K, value: DeciderModelInput[K]) =>
     setDraft((d) => ({ ...d, [key]: value }))
 
@@ -209,92 +195,45 @@ export function DeciderProviderForm({
           </FieldShell>
         )}
 
-        {canBorrow(backend) && (
-          <FieldShell label={t('form.credentials')}>
-            <select
-              className={fieldInputCls}
-              value={draft.credentials}
-              onChange={(e) =>
-                set('credentials', e.target.value as DeciderModelInput['credentials'])
-              }
-              data-testid="decider-provider-credentials"
-            >
-              <option value="own">{t('form.credentialsOwn')}</option>
-              <option value="provider">{t('form.credentialsProvider')}</option>
-            </select>
-          </FieldShell>
-        )}
-
-        {draft.credentials === 'provider' ? (
-          <FieldShell
-            label={t('form.provider')}
-            help={t('form.credentialsProviderHint')}
-            warning={providers.length === 0 ? t('form.providerMissing') : undefined}
-          >
-            <select
-              className={fieldInputCls}
-              value={draft.providerInstanceId}
-              onChange={(e) => set('providerInstanceId', e.target.value)}
-              data-testid="decider-provider-account"
-            >
-              <option value="">{t('form.providerAuto')}</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label ? `${p.label} (${p.id})` : p.id}
-                </option>
-              ))}
-              {staleProvider && (
-                <option value={draft.providerInstanceId}>
-                  {t('form.providerUnavailable', { id: draft.providerInstanceId })}
-                </option>
-              )}
-            </select>
-          </FieldShell>
-        ) : (
-          <>
-            <FieldShell
-              label={t('form.baseUrl')}
-              help={t('form.baseUrlHint', { url: backend?.defaultBaseUrl ?? '' })}
-            >
+        <FieldShell
+          label={t('form.baseUrl')}
+          help={t('form.baseUrlHint', { url: backend?.defaultBaseUrl ?? '' })}
+        >
+          <input
+            className={fieldInputCls}
+            value={draft.baseUrl}
+            placeholder={backend?.defaultBaseUrl}
+            onChange={(e) => set('baseUrl', e.target.value.trim())}
+            data-testid="decider-provider-baseurl"
+          />
+        </FieldShell>
+        <FieldShell
+          label={backend?.keyRequired ? t('form.apiKey') : t('form.apiKeyOptional')}
+          warning={missingKey ? t('form.apiKeyRequired') : undefined}
+        >
+          <input
+            type="password"
+            autoComplete="off"
+            className={fieldInputCls}
+            value={keyText}
+            placeholder={keyStored && !clearKey ? t('form.apiKeyStored') : ''}
+            onChange={(e) => setKeyText(e.target.value)}
+            data-testid="decider-provider-key"
+          />
+          {keyStored && !clearKey && (
+            <span className="text-[10px] text-[var(--color-success)]">{t('form.apiKeySaved')}</span>
+          )}
+          {keyStored && (
+            <span className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]">
               <input
-                className={fieldInputCls}
-                value={draft.baseUrl}
-                placeholder={backend?.defaultBaseUrl}
-                onChange={(e) => set('baseUrl', e.target.value.trim())}
-                data-testid="decider-provider-baseurl"
+                type="checkbox"
+                checked={clearKey}
+                onChange={(e) => setClearKey(e.target.checked)}
               />
-            </FieldShell>
-            <FieldShell
-              label={backend?.keyRequired ? t('form.apiKey') : t('form.apiKeyOptional')}
-              warning={missingKey ? t('form.apiKeyRequired') : undefined}
-            >
-              <input
-                type="password"
-                autoComplete="off"
-                className={fieldInputCls}
-                value={keyText}
-                placeholder={keyStored && !clearKey ? t('form.apiKeyStored') : ''}
-                onChange={(e) => setKeyText(e.target.value)}
-                data-testid="decider-provider-key"
-              />
-              {keyStored && !clearKey && (
-                <span className="text-[10px] text-[var(--color-success)]">
-                  {t('form.apiKeySaved')}
-                </span>
-              )}
-              {keyStored && (
-                <span className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]">
-                  <input
-                    type="checkbox"
-                    checked={clearKey}
-                    onChange={(e) => setClearKey(e.target.checked)}
-                  />
-                  {t('form.apiKeyClear')}
-                </span>
-              )}
-            </FieldShell>
-          </>
-        )}
+              {t('form.apiKeyClear')}
+            </span>
+          )}
+        </FieldShell>
 
         <FieldShell label={t('form.timeout')} help={t('form.timeoutHint')}>
           <input

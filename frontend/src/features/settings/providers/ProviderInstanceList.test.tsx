@@ -71,7 +71,7 @@ describe('ProviderInstanceList local reachability', () => {
   // Absent means "not probed" (every hosted kind), NOT "down" — flagging those
   // would mark every working Anthropic/OpenRouter instance as offline.
   it('shows no badge for a hosted provider, which is never probed', () => {
-    const html = renderList([instance({ kindId: 'anthropic', reachable: undefined })])
+    const html = renderList([instance({ kindId: 'openrouter', reachable: undefined })])
     expect(html.textContent).not.toContain('sunucu kapalı')
   })
 })

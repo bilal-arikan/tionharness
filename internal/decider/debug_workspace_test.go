@@ -12,6 +12,7 @@ func TestDecisionDebugSeparatesRepeatedSessionIDsByWorkspace(t *testing.T) {
 	opts := h.opts
 	opts.DataDir = t.TempDir()
 	h = NewHub(opts)
+	pointSeedAt(t, h, server)
 	cfg := h.Config()
 	cfg.Enabled = true
 	if _, err := h.Update(cfg); err != nil {

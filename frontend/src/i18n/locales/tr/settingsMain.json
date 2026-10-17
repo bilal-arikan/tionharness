@@ -71,41 +71,6 @@
     "unavailable": "kullanılamıyor",
     "empty": "Ajan atamak için bir workspace oluştur."
   },
-  "anthropic": {
-    "description": "Bu seçenekler Claude CLI için değil, yalnızca desteklenen Anthropic API modelleri için geçerlidir.",
-    "extendedCache": {
-      "label": "Uzatılmış prompt cache (1 saat)",
-      "hint": "Yeniden kullanılabilir prompt ön eklerini daha uzun süre cache'te tut."
-    },
-    "contextEditing": {
-      "label": "Sunucu tarafı bağlam düzenleme",
-      "hint": "Cache'lenmiş ön eki korurken eski araç sonuçlarını buda."
-    },
-    "toolSearch": {
-      "label": "Native araç arama",
-      "hint": "Desteklenen Anthropic modellerinin ertelenmiş araçları sunucuda keşfetmesini sağla."
-    },
-    "programmaticTools": {
-      "label": "Programatik araç çağrıları",
-      "hint": "Araç orkestrasyonunu sağlayıcı container'ında çalıştır. Yerel kod modu ayrı bir yetenektir; izin kontrolleri uygulanmaya devam eder."
-    },
-    "webTools": {
-      "label": "Sunucu tarafı web araçları",
-      "hint": "Araçları etkin ajanlar için sağlayıcı barındırmalı arama ve sayfa alımını aç. Kullanım ek ücrete tabi olabilir."
-    },
-    "compaction": {
-      "label": "Sunucu tarafı sıkıştırma",
-      "hint": "Uzun araç döngülerini sunucuda sıkıştır. İstemci tarafı konuşma sıkıştırması ayrı kalır."
-    },
-    "refusalFallback": {
-      "label": "Reddetme fallback'i",
-      "hint": "Desteklenen Fable/Mythos isteklerinde yapılandırılmış API fallback'ini kullan."
-    },
-    "taskBudget": {
-      "label": "Otonom görev bütçesi (token)",
-      "hint": "0 API görev bütçesini kapatır. Desteklenen adaptif modeller etkin olduğunda en az 20.000 token kullanır."
-    }
-  },
   "tools": {
     "shell": {
       "label": "Shell erişimi",
@@ -234,10 +199,6 @@
     "researchAgents": {
       "label": "Claude CLI araştırma ajanları",
       "hint": "Native Explore ve Plan ajanlarına izin ver. TionHarness ajanlarına delegasyon ayrı kalır."
-    },
-    "auxRouting": {
-      "label": "Yardımcı çağrılarda Anthropic API kullan",
-      "hint": "Desteklenen başlık, özet ve araçsız sistem çağrılarını kullanılabilir bir Anthropic API örneği üzerinden yönlendir. Bu çağrılar CLI aboneliği yerine API faturalaması kullanır."
     }
   },
   "commands": {

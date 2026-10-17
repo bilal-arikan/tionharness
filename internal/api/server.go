@@ -287,7 +287,6 @@ func (s *Server) applySettings() {
 	// the (now legacy, migration-only) top-level settings.
 	exttools.SetPathOverride(exttools.ClaudeToolName, instanceFieldValue(instances, "claude-cli", providers.FieldKeyCLIPath))
 	exttools.SetPathOverride(exttools.CodexToolName, instanceFieldValue(instances, "codex-cli", providers.FieldKeyCLIPath))
-	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing, cur.AnthropicServerCompaction, cur.AnthropicRefusalFallback)
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
 	s.convo.SetAutoCompactMode(cur.AutoCompactMode)
@@ -315,7 +314,6 @@ func (s *Server) applySettings() {
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
 	s.tun.SetClaudeCLIToolAllowlist(cur.ClaudeCLIToolAllowlist)
 	s.tun.SetClaudeCLINativeSubagents(cur.ClaudeCLINativeSubagents)
-	s.tun.SetAuxNativeRouting(cur.AuxNativeRouting)
 	s.tun.SetClaudeSysPromptFile(cur.ClaudeSysPromptFile)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnQueueMax, cur.SpawnMaxPerTurn)
@@ -323,6 +321,8 @@ func (s *Server) applySettings() {
 	s.tun.SetFlowRunRetention(cur.FlowRunRetention)
 	s.tun.SetChatTurnIdleTimeoutMinutes(cur.ChatTurnIdleTimeoutMin)
 	providers.SetCodexIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleSec) * time.Second)
+	// opencode-cli shares the codex stdout-idle window: same transport shape.
+	providers.SetOpenCodeIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleSec) * time.Second)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
 	s.tun.SetTurnIdleWatchdogMinutes(cur.TurnIdleWatchdogMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
@@ -333,11 +333,6 @@ func (s *Server) applySettings() {
 	s.tun.SetCoordinatorSettleGrace(cur.CoordinatorSettleGraceSec)
 	s.tun.SetCoordinatorStallGuard(cur.CoordinatorStallGuard, cur.CoordinatorStallSweepMin, cur.CoordinatorStallMaxNudges)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.AutonomousBootSeq)
-	s.tun.SetAutonomousTaskBudget(cur.AutonomousTaskBudgetTokens)
-	s.tun.SetNativeToolSearch(cur.AnthropicNativeToolSearch)
-	s.tun.SetProgrammaticTools(cur.AnthropicProgrammaticTools)
-	s.tun.SetWebTools(cur.AnthropicWebTools)
-	s.tun.SetServerCompaction(cur.AnthropicServerCompaction)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetProviderRetryMax(cur.MaxProviderRetries)
 	s.tun.SetToolGuard(cur.ToolGuardWarnings, cur.ToolGuardHardStop)

@@ -134,6 +134,7 @@
     "thinkingHelp": "Extended reasoning applies to tool-free chat with the anthropic provider. Under claude-cli, the selected level is passed to the subprocess and mapped to CLI effortLevel. High+ and Max deep-work tiers reach the CLI. Max is applied with CLAUDE_CODE_EFFORT_LEVEL=max because settings.json rejects it. Thinking disables parallel tool batches (think XOR batch). Off disables thinking entirely with MAX_THINKING_TOKENS=0.",
     "thinkingOffHelp": "Off + claude-cli: Claude Code 2.1.203 and newer do not make parallel tool calls while thinking is enabled. This setting restores parallel batches, making runs faster and cheaper at the cost of deep reasoning.",
     "permissionHelp": "Read-only permits only reading tools. Ask shows an approval dialog for write and command tools; autonomous runs reject these actions when nobody can approve. For claude-cli, these modes map to plan, acceptEdits, and bypass.",
+    "bridgeApprovalNote": "Bridge approval: {{provider}} cannot show an approval dialog in headless mode, so its own edit and shell tools are auto-rejected under Ask. Only the TionHarness bridge tools (shell, files via the Interaction server) go through real approval.",
     "nativeWebSearchHelp": "Allow the CLI provider to use its own web search. This is enabled by default and provider searches still appear in the activity trace. Turning it off disables Codex web_search and Claude CLI WebSearch/WebFetch; searches then use the bridged TionHarness tools so tracking and usage counts apply.",
     "nativeShellHelp": "Off by default: Claude Code and Codex use the TionHarness shell when the shell bridge is enabled. Turn this on to also allow the provider's own shell. Native commands use the provider's permissions and run outside TionHarness shell approval and background process management.",
     "coordinatorHelp": "Start new sessions opened by this agent in coordinator mode. The coordinator handbook and worker-management tools are available automatically. Existing sessions are unaffected, and the agent can return its own session to single-task mode with set_coordinator_mode.",
@@ -145,25 +146,58 @@
   },
   "options": {
     "thinking": {
-      "off": { "label": "Off", "hint": "No thinking" },
-      "low": { "label": "Low", "hint": "~2K tokens / low effort" },
-      "medium": { "label": "Medium", "hint": "~8K tokens / medium effort" },
-      "high": { "label": "High", "hint": "~16K tokens / high effort" },
+      "off": {
+        "label": "Off",
+        "hint": "No thinking"
+      },
+      "low": {
+        "label": "Low",
+        "hint": "~2K tokens / low effort"
+      },
+      "medium": {
+        "label": "Medium",
+        "hint": "~8K tokens / medium effort"
+      },
+      "high": {
+        "label": "High",
+        "hint": "~16K tokens / high effort"
+      },
       "xhigh": {
         "label": "Very high",
         "hint": "xhigh effort — coding and agent work on current models"
       },
-      "max": { "label": "Max", "hint": "max effort — hardest work on current models" },
-      "ultra": { "label": "Ultra", "hint": "ultra effort — Codex GPT-5 family" }
+      "max": {
+        "label": "Max",
+        "hint": "max effort — hardest work on current models"
+      },
+      "ultra": {
+        "label": "Ultra",
+        "hint": "ultra effort — Codex GPT-5 family"
+      }
     },
     "permission": {
-      "auto": { "label": "Automatic", "hint": "Run all tools without approval" },
-      "ask": { "label": "Ask", "hint": "Ask approval for writes and commands" },
-      "readOnly": { "label": "Read-only", "hint": "Block writes and commands" }
+      "auto": {
+        "label": "Automatic",
+        "hint": "Run all tools without approval"
+      },
+      "ask": {
+        "label": "Ask",
+        "hint": "Ask approval for writes and commands"
+      },
+      "readOnly": {
+        "label": "Read-only",
+        "hint": "Block writes and commands"
+      }
     },
     "boolean": {
-      "on": { "label": "On", "hint": "Enabled" },
-      "off": { "label": "Off", "hint": "Disabled" }
+      "on": {
+        "label": "On",
+        "hint": "Enabled"
+      },
+      "off": {
+        "label": "Off",
+        "hint": "Disabled"
+      }
     },
     "unknownBoolean": "Unknown boolean option: {{value}}"
   },
@@ -205,7 +239,10 @@
     "sharedHelp": "These skills are already available without assignment. Add one to pin it in the agent's system prompt and order.",
     "sharedAction": "{{description}} · Assign to pin it in prompt order",
     "sourceLabel": "· {{source}}",
-    "source": { "global": "Global", "workspace": "Workspace" }
+    "source": {
+      "global": "Global",
+      "workspace": "Workspace"
+    }
   },
   "tools": {
     "loading": "Loading tools…",

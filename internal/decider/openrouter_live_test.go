@@ -2,25 +2,11 @@ package decider
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
 )
-
-// liveSource resolves every instance id to one real OpenRouter key.
-type liveSource struct{ key string }
-
-func (s liveSource) Endpoint(id string) (Endpoint, error) {
-	return Endpoint{InstanceID: id, Kind: "openrouter", Authorize: func(h http.Header) { h.Set("Authorization", "Bearer "+s.key) }}, nil
-}
-
-func (liveSource) Instances() []InstanceInfo {
-	return []InstanceInfo{{ID: "live", Kind: "openrouter", Enabled: true, Available: true}}
-}
-
-func (liveSource) Generation() uint64 { return 1 }
 
 // TestLiveOpenRouterDecisions is a REAL call to OpenRouter's Decisions API
 // (TypeSafe Jev) through the Hub — client, request shape, state preparation
@@ -34,14 +20,14 @@ func TestLiveOpenRouterDecisions(t *testing.T) {
 	if key == "" {
 		t.Skip("set OPENROUTER_LIVE_KEY=sk-or-... to run the live Decisions API test")
 	}
-	h := NewHub(HubOptions{Source: liveSource{key: key}})
+	h := NewHub(HubOptions{Secrets: fakeBox{}})
 	cfg := h.Config()
 	cfg.Enabled = true
 	if _, err := h.Update(cfg); err != nil {
 		t.Fatal(err)
 	}
 	seed, _ := h.Model("DM1")
-	if _, err := h.UpsertModel(ModelInput{ID: seed.ID, Backend: seed.Backend, Label: seed.Label, Enabled: true, Model: seed.Model, Credentials: CredentialsProvider, TimeoutMs: 10000}); err != nil {
+	if _, err := h.UpsertModel(ModelInput{ID: seed.ID, Backend: seed.Backend, Label: seed.Label, Enabled: true, Model: seed.Model, TimeoutMs: 10000, Secrets: map[string]string{SecretAPIKey: key}}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -81,7 +67,7 @@ func TestLiveOpenRouterDecisions(t *testing.T) {
 		a.Probability, resp.Answers["risk"].Score, resp.Answers["tier"].Choice, resp.Answers["tier"].Strength())
 
 	// The same account through OpenRouter's System One endpoint, bare TypeSafe id.
-	so, err := h.UpsertModel(ModelInput{Backend: SystemOneBackendID, Label: "Jev · System One", Enabled: true, Model: JevPinnedModel, Credentials: CredentialsProvider, TimeoutMs: 10000})
+	so, err := h.UpsertModel(ModelInput{Backend: SystemOneBackendID, Label: "Jev · System One", Enabled: true, Model: JevPinnedModel, BaseURL: openRouterDefaultBase, TimeoutMs: 10000, Secrets: map[string]string{SecretAPIKey: key}})
 	if err != nil {
 		t.Fatal(err)
 	}

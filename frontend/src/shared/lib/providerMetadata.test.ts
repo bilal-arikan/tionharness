@@ -54,8 +54,6 @@ function readStaticProviderModels(): Map<string, SourceModel[]> {
     if (models.length > 0) providers.set(providerId, models)
   }
 
-  const deepSeekModels = providers.get('deepseek')
-  if (deepSeekModels) providers.set('deepseek-anthropic', deepSeekModels)
   return providers
 }
 
@@ -119,26 +117,6 @@ describe('provider metadata localization', () => {
     expect(localizeProviderKind(unknown)).toEqual(unknown)
   })
 
-  it('supports the short built-in Anthropic-mode provider labels without matching custom labels', async () => {
-    await i18next.changeLanguage('en')
-
-    expect(
-      localizeCatalogEntry(
-        catalogEntry({ id: 'minimax-anthropic', label: 'MiniMax (Anthropic modu)', models: [] }),
-      ).label,
-    ).toBe('MiniMax (Anthropic mode · tool use + thinking)')
-    expect(
-      localizeCatalogEntry(
-        catalogEntry({ id: 'deepseek-anthropic', label: 'DeepSeek (Anthropic modu)', models: [] }),
-      ).label,
-    ).toBe('DeepSeek (Anthropic mode · tool use + thinking)')
-    expect(
-      localizeCatalogEntry(
-        catalogEntry({ id: 'minimax-anthropic', label: 'My Anthropic transport', models: [] }),
-      ).label,
-    ).toBe('My Anthropic transport')
-  })
-
   it('localizes provider-kind fields while preserving field keys, types, and options', async () => {
     const kind: ProviderKind = {
       id: 'claude-cli',
@@ -174,18 +152,8 @@ describe('provider metadata localization', () => {
   it('localizes representative field copy for every built-in provider kind', async () => {
     await i18next.changeLanguage('en')
     const samples: Array<[string, ProviderFieldSpec]> = [
-      ['anthropic', field('key')],
-      ['anthropic-compat', field('baseUrl')],
       ['claude-cli', field('cliPath', "otomatik (PATH'te ara)")],
       ['codex-cli', field('configDir')],
-      ['deepseek', field('baseUrl')],
-      ['deepseek-anthropic', field('key')],
-      ['minimax', field('baseUrl', 'varsayilan MiniMax uc noktasi')],
-      ['minimax-anthropic', field('key')],
-      ['openai-compat', field('baseUrl')],
-      ['openrouter', field('baseUrl')],
-      ['zai', field('baseUrl')],
-      ['lmstudio', field('key')],
     ]
 
     for (const [providerId, sourceField] of samples) {
@@ -205,33 +173,13 @@ describe('provider metadata localization', () => {
         )
       }
     }
-
-    const lmStudio = localizeProviderKind({
-      id: 'lmstudio',
-      label: 'LM Studio (yerel)',
-      transport: 'api',
-      multi: true,
-      fields: [field('key')],
-    })
-    expect(lmStudio.fields[0].label).toBe('API key (optional)')
   })
 
   it('covers every model declared by each static built-in provider kind', async () => {
     await i18next.changeLanguage('en')
     const providers = readStaticProviderModels()
 
-    expect([...providers.keys()].sort()).toEqual([
-      'anthropic',
-      'claude-cli',
-      'codex-cli',
-      'deepseek',
-      'deepseek-anthropic',
-      'lmstudio',
-      'minimax',
-      'minimax-anthropic',
-      'openrouter',
-      'zai',
-    ])
+    expect([...providers.keys()].sort()).toEqual(['claude-cli', 'codex-cli', 'opencode-cli'])
 
     for (const [providerId, models] of providers) {
       const localized = localizeCatalogEntry(

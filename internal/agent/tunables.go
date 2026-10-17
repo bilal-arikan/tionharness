@@ -154,15 +154,8 @@ type Tunables struct {
 	// read-only research types (Explore/Plan); their transcript is folded into the
 	// trace. On by default.
 	cliNativeSubagents bool
-	// auxNativeRouting runs tool-less auxiliary system-agent calls (title, summary,
-	// compaction, lessons, insight, recipe optimizer, stall judge) on a configured
-	// first-party anthropic API instance instead of the calling agent's CLI, so a
-	// ten-token verdict no longer pays Claude Code's ~36k-token base prompt. Only
-	// effective when the CALLING agent is on a CLI transport and an anthropic key
-	// is configured; otherwise the call stays where it was. On by default.
-	auxNativeRouting bool
-	delegMaxDepth    int // 0 → DefaultMaxDelegationDepth
-	delegMaxCalls    int // 0 → DefaultMaxDelegationCalls
+	delegMaxDepth      int // 0 → DefaultMaxDelegationDepth
+	delegMaxCalls      int // 0 → DefaultMaxDelegationCalls
 
 	agentMsgMaxBytes    int // 0 → DefaultAgentMessageMaxBytes (per-message body cap)
 	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
@@ -284,42 +277,6 @@ type Tunables struct {
 	// boot. See codemode_tunable.go.
 	codeMode bool
 
-	// autonomousTaskBudget (beta) — when > 0, autonomous turns announce this
-	// token budget to the model via the API-native task-budget directive
-	// (output_config.task_budget): the model sees a running countdown for the
-	// whole agentic loop and paces itself, wrapping up gracefully instead of
-	// being cut off by the iteration cap. A soft, model-aware complement to the
-	// hard guards (maxToolIters/auto-continue caps); only adaptive-class
-	// anthropic models honour it. 0 = off (default).
-	autonomousTaskBudget int
-
-	// nativeToolSearch (beta) — when true, native anthropic tool turns ship the
-	// FULL tool catalog with lazy tools marked defer_loading plus the server-side
-	// tool-search tool: the model discovers tools by regex without an
-	// activate_tools round-trip, discovered schemas are APPENDED (cache-safe),
-	// and the shipped tools block is byte-stable across loop iterations.
-	// TionHarness's own activation builtins keep working alongside. Off by default.
-	nativeToolSearch bool
-
-	// programmaticTools — when true, native anthropic tool turns add the
-	// code-execution server tool and mark eligible builtins code-callable
-	// (allowed_callers): the model invokes tools from Python inside Anthropic's
-	// container, keeping intermediate results out of context. The API-native
-	// counterpart of the local run_code code mode (which needs local Python);
-	// MCP and interactive tools are excluded. Off by default.
-	programmaticTools bool
-
-	// webTools — when true, native anthropic tool turns add the server-side
-	// web search + web fetch tools: searches run on Anthropic's infrastructure
-	// and return cited results in the same response. Billed per search
-	// (conservative per-turn max_uses ceilings applied). Off by default.
-	webTools bool
-
-	// serverCompaction mirrors the AnthropicServerCompaction beta so the tool
-	// loop knows to echo assistant content verbatim (compaction blocks must ride
-	// back exactly). The beta itself is applied provider-side (WithBetas).
-	serverCompaction bool
-
 	// decider is the app-wide decision-model hub (internal/decider), shared by
 	// every workspace runtime. nil until the API server wires it (tests: never),
 	// in which case every decision authority behaves as off. See tunables_decider.go.
@@ -360,7 +317,6 @@ func NewTunables() *Tunables {
 		// default: both are pure prefix-size levers (_Docs/17, 2026-09-03).
 		cliToolAllowlist:   true,
 		cliNativeSubagents: true,
-		auxNativeRouting:   true,
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
@@ -475,22 +431,6 @@ func (t *Tunables) ClaudeCLINativeSubagents() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.cliNativeSubagents
-}
-
-// SetAuxNativeRouting toggles running auxiliary system-agent calls on a
-// configured anthropic API instance when the calling agent is on a CLI. See
-// routeAuxAgent.
-func (t *Tunables) SetAuxNativeRouting(enabled bool) {
-	t.mu.Lock()
-	t.auxNativeRouting = enabled
-	t.mu.Unlock()
-}
-
-// AuxNativeRouting reports whether auxiliary calls prefer the native API.
-func (t *Tunables) AuxNativeRouting() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.auxNativeRouting
 }
 
 // SetClaudeSysPromptFile toggles routing the appended claude-cli system prompt
@@ -1194,84 +1134,4 @@ func (t *Tunables) AutoTagSessions() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.autoTagSessions
-}
-
-// SetAutonomousTaskBudget sets the token budget announced to autonomous turns
-// via the API-native task-budget directive. 0 disables; positive values below
-// the API minimum (20K) are raised by the provider.
-func (t *Tunables) SetAutonomousTaskBudget(tokens int) {
-	t.mu.Lock()
-	t.autonomousTaskBudget = tokens
-	t.mu.Unlock()
-}
-
-// AutonomousTaskBudget returns the configured autonomous task budget (0 = off).
-func (t *Tunables) AutonomousTaskBudget() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.autonomousTaskBudget < 0 {
-		return 0
-	}
-	return t.autonomousTaskBudget
-}
-
-// SetNativeToolSearch toggles native (server-side) tool search on the anthropic
-// tool loop: full catalog shipped with lazy tools deferred + the search server
-// tool. Off by default (beta API surface).
-func (t *Tunables) SetNativeToolSearch(enabled bool) {
-	t.mu.Lock()
-	t.nativeToolSearch = enabled
-	t.mu.Unlock()
-}
-
-// SetProgrammaticTools toggles programmatic tool calling (code_execution +
-// allowed_callers) on the native anthropic tool loop. Off by default.
-func (t *Tunables) SetProgrammaticTools(enabled bool) {
-	t.mu.Lock()
-	t.programmaticTools = enabled
-	t.mu.Unlock()
-}
-
-// ProgrammaticTools reports whether programmatic tool calling is enabled.
-func (t *Tunables) ProgrammaticTools() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.programmaticTools
-}
-
-// SetWebTools toggles the server-side web search + web fetch tools on the
-// native anthropic tool loop. Off by default.
-func (t *Tunables) SetWebTools(enabled bool) {
-	t.mu.Lock()
-	t.webTools = enabled
-	t.mu.Unlock()
-}
-
-// WebTools reports whether the server-side web tools are enabled.
-func (t *Tunables) WebTools() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.webTools
-}
-
-// SetServerCompaction mirrors the API-native compaction beta into the agent
-// layer (the tool loop needs it for the verbatim assistant echo).
-func (t *Tunables) SetServerCompaction(enabled bool) {
-	t.mu.Lock()
-	t.serverCompaction = enabled
-	t.mu.Unlock()
-}
-
-// ServerCompaction reports whether API-native compaction is enabled.
-func (t *Tunables) ServerCompaction() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.serverCompaction
-}
-
-// NativeToolSearch reports whether native tool search is enabled.
-func (t *Tunables) NativeToolSearch() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.nativeToolSearch
 }

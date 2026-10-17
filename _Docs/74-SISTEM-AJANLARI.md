@@ -31,6 +31,12 @@ Derlenmiş kayıt defteri altyapı rolleri ve altı yerleşik worker profili tan
 
 ### Yardımcı çağrılar nerede koşar — `auxNativeRouting` (2026-09-03)
 
+> **Kaldırıldı (2026-10-13):** native Anthropic istemcisiyle birlikte `auxNativeRouting`
+> ayarı, `systemagent_route.go` (yönlendirme, karantina, geri dönüş) ve
+> `providers.NativeClaudeModel` silindi. Yardımcı çağrılar artık yalnız aşağıdaki
+> "kural değişti" paragrafındaki gibi sistem ajanının kendi sağlayıcısında koşar;
+> aşağıdaki yönlendirme anlatımı tarihseldir ([95](95-OPENCODE-CLI-SAGLAYICI.md)).
+
 **Kural değişti (2026-09-11):** çözümleyiciler (`resolveTitleConfig`,
 `resolveCompactorConfig`, `resolveAnalysisSystemAgent`, `resolveFoldAgent`) artık tek
 bir yardımcıdan geçer — `Runtime.systemAgentExecutor` — ve **sistem ajanının kendi

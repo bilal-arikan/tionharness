@@ -17,12 +17,10 @@ type CredentialSource string
 
 const (
 	// CredentialsOwn: the model carries its own base URL and (optional) API
-	// key, stored encrypted like a provider secret.
+	// key, stored encrypted like a provider secret. It is the only source since
+	// 2026-10-13: borrowing a provider instance's key went with the HTTP
+	// provider kinds (_Docs/95); a stored "provider" value loads as own.
 	CredentialsOwn CredentialSource = "own"
-	// CredentialsProvider: the model borrows the key and base URL of a provider
-	// instance (an OpenRouter account the user already configured), so the
-	// key is never entered twice.
-	CredentialsProvider CredentialSource = "provider"
 )
 
 // SecretAPIKey is the secret holding a model's own API key.
@@ -44,11 +42,7 @@ type ModelInstance struct {
 	// Model is the service model id ("typesafe/jev-1.13", "qwen3:4b").
 	Model       string           `json:"model"`
 	Credentials CredentialSource `json:"credentials"`
-	// ProviderInstanceID is the provider whose credentials are borrowed
-	// (CredentialsProvider). "" = the first enabled one the backend accepts.
-	ProviderInstanceID string `json:"providerInstanceId,omitempty"`
-	// BaseURL is the model's own endpoint (CredentialsOwn). "" = the
-	// backend's default.
+	// BaseURL is the model's own endpoint. "" = the backend's default.
 	BaseURL string `json:"baseUrl,omitempty"`
 	// TimeoutMs bounds one attempt of a call.
 	TimeoutMs int `json:"timeoutMs"`
@@ -71,20 +65,19 @@ func (m ModelInstance) Timeout() time.Duration {
 
 // ModelDTO is the masked, client-facing view of a ModelInstance.
 type ModelDTO struct {
-	ID                 string            `json:"id"`
-	Label              string            `json:"label"`
-	Backend            string            `json:"backend"`
-	Enabled            bool              `json:"enabled"`
-	Model              string            `json:"model"`
-	Credentials        CredentialSource  `json:"credentials"`
-	ProviderInstanceID string            `json:"providerInstanceId"`
-	BaseURL            string            `json:"baseUrl"`
-	TimeoutMs          int               `json:"timeoutMs"`
-	ContextTokens      int               `json:"contextTokens"`
-	Config             map[string]string `json:"config"`
-	SecretsSet         map[string]bool   `json:"secretsSet"`
-	CreatedAt          time.Time         `json:"createdAt"`
-	UpdatedAt          time.Time         `json:"updatedAt"`
+	ID            string            `json:"id"`
+	Label         string            `json:"label"`
+	Backend       string            `json:"backend"`
+	Enabled       bool              `json:"enabled"`
+	Model         string            `json:"model"`
+	Credentials   CredentialSource  `json:"credentials"`
+	BaseURL       string            `json:"baseUrl"`
+	TimeoutMs     int               `json:"timeoutMs"`
+	ContextTokens int               `json:"contextTokens"`
+	Config        map[string]string `json:"config"`
+	SecretsSet    map[string]bool   `json:"secretsSet"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	UpdatedAt     time.Time         `json:"updatedAt"`
 }
 
 // ToDTO projects the model into its masked view.
@@ -98,20 +91,19 @@ func (m ModelInstance) ToDTO() ModelDTO {
 		cfg = map[string]string{}
 	}
 	return ModelDTO{
-		ID:                 m.ID,
-		Label:              m.Label,
-		Backend:            m.Backend,
-		Enabled:            m.Enabled,
-		Model:              m.Model,
-		Credentials:        m.Credentials,
-		ProviderInstanceID: m.ProviderInstanceID,
-		BaseURL:            m.BaseURL,
-		TimeoutMs:          m.TimeoutMs,
-		ContextTokens:      m.ContextTokens,
-		Config:             cfg,
-		SecretsSet:         set,
-		CreatedAt:          m.CreatedAt,
-		UpdatedAt:          m.UpdatedAt,
+		ID:            m.ID,
+		Label:         m.Label,
+		Backend:       m.Backend,
+		Enabled:       m.Enabled,
+		Model:         m.Model,
+		Credentials:   m.Credentials,
+		BaseURL:       m.BaseURL,
+		TimeoutMs:     m.TimeoutMs,
+		ContextTokens: m.ContextTokens,
+		Config:        cfg,
+		SecretsSet:    set,
+		CreatedAt:     m.CreatedAt,
+		UpdatedAt:     m.UpdatedAt,
 	}
 }
 
@@ -119,18 +111,17 @@ func (m ModelInstance) ToDTO() ModelDTO {
 // the provider convention: a key absent from the map keeps the stored secret,
 // an empty value clears it, a non-empty value replaces it.
 type ModelInput struct {
-	ID                 string            `json:"id"`
-	Label              string            `json:"label"`
-	Backend            string            `json:"backend"`
-	Enabled            bool              `json:"enabled"`
-	Model              string            `json:"model"`
-	Credentials        CredentialSource  `json:"credentials"`
-	ProviderInstanceID string            `json:"providerInstanceId"`
-	BaseURL            string            `json:"baseUrl"`
-	TimeoutMs          int               `json:"timeoutMs"`
-	ContextTokens      int               `json:"contextTokens"`
-	Config             map[string]string `json:"config"`
-	Secrets            map[string]string `json:"secrets"`
+	ID            string            `json:"id"`
+	Label         string            `json:"label"`
+	Backend       string            `json:"backend"`
+	Enabled       bool              `json:"enabled"`
+	Model         string            `json:"model"`
+	Credentials   CredentialSource  `json:"credentials"`
+	BaseURL       string            `json:"baseUrl"`
+	TimeoutMs     int               `json:"timeoutMs"`
+	ContextTokens int               `json:"contextTokens"`
+	Config        map[string]string `json:"config"`
+	Secrets       map[string]string `json:"secrets"`
 }
 
 // configValidator is implemented by backends whose fields need more than the
@@ -170,25 +161,16 @@ func normalizeModelInput(in ModelInput, existing *ModelInstance) (ModelInput, Ma
 	}
 
 	switch in.Credentials {
-	case "":
+	case "", CredentialsOwn, "provider":
+		// "provider" is the pre-2026-10-13 borrowed source: such a model keeps
+		// its backend and model and now needs its own key entered.
 		in.Credentials = CredentialsOwn
-	case CredentialsOwn, CredentialsProvider:
 	default:
-		return in, m, fmt.Errorf("unknown credential source %q (own or provider)", in.Credentials)
+		return in, m, fmt.Errorf("unknown credential source %q (own)", in.Credentials)
 	}
-	in.ProviderInstanceID = strings.TrimSpace(in.ProviderInstanceID)
 	in.BaseURL = strings.TrimRight(strings.TrimSpace(in.BaseURL), "/")
-	if in.Credentials == CredentialsProvider {
-		if len(m.ProviderKinds) == 0 {
-			return in, m, fmt.Errorf("%s cannot borrow provider credentials", m.Label)
-		}
-		// A borrowed key only ever goes to the provider's own base URL.
-		in.BaseURL = ""
-	} else {
-		in.ProviderInstanceID = ""
-		if in.BaseURL != "" && !strings.HasPrefix(in.BaseURL, "http://") && !strings.HasPrefix(in.BaseURL, "https://") {
-			return in, m, fmt.Errorf("base URL %q must start with http:// or https://", in.BaseURL)
-		}
+	if in.BaseURL != "" && !strings.HasPrefix(in.BaseURL, "http://") && !strings.HasPrefix(in.BaseURL, "https://") {
+		return in, m, fmt.Errorf("base URL %q must start with http:// or https://", in.BaseURL)
 	}
 
 	if in.TimeoutMs <= 0 {
@@ -226,9 +208,8 @@ func normalizeModelInput(in ModelInput, existing *ModelInstance) (ModelInput, Ma
 			return in, m, fmt.Errorf("unknown secret %q (only %q)", k, SecretAPIKey)
 		}
 	}
-	if in.Credentials == CredentialsOwn && m.KeyRequired && !keyWillBeSet(in, existing) {
-		return in, m, fmt.Errorf("%s needs an API key", m.Label)
-	}
+	// A hosted backend saved without a key is kept (the seed model starts that
+	// way); it reports "no API key" and is never called until one is entered.
 	return in, m, nil
 }
 

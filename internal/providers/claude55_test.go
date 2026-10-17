@@ -8,14 +8,14 @@ import (
 func TestClaude55Capabilities(t *testing.T) {
 	for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "anthropic/claude-opus-5.5", "anthropic/claude-sonnet-5.5"} {
 		t.Run(model, func(t *testing.T) {
-			if !UsesAdaptiveThinking(model) || !SupportsThinkingBinding(model) || !SupportsSystemInMessages(model) || !SupportsTaskBudget(model) || !SupportsStructuredOutputs(model) || !SupportsDynamicWebTools(model) || !SupportsProgrammaticTools(model) {
+			if !UsesAdaptiveThinking(model) || !SupportsThinkingBinding(model) {
 				t.Fatal("missing Claude 5.5 capability")
 			}
-			if got := ContextWindowFor("anthropic", model); got != 1_000_000 {
+			if got := ContextWindowFor("claude-cli", model); got != 1_000_000 {
 				t.Fatalf("context = %d, want 1000000", got)
 			}
-			if tiers := ThinkingTiersForProvider("anthropic", model); !slices.Contains(tiers, "max") || slices.Contains(tiers, "ultra") {
-				t.Fatalf("native effort tiers = %v", tiers)
+			if tiers := ThinkingTiersForProvider("claude-cli", model); !slices.Contains(tiers, "max") {
+				t.Fatalf("effort tiers = %v", tiers)
 			}
 		})
 	}
@@ -28,7 +28,7 @@ func TestClaude55Capabilities(t *testing.T) {
 }
 
 func TestClaude55Catalog(t *testing.T) {
-	for _, provider := range []string{"anthropic", "claude-cli", "openrouter"} {
+	for _, provider := range []string{"claude-cli"} {
 		for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5"} {
 			id := model
 			if provider == "openrouter" {

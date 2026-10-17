@@ -33,7 +33,7 @@
 //     and keeps a local ledger of every decision, so agreement can be measured
 //     before an authority is switched on or a model replaced.
 //
-// The package imports no other internal package: provider credentials arrive
-// through the EndpointSource interface, secrets are sealed by a SecretBox the
-// app passes in, and usage accounting is the caller's job (WithBilling).
+// The package imports no other internal package: every decision model carries
+// its own endpoint and key (sealed by a SecretBox the app passes in), and usage
+// accounting is the caller's job (WithBilling).
 package decider

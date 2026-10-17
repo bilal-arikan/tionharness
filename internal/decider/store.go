@@ -41,10 +41,9 @@ type configFile struct {
 // legacyConnection is a version-1 config's connection, from which the first
 // decision model is created.
 type legacyConnection struct {
-	Backend            string
-	ProviderInstanceID string
-	Model              string
-	TimeoutMs          int
+	Backend   string
+	Model     string
+	TimeoutMs int
 }
 
 // loadConfig reads the config from dataDir. A missing file yields
@@ -69,7 +68,7 @@ func loadConfig(dataDir string) (Config, *legacyConnection, error) {
 		if c.Authorities == nil {
 			c.Authorities = f.Sites
 		}
-		legacy = &legacyConnection{Backend: f.Backend, ProviderInstanceID: f.ProviderInstanceID, Model: f.Model, TimeoutMs: f.TimeoutMs}
+		legacy = &legacyConnection{Backend: f.Backend, Model: f.Model, TimeoutMs: f.TimeoutMs}
 	}
 	return c.Normalized(), legacy, nil
 }
@@ -103,9 +102,9 @@ func writeFileAtomic(path string, data []byte) error {
 }
 
 // seedModel is the decision model created on first run: from a version-1
-// config's connection, or Jev through the first OpenRouter account (the
-// out-of-the-box choice) when there was no config at all. It borrows provider
-// credentials, exactly like the version-1 connection did.
+// config's connection, or Jev through OpenRouter (the out-of-the-box choice)
+// when there was no config at all. It carries its own credentials; until an
+// OpenRouter API key is entered on it the model reports "no API key".
 func seedModel(legacy *legacyConnection) ModelInput {
 	in := ModelInput{
 		ID:          "DM1",
@@ -113,7 +112,7 @@ func seedModel(legacy *legacyConnection) ModelInput {
 		Backend:     OpenRouterBackendID,
 		Enabled:     true,
 		Model:       JevModel,
-		Credentials: CredentialsProvider,
+		Credentials: CredentialsOwn,
 	}
 	if legacy == nil {
 		return in
@@ -126,7 +125,6 @@ func seedModel(legacy *legacyConnection) ModelInput {
 			}
 		}
 	}
-	in.ProviderInstanceID = legacy.ProviderInstanceID
 	if legacy.Model != "" {
 		in.Model = legacy.Model
 	}

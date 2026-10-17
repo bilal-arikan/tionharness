@@ -50,20 +50,3 @@ func TestNewDeepSeekAndGLMPrices(t *testing.T) {
 		t.Errorf("deepseek-flash cache-hit cost = %v, want 0.003", got)
 	}
 }
-
-// TestCuratedDeepSeekAndZAIModelsArePriced guards catalog ↔ price-table drift:
-// every model the DeepSeek and Z.ai kinds offer has a list price, so the budget
-// screen never shows a curated model as unpriced.
-func TestCuratedDeepSeekAndZAIModelsArePriced(t *testing.T) {
-	for _, kind := range []string{"deepseek", "deepseek-anthropic", "zai"} {
-		k, ok := lookupKind(kind)
-		if !ok {
-			t.Fatalf("kind %q not registered", kind)
-		}
-		for _, m := range k.Manifest().Models {
-			if _, ok := PriceFor(kind, m.ID); !ok {
-				t.Errorf("%s/%s is offered but unpriced", kind, m.ID)
-			}
-		}
-	}
-}

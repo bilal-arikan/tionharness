@@ -55,7 +55,6 @@ func (logprobsBackend) Manifest() Manifest {
 		ID:             LogprobsBackendID,
 		Label:          "Any LLM (token probabilities)",
 		Description:    "Turns an ordinary chat model into a decision model: each question is asked as a one-letter multiple choice and the answer's probabilities are read from the model's token probabilities. Works with Ollama, LM Studio, llama.cpp, vLLM and any OpenAI-compatible server that returns logprobs. Approximate: the probabilities are the model's own, not calibrated.",
-		ProviderKinds:  []string{"lmstudio", "openai-compat", "openrouter"},
 		DefaultBaseURL: ollamaDefaultBase,
 		KeyRequired:    false,
 		Fields: []Field{
@@ -108,13 +107,6 @@ func (logprobsBackend) Manifest() Manifest {
 
 // Accepts lends the credentials (and base URL) of any chat-completions
 // provider: LM Studio, a custom OpenAI-compatible server, or OpenRouter.
-func (logprobsBackend) Accepts(kind, _ string) bool {
-	switch kind {
-	case "lmstudio", "openai-compat", "openrouter":
-		return true
-	}
-	return false
-}
 
 // ValidateConfig checks the backend-specific fields before a model is saved.
 func (logprobsBackend) ValidateConfig(cfg map[string]string) error {
@@ -123,13 +115,7 @@ func (logprobsBackend) ValidateConfig(cfg map[string]string) error {
 }
 
 func (b logprobsBackend) New(ep Endpoint, opts ClientOptions) (Decider, error) {
-	if ep.Kind != "" && !b.Accepts(ep.Kind, ep.BaseURL) {
-		return nil, fmt.Errorf("provider instance %q (%s) has no chat-completions endpoint", ep.InstanceID, ep.Kind)
-	}
-	root, err := endpointBase(ep)
-	if err != nil {
-		return nil, err
-	}
+	root := endpointBase(ep)
 	endpoint, err := ChatCompletionsURL(root)
 	if err != nil {
 		return nil, err
@@ -149,7 +135,7 @@ func (b logprobsBackend) New(ep Endpoint, opts ClientOptions) (Decider, error) {
 		timeout:   timeoutOrDefault(opts.Timeout),
 		client:    opts.HTTPClient,
 		opts:      lo,
-		billing:   billingProviderFor(endpoint, ep.Kind),
+		billing:   billingProviderFor(endpoint, ""),
 	}, nil
 }
 

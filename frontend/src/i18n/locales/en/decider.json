@@ -32,12 +32,12 @@
     "done": "done",
     "goProviders": "Go to Providers →",
     "account": {
-      "title": "Provider account",
-      "text": "Add an OpenRouter account under provider instances and enter its API key. Not needed if you use a local model (LM Studio, Ollama, OpenJev) or give a decision provider its own key."
+      "title": "API key",
+      "text": "Give the decision provider its own key: an OpenRouter API key for Jev (entered on the decision provider card), or a TypeSafe key. Not needed for a local model (LM Studio, Ollama, OpenJev)."
     },
     "provider": {
       "title": "Decision provider",
-      "text": "Add one with “+ New decision provider” (the “Jev · OpenRouter” template borrows the account above), then press Test on its card.",
+      "text": "Add one with “+ New decision provider” (the “Jev · OpenRouter” template asks for your OpenRouter key), then press Test on its card.",
       "action": "Add {{preset}}"
     },
     "enable": {
@@ -76,7 +76,6 @@
     "endpoint": "endpoint",
     "usedBy": "used by",
     "usedByDefault": "default",
-    "viaProvider": "via provider {{id}}",
     "free": "free · local",
     "approximate": "approximate probabilities",
     "statsLine": "{{calls}} calls · p50 {{p50}} ms · {{cost}}",
@@ -99,14 +98,6 @@
     "model": "Model",
     "modelCustom": "Custom model id…",
     "modelCustomPlaceholder": "The model id as the server lists it",
-    "credentials": "Credentials",
-    "credentialsOwn": "Own endpoint and key",
-    "credentialsProvider": "Borrow a provider account",
-    "credentialsProviderHint": "Uses the key and endpoint of that provider; no key is entered twice.",
-    "provider": "Provider account",
-    "providerAuto": "Automatic (first usable account)",
-    "providerMissing": "No usable provider account for this kind. Add one above, or use an own endpoint and key.",
-    "providerUnavailable": "{{id}} (currently unavailable)",
     "baseUrl": "Base URL",
     "baseUrlHint": "Empty = {{url}}",
     "apiKey": "API key",

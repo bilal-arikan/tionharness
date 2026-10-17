@@ -15,10 +15,10 @@ func instanceOf(kindID string, values map[string]string) Instance {
 // kinds in Order and carries the expected built-in trio.
 func TestCatalogDerivedFromKinds(t *testing.T) {
 	cat := Catalog()
-	if len(cat) != 12 {
-		t.Fatalf("catalog: want 12 entries, got %d", len(cat))
+	if len(cat) != 3 {
+		t.Fatalf("catalog: want 3 entries, got %d", len(cat))
 	}
-	wantOrder := []string{"claude-cli", "anthropic", "minimax", "minimax-anthropic", "openrouter", "zai", "deepseek", "deepseek-anthropic", "codex-cli", "openai-compat", "anthropic-compat", "lmstudio"}
+	wantOrder := []string{"claude-cli", "codex-cli", "opencode-cli"}
 	for i, id := range wantOrder {
 		if cat[i].ID != id {
 			t.Errorf("catalog[%d].ID = %q, want %q", i, cat[i].ID, id)
@@ -53,9 +53,8 @@ func TestRegistryGetDispatchesByKind(t *testing.T) {
 	r := NewRegistry()
 	r.claudeCLIPath = "/usr/bin/claude" // simulate CLI present
 	r.SetInstances([]Instance{
-		instanceOf("anthropic", map[string]string{FieldKeyAPIKey: "sk-test"}),
-		instanceOf("minimax", map[string]string{FieldKeyAPIKey: "mm-test"}),
-		instanceOf("minimax-anthropic", map[string]string{FieldKeyAPIKey: "mm-test"}),
+		instanceOf("codex-cli", map[string]string{FieldKeyCLIPath: "/usr/bin/codex"}),
+		instanceOf("opencode-cli", map[string]string{FieldKeyCLIPath: "/usr/bin/opencode"}),
 		instanceOf("claude-cli", nil),
 	})
 
@@ -63,9 +62,8 @@ func TestRegistryGetDispatchesByKind(t *testing.T) {
 		name     string
 		wantName string
 	}{
-		{"anthropic", "anthropic"},
-		{"minimax", "minimax"},
-		{"minimax-anthropic", "minimax-anthropic"}, // reuses MiniMax key, Anthropic transport
+		{"codex-cli", "codex-cli"},
+		{"opencode-cli", "opencode-cli"},
 		{"claude-cli", "claude-cli"},
 		{"", "claude-cli"}, // empty normalizes to the CLI default
 	}
@@ -87,15 +85,20 @@ func TestRegistryGetDispatchesByKind(t *testing.T) {
 // TestRegistryAvailable verifies per-id availability gating.
 func TestRegistryAvailable(t *testing.T) {
 	r := NewRegistry() // no instances registered
-	if r.Available("anthropic") {
-		t.Error("anthropic available without a registered instance")
+	r.codexCLIPath = ""
+	if r.Available("codex-cli") {
+		t.Error("codex-cli available without a registered instance")
 	}
-	if r.Available("minimax") {
-		t.Error("minimax available without a registered instance")
+	if r.Available("opencode-cli") {
+		t.Error("opencode-cli available without a registered instance")
 	}
-	r.SetInstances([]Instance{instanceOf("anthropic", map[string]string{FieldKeyAPIKey: "sk-x"})})
-	if !r.Available("anthropic") {
-		t.Error("anthropic not available after key set")
+	r.SetInstances([]Instance{instanceOf("codex-cli", nil)})
+	if r.Available("codex-cli") {
+		t.Error("codex-cli available without a binary")
+	}
+	r.SetInstances([]Instance{instanceOf("codex-cli", map[string]string{FieldKeyCLIPath: "/usr/bin/codex"})})
+	if !r.Available("codex-cli") {
+		t.Error("codex-cli not available after its binary path is set")
 	}
 	if r.Available("nope") {
 		t.Error("unknown id reported available")
@@ -103,44 +106,44 @@ func TestRegistryAvailable(t *testing.T) {
 }
 
 // TestTwoInstancesOfSameKindAreIndependent verifies the Faz 2 payoff: two
-// provider instances of the SAME kind (two "anthropic" instances, different
-// keys) resolve to independent clients carrying their own credential, neither
-// leaking into the other (_Docs/71 §10 test plan).
+// provider instances of the SAME kind (two "claude-cli" instances, different
+// credentials) resolve to independent clients carrying their own credential,
+// neither leaking into the other (_Docs/71 §10 test plan).
 func TestTwoInstancesOfSameKindAreIndependent(t *testing.T) {
 	r := NewRegistry()
 	r.SetInstances([]Instance{
-		{ID: "anthropic", KindID: "anthropic", Values: map[string]string{FieldKeyAPIKey: "sk-work"}},
-		{ID: "PRV1", KindID: "anthropic", Values: map[string]string{FieldKeyAPIKey: "sk-personal"}},
+		{ID: "claude-cli", KindID: "claude-cli", Values: map[string]string{FieldKeyCLIPath: "/usr/bin/claude", FieldKeyAuthKind: "oauth", FieldKeyAuthToken: "tok-work"}},
+		{ID: "PRV1", KindID: "claude-cli", Values: map[string]string{FieldKeyCLIPath: "/usr/bin/claude", FieldKeyAuthKind: "oauth", FieldKeyAuthToken: "tok-personal"}},
 	})
 
-	work, err := r.Get("anthropic")
+	work, err := r.Get("claude-cli")
 	if err != nil {
-		t.Fatalf("Get(anthropic): %v", err)
+		t.Fatalf("Get(claude-cli): %v", err)
 	}
 	personal, err := r.Get("PRV1")
 	if err != nil {
 		t.Fatalf("Get(PRV1): %v", err)
 	}
-	workAnthropic, ok := work.(*Anthropic)
+	workClient, ok := work.(*ClaudeCLI)
 	if !ok {
-		t.Fatalf("Get(anthropic) did not return *Anthropic")
+		t.Fatalf("Get(claude-cli) did not return *ClaudeCLI")
 	}
-	personalAnthropic, ok := personal.(*Anthropic)
+	personalClient, ok := personal.(*ClaudeCLI)
 	if !ok {
-		t.Fatalf("Get(PRV1) did not return *Anthropic")
+		t.Fatalf("Get(PRV1) did not return *ClaudeCLI")
 	}
-	if workAnthropic.apiKey != "sk-work" {
-		t.Errorf("anthropic instance apiKey = %q, want sk-work", workAnthropic.apiKey)
+	if workClient.authToken != "tok-work" {
+		t.Errorf("claude-cli instance authToken = %q, want tok-work", workClient.authToken)
 	}
-	if personalAnthropic.apiKey != "sk-personal" {
-		t.Errorf("PRV1 instance apiKey = %q, want sk-personal", personalAnthropic.apiKey)
+	if personalClient.authToken != "tok-personal" {
+		t.Errorf("PRV1 instance authToken = %q, want tok-personal", personalClient.authToken)
 	}
 
-	if !r.Available("anthropic") || !r.Available("PRV1") {
-		t.Error("both instances should be available with their own key set")
+	if !r.Available("claude-cli") || !r.Available("PRV1") {
+		t.Error("both instances should be available with their own binary path set")
 	}
-	if got := r.KindOf("PRV1"); got != "anthropic" {
-		t.Errorf("KindOf(PRV1) = %q, want anthropic", got)
+	if got := r.KindOf("PRV1"); got != "claude-cli" {
+		t.Errorf("KindOf(PRV1) = %q, want claude-cli", got)
 	}
 }
 
@@ -165,9 +168,9 @@ func TestGetUnregisteredKindErrors(t *testing.T) {
 func TestInstanceCatalogPerInstanceEntries(t *testing.T) {
 	r := NewRegistry()
 	r.SetInstances([]Instance{
-		{ID: "anthropic", KindID: "anthropic", Enabled: true, Label: "Anthropic — iş", Values: map[string]string{FieldKeyAPIKey: "sk-work"}},
-		{ID: "PRV1", KindID: "anthropic", Enabled: true, Label: "Anthropic — kişisel", Values: map[string]string{FieldKeyAPIKey: "sk-personal"}},
-		{ID: "PRV2", KindID: "anthropic", Enabled: false, Label: "Anthropic — devre dışı"},
+		{ID: "claude-cli", KindID: "claude-cli", Enabled: true, Label: "Claude — iş", Values: map[string]string{FieldKeyCLIPath: "/usr/bin/claude"}},
+		{ID: "PRV1", KindID: "claude-cli", Enabled: true, Label: "Claude — kişisel", Values: map[string]string{FieldKeyCLIPath: "/usr/bin/claude"}},
+		{ID: "PRV2", KindID: "claude-cli", Enabled: false, Label: "Claude — devre dışı"},
 		{ID: "ghost", KindID: "does-not-exist-kind", Enabled: true},
 	})
 
@@ -177,13 +180,13 @@ func TestInstanceCatalogPerInstanceEntries(t *testing.T) {
 		byID[e.ID] = e
 	}
 
-	if _, ok := byID["anthropic"]; !ok {
-		t.Error("missing catalog entry for default anthropic instance")
+	if _, ok := byID["claude-cli"]; !ok {
+		t.Error("missing catalog entry for default claude-cli instance")
 	}
 	if _, ok := byID["PRV1"]; !ok {
-		t.Error("missing catalog entry for second anthropic instance (PRV1)")
+		t.Error("missing catalog entry for second claude-cli instance (PRV1)")
 	}
-	if byID["anthropic"].Label == byID["PRV1"].Label {
+	if byID["claude-cli"].Label == byID["PRV1"].Label {
 		t.Error("two distinct instances of the same kind must not collapse into one catalog entry")
 	}
 	if _, ok := byID["PRV2"]; ok {
@@ -192,11 +195,11 @@ func TestInstanceCatalogPerInstanceEntries(t *testing.T) {
 	if _, ok := byID["ghost"]; ok {
 		t.Error("instance with an unregistered kind must not appear in the catalog")
 	}
-	if !byID["PRV1"].NeedsKey {
-		t.Error("PRV1 entry should inherit NeedsKey=true from the anthropic kind manifest")
+	if byID["PRV1"].NeedsKey {
+		t.Error("PRV1 entry should inherit NeedsKey=false from the claude-cli kind manifest")
 	}
 	if len(byID["PRV1"].Models) == 0 {
-		t.Error("PRV1 entry should inherit the anthropic kind's curated model list (no instance override set)")
+		t.Error("PRV1 entry should inherit the claude-cli kind's curated model list (no instance override set)")
 	}
 }
 
@@ -206,8 +209,8 @@ func TestInstanceCatalogPerInstanceEntries(t *testing.T) {
 func TestInstanceCatalogEnrichesModels(t *testing.T) {
 	r := NewRegistry()
 	r.SetInstances([]Instance{
-		{ID: "anthropic", KindID: "anthropic", Enabled: true, Values: map[string]string{FieldKeyAPIKey: "sk-work"}},
-		{ID: "PRV1", KindID: "anthropic", Enabled: true, Models: "claude-opus-5", Values: map[string]string{FieldKeyAPIKey: "sk-personal"}},
+		{ID: "claude-cli", KindID: "claude-cli", Enabled: true, Values: map[string]string{FieldKeyCLIPath: "/usr/bin/claude"}},
+		{ID: "PRV1", KindID: "claude-cli", Enabled: true, Models: "claude-opus-5", Values: map[string]string{FieldKeyCLIPath: "/usr/bin/claude"}},
 	})
 
 	byID := make(map[string]CatalogEntry)
@@ -215,7 +218,10 @@ func TestInstanceCatalogEnrichesModels(t *testing.T) {
 		byID[e.ID] = e
 	}
 
-	for _, m := range byID["anthropic"].Models {
+	for _, m := range byID["claude-cli"].Models {
+		if m.ID == "" {
+			continue // the "session model" alias has no family of its own
+		}
 		if m.ContextWindow == 0 {
 			t.Errorf("manifest model %q: ContextWindow = 0, want family value", m.ID)
 		}
@@ -253,8 +259,8 @@ func TestAppliesToolHooksSignal(t *testing.T) {
 	if got := byID["claude-cli"].AppliesToolHooks; !got {
 		t.Error("claude-cli.AppliesToolHooks = false, want true (hooks forwarded via --settings)")
 	}
-	if got := byID["anthropic"].AppliesToolHooks; !got {
-		t.Error("anthropic.AppliesToolHooks = false, want true (native tool loop runs hooks)")
+	if got := byID["claude-cli"].AppliesToolHooks; !got {
+		t.Error("openrouter.AppliesToolHooks = false, want true (native tool loop runs hooks)")
 	}
 }
 

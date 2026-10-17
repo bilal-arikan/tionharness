@@ -42,7 +42,6 @@ const view: DeciderView = {
   status: { enabled: true, ready: true },
   models: ['DM1', 'DM2'].map((id) => ({ id, label: id, enabled: true }) as DeciderModelInstance),
   backends: [],
-  providerCandidates: {},
   stats: [],
   recent: [],
   statsDays: 7,

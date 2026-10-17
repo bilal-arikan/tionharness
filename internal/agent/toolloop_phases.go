@@ -99,7 +99,9 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	t.req.PermissionMode = effectivePermissionMode(t.agent.PermissionMode, t.autonomous)
 	// Resolved here, not in initLoopState: the plain (no-tools) path folds steer
 	// messages too and never reaches the native loop's setup.
-	t.steerRole = steerRoleFor(t.provider, t.agent.Model)
+	// Steer messages ride the user role: the operator ({"role":"system"} in
+	// messages) channel belonged to the removed native Anthropic client.
+	t.steerRole = providers.RoleUser
 	if t.agent.ThinkingLevel != "" {
 		if err := providers.ValidateThinkingLevelForProvider(t.agent.Provider, t.agent.Model, t.agent.ThinkingLevel); err != nil {
 			return noop, err
@@ -122,14 +124,6 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// trace step; off tells the CLI providers to switch their own search off so
 	// the bridged WebSearch/WebFetch tools stay the single path.
 	t.req.NativeWebSearch = t.agent.NativeWebSearchEnabled()
-
-	// Announce the configured task budget to autonomous turns (API-native
-	// output_config.task_budget): the model sees a running countdown for the
-	// whole loop and paces itself. Providers/models without support ignore it;
-	// interactive chat turns stay un-budgeted (a human is watching).
-	if t.autonomous {
-		t.req.TaskBudgetTokens = t.r.tun.AutonomousTaskBudget()
-	}
 
 	// Process ledger ownership (internal/procwatch): every native process this
 	// turn spawns — shell tool calls, code-mode interpreters, the CLI transport
@@ -218,6 +212,9 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 		// shared, so it must be pushed rather than baked in at construction.
 		t.r.applyCodexPlugins(t.provider)
 		if err := t.r.PinCodexHome(t.provider); err != nil {
+			return noop, err
+		}
+		if err := t.r.PinOpenCodeHome(t.provider); err != nil {
 			return noop, err
 		}
 	}
@@ -369,8 +366,8 @@ func (t *toolLoopTurn) runPlain() (*providers.Response, []TurnStep, error) {
 // did (LIFO: settings first, then the mcp config).
 func (t *toolLoopTurn) configureCLIMCP() func() {
 	noop := func() {}
-	if _, ok := t.provider.(*providers.CodexCLI); ok {
-		// codex has no --mcp-config file or --settings file; its MCP delegation is
+	if usesServerSpec(t.provider) {
+		// codex (and opencode) have no --mcp-config file or --settings file; its MCP delegation is
 		// expressed entirely through the CLIMCPSpec.Servers map, rendered straight
 		// into config.toml by ConfigureCLIMCP. Building that map is asymmetric
 		// enough from the claude path (see codexmcp.go's file comment) that it gets
@@ -480,43 +477,11 @@ func (t *toolLoopTurn) prepareNativeLoop() (resp *providers.Response, steps []Tu
 	toolFilter := t.r.toolFilter(t.ctx, t.agent)
 	t.r.seedDecisionTools(t.ctx, t.agent, t.reg, t.active)
 	t.reg.ConfigureAutoActivation(t.active, toolFilter)
-	// Native (server-side) tool search — first-party anthropic only: the full
-	// catalog ships with lazy tools marked defer_loading + the search server
-	// tool, so discovery needs no activate_tools round-trip and the tools block
-	// stays byte-stable across iterations. Anthropic-protocol lookalikes
-	// (minimax-anthropic, custom endpoints) would reject the server tool type,
-	// hence the exact-name gate. Everything else keeps the activation flow.
-	nativeSearch := t.r.tun.NativeToolSearch() && t.provider.Name() == "anthropic"
-	// Programmatic tool calling (PTC): the code-execution server tool lets the
-	// model call code-callable tools from Python inside Anthropic's container —
-	// intermediate results never enter context. First-party anthropic only.
-	ptcMode := t.r.tun.ProgrammaticTools() && t.provider.Name() == "anthropic"
-	// Server-side web search + fetch (first-party anthropic only): declared in
-	// the tools array, executed on Anthropic's infrastructure, results ride the
-	// same response with citations.
-	webMode := t.r.tun.WebTools() && t.provider.Name() == "anthropic"
-	// API-native compaction (beta, applied provider-side): the loop only needs
-	// to know so the verbatim echo below preserves compaction blocks.
-	serverCompact := t.r.tun.ServerCompaction() && t.provider.Name() == "anthropic"
+	// The server-side features of the removed native Anthropic client (native
+	// tool search, programmatic tool calling, server web tools, server
+	// compaction) are gone: every provider ships the active tool set.
 	shipDefs := func() []providers.ToolDef {
-		var defs []providers.ToolDef
-		if nativeSearch {
-			defs = t.reg.DeferredDefs(toolFilter, t.active.Snapshot())
-		} else {
-			defs = t.reg.ActiveDefs(toolFilter, t.active.Snapshot())
-		}
-		if ptcMode {
-			for i := range defs {
-				// MCP tools are incompatible with PTC (namespaced server__tool);
-				// interactive/recursive builtins are excluded by the same policy
-				// code mode uses (they would hang or recurse inside a script).
-				if strings.Contains(defs[i].Name, "__") || !tools.CodeModeEligible(defs[i].Name) {
-					continue
-				}
-				defs[i].CodeCallable = true
-			}
-		}
-		return defs
+		return t.reg.ActiveDefs(toolFilter, t.active.Snapshot())
 	}
 	// Prompt epoch: the shipped tool defs are the FROZEN session-start snapshot
 	// (promptepoch.go) so passive catalog drift — a skill install, an MCP
@@ -538,8 +503,6 @@ func (t *toolLoopTurn) prepareNativeLoop() (resp *providers.Response, steps []Tu
 		}
 	}
 	t.req.Tools = t.shipFor()
-	t.req.ProgrammaticTools = ptcMode
-	t.req.WebTools = webMode
 	// rawEcho gates the verbatim assistant-content echo on the modes whose
 	// responses carry server blocks (tool-search results, code-execution runs,
 	// web tool results, compaction blocks) that MUST ride back exactly;
@@ -550,7 +513,7 @@ func (t *toolLoopTurn) prepareNativeLoop() (resp *providers.Response, steps []Tu
 	// echoed exactly. Claude 5.5 binds these blocks to the conversation;
 	// constructing only Text+ToolCalls would drop them and lose continuity.
 	t.rawEcho = func(raw json.RawMessage) json.RawMessage {
-		if nativeSearch || ptcMode || webMode || serverCompact || providers.AlwaysOnThinking(t.agent.Model) || providers.SupportsThinkingBinding(t.agent.Model) {
+		if providers.AlwaysOnThinking(t.agent.Model) || providers.SupportsThinkingBinding(t.agent.Model) {
 			return raw
 		}
 		return nil

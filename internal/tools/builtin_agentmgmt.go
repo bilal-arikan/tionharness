@@ -137,7 +137,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"name":{"type":"string","description":"Display name for the agent"},
 				"soul":{"type":"string","description":"Personality / system prompt that defines how the agent behaves"},
 				"identity":{"type":"string","description":"Short identity/role description"},
-				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, anthropic, minimax). If omitted, inherits the creating agent's provider (together with its model), falling back to claude-cli."},
+				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, codex-cli, opencode-cli, openrouter). If omitted, inherits the creating agent's provider (together with its model), falling back to claude-cli."},
 				"model":{"type":"string","description":"Model id for the chosen provider. If both provider and model are omitted, both are inherited from the creating agent."},
 				"thinkingLevel":{"type":"string","enum":"__THINKING_LEVELS__","description":"Extended-reasoning tier. Must be supported by the chosen model. Omit to get the tier the provider historically behaved as: high for the CLI providers, off for everything else."},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
@@ -149,8 +149,8 @@ func (CreateAgentTool) Def() providers.ToolDef {
 			"additionalProperties":false
 		}`),
 		Examples: []json.RawMessage{
-			// anthropic provider needs an explicit model id.
-			json.RawMessage(`{"name":"Reviewer","provider":"anthropic","model":"claude-sonnet-5","soul":"You are a meticulous code reviewer; be terse."}`),
+			// opencode-cli models are "<vendor>/<model>" ids.
+			json.RawMessage(`{"name":"Reviewer","provider":"opencode-cli","model":"anthropic/claude-sonnet-5-5","soul":"You are a meticulous code reviewer; be terse."}`),
 			// claude-cli provider is keyless and needs no model id.
 			json.RawMessage(`{"name":"Helper","provider":"claude-cli"}`),
 		},

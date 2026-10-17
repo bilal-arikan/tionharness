@@ -307,63 +307,17 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 	}, nil
 }
 
-// installProviderPack registers a custom provider from a pack payload and pushes
-// it live. The API key (never carried in a pack) is supplied by the user here;
-// an empty key still installs (AllowMissingRequiredSecrets — the user can add
-// it later in Settings). Writes through the same upsertProviderInstance
-// validation path handleUpsertProvider uses — an unknown pack kind or a
-// missing required plain field fails the install with a clear error rather
-// than silently landing a broken instance (_Docs/71 Faz 3 item 1).
-func (s *Server) installProviderPack(wsp *workspace.Workspace, pack market.Pack, apiKey string) (market.InstallResult, error) {
-	pp := pack.Payload.Provider
-	if pp == nil || pp.BaseURL == "" {
+// installProviderPack used to register an OpenAI/Anthropic-compatible HTTP
+// provider from a pack payload. Those provider kinds were removed with the
+// move to CLI-only transports (_Docs/95): every third-party vendor is reached
+// through an opencode-cli instance, whose credentials live in opencode's own
+// store, so a pack has nothing to install. The pack type stays readable for
+// older marketplaces; installing one explains the new path.
+func (s *Server) installProviderPack(_ *workspace.Workspace, pack market.Pack, _ string) (market.InstallResult, error) {
+	if pack.Payload.Provider == nil || pack.Payload.Provider.BaseURL == "" {
 		return market.InstallResult{}, httpErr{http.StatusBadRequest, "provider pack is missing its payload"}
 	}
-	id := providerIDFromPack(pack)
-
-	// Legacy pack Kind is "openai" | "anthropic" (market.ProviderPayload); map it
-	// onto the registered instance kind ids the same way MigrateFromSettings does
-	// for a legacy CustomProvider (internal/settings/provider_migrate.go), so a
-	// pack installs into an actually-registered kind rather than a bare "openai"/
-	// "anthropic" string that providerKindByID would reject.
-	kindID := "openai-compat"
-	if pp.Kind == "anthropic" {
-		kindID = "anthropic-compat"
-	}
-
-	reasoning := ""
-	if pp.Reasoning {
-		reasoning = "true"
-	}
-	secrets := map[string]string{}
-	if apiKey != "" {
-		secrets["key"] = apiKey
-	}
-
-	inst, err := s.upsertProviderInstance(upsertProviderInstanceReq{
-		ID:           id,
-		KindID:       kindID,
-		Label:        pp.Label,
-		Enabled:      true,
-		DefaultModel: pp.DefaultModel,
-		Models:       pp.Models,
-		Config:       map[string]string{"baseUrl": pp.BaseURL},
-		Secrets:      secrets,
-	}, upsertProviderOpts{
-		ExtraConfig: map[string]string{
-			"reasoning":   reasoning,
-			"promptCache": pp.PromptCache,
-		},
-		AllowMissingRequiredSecrets: true,
-	})
-	if err != nil {
-		return market.InstallResult{}, err
-	}
-	s.applySettings() // push the new provider into the live registry
-	return market.InstallResult{
-		Kind: market.KindProvider, Ref: inst.ID,
-		Message: "Provider \"" + pp.Label + "\" installed",
-	}, nil
+	return market.InstallResult{}, httpErr{http.StatusBadRequest, "provider packs are no longer installable: TionHarness has no HTTP provider kinds; configure the vendor in opencode (opencode auth login) and use an opencode-cli instance"}
 }
 
 // providerIDFromPack derives a settings provider id from a pack id. Pack ids are

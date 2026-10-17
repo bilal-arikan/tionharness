@@ -102,11 +102,6 @@ func (s *Store) DTO() DTO {
 	return s.Get().ToDTO()
 }
 
-// AnthropicKey returns the decrypted API key, or "" if none/undecryptable.
-func (s *Store) AnthropicKey() string {
-	return s.decrypt(s.Get().AnthropicKeyEnc)
-}
-
 // ClaudeCliAuthToken returns the decrypted claude-cli credential (OAuth token or
 // API key, per ClaudeCliAuthKind), or "" if none/undecryptable.
 func (s *Store) ClaudeCliAuthToken() string {
@@ -153,14 +148,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
 	applyString(&next.ClaudeCliAuthKind, p.ClaudeCliAuthKind)
 
-	applyBool(&next.ExtendedPromptCache, p.ExtendedPromptCache)
-	applyBool(&next.AnthropicContextEditing, p.AnthropicContextEditing)
-	applyBool(&next.AnthropicNativeToolSearch, p.AnthropicNativeToolSearch)
-	applyBool(&next.AnthropicProgrammaticTools, p.AnthropicProgrammaticTools)
-	applyBool(&next.AnthropicWebTools, p.AnthropicWebTools)
-	applyBool(&next.AnthropicServerCompaction, p.AnthropicServerCompaction)
-	applyBool(&next.AnthropicRefusalFallback, p.AnthropicRefusalFallback)
-	applyInt(&next.AutonomousTaskBudgetTokens, p.AutonomousTaskBudgetTokens)
 	applyBool(&next.DesktopNotifications, p.DesktopNotifications)
 	applyBool(&next.KeepAwake, p.KeepAwake)
 
@@ -237,7 +224,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.ClaudePersistentSession, p.ClaudePersistentSession)
 	applyBool(&next.ClaudeCLIToolAllowlist, p.ClaudeCLIToolAllowlist)
 	applyBool(&next.ClaudeCLINativeSubagents, p.ClaudeCLINativeSubagents)
-	applyBool(&next.AuxNativeRouting, p.AuxNativeRouting)
 	applyBool(&next.ClaudeSysPromptFile, p.ClaudeSysPromptFile)
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
@@ -284,17 +270,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 				return Settings{}, err
 			}
 			next.ClaudeCliAuthTokenEnc = enc
-		}
-	}
-	if p.AnthropicKey != nil {
-		if *p.AnthropicKey == "" {
-			next.AnthropicKeyEnc = ""
-		} else {
-			enc, err := s.cipher.Encrypt(*p.AnthropicKey)
-			if err != nil {
-				return Settings{}, err
-			}
-			next.AnthropicKeyEnc = enc
 		}
 	}
 	next = normalize(next)

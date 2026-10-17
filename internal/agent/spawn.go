@@ -183,6 +183,10 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 			if p.ConfigDir() == "" {
 				p.SetConfigDir(r.codexHomeDir())
 			}
+		case *providers.OpenCodeCLI:
+			if p.ConfigDir() == "" {
+				p.SetConfigDir(r.opencodeHomeDir())
+			}
 		}
 		if err := cli.Preflight(ctx); err != nil {
 			return SpawnResult{}, fmt.Errorf("spawn refused: %w", err)

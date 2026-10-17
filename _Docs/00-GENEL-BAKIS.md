@@ -50,7 +50,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | Doküman | İçerik |
 |---------|--------|
 | [00-GENEL-BAKIS.md](00-GENEL-BAKIS.md) | Bu dosya — projenin amacı ve özeti |
-| [01-MIMARI.md](01-MIMARI.md) | Sistem mimarisi, katmanlar, modüller |
+| [01-MIMARI.md](01-MIMARI.md) | Sistem mimarisi, katmanlar, modüller (sağlayıcılar 2026-10-13: üç CLI köprüsü + OpenAI-uyumlu HTTP kind'ları) |
 | [02-VERI-MODELI.md](02-VERI-MODELI.md) | Dosya-tabanlı varlık modeli ve ilişkileri |
 | [03-YOL-HARITASI.md](03-YOL-HARITASI.md) | Aşama aşama (faz) geliştirme planı |
 | [04-TEKNOLOJI-SECIMLERI.md](04-TEKNOLOJI-SECIMLERI.md) | Kütüphane seçimleri ve gerekçeleri |
@@ -141,6 +141,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [AYARLAR-SADELESTIRME.md](AYARLAR-SADELESTIRME.md) | Ayar kategorileri, kategoriye özel kayıt davranışı ve eski bağlantıların yönlendirilmesi |
 | [94-FARKINDALIK-VE-NOTLAR.md](94-FARKINDALIK-VE-NOTLAR.md) | **Uygulandı (2026-10-04)** — Workspace farkındalığı (brifing · tur · kapanış özeti; bütçe + sayaç + işaretçiye düşürme) ve Markdown hafıza notları (erişim, güven, supersede; `remember` / `record_work` / `note_search` / `note_expand` / `note_correct`); dersler nota taşındı; dört karar mercii; Notlar ekranı |
 | [93-EVRILEN-AKISLAR.md](93-EVRILEN-AKISLAR.md) | **Uygulandı (2026-10-04)** — Evrilen akışlar: her ajanın tek **ana akışı** (input → aşamalar → output) her turda koşar; `internal/flow` motoru (llm / route / transform düğümleri, döngü ve geri besleme kenarları, kodda zorlanan sonlanma), sürümleme, koşu kayıtları, ajan araçları (`get_flow`/`edit_flow`/`revert_flow`/`list_flow_runs`/`update_my_prompt`), **Flow Observer** sistem ajanı (öner/otomatik politika, kodda doğrulanan öneriler), prompt sürümleri ve dikey ekranlara uyumlu Akışlar ekranı. Eski orkestrasyon akışları kaldırıldı. **Ek:** JEV karar mekanizmaları (`criteria` kapısı, koşu puanlama, öneri kapısı) ve otomasyon bağlantısı (`trigger` düğümü, `flow` türü otomasyon); beyin fırtınası §8 |
+| [95-OPENCODE-CLI-SAGLAYICI.md](95-OPENCODE-CLI-SAGLAYICI.md) | **Uygulandı (2026-10-13)** — Üçüncü CLI taşıyıcısı `opencode-cli` (tur başına `opencode run --format json`, XDG izoleli ev, Interaction MCP köprüsü, scope tabanlı resume) ve native Anthropic HTTP istemcisinin + Anthropic-protokollü kind'ların (`anthropic`, `anthropic-compat`, `minimax-anthropic`, `deepseek-anthropic`, `zai`) kaldırılması; "üç CLI" kararı; ikinci adımda OpenAI-uyumlu HTTP ailesi de silindi ve karar katmanı kendi anahtarına geçti (§7) |
 | [92-JEV-IS-AKISLARI.md](92-JEV-IS-AKISLARI.md) | **Uygulandı (2026-10-01)** — Session hazırlığı, model router, soru kontrolü, compact koruması, hatırlatma ve worker incelemesi; gruplu Karar Mercileri UI, oturum pin/feedback ve iz bağlantıları |
 | [INSIGHT-BACKLOG.md](INSIGHT-BACKLOG.md) | **Otomatik üretilir** — Insight taramasının "app-fix" kanalı; uygulama-tarafı bulgu birikimi (elle düzenlenmez; bkz. [60](60-RETROSPEKTIF-TARAMA.md)) |
 | [analiz-harici-ajan-arac-eslestirme.md](analiz-harici-ajan-arac-eslestirme.md) | the external agent project↔TionHarness araç eşleştirme analizi |

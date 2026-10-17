@@ -40,7 +40,8 @@ func (s *Server) planCLIResume(ctx context.Context, provider providers.Provider,
 	switch provider.Name() {
 	case "claude-cli":
 		plan = s.planClaudeResume(ctx, provider, agentCount, session, rawHistory, compacted, llmReq)
-	case "codex-cli":
+	case "codex-cli", "opencode-cli":
+		// opencode-cli shares codex's scoped durable-session plan (ScopedCLIResumer).
 		plan = s.planCodexResume(ctx, provider, agentCount, session, agentRow, rawHistory, compacted, llmReq)
 	default:
 		plan = cliResumePlan{}

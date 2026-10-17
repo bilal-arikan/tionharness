@@ -135,7 +135,6 @@
   "providerOptions": {
     "title": "Advanced provider options",
     "description": "These options apply to all workspaces using the relevant provider. Save changes here; provider connections above are saved separately by their forms.",
-    "anthropic": "Anthropic API",
     "cli": "CLI sessions and auxiliary calls"
   },
   "providers": {

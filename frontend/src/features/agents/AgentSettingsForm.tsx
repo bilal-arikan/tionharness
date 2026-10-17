@@ -815,6 +815,15 @@ export function AgentSettingsForm({
               ariaLabel={t('settings.fields.permission')}
               testid="agent-permission-mode"
             />
+            {permissionMode === 'ask' &&
+              (provider === 'codex-cli' || provider === 'opencode-cli') && (
+                <p
+                  data-testid="agent-bridge-approval-note"
+                  className="mt-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_14%,var(--color-surface))] px-2 py-1.5 text-xs text-[var(--color-text-dim)]"
+                >
+                  {t('settings.bridgeApprovalNote', { provider })}
+                </p>
+              )}
           </OptionField>
 
           <OptionField

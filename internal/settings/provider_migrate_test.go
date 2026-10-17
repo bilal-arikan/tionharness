@@ -12,12 +12,10 @@ func findInstance(list []ProviderInstance, id string) (ProviderInstance, bool) {
 }
 
 // TestMigrateFromSettings_SeedsBuiltInInstances: the boot seed derives the
-// anthropic / claude-cli / codex-cli instances from the app settings. claude-cli
-// is always present (it runs keyless), the other two only when configured.
+// claude-cli / codex-cli instances from the app settings. claude-cli is always
+// present (it runs keyless), codex-cli only when configured.
 func TestMigrateFromSettings_SeedsBuiltInInstances(t *testing.T) {
 	s := Settings{
-		AnthropicKeyEnc: "enc:anthropic-key",
-
 		ClaudeCLIPath:         "/usr/bin/claude",
 		ClaudeCliAuthKind:     "oauth",
 		ClaudeCliAuthTokenEnc: "enc:claude-token",
@@ -29,7 +27,6 @@ func TestMigrateFromSettings_SeedsBuiltInInstances(t *testing.T) {
 	instances := MigrateFromSettings(s, func(enc string) string { return enc })
 
 	wantIDs := map[string]string{ // id -> kindId
-		"anthropic":  "anthropic",
 		"claude-cli": "claude-cli",
 		"codex-cli":  "codex-cli",
 	}
@@ -44,11 +41,6 @@ func TestMigrateFromSettings_SeedsBuiltInInstances(t *testing.T) {
 		if inst.KindID != kind {
 			t.Fatalf("instance %q: expected kindId %q, got %q", id, kind, inst.KindID)
 		}
-	}
-
-	anthropic, _ := findInstance(instances, "anthropic")
-	if anthropic.SecretsEnc["key"] != "enc:anthropic-key" {
-		t.Fatalf("anthropic secret not migrated: %+v", anthropic.SecretsEnc)
 	}
 
 	cli, _ := findInstance(instances, "claude-cli")
@@ -75,5 +67,31 @@ func TestMigrateFromSettings_EmptySettingsStillSeedClaudeCLI(t *testing.T) {
 	}
 	if instances[0].ID != "claude-cli" || !instances[0].Enabled {
 		t.Fatalf("unexpected seed instance: %+v", instances[0])
+	}
+}
+
+// TestEnsureKindInstance_AddsOnceForMissingKind: a store that predates a kind
+// gains exactly one default instance of it; later calls are no-ops.
+func TestEnsureKindInstance_AddsOnceForMissingKind(t *testing.T) {
+	store, err := OpenProviderStore(t.TempDir(), testCipher{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.EnsureMigrated(Settings{}, func(enc string) string { return enc }); err != nil {
+		t.Fatal(err)
+	}
+	added, err := store.EnsureKindInstance("opencode-cli", "OpenCode CLI")
+	if err != nil || !added {
+		t.Fatalf("first call: added=%v err=%v", added, err)
+	}
+	inst, ok := store.Get("opencode-cli")
+	if !ok || inst.KindID != "opencode-cli" || !inst.Enabled || inst.Label != "OpenCode CLI" {
+		t.Fatalf("instance = %+v ok=%v", inst, ok)
+	}
+	if added, err := store.EnsureKindInstance("opencode-cli", "OpenCode CLI"); err != nil || added {
+		t.Fatalf("second call: added=%v err=%v", added, err)
+	}
+	if n := len(store.List()); n != 2 {
+		t.Fatalf("instances = %d, want claude-cli + opencode-cli", n)
 	}
 }

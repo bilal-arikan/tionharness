@@ -93,53 +93,6 @@ type Settings struct {
 	CodexCLIPath   string `json:"codexCliPath"`   // "" = auto-detect on PATH
 	CodexConfigDir string `json:"codexConfigDir"` // CODEX_HOME for codex-cli; "" = inherit ~/.codex
 
-	AnthropicKeyEnc string `json:"anthropicKeyEnc"` // AES-GCM, never exposed
-
-	// Anthropic beta capabilities (anthropic provider only; claude-cli ignores).
-	// (The 1M-context beta was retired — 1M is GA since 2026-03, no toggle needed.)
-	ExtendedPromptCache bool `json:"extendedPromptCache"` // 1h extended prompt cache TTL
-	// AnthropicContextEditing enables API-native context editing (server-side
-	// clear_tool_uses on the cached prefix — the microcompact analogue, P3). Off by
-	// default; complements the client-side compaction, does not replace it.
-	AnthropicContextEditing bool `json:"anthropicContextEditing"`
-	// AnthropicNativeToolSearch (beta) ships the FULL tool catalog on native
-	// anthropic tool turns with lazy tools marked defer_loading plus the
-	// server-side tool-search tool: discovery without an activate_tools
-	// round-trip, cache-safe schema appends, byte-stable tools block. Off by
-	// default. First-party anthropic provider only.
-	AnthropicNativeToolSearch bool `json:"anthropicNativeToolSearch"`
-	// AutonomousTaskBudgetTokens (beta), when > 0, announces a token budget to
-	// every AUTONOMOUS turn via the API-native task-budget directive
-	// (output_config.task_budget): the model sees a running countdown for the
-	// whole agentic loop and paces itself. Values below the API minimum (20000)
-	// are raised to it. 0 = off. Adaptive-class anthropic models only.
-	AutonomousTaskBudgetTokens int `json:"autonomousTaskBudgetTokens"`
-	// AnthropicProgrammaticTools enables programmatic tool calling on native
-	// anthropic tool turns: the code-execution server tool is added and eligible
-	// builtins become callable from Claude-written Python in Anthropic's
-	// container — intermediate results never enter context. MCP + interactive
-	// tools excluded. Off by default. First-party anthropic provider only.
-	AnthropicProgrammaticTools bool `json:"anthropicProgrammaticTools"`
-	// AnthropicWebTools adds the SERVER-SIDE web search + web fetch tools to
-	// native anthropic tool turns: searches run on Anthropic's infrastructure
-	// (no local process) and return cited results in the same response. Billed
-	// per search — conservative per-turn max_uses ceilings are applied. Off by
-	// default. First-party anthropic provider only.
-	AnthropicWebTools bool `json:"anthropicWebTools"`
-	// AnthropicServerCompaction enables API-native compaction (beta): the server
-	// summarizes earlier history into compaction blocks once the prompt nears
-	// its trigger (~150K tokens); within a turn the blocks are echoed back
-	// verbatim. Complements the client-side compaction (which keeps managing
-	// the cross-turn transcript). Off by default. anthropic provider only.
-	AnthropicServerCompaction bool `json:"anthropicServerCompaction"`
-	// AnthropicRefusalFallback (beta) attaches the server-side fallback to
-	// Fable-class requests: a safety-classifier decline (stop_reason "refusal")
-	// is transparently re-served by Opus 4.8 inside the same call instead of
-	// failing the turn (a decline before output isn't billed; the rescue bills
-	// at Opus rates). ON by default per Anthropic's Fable guidance — false
-	// positives on benign adjacent work do happen. anthropic provider only.
-	AnthropicRefusalFallback bool `json:"anthropicRefusalFallback"`
-
 	// Desktop / display behaviour (applied client-side).
 	DesktopNotifications bool `json:"desktopNotifications"` // browser notifications
 	KeepAwake            bool `json:"keepAwake"`            // hold a screen wake lock
@@ -286,13 +239,6 @@ type Settings struct {
 	// stays denied and writing delegation still goes through run_subagent.
 	// Default on.
 	ClaudeCLINativeSubagents bool `json:"claudeCliNativeSubagents"`
-	// AuxNativeRouting runs tool-less auxiliary system-agent calls (title, summary,
-	// compaction fold, lessons, insight, recipe optimizer, stall judge) on a
-	// configured first-party anthropic API instance when the calling agent is on a
-	// CLI transport, so a ten-token verdict stops paying Claude Code's base prompt.
-	// Those calls are then billed to the API key, not the CLI login. Default on;
-	// no-op without an anthropic key. _Docs/74.
-	AuxNativeRouting bool `json:"auxNativeRouting"`
 	// ClaudeSysPromptFile controls HOW the appended system prompt is handed to the
 	// claude-cli subprocess: false (default) passes it inline via
 	// --append-system-prompt <text>; true writes it to a temp file and passes
@@ -437,16 +383,6 @@ func Default() Settings {
 
 		// Extended prompt caching (1h TTL) on by default: cache reads bill at
 		// ~0.1× the input price, so with the static/dynamic prompt split every
-		// follow-up turn re-reads the transcript prefix nearly free instead of
-		// paying full input price. Only affects the anthropic provider; existing
-		// settings.json files keep whatever the user last saved.
-		ExtendedPromptCache: true,
-
-		// Refusal fallback on by default (Anthropic's Fable 5 guidance): only
-		// Fable-class requests carry it, and without it a classifier false
-		// positive fails the turn outright.
-		AnthropicRefusalFallback: true,
-
 		// Auto-tagging on by default: derives error/archived tags for automation
 		// scanning; add-only and cheap (a small write only when a tag actually changes).
 		AutoTagSessions: true,
@@ -496,7 +432,6 @@ func Default() Settings {
 		// Native research subagents (Explore/Plan) on by default: observable via
 		// the folded transcript and cheaper than a fresh CLI start (2026-09-10).
 		ClaudeCLINativeSubagents: true,
-		AuxNativeRouting:         true,
 
 		// System prompt handed to claude-cli via a temp file by default
 		// (--append-system-prompt-file): a large appended prompt (skills + lazy tool
@@ -562,22 +497,6 @@ type DTO struct {
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
 	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthSet      bool   `json:"claudeCliAuthSet"`
-	// AnthropicKeySet reflects AnthropicKeyEnc, which stays live: it seeds the
-	// default "anthropic" provider instance from ANTHROPIC_API_KEY at boot
-	// (internal/app/app.go) and from a manual key entry via Patch.AnthropicKey,
-	// which app.go also calls internally at boot — not just an API-facing field.
-	// ClaudeCLIPath/CodexCLIPath/CodexConfigDir are not on the DTO/Patch: their
-	// only reader is MigrateFromSettings (one-time boot seed of providers.json).
-	AnthropicKeySet bool `json:"anthropicKeySet"`
-
-	ExtendedPromptCache        bool `json:"extendedPromptCache"`
-	AnthropicContextEditing    bool `json:"anthropicContextEditing"`
-	AnthropicNativeToolSearch  bool `json:"anthropicNativeToolSearch"`
-	AnthropicProgrammaticTools bool `json:"anthropicProgrammaticTools"`
-	AnthropicWebTools          bool `json:"anthropicWebTools"`
-	AnthropicServerCompaction  bool `json:"anthropicServerCompaction"`
-	AnthropicRefusalFallback   bool `json:"anthropicRefusalFallback"`
-	AutonomousTaskBudgetTokens int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
 	KeepAwake            bool `json:"keepAwake"`
@@ -647,7 +566,6 @@ type DTO struct {
 	// ClaudeCLINativeSubagents: claude-cli's native Explore/Plan subagents stay on
 	// the menu (default on; transcript folded into the trace).
 	ClaudeCLINativeSubagents bool `json:"claudeCliNativeSubagents"`
-	AuxNativeRouting         bool `json:"auxNativeRouting"`
 	// ClaudeSysPromptFile: true (default) routes the appended system prompt through a
 	// temp file (--append-system-prompt-file) to survive the Windows command-line
 	// limit; false hands it inline via --append-system-prompt. _Docs/17.
@@ -701,16 +619,6 @@ func (s Settings) ToDTO() DTO {
 		DefaultPermissionMode: s.DefaultPermissionMode,
 		ClaudeCliAuthKind:     s.ClaudeCliAuthKind,
 		ClaudeCliAuthSet:      s.ClaudeCliAuthTokenEnc != "",
-		AnthropicKeySet:       s.AnthropicKeyEnc != "",
-
-		ExtendedPromptCache:        s.ExtendedPromptCache,
-		AnthropicContextEditing:    s.AnthropicContextEditing,
-		AnthropicNativeToolSearch:  s.AnthropicNativeToolSearch,
-		AnthropicProgrammaticTools: s.AnthropicProgrammaticTools,
-		AnthropicWebTools:          s.AnthropicWebTools,
-		AnthropicServerCompaction:  s.AnthropicServerCompaction,
-		AnthropicRefusalFallback:   s.AnthropicRefusalFallback,
-		AutonomousTaskBudgetTokens: s.AutonomousTaskBudgetTokens,
 
 		DesktopNotifications: s.DesktopNotifications,
 		KeepAwake:            s.KeepAwake,
@@ -769,7 +677,6 @@ func (s Settings) ToDTO() DTO {
 		ClaudePersistentSession:  s.ClaudePersistentSession,
 		ClaudeCLIToolAllowlist:   s.ClaudeCLIToolAllowlist,
 		ClaudeCLINativeSubagents: s.ClaudeCLINativeSubagents,
-		AuxNativeRouting:         s.AuxNativeRouting,
 		ClaudeSysPromptFile:      s.ClaudeSysPromptFile,
 		DelegationMaxDepth:       s.DelegationMaxDepth,
 		DelegationMaxCalls:       s.DelegationMaxCalls,
@@ -822,16 +729,6 @@ type Patch struct {
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
 	ClaudeCliAuthKind     *string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthToken    *string `json:"claudeCliAuthToken"` // write-only
-	AnthropicKey          *string `json:"anthropicKey"`       // write-only
-
-	ExtendedPromptCache        *bool `json:"extendedPromptCache"`
-	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`
-	AnthropicNativeToolSearch  *bool `json:"anthropicNativeToolSearch"`
-	AnthropicProgrammaticTools *bool `json:"anthropicProgrammaticTools"`
-	AnthropicRefusalFallback   *bool `json:"anthropicRefusalFallback"`
-	AnthropicWebTools          *bool `json:"anthropicWebTools"`
-	AnthropicServerCompaction  *bool `json:"anthropicServerCompaction"`
-	AutonomousTaskBudgetTokens *int  `json:"autonomousTaskBudgetTokens"`
 
 	DesktopNotifications *bool `json:"desktopNotifications"`
 	KeepAwake            *bool `json:"keepAwake"`
@@ -890,7 +787,6 @@ type Patch struct {
 	ClaudePersistentSession  *bool `json:"claudePersistentSession"`
 	ClaudeCLIToolAllowlist   *bool `json:"claudeCliToolAllowlist"`
 	ClaudeCLINativeSubagents *bool `json:"claudeCliNativeSubagents"`
-	AuxNativeRouting         *bool `json:"auxNativeRouting"`
 	ClaudeSysPromptFile      *bool `json:"claudeSysPromptFile"`
 	DelegationMaxDepth       *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls       *int  `json:"delegationMaxCalls"`

@@ -183,7 +183,6 @@ export function DeciderProviders({ onOpenAuthorities }: Props) {
           <DeciderProviderForm
             key={editing.model?.id ?? 'new'}
             backends={view.backends}
-            candidates={view.providerCandidates}
             initial={editing.input}
             editing={editing.model}
             onCancel={() => setEditing(null)}

@@ -10,12 +10,13 @@ import (
 // (Key, BaseURL, CLIPath, CLIConfigDir, CLIAuthKind, CLIAuthToken) without a
 // per-kind translation layer.
 const (
-	FieldKeyAPIKey    = "key"
-	FieldKeyBaseURL   = "baseUrl"
-	FieldKeyCLIPath   = "cliPath"
-	FieldKeyConfigDir = "configDir"
-	FieldKeyAuthKind  = "authKind"
-	FieldKeyAuthToken = "authToken"
+	FieldKeyCLIPath = "cliPath"
+	// FieldKeyEffortVariant toggles passing the agent's thinking level as
+	// opencode's `--variant` (opencode-cli only).
+	FieldKeyEffortVariant = "effortVariant"
+	FieldKeyConfigDir     = "configDir"
+	FieldKeyAuthKind      = "authKind"
+	FieldKeyAuthToken     = "authToken"
 )
 
 // Transport identifies how a kind's Provider talks to the model: a direct API
@@ -62,18 +63,14 @@ type FieldSpec struct {
 // registers itself — nothing else in the system has to change.
 type Manifest struct {
 	// Kind is the stable identifier used everywhere a provider is referenced
-	// (Agent.Provider, settings.DefaultProvider, catalog ID). For the built-in
-	// trio these are "anthropic", "claude-cli" and "minimax".
+	// (Agent.Provider, catalog ID). The built-in trio is "claude-cli",
+	// "codex-cli" and "opencode-cli" (_Docs/95).
 	Kind string
 	// Label is the human-facing name shown in pickers.
 	Label string
 	// NeedsKey reports whether the kind requires an API key (UI shows a key
 	// field; availability depends on the key being set).
 	NeedsKey bool
-	// NeedsBaseURL reports whether the kind accepts a custom base URL (HTTP
-	// transports); false for the CLI transport. Not yet surfaced to the API —
-	// reserved for the data-driven instance UI (Faz 2).
-	NeedsBaseURL bool
 	// AllowCustomModel lets the user type a model not in Models (model IDs
 	// change frequently).
 	AllowCustomModel bool
@@ -89,12 +86,6 @@ type Manifest struct {
 	// hooks. Surfaced to the UI via the catalog so this silent gap is visible
 	// instead of assumed.
 	AppliesToolHooks bool
-	// RequestTimeoutSecs overrides the per-request wall-clock budget (seconds) for
-	// every client this kind builds. 0 = model-class default (120s, or the long
-	// budget for reasoning/adaptive models — see LongRequestModel). Lets a slow
-	// endpoint declare a longer budget declaratively; Registry.Get applies it to
-	// the built provider after Build, with no per-kind build-function change.
-	RequestTimeoutSecs int
 	// Models is the curated suggestion list for the picker.
 	Models []ModelInfo
 	// Transport is the behavioural switch consumed by call sites that today
@@ -109,15 +100,6 @@ type Manifest struct {
 	// Multi reports whether more than one instance of this kind is meaningful
 	// (e.g. two Anthropic API keys for two accounts). Not yet enforced.
 	Multi bool
-	// TemplateOnly marks a kind that exists purely so a user CAN create an
-	// instance from it (openai-compat, anthropic-compat) rather than one a
-	// user picks directly — it ships with no default/migrated instance of its
-	// own. Catalog() still lists it (so /api/provider-kinds can offer it as a
-	// template to build a custom provider from), but the model-picker catalog
-	// (/api/catalog, providers.Catalog()+MergeCatalog) drops its per-kind
-	// entry when no instance of it exists, instead of showing a permanently
-	// unavailable, model-less placeholder.
-	TemplateOnly bool
 }
 
 // FieldByKey returns the field spec with the given Key, if the manifest
@@ -146,29 +128,22 @@ func TransportOf(kindID string) string {
 // provider id. Fields a given kind does not use are simply left zero — the CLI
 // transport ignores Key/BaseURL, the HTTP transports ignore CLIPath.
 type ResolvedConfig struct {
-	Key              string // API key (anthropic, minimax)
-	BaseURL          string // custom endpoint ("" = kind default)
-	CLIPath          string // resolved `claude` binary path (claude-cli)
-	CLIConfigDir     string // CLAUDE_CONFIG_DIR override for the claude-cli subprocess ("" = inherit ~/.claude)
-	CLIAuthKind      string // claude-cli credential kind: "oauth" | "apikey" | "" (none)
-	CLIAuthToken     string // claude-cli credential value injected into the subprocess env
-	CodexPath        string // resolved `codex` binary path (codex-cli)
-	CodexConfigDir   string // CODEX_HOME override for the codex-cli subprocess ("" = inherit ~/.codex)
-	ExtendedCache    bool   // anthropic extended prompt-cache beta
-	ContextEditing   bool   // anthropic API-native context-editing beta (clear_tool_uses)
-	ServerCompaction bool   // anthropic API-native compaction beta (compact_20260112)
-	RefusalFallback  bool   // anthropic server-side refusal fallback (Fable-class requests)
+	CLIPath           string // resolved `claude` binary path (claude-cli)
+	CLIConfigDir      string // CLAUDE_CONFIG_DIR override for the claude-cli subprocess ("" = inherit ~/.claude)
+	CLIAuthKind       string // claude-cli credential kind: "oauth" | "apikey" | "" (none)
+	CLIAuthToken      string // claude-cli credential value injected into the subprocess env
+	CodexPath         string // resolved `codex` binary path (codex-cli)
+	CodexConfigDir    string // CODEX_HOME override for the codex-cli subprocess ("" = inherit ~/.codex)
+	OpenCodePath      string // resolved `opencode` binary path (opencode-cli)
+	OpenCodeConfigDir string // opencode home for the opencode-cli subprocess ("" = inherit the ambient XDG dirs)
 
-	// InstanceID/DefaultModel/Models/Values carry per-INSTANCE data for the
-	// generic openai-compat/anthropic-compat kinds (Faz 2, _Docs/71 §3): unlike
-	// every other field above (which mirrors an app-wide Registry setting),
-	// these vary per instance of the SAME kind (two "openai-compat" instances
-	// have different base URLs, models and reasoning/cache capability flags).
+	// InstanceID/DefaultModel/Models/Values carry per-INSTANCE data (Faz 2,
+	// _Docs/71 §3): unlike the fields above (which mirror an app-wide Registry
+	// setting), these vary per instance of the SAME kind (two opencode-cli
+	// instances have different homes and default models).
 	InstanceID   string            // the resolved provider instance's id (client "name")
 	DefaultModel string            // instance's configured default model, if any
 	Models       string            // instance's model-id suggestion list (comma/newline)
-	Reasoning    bool              // send reasoning_effort (openai-compat only)
-	PromptCache  string            // "native" | "auto" | "none" | "" (openai-compat only)
 	Values       map[string]string // raw resolved field values, keyed by FieldSpec.Key
 }
 

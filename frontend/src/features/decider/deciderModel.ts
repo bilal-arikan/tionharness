@@ -216,17 +216,13 @@ export interface SetupStep {
 }
 
 // setupSteps is the three-step setup the guide walks through: a credential (a
-// provider account a decision provider can borrow, or a decision provider with
-// its own key — a local server needs none), a decision provider that is ready,
-// and the master switch on.
+// decision provider with its own key — a local server needs none), a decision
+// provider that is ready, and the master switch on.
 export function setupSteps(view: DeciderView): SetupStep[] {
   const keyRequired = (m: DeciderModelInstance) =>
     view.backends.find((b) => b.id === m.backend)?.keyRequired ?? false
   const ready = view.models.some((m) => m.enabled && m.status.ready)
-  const account =
-    ready ||
-    Object.values(view.providerCandidates).some((list) => list.length > 0) ||
-    view.models.some((m) => m.credentials === 'own' && (!keyRequired(m) || m.secretsSet.key))
+  const account = ready || view.models.some((m) => !keyRequired(m) || m.secretsSet.key)
   return [
     { id: 'account', done: account },
     { id: 'provider', done: ready },

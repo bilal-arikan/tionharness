@@ -16,10 +16,6 @@ import (
 // the secret never travels through this layer as a plain string (and so can
 // never end up in a log line or an error message).
 type Endpoint struct {
-	// InstanceID and Kind name the provider instance whose credentials were
-	// borrowed; both are "" when the decision model carries its own.
-	InstanceID string
-	Kind       string
 	// BaseURL is the configured base URL ("" = the backend's default).
 	BaseURL string
 	// Authorize stamps the credential; nil for a server that needs none.
@@ -89,10 +85,6 @@ type Manifest struct {
 	ID          string `json:"id"`
 	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
-	// ProviderKinds lists the provider-instance kinds whose credentials a
-	// decision model of this backend can borrow. Accepts makes the final call
-	// (an openai-compat instance qualifies only when it points at the right host).
-	ProviderKinds []string `json:"providerKinds"`
 	// DefaultBaseURL is used by a model with its own credentials and no base URL.
 	DefaultBaseURL string `json:"defaultBaseUrl"`
 	// KeyRequired: a model with its own credentials must carry an API key (a
@@ -138,9 +130,6 @@ func (m Manifest) FieldByKey(key string) (Field, bool) {
 // an alternative touches no caller.
 type Backend interface {
 	Manifest() Manifest
-	// Accepts reports whether a provider instance of this kind and base URL
-	// can lend its credentials to reach the backend's service.
-	Accepts(kind, baseURL string) bool
 	// New builds a client for one endpoint and model.
 	New(ep Endpoint, opts ClientOptions) (Decider, error)
 }

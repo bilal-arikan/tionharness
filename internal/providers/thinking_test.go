@@ -105,42 +105,13 @@ func TestCodexGPT5ThinkingTiersAreProviderAware(t *testing.T) {
 	}
 }
 
-// TestNativeEffortTransportsDoNotOfferUltra pins the asymmetry the effort enum
-// forces: "ultra" is a real CLI effort value but has no Messages-API
-// representation, so the HTTP kinds must not offer it while the CLI kinds must.
-func TestNativeEffortTransportsDoNotOfferUltra(t *testing.T) {
-	for _, kind := range []string{"anthropic", "anthropic-compat"} {
-		got := ThinkingTiersForProvider(kind, "claude-opus-4-8")
-		if slices.Contains(got, "ultra") {
-			t.Errorf("%s offers ultra but output_config.effort cannot carry it: %v", kind, got)
-		}
-		if !slices.Contains(got, "max") {
-			t.Errorf("%s lost the max tier: %v", kind, got)
-		}
-		// Always-on models take the same treatment.
-		if alwaysOn := ThinkingTiersForProvider(kind, "claude-fable-5"); slices.Contains(alwaysOn, "ultra") {
-			t.Errorf("%s always-on ramp offers ultra: %v", kind, alwaysOn)
-		}
-	}
+// TestCLITransportsOfferUltra pins that the CLI kinds keep the "ultra" tier
+// (reached through CLAUDE_CODE_EFFORT_LEVEL / codex model_reasoning_effort).
+func TestCLITransportsOfferUltra(t *testing.T) {
 	if got := ThinkingTiersForProvider("claude-cli", "claude-opus-4-8"); !slices.Contains(got, "ultra") {
 		t.Errorf("claude-cli lost ultra, which it reaches through CLAUDE_CODE_EFFORT_LEVEL: %v", got)
 	}
-}
-
-// TestUltraStaysStorableOnNativeEffortTransports guards the migration edge: an
-// agent that stored "ultra" (picked on a CLI provider, or before a provider
-// switch) must remain saveable even though the picker no longer offers it.
-func TestUltraStaysStorableOnNativeEffortTransports(t *testing.T) {
-	for _, kind := range []string{"anthropic", "anthropic-compat"} {
-		if got := StorableThinkingLevelsFor(kind, "claude-opus-4-8"); !slices.Contains(got, "ultra") {
-			t.Errorf("%s made a stored ultra row unsaveable: %v", kind, got)
-		}
-		if err := ValidateThinkingLevelForProvider(kind, "claude-opus-4-8", "ultra"); err != nil {
-			t.Errorf("%s rejected a stored ultra level: %v", kind, err)
-		}
-	}
-	// A model class that never had ultra does not gain it.
-	if got := StorableThinkingLevelsFor("anthropic", "claude-haiku-4-5"); slices.Contains(got, "ultra") {
+	if got := StorableThinkingLevelsFor("claude-cli", "claude-haiku-4-5"); slices.Contains(got, "ultra") {
 		t.Errorf("legacy class gained ultra: %v", got)
 	}
 }
@@ -181,42 +152,5 @@ func TestThinkingClass(t *testing.T) {
 		if got := ThinkingClass(model); got != want {
 			t.Errorf("ThinkingClass(%q) = %q, want %q", model, got, want)
 		}
-	}
-}
-
-func TestThinkingFor(t *testing.T) {
-	// Adaptive class: budget translates to adaptive + effort, no budget_tokens.
-	p, cfg, mt := thinkingFor("claude-opus-4-8", 16384, 4096)
-	if p == nil || p.Type != "adaptive" || p.BudgetTokens != 0 || p.Display != "summarized" {
-		t.Errorf("adaptive high: got %+v", p)
-	}
-	if cfg == nil || cfg.Effort != "high" {
-		t.Errorf("adaptive high effort: got %+v", cfg)
-	}
-	if mt != 4096 {
-		t.Errorf("adaptive should not bump max_tokens: got %d", mt)
-	}
-	// Adaptive class, off: explicit disabled.
-	p, cfg, _ = thinkingFor("claude-sonnet-5", 0, 4096)
-	if p == nil || p.Type != "disabled" || cfg != nil {
-		t.Errorf("adaptive off: got %+v cfg %+v", p, cfg)
-	}
-	// Always-on class, off: field omitted entirely (disabled 400s on Fable).
-	p, cfg, _ = thinkingFor("claude-fable-5", 0, 4096)
-	if p != nil || cfg != nil {
-		t.Errorf("fable off should omit thinking: got %+v cfg %+v", p, cfg)
-	}
-	// Legacy class: enabled + budget, max_tokens bumped above the budget.
-	p, cfg, mt = thinkingFor("claude-haiku-4-5", 8192, 4096)
-	if p == nil || p.Type != "enabled" || p.BudgetTokens != 8192 || cfg != nil {
-		t.Errorf("legacy: got %+v cfg %+v", p, cfg)
-	}
-	if mt <= 8192 {
-		t.Errorf("legacy max_tokens must exceed budget: got %d", mt)
-	}
-	// Legacy class, off: omitted.
-	p, cfg, _ = thinkingFor("MiniMax-M1", 0, 4096)
-	if p != nil || cfg != nil {
-		t.Errorf("legacy off should omit thinking: got %+v cfg %+v", p, cfg)
 	}
 }

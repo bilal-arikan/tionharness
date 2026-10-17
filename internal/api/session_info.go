@@ -597,11 +597,6 @@ func (s *Server) systemFillersOpts(ctx context.Context, wsp *workspace.Workspace
 
 	out := make([]contextFiller, 0, 6)
 	system := s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
-	// The whole prefix as shipped, before the catalog blocks are carved out for
-	// display: the exact-count fingerprint must cover exactly what the provider
-	// receives as the system field.
-	fullSystem := system
-
 	// Carve the two self-contained catalog blocks out of the prefix into their own
 	// buckets. Both are costs the user can act on INDEPENDENTLY of the prompt text
 	// (unassign a skill / drop a tool to a leaner visibility tier), which is exactly
@@ -645,15 +640,6 @@ func (s *Server) systemFillersOpts(ctx context.Context, wsp *workspace.Workspace
 	cat := wsp.Runtime.ShippedToolCatalog(ctx, agentRow)
 	if len(cat) > 0 {
 		out = append(out, contextFiller{Label: "Araçlar", Role: "tools", Tokens: estimateToolCatalog(cat), Count: len(cat)})
-	}
-
-	// Exact prefix count (providers with a server-side counter): rescale the
-	// prefix buckets above to the real tokenizer's figure, so the meter and the
-	// fold gate stop estimating the largest fixed share of the context.
-	if counter, ok := s.tokenCounterFor(agentRow); ok {
-		if exact, ok := exactPrefixTokens(ctx, wsp.DB, counter, agentRow, fullSystem, cat, measurePrefix); ok {
-			out = applyPrefixCalibration(out, exact)
-		}
 	}
 
 	// CLI-wrapper harness (claude-cli): the CLI's own system prompt, built-in

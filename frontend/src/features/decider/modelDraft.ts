@@ -11,11 +11,6 @@ import type {
 // API_KEY is the secret holding a model's own API key.
 export const API_KEY = 'key'
 
-// canBorrow reports whether a backend's models can use a provider account.
-export function canBorrow(backend: DeciderBackend | undefined): boolean {
-  return (backend?.providerKinds.length ?? 0) > 0
-}
-
 // draftFromBackend is a blank model of a backend with its defaults.
 export function draftFromBackend(backend: DeciderBackend): DeciderModelInput {
   return {
@@ -24,7 +19,6 @@ export function draftFromBackend(backend: DeciderBackend): DeciderModelInput {
     enabled: true,
     model: backend.defaultModel,
     credentials: 'own',
-    providerInstanceId: '',
     baseUrl: backend.defaultBaseUrl,
     timeoutMs: backend.defaultTimeoutMs,
     contextTokens: 0,
@@ -39,8 +33,8 @@ export function draftFromPreset(backend: DeciderBackend, preset: DeciderPreset):
     ...base,
     label: preset.label,
     model: preset.model || base.model,
-    credentials: preset.credentials,
-    baseUrl: preset.credentials === 'own' ? preset.baseUrl || base.baseUrl : '',
+    credentials: 'own',
+    baseUrl: preset.baseUrl || base.baseUrl,
     timeoutMs: preset.timeoutMs || base.timeoutMs,
     contextTokens: preset.contextTokens ?? 0,
     config: { ...(preset.config ?? {}) },
@@ -57,7 +51,6 @@ export function draftFromModel(model: DeciderModelInstance): DeciderModelInput {
     enabled: model.enabled,
     model: model.model,
     credentials: model.credentials,
-    providerInstanceId: model.providerInstanceId,
     baseUrl: model.baseUrl,
     timeoutMs: model.timeoutMs,
     contextTokens: model.contextTokens,
@@ -66,7 +59,7 @@ export function draftFromModel(model: DeciderModelInstance): DeciderModelInput {
 }
 
 // toInput is the request body for a draft: the typed key is sent only when the
-// user typed one (or asked to clear it); borrowed credentials send no base URL.
+// user typed one (or asked to clear it).
 export function toInput(
   draft: DeciderModelInput,
   keyText: string,
@@ -74,25 +67,19 @@ export function toInput(
 ): DeciderModelInput {
   const out: DeciderModelInput = { ...draft, config: { ...draft.config } }
   delete out.secrets
-  if (out.credentials === 'provider') {
-    out.baseUrl = ''
-  } else {
-    out.providerInstanceId = ''
-    if (keyText.trim() !== '') out.secrets = { [API_KEY]: keyText.trim() }
-    else if (clearKey) out.secrets = { [API_KEY]: '' }
-  }
+  if (keyText.trim() !== '') out.secrets = { [API_KEY]: keyText.trim() }
+  else if (clearKey) out.secrets = { [API_KEY]: '' }
   return out
 }
 
 // keyMissing reports a hosted backend's own-credential model saved without a key.
 export function keyMissing(
   backend: DeciderBackend | undefined,
-  draft: DeciderModelInput,
   keyText: string,
   keyStored: boolean,
   clearKey: boolean,
 ): boolean {
-  if (!backend?.keyRequired || draft.credentials !== 'own') return false
+  if (!backend?.keyRequired) return false
   if (keyText.trim() !== '') return false
   return !keyStored || clearKey
 }

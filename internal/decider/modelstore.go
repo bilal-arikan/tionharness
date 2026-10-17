@@ -169,7 +169,6 @@ func (s *ModelStore) Upsert(in ModelInput) (ModelInstance, error) {
 	entry.Enabled = in.Enabled
 	entry.Model = in.Model
 	entry.Credentials = in.Credentials
-	entry.ProviderInstanceID = in.ProviderInstanceID
 	entry.BaseURL = in.BaseURL
 	entry.TimeoutMs = in.TimeoutMs
 	entry.ContextTokens = in.ContextTokens

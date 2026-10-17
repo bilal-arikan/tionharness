@@ -1,6 +1,9 @@
 package providers
 
-import "maps"
+import (
+	"maps"
+	"strings"
+)
 
 // Price is a model's API token price in USD per 1,000,000 tokens.
 type Price struct {
@@ -389,6 +392,26 @@ func EstimateFor(provider, model string) (Price, bool) {
 			p.CacheWriteMultOverride = 0 // fall back to CacheWriteMult (1.25×), the 5-minute tier
 			return p, true
 		}
+	case "opencode-cli":
+		// opencode-cli models are "<vendor>/<model>" (possibly nested, e.g.
+		// "openrouter/anthropic/claude-…"). Only the two first-party vendors have
+		// a list price here; the estimate is informational like the other CLIs.
+		vendor, rest, ok := strings.Cut(model, "/")
+		if !ok {
+			return Price{}, false
+		}
+		switch vendor {
+		case "anthropic":
+			if p, ok := priceTable["anthropic"][rest]; ok {
+				p.CacheWriteMultOverride = 0
+				return p, true
+			}
+		case "openai":
+			if p, ok := priceTable["openai"][rest]; ok {
+				return p, true
+			}
+		}
+		return Price{}, false
 	case "codex-cli":
 		// codex-cli runs via ChatGPT/Codex subscription login; reuse OpenAI's own
 		// first-party list price for the same model id as an informational

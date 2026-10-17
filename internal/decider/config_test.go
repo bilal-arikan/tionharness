@@ -107,11 +107,11 @@ func TestConfigRoundTrip(t *testing.T) {
 
 func TestSeedModel(t *testing.T) {
 	fresh := seedModel(nil)
-	if fresh.Backend != OpenRouterBackendID || fresh.Model != JevModel || fresh.Credentials != CredentialsProvider || !fresh.Enabled {
+	if fresh.Backend != OpenRouterBackendID || fresh.Model != JevModel || fresh.Credentials != CredentialsOwn || !fresh.Enabled {
 		t.Errorf("fresh seed = %+v", fresh)
 	}
-	legacy := seedModel(&legacyConnection{Backend: "nope", ProviderInstanceID: "PRV7", Model: "typesafe/jev-2", TimeoutMs: 2000})
-	if legacy.Backend != OpenRouterBackendID || legacy.ProviderInstanceID != "PRV7" || legacy.Model != "typesafe/jev-2" || legacy.TimeoutMs != 2000 {
+	legacy := seedModel(&legacyConnection{Backend: "nope", Model: "typesafe/jev-2", TimeoutMs: 2000})
+	if legacy.Backend != OpenRouterBackendID || legacy.Model != "typesafe/jev-2" || legacy.TimeoutMs != 2000 {
 		t.Errorf("legacy seed = %+v; an unknown backend keeps the default", legacy)
 	}
 }

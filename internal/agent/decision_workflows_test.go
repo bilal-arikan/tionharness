@@ -25,7 +25,7 @@ func decisionWorkflowFixture(t *testing.T, modes map[string]decider.Mode) (*Runt
 	t.Cleanup(func() { drainSpawns(t, rt) })
 	stub := newDecisionStub(t)
 	wireDecider(t, tun, stub, modes)
-	agent, err := rt.db.CreateAgent(context.Background(), db.Agent{Name: "Workflow", Provider: "anthropic", Model: "claude-sonnet-4-5", MCPEnabled: true})
+	agent, err := rt.db.CreateAgent(context.Background(), db.Agent{Name: "Workflow", Provider: "openrouter", Model: "claude-sonnet-4-5", MCPEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,14 +363,15 @@ func TestDecisionRouterRestrictsCandidatesAndKeepsPinnedOrResumedRoutes(t *testi
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			rt, stub, ctx, agent := decisionWorkflowFixture(t, map[string]decider.Mode{authModelRouter: decider.ModeOn})
+			// CLI routing stays within one instance: the candidates are the other
+			// models of the agent's own instance; a second instance and a disabled
+			// one must never reach the judge.
 			rt.providers.SetInstances([]providers.Instance{
-				{ID: "a-native", KindID: "anthropic", Enabled: true, Models: "claude-sonnet-4-5", Values: map[string]string{providers.FieldKeyAPIKey: "fixture"}},
-				{ID: "b-native", KindID: "anthropic", Enabled: true, Models: "claude-opus-4-1", Values: map[string]string{providers.FieldKeyAPIKey: "fixture"}},
-				{ID: "disabled", KindID: "anthropic", Enabled: false, Models: "claude-opus-disabled", Values: map[string]string{providers.FieldKeyAPIKey: "fixture"}},
-				{ID: "missing-key", KindID: "anthropic", Enabled: true, Models: "claude-opus-unavailable"},
-				{ID: "cli", KindID: "claude-cli", Enabled: true, Models: "opus", Values: map[string]string{providers.FieldKeyCLIPath: executable}},
+				{ID: "cli", KindID: "claude-cli", Enabled: true, Models: "claude-sonnet-4-5,claude-opus-4-1,claude-haiku-4-5", Values: map[string]string{providers.FieldKeyCLIPath: executable}},
+				{ID: "other", KindID: "claude-cli", Enabled: true, Models: "claude-opus-unavailable", Values: map[string]string{providers.FieldKeyCLIPath: executable}},
+				{ID: "disabled", KindID: "claude-cli", Enabled: false, Models: "claude-opus-disabled", Values: map[string]string{providers.FieldKeyCLIPath: executable}},
 			})
-			agent.ProviderInstanceID, agent.Model = "a-native", "claude-sonnet-4-5"
+			agent.Provider, agent.ProviderInstanceID, agent.Model = "claude-cli", "cli", "claude-sonnet-4-5"
 			provider, err := rt.providers.Get(agent.ProviderRef())
 			if err != nil {
 				t.Fatal(err)
@@ -383,10 +384,12 @@ func TestDecisionRouterRestrictsCandidatesAndKeepsPinnedOrResumedRoutes(t *testi
 			if _, err := hub.Update(cfg); err != nil {
 				t.Fatal(err)
 			}
-			stub.set(func(stub *decisionStub) { stub.choice["route"] = questionKey(1) })
+			// Candidates are keyed from 1 ("current" is the agent's own model) and
+			// sorted by id: candidate_1 = haiku, candidate_2 = opus.
+			stub.set(func(stub *decisionStub) { stub.choice["route"] = questionKey(2) })
 			if test.pin {
 				if err := rt.db.UpdateSessionDecisions(ctx, SessionIDFrom(ctx), func(state *db.SessionDecisions) error {
-					state.Route = &db.DecisionRoute{Provider: "b-native", Model: "claude-opus-4-1", Pinned: true}
+					state.Route = &db.DecisionRoute{Provider: "cli", Model: "claude-opus-4-1", Pinned: true}
 					return nil
 				}); err != nil {
 					t.Fatal(err)
@@ -398,13 +401,16 @@ func TestDecisionRouterRestrictsCandidatesAndKeepsPinnedOrResumedRoutes(t *testi
 			}
 			routed, _, actual := rt.routeDecisionTurn(ctx, agent, provider, req)
 			if routed.Model != test.wantModel || actual.Model != test.wantModel || stub.calls() != test.wantCalls {
-				t.Fatalf("route model=%s req=%s calls=%d; want %s/%d", routed.Model, actual.Model, stub.calls(), test.wantModel, test.wantCalls)
+				stub.mu.Lock()
+				bodies := strings.Join(stub.bodies, "\n")
+				stub.mu.Unlock()
+				t.Fatalf("route model=%s req=%s calls=%d; want %s/%d\njudge bodies:\n%s", routed.Model, actual.Model, stub.calls(), test.wantModel, test.wantCalls, bodies)
 			}
 			if test.wantCalls > 0 {
 				stub.mu.Lock()
 				body := stub.bodies[0]
 				stub.mu.Unlock()
-				for _, excluded := range []string{"claude-opus-disabled", "claude-opus-unavailable", "cli/opus"} {
+				for _, excluded := range []string{"claude-opus-disabled", "claude-opus-unavailable"} {
 					if strings.Contains(body, excluded) {
 						t.Errorf("ineligible model reached judge candidate list: %s", excluded)
 					}
@@ -607,7 +613,11 @@ func TestDecisionRouterRespectsPinChangedWhileJudgeRuns(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	t.Cleanup(func() { drainSpawns(t, rt) })
 	ctx := context.Background()
-	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Pinned route", Provider: "anthropic", ProviderInstanceID: "a-native", Model: "claude-sonnet-4-5"})
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Pinned route", Provider: "claude-cli", ProviderInstanceID: "cli", Model: "claude-sonnet-4-5"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -617,8 +627,7 @@ func TestDecisionRouterRespectsPinChangedWhileJudgeRuns(t *testing.T) {
 	}
 	ctx = WithSessionID(ctx, session.ID)
 	rt.providers.SetInstances([]providers.Instance{
-		{ID: "a-native", KindID: "anthropic", Enabled: true, Models: "claude-sonnet-4-5", Values: map[string]string{providers.FieldKeyAPIKey: "fixture"}},
-		{ID: "b-native", KindID: "anthropic", Enabled: true, Models: "claude-opus-4-1", Values: map[string]string{providers.FieldKeyAPIKey: "fixture"}},
+		{ID: "cli", KindID: "claude-cli", Enabled: true, Models: "claude-sonnet-4-5,claude-opus-4-1,claude-haiku-4-5", Values: map[string]string{providers.FieldKeyCLIPath: executable}},
 	})
 	started, release := make(chan struct{}), make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -628,7 +637,7 @@ func TestDecisionRouterRespectsPinChangedWhileJudgeRuns(t *testing.T) {
 		_, _ = io.WriteString(w, `{"answers":{"route":{"type":"choice","choice":"candidate_1","probabilities":{"candidate_1":0.99},"confidence":0.99}}}`)
 	}))
 	defer server.Close()
-	hub := decider.NewHub(decider.HubOptions{Source: stubSource{url: server.URL}})
+	hub := newStubDeciderHub(t, server.URL)
 	cfg := hub.Config()
 	cfg.Enabled = true
 	ac := cfg.Authorities[authModelRouter]
@@ -647,7 +656,7 @@ func TestDecisionRouterRespectsPinChangedWhileJudgeRuns(t *testing.T) {
 		t.Fatal("router never reached the judge")
 	}
 	if err := rt.db.UpdateSessionDecisions(ctx, session.ID, func(state *db.SessionDecisions) error {
-		state.Route = &db.DecisionRoute{Provider: "a-native", Model: "claude-sonnet-4-5", Pinned: true}
+		state.Route = &db.DecisionRoute{Provider: "cli", Model: "claude-sonnet-4-5", Pinned: true}
 		return nil
 	}); err != nil {
 		close(release)
@@ -661,7 +670,7 @@ func TestDecisionRouterRespectsPinChangedWhileJudgeRuns(t *testing.T) {
 		t.Fatal("router did not finish after the judge returned")
 	}
 	state, err := rt.db.ReadSessionDecisions(ctx, session.ID)
-	if err != nil || routed.Model != "claude-sonnet-4-5" || state.Route == nil || !state.Route.Pinned || state.Route.Provider != "a-native" {
+	if err != nil || routed.Model != "claude-sonnet-4-5" || state.Route == nil || !state.Route.Pinned || state.Route.Provider != "cli" {
 		t.Fatalf("concurrent pin was overwritten: routed=%+v state=%+v err=%v", routed, state.Route, err)
 	}
 }

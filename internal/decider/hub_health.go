@@ -25,7 +25,6 @@ type modelHealth struct {
 	failures      int
 	openUntil     time.Time
 	quarantine    time.Time
-	quarantineGen uint64
 	quarantineWhy string
 	lastProblem   string
 	lastProblemAt time.Time
@@ -48,7 +47,7 @@ func (h *Hub) quarantined(m ModelInstance, mh *modelHealth) bool {
 	if mh == nil || !h.now().Before(mh.quarantine) {
 		return false
 	}
-	return m.Credentials != CredentialsProvider || mh.quarantineGen == h.providerGeneration()
+	return true
 }
 
 func (h *Hub) checkHealth(m ModelInstance) error {
@@ -78,7 +77,6 @@ func (h *Hub) noteFailure(ctx context.Context, m ModelInstance, err error) {
 	mh.lastProblem, mh.lastProblemAt = err.Error(), h.now()
 	if IsAuthError(err) {
 		mh.quarantine = h.now().Add(quarantineFor)
-		mh.quarantineGen = h.providerGeneration()
 		mh.quarantineWhy = err.Error()
 		h.logger.Warn("decision model rejected the credentials; pausing it", "model", m.ID, "error", err, "for", quarantineFor)
 		return
@@ -132,8 +130,6 @@ type ModelStatus struct {
 	Problem      string `json:"problem,omitempty"`
 	ProblemAt    int64  `json:"problemAt,omitempty"`
 	BackoffUntil int64  `json:"backoffUntil,omitempty"`
-	// Provider is the provider account a borrowing model would use now.
-	Provider string `json:"provider,omitempty"`
 	// Endpoint is the host requests go to (never a path or a key).
 	Endpoint string `json:"endpoint,omitempty"`
 }
@@ -151,18 +147,9 @@ func (h *Hub) ModelStatus(id string) ModelStatus {
 	manifest := b.Manifest()
 	var st ModelStatus
 	setup := ""
-	if m.Credentials == CredentialsProvider {
-		st.Provider = h.providerFor(m, b)
-		if st.Provider == "" {
-			setup = ErrNoEndpoint.Error()
-		} else {
-			st.Endpoint = hostOf(h.providerBaseURL(st.Provider))
-		}
-	} else {
-		st.Endpoint = hostOf(firstNonEmpty(m.BaseURL, manifest.DefaultBaseURL))
-		if manifest.KeyRequired && m.SecretsEnc[SecretAPIKey] == "" {
-			setup = "no API key"
-		}
+	st.Endpoint = hostOf(firstNonEmpty(m.BaseURL, manifest.DefaultBaseURL))
+	if manifest.KeyRequired && m.SecretsEnc[SecretAPIKey] == "" {
+		setup = "no API key"
 	}
 	if !m.Enabled && setup == "" {
 		setup = ErrModelDisabled.Error()
@@ -187,21 +174,6 @@ func (h *Hub) ModelStatus(id string) ModelStatus {
 		st.Ready = true
 	}
 	return st
-}
-
-// providerBaseURL is where a provider instance's requests go: its configured
-// base URL, else its kind's default ("" = unknown).
-func (h *Hub) providerBaseURL(id string) string {
-	if h.opts.Source == nil {
-		return ""
-	}
-	for _, inst := range h.opts.Source.Instances() {
-		if inst.ID == id {
-			base, _ := endpointBase(Endpoint{InstanceID: inst.ID, Kind: inst.Kind, BaseURL: inst.BaseURL})
-			return base
-		}
-	}
-	return ""
 }
 
 func firstNonEmpty(vals ...string) string {

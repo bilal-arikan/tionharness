@@ -53,7 +53,7 @@ func TestModelStoreCreateUpdateDelete(t *testing.T) {
 	if second.ID != "DM2" {
 		t.Errorf("second id = %q", second.ID)
 	}
-	named, err := s.Upsert(ModelInput{ID: "jev-cloud", Backend: OpenRouterBackendID, Credentials: CredentialsProvider})
+	named, err := s.Upsert(ModelInput{ID: "jev-cloud", Backend: OpenRouterBackendID})
 	if err != nil || named.ID != "jev-cloud" {
 		t.Errorf("named model = %+v, %v", named, err)
 	}
@@ -81,7 +81,6 @@ func TestModelInputValidation(t *testing.T) {
 		want string
 	}{
 		{"unknown backend", ModelInput{Backend: "nope"}, "unknown decision backend"},
-		{"key required", ModelInput{Backend: OpenRouterBackendID, Credentials: CredentialsOwn}, "needs an API key"},
 		{"bad credentials", ModelInput{Backend: OpenRouterBackendID, Credentials: "stolen"}, "unknown credential source"},
 		{"bad base URL", ModelInput{Backend: SystemOneBackendID, BaseURL: "ftp://x"}, "must start with http"},
 		{"unknown field", ModelInput{Backend: SystemOneBackendID, Config: map[string]string{"temperature": "1"}}, "unknown field"},
@@ -96,14 +95,13 @@ func TestModelInputValidation(t *testing.T) {
 			t.Errorf("%s: err = %v, want it to mention %q", c.name, err, c.want)
 		}
 	}
-	// Borrowed credentials never keep an own base URL: the provider's key only
-	// goes to the provider's endpoint.
-	m, err := s.Upsert(ModelInput{Backend: OpenRouterBackendID, Credentials: CredentialsProvider, BaseURL: "https://evil.example/v1", ProviderInstanceID: " PRV1 "})
+	// The pre-2026-10-13 "provider" source loads as own credentials.
+	m, err := s.Upsert(ModelInput{Backend: OpenRouterBackendID, Credentials: "provider"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.BaseURL != "" || m.ProviderInstanceID != "PRV1" {
-		t.Errorf("borrowing model = %+v", m)
+	if m.Credentials != CredentialsOwn {
+		t.Errorf("legacy borrowing model = %+v, want own credentials", m)
 	}
 	// Timeouts and context sizes are clamped.
 	m, _ = s.Upsert(ModelInput{Backend: SystemOneBackendID, TimeoutMs: 999_999, ContextTokens: 10})

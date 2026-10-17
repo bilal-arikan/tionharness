@@ -41,7 +41,7 @@ func TestOpenRouterDecideRequestAndResponseShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d, err := openRouterBackend{}.New(Endpoint{InstanceID: "PRV1", Kind: "openrouter", BaseURL: srv.URL + "/api/v1", Authorize: bearer("k1")}, ClientOptions{})
+	d, err := openRouterBackend{}.New(Endpoint{BaseURL: srv.URL + "/api/v1", Authorize: bearer("k1")}, ClientOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestOpenRouterErrorEnvelopeAndRetry(t *testing.T) {
 	}))
 	defer srv.Close()
 	ask := func(caseName string) error {
-		ep := Endpoint{Kind: "openrouter", BaseURL: srv.URL + "/api/v1", Authorize: func(h http.Header) { h.Set("X-Case", caseName) }}
+		ep := Endpoint{BaseURL: srv.URL + "/api/v1", Authorize: func(h http.Header) { h.Set("X-Case", caseName) }}
 		d, err := openRouterBackend{}.New(ep, ClientOptions{})
 		if err != nil {
 			t.Fatal(err)
@@ -149,7 +149,7 @@ func TestOpenRouterRejectsIncompleteAnswers(t *testing.T) {
 		_, _ = io.WriteString(w, `{"answers":{"a":{"type":"choice","choice":"x"}}}`)
 	}))
 	defer srv.Close()
-	d, _ := openRouterBackend{}.New(Endpoint{Kind: "openrouter", BaseURL: srv.URL + "/v1"}, ClientOptions{})
+	d, _ := openRouterBackend{}.New(Endpoint{BaseURL: srv.URL + "/v1"}, ClientOptions{})
 	_, err := d.Decide(context.Background(), Request{State: "s", Questions: map[string]Question{
 		"a": Noul("?", "", ""),
 		"b": Noul("?", "", ""),
@@ -170,7 +170,7 @@ func TestOpenRouterAttemptTimeout(t *testing.T) {
 	}))
 	defer srv.Close()
 	defer close(release)
-	d, _ := openRouterBackend{}.New(Endpoint{Kind: "openrouter", BaseURL: srv.URL + "/v1"}, ClientOptions{Timeout: 50 * time.Millisecond})
+	d, _ := openRouterBackend{}.New(Endpoint{BaseURL: srv.URL + "/v1"}, ClientOptions{Timeout: 50 * time.Millisecond})
 	start := time.Now()
 	_, err := d.Decide(context.Background(), Request{State: "s", Questions: map[string]Question{"q": Noul("?", "", "")}})
 	if err == nil || !isTimeout(err) {
@@ -196,22 +196,6 @@ func TestDecisionsURL(t *testing.T) {
 	}
 	if _, err := DecisionsURL("https://proxy.corp/openrouter"); err == nil {
 		t.Error("a base without /v1 must be refused, not guessed")
-	}
-}
-
-func TestOpenRouterAccepts(t *testing.T) {
-	b := openRouterBackend{}
-	if !b.Accepts("openrouter", "") {
-		t.Error("openrouter kind refused")
-	}
-	if !b.Accepts("openai-compat", "https://openrouter.ai/api/v1") {
-		t.Error("openai-compat pointing at openrouter.ai refused")
-	}
-	if b.Accepts("openai-compat", "https://api.example.com/v1") || b.Accepts("anthropic", "") {
-		t.Error("an instance that cannot reach OpenRouter was accepted")
-	}
-	if _, err := b.New(Endpoint{Kind: "anthropic"}, ClientOptions{}); err == nil {
-		t.Error("a client was built over an unusable provider")
 	}
 }
 

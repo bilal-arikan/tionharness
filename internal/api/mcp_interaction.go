@@ -838,7 +838,9 @@ func bareToolName(name string) string {
 // Such a run can never populate the session's activated set, so the call-time
 // activation gate must not apply to it either — otherwise every extended tool it
 // was shown answers "is not activated" with no way to fix it.
-func fullTierProvider(provider string) bool { return provider == "codex-cli" }
+func fullTierProvider(provider string) bool {
+	return provider == "codex-cli" || provider == "opencode-cli"
+}
 
 // toolCallError distinguishes an unloaded on-demand tool from a policy-blocked or
 // genuinely unknown name before dispatch. Claude can submit either a bare or MCP-

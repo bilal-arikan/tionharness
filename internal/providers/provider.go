@@ -169,14 +169,6 @@ type Request struct {
 	// ThinkingBudget, when > 0, requests extended reasoning with that many
 	// thinking tokens (providers that support it, e.g. anthropic). 0 = off.
 	ThinkingBudget int
-	// TaskBudgetTokens, when > 0, tells the model how many tokens the WHOLE
-	// agentic loop has (thinking + tool calls + output): the server injects a
-	// running countdown the model sees and paces itself against — a soft,
-	// model-aware complement to the caller's hard iteration caps. Only providers/
-	// models with task-budget support send it (anthropic, adaptive class; see
-	// SupportsTaskBudget); everyone else ignores it. Values below the API minimum
-	// (20K) are raised to it.
-	TaskBudgetTokens int
 	// OutputSchema, when set, constrains the reply to this JSON Schema via
 	// output_config.format (structured outputs). Only sent to models with
 	// support (SupportsStructuredOutputs); other providers/models ignore it, so
@@ -439,13 +431,6 @@ type InputTransformation struct {
 	Reason string // "prefix_binding_mismatch" | "model_binding_mismatch"
 }
 
-// TokenCounter is implemented by providers exposing an exact server-side token
-// count for a request (Anthropic /v1/messages/count_tokens). Used to display
-// accurate figures next to the local heuristic estimate.
-type TokenCounter interface {
-	CountTokens(ctx context.Context, req Request) (int, error)
-}
-
 // Provider is implemented by every LLM backend.
 type Provider interface {
 	// Name returns the provider identifier, e.g. "anthropic".
@@ -595,7 +580,7 @@ func HasNativeCLICompactionEvents(p Provider) bool {
 // tool-free invocation against the configured config home. It returns nil when
 // authenticated and a classified error otherwise, so an auth lapse surfaces in
 // Settings instead of failing the first real agent turn. Optional capability in
-// the Streamer/TokenCounter mould: call sites branch on the interface, never on
+// the Streamer mould: call sites branch on the interface, never on
 // a concrete provider type.
 type AuthProber interface {
 	ProbeAuth(ctx context.Context) error

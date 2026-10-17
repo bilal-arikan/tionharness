@@ -4,7 +4,7 @@
 
 export type DeciderMode = 'off' | 'shadow' | 'on'
 type DeciderPattern = 'gate' | 'pick' | 'rate' | 'select' | 'triage'
-type DeciderCredentials = 'own' | 'provider'
+type DeciderCredentials = 'own'
 
 export interface DeciderAuthorityConfig {
   mode: DeciderMode
@@ -58,7 +58,6 @@ export interface DeciderBackend {
   id: string
   label: string
   description?: string
-  providerKinds: string[]
   defaultBaseUrl: string
   keyRequired: boolean
   fields?: DeciderField[]
@@ -88,15 +87,6 @@ export interface DeciderAuthority {
   order?: number
 }
 
-export interface DeciderProviderInstance {
-  id: string
-  kind: string
-  label: string
-  baseUrl?: string
-  enabled: boolean
-  available: boolean
-}
-
 interface DeciderModelStatus {
   ready: boolean
   problem?: string
@@ -123,7 +113,6 @@ export interface DeciderModelInstance {
   enabled: boolean
   model: string
   credentials: DeciderCredentials
-  providerInstanceId: string
   baseUrl: string
   timeoutMs: number
   contextTokens: number
@@ -145,7 +134,6 @@ export interface DeciderModelInput {
   enabled: boolean
   model: string
   credentials: DeciderCredentials
-  providerInstanceId: string
   baseUrl: string
   timeoutMs: number
   contextTokens: number
@@ -211,7 +199,6 @@ export interface DeciderView {
   groups: string[]
   authorities: DeciderAuthority[]
   models: DeciderModelInstance[]
-  providerCandidates: Record<string, DeciderProviderInstance[]>
   stats: DeciderAuthorityStats[]
   recent: DeciderRecord[]
   statsDays: number

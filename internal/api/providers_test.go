@@ -89,7 +89,6 @@ func TestProviderAuthRoutes(t *testing.T) {
 	}{
 		{name: "claude status", kind: "claude-cli", method: http.MethodGet, pathSuffix: "/auth", wantStatus: http.StatusOK},
 		{name: "codex status", kind: "codex-cli", method: http.MethodGet, pathSuffix: "/auth", wantStatus: http.StatusOK},
-		{name: "non CLI status", kind: "anthropic", method: http.MethodGet, pathSuffix: "/auth", wantStatus: http.StatusBadRequest},
 		{name: "claude route on codex", kind: "codex-cli", method: http.MethodPost, pathSuffix: "/auth/oauth/start", wantStatus: http.StatusBadRequest},
 		{name: "codex route on claude", kind: "claude-cli", method: http.MethodGet, pathSuffix: "/auth/device/status", wantStatus: http.StatusBadRequest},
 	}
@@ -97,11 +96,7 @@ func TestProviderAuthRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s, wsp := newWorkspaceServer(t)
 			config := map[string]string{"configDir": filepath.Join(t.TempDir(), "auth-home")}
-			secrets := map[string]string(nil)
-			if tt.kind == "anthropic" {
-				secrets = map[string]string{"key": "test"}
-			}
-			inst, err := s.providerStore.Upsert(settings.ProviderInstanceInput{ID: "auth-test", KindID: tt.kind, Config: config, Secrets: secrets})
+			inst, err := s.providerStore.Upsert(settings.ProviderInstanceInput{ID: "auth-test", KindID: tt.kind, Config: config})
 			if err != nil {
 				t.Fatalf("seed provider: %v", err)
 			}
@@ -242,24 +237,24 @@ func TestProviderKinds_SchemaCoversEveryRegisteredKind(t *testing.T) {
 	for _, k := range kinds {
 		byID[k.ID] = k
 	}
-	anthropic, ok := byID["anthropic"]
+	cli, ok := byID["claude-cli"]
 	if !ok {
-		t.Fatalf("expected \"anthropic\" kind in schema, got %+v", byID)
+		t.Fatalf("expected \"claude-cli\" kind in schema, got %+v", byID)
 	}
-	if anthropic.Transport != "api" {
-		t.Fatalf("expected anthropic transport \"api\", got %q", anthropic.Transport)
+	if cli.Transport != "cli" {
+		t.Fatalf("expected claude-cli transport \"cli\", got %q", cli.Transport)
 	}
 	found := false
-	for _, f := range anthropic.Fields {
-		if f.Key == "key" {
+	for _, f := range cli.Fields {
+		if f.Key == "authToken" {
 			found = true
-			if !f.Secret || !f.Required {
-				t.Fatalf("expected anthropic \"key\" field secret+required, got %+v", f)
+			if !f.Secret {
+				t.Fatalf("expected claude-cli \"authToken\" field to be secret, got %+v", f)
 			}
 		}
 	}
 	if !found {
-		t.Fatalf("expected anthropic kind to declare a \"key\" field, got %+v", anthropic.Fields)
+		t.Fatalf("expected claude-cli kind to declare an \"authToken\" field, got %+v", cli.Fields)
 	}
 }
 
@@ -278,10 +273,10 @@ func TestProviders_CRUDRoundTrip(t *testing.T) {
 		SecretsSet map[string]bool `json:"secretsSet"`
 	}{}
 	rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-		KindID: "anthropic",
+		KindID: "claude-cli",
 		Label:  "İş hesabı",
 		Secrets: map[string]string{
-			"key": "sk-live-abc",
+			"authToken": "sk-live-abc",
 		},
 	}, &created)
 	if rec.Code != http.StatusOK {
@@ -290,7 +285,7 @@ func TestProviders_CRUDRoundTrip(t *testing.T) {
 	if created.ID == "" {
 		t.Fatal("expected a generated instance id")
 	}
-	if !created.SecretsSet["key"] {
+	if !created.SecretsSet["authToken"] {
 		t.Fatalf("expected secretsSet[key]=true, got %+v", created.SecretsSet)
 	}
 
@@ -335,7 +330,7 @@ func TestProviders_CRUDRoundTrip(t *testing.T) {
 	}
 	rec = doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
 		ID:     created.ID,
-		KindID: "anthropic",
+		KindID: "claude-cli",
 		Label:  "İş hesabı v2",
 	}, &updated)
 	if rec.Code != http.StatusOK {
@@ -344,7 +339,7 @@ func TestProviders_CRUDRoundTrip(t *testing.T) {
 	if updated.Label != "İş hesabı v2" {
 		t.Fatalf("expected updated label, got %q", updated.Label)
 	}
-	if !updated.SecretsSet["key"] {
+	if !updated.SecretsSet["authToken"] {
 		t.Fatal("expected key to survive an update that omits it")
 	}
 
@@ -385,16 +380,16 @@ func TestProviders_UnknownKindRejected(t *testing.T) {
 
 // TestProviders_MissingRequiredFieldRejected verifies a kind's required
 // secret field (anthropic's "key") must be present on create.
-func TestProviders_MissingRequiredFieldRejected(t *testing.T) {
+func TestProviders_RemovedKindRejected(t *testing.T) {
 	s, _ := newWorkspaceServer(t)
 	h := s.Routes()
 
 	rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-		KindID: "anthropic",
-		Label:  "no key",
+		KindID: "openrouter", // removed with the HTTP transports (_Docs/95)
+		Label:  "legacy kind",
 	}, nil)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing required field, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 400 for an unregistered kind, got %d: %s", rec.Code, rec.Body.String())
 	}
 	_ = s
 }
@@ -406,9 +401,9 @@ func TestProviders_UnknownFieldRejected(t *testing.T) {
 	h := s.Routes()
 
 	rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-		KindID:  "anthropic",
+		KindID:  "claude-cli",
 		Label:   "x",
-		Secrets: map[string]string{"key": "sk-live-abc"},
+		Secrets: map[string]string{"authToken": "sk-live-abc"},
 		Config:  map[string]string{"totallyBogusField": "y"},
 	}, nil)
 	if rec.Code != http.StatusBadRequest {
@@ -425,9 +420,9 @@ func TestProviders_SecretsNeverLeakInResponses(t *testing.T) {
 
 	const secret = "sk-live-do-not-leak-987654321"
 	rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-		KindID:  "anthropic",
+		KindID:  "claude-cli",
 		Label:   "leak check",
-		Secrets: map[string]string{"key": secret},
+		Secrets: map[string]string{"authToken": secret},
 	}, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
@@ -449,7 +444,7 @@ func TestProviders_SecretsNeverLeakInResponses(t *testing.T) {
 		t.Fatal("expected at least one stored instance")
 	}
 	for _, inst := range list {
-		enc, ok := inst.SecretsEnc["key"]
+		enc, ok := inst.SecretsEnc["authToken"]
 		if !ok || enc == "" {
 			continue
 		}
@@ -470,9 +465,9 @@ func TestProviders_DeleteReportsAffectedAgents(t *testing.T) {
 		ID string `json:"id"`
 	}
 	rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-		KindID:  "anthropic",
+		KindID:  "claude-cli",
 		Label:   "used by agent",
-		Secrets: map[string]string{"key": "sk-live-in-use"},
+		Secrets: map[string]string{"authToken": "sk-live-in-use"},
 	}, &created)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
@@ -527,61 +522,31 @@ func providerPack(id, kind, baseURL string) market.Pack {
 	}
 }
 
-// TestInstallProviderPack_ResolvesInLiveRegistry verifies a market provider
-// pack installs through the same providers.json path as the CRUD handler:
-// the instance resolves in the live registry in the same call (the bug this
-// task's follow-up was scoped around — installProviderPack writing to the
-// legacy settings.json path the registry no longer reads from).
-func TestInstallProviderPack_ResolvesInLiveRegistry(t *testing.T) {
+// TestInstallProviderPack_Rejected pins the post-removal contract: TionHarness
+// has no HTTP provider kinds any more, so a provider pack of either legacy kind
+// is refused with the opencode hint and nothing lands in providers.json.
+func TestInstallProviderPack_Rejected(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
 
 	pack := providerPack("myrouter", "openai", "https://myrouter.ai/api/v1")
-	res, err := s.installProviderPack(wsp, pack, "sk-live-pack-key")
-	if err != nil {
-		t.Fatalf("installProviderPack: %v", err)
+	if _, err := s.installProviderPack(wsp, pack, "sk-live-pack-key"); err == nil || !strings.Contains(err.Error(), "opencode") {
+		t.Fatalf("openai pack must be rejected with the opencode hint, got %v", err)
 	}
-	if res.Ref == "" {
-		t.Fatal("expected a non-empty install ref (instance id)")
-	}
-
-	if _, err := s.providers.Get(res.Ref); err != nil {
-		t.Fatalf("expected registry to resolve pack-installed instance %q in the same call: %v", res.Ref, err)
-	}
-
-	inst, ok := s.providerStore.Get(res.Ref)
-	if !ok {
-		t.Fatalf("expected providerStore to hold instance %q", res.Ref)
-	}
-	if inst.KindID != "openai-compat" {
-		t.Fatalf("expected legacy pack kind %q to map to \"openai-compat\", got %q", "openai", inst.KindID)
-	}
-	if inst.SecretsEnc["key"] == "" {
-		t.Fatal("expected the supplied apiKey to be stored as a secret")
+	if _, ok := s.providerStore.Get(providerIDFromPack(pack)); ok {
+		t.Fatal("a rejected pack must not create a provider instance")
 	}
 }
 
-// TestInstallProviderPack_EmptyAPIKeyStillInstalls verifies the pre-existing
-// behaviour is preserved: a pack installs with no API key supplied (the user
-// adds it later in Settings), even though "key" is a required secret field
-// on openai-compat/anthropic-compat.
-func TestInstallProviderPack_EmptyAPIKeyStillInstalls(t *testing.T) {
+// TestInstallProviderPack_AnthropicKindRejected pins the post-removal contract:
+// the Anthropic-protocol HTTP kinds no longer exist, so an "anthropic" pack is
+// refused with a clear message instead of landing an instance of a kind the
+// registry cannot build.
+func TestInstallProviderPack_AnthropicKindRejected(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
 
-	pack := providerPack("nokeyrouter", "anthropic", "https://example.com/v1")
-	res, err := s.installProviderPack(wsp, pack, "")
-	if err != nil {
-		t.Fatalf("installProviderPack with empty apiKey: %v", err)
-	}
-
-	inst, ok := s.providerStore.Get(res.Ref)
-	if !ok {
-		t.Fatalf("expected providerStore to hold instance %q", res.Ref)
-	}
-	if inst.KindID != "anthropic-compat" {
-		t.Fatalf("expected legacy pack kind %q to map to \"anthropic-compat\", got %q", "anthropic", inst.KindID)
-	}
-	if len(inst.SecretsEnc) != 0 {
-		t.Fatalf("expected no stored secret when apiKey is empty, got %v", inst.SecretsEnc)
+	pack := providerPack("legacyanthropic", "anthropic", "https://example.com/v1")
+	if _, err := s.installProviderPack(wsp, pack, "sk-x"); err == nil || !strings.Contains(err.Error(), "opencode") {
+		t.Fatalf("anthropic pack must be rejected with the opencode hint, got %v", err)
 	}
 }
 
@@ -594,72 +559,5 @@ func TestInstallProviderPack_MissingBaseURLRejected(t *testing.T) {
 	pack := providerPack("nobase", "openai", "")
 	if _, err := s.installProviderPack(wsp, pack, "sk-live"); err == nil {
 		t.Fatal("expected an error installing a provider pack with an empty baseUrl")
-	}
-}
-
-// TestProviders_ListReportsLocalReachability pins the runtime annotation the
-// list handler adds on top of the stored DTO: a local instance carries a
-// reachability verdict, a hosted one carries none. The distinction matters in
-// the UI — absent means "not applicable", not "down" — so a hosted provider
-// must never be reported as unreachable just because it was not probed.
-func TestProviders_ListReportsLocalReachability(t *testing.T) {
-	s, _ := newWorkspaceServer(t)
-	h := s.Routes()
-
-	var local struct {
-		ID string `json:"id"`
-	}
-	// Port 1 has no listener, so the probe must come back false rather than
-	// optimistically true.
-	rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-		KindID: "lmstudio",
-		Label:  "Yerel",
-		Config: map[string]string{"baseUrl": "http://127.0.0.1:1/v1"},
-	}, &local)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("create local status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-
-	var hosted struct {
-		ID string `json:"id"`
-	}
-	rec = doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
-		KindID:  "anthropic",
-		Label:   "Barındırılan",
-		Secrets: map[string]string{"key": "sk-test"},
-	}, &hosted)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("create hosted status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-
-	var list []struct {
-		ID        string `json:"id"`
-		KindID    string `json:"kindId"`
-		Reachable *bool  `json:"reachable"`
-	}
-	rec = doJSON(t, h, http.MethodGet, "/api/providers", nil, &list)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("list status = %d", rec.Code)
-	}
-
-	var sawLocal, sawHosted bool
-	for _, p := range list {
-		switch p.ID {
-		case local.ID:
-			sawLocal = true
-			if p.Reachable == nil {
-				t.Error("local instance has no reachability verdict")
-			} else if *p.Reachable {
-				t.Error("local instance reported reachable with no listener on the port")
-			}
-		case hosted.ID:
-			sawHosted = true
-			if p.Reachable != nil {
-				t.Errorf("hosted instance carries reachable=%v; hosted liveness must not be probed", *p.Reachable)
-			}
-		}
-	}
-	if !sawLocal || !sawHosted {
-		t.Fatalf("list missing instances (local=%v hosted=%v)", sawLocal, sawHosted)
 	}
 }

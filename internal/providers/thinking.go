@@ -43,13 +43,6 @@ func StorableThinkingLevelsFor(providerKind, model string) []string {
 		return coarseEffortStorable()
 	}
 	tiers := ThinkingTiersForProvider(providerKind, model)
-	// The Messages-API transports do not OFFER "ultra" (the effort enum stops at
-	// "max"), but an agent may already store it — it was picked on a CLI provider,
-	// or the provider was switched afterwards. Rejecting it would make those rows
-	// unsaveable, so it stays a legal stored state that maps to the ceiling.
-	if usesNativeEffort(providerKind) && containsTier(thinkingTiersForClass(class, model), "ultra") {
-		tiers = append(tiers, "ultra")
-	}
 	if class != "always-on" {
 		return tiers
 	}
@@ -117,53 +110,6 @@ func AlwaysOnThinking(model string) bool {
 	return fableModel(model) || claude55Tier(model) == "opus"
 }
 
-// SupportsTaskBudget reports whether the model accepts the (beta) task-budget
-// directive (output_config.task_budget + the task-budgets beta header): the
-// model sees a running token countdown for the whole agentic loop and paces
-// itself. Supported on exactly the adaptive-thinking class (Fable/Mythos 5,
-// Opus 4.7/4.8, Sonnet 5).
-func SupportsTaskBudget(model string) bool { return UsesAdaptiveThinking(model) }
-
-// SupportsStructuredOutputs reports whether the model accepts
-// output_config.format (JSON-schema-constrained replies). Per the capability
-// matrix: Fable/Mythos 5, Opus 4.8, Sonnet 5, Haiku 4.5, plus legacy Opus
-// 4.5/4.1 — notably NOT Opus 4.6/4.7 or Sonnet 4.6.
-func SupportsStructuredOutputs(model string) bool {
-	if claude55Tier(model) != "" {
-		return true
-	}
-	m := strings.ToLower(model)
-	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
-		return true
-	}
-	for _, s := range []string{"opus-4-8", "opus-4.8", "sonnet-5", "haiku-4-5", "haiku-4.5", "opus-4-5", "opus-4.5", "opus-4-1", "opus-4.1"} {
-		if strings.Contains(m, s) {
-			return true
-		}
-	}
-	return false
-}
-
-// SupportsSystemInMessages reports whether the model accepts mid-conversation
-// {"role":"system"} entries in the messages array (the cache-safe, non-spoofable
-// operator channel): Claude Opus 4.8, Opus 5 and the Fable/Mythos 5.x class —
-// NOT Sonnet 5 (folded into the preceding user turn there).
-func SupportsSystemInMessages(model string) bool {
-	if claude55Tier(model) != "" {
-		return true
-	}
-	m := strings.ToLower(model)
-	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
-		return true
-	}
-	for _, s := range []string{"opus-4-8", "opus-4.8", "opus-5"} {
-		if strings.Contains(m, s) {
-			return true
-		}
-	}
-	return false
-}
-
 // SupportsThinkingBinding reports whether the model enforces "preserved
 // thinking" (Claude Fable 5.1 / Mythos 5.1): a thinking block's signature is
 // bound to the conversation prefix that produced it, so any edit to an earlier
@@ -178,51 +124,6 @@ func SupportsThinkingBinding(model string) bool {
 	}
 	m := strings.ToLower(model)
 	for _, s := range []string{"fable-5-1", "fable-5.1", "mythos-5-1", "mythos-5.1"} {
-		if strings.Contains(m, s) {
-			return true
-		}
-	}
-	return false
-}
-
-// SupportsDynamicWebTools reports whether the model accepts the _20260209 web
-// search/fetch variants (dynamic filtering): the Claude 4.6+ class — Opus
-// 4.6/4.7/4.8, Sonnet 4.6, Sonnet 5, Fable/Mythos. Older models use the basic
-// variants instead.
-func SupportsDynamicWebTools(model string) bool {
-	if claude55Tier(model) != "" {
-		return true
-	}
-	m := strings.ToLower(model)
-	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
-		return true
-	}
-	for _, s := range []string{
-		"opus-4-6", "opus-4.6", "opus-4-7", "opus-4.7", "opus-4-8", "opus-4.8",
-		"sonnet-4-6", "sonnet-4.6", "sonnet-5",
-	} {
-		if strings.Contains(m, s) {
-			return true
-		}
-	}
-	return false
-}
-
-// SupportsProgrammaticTools reports whether the model supports programmatic
-// tool calling (code_execution_20260120 + allowed_callers): Claude Opus 4.5+
-// and Sonnet 4.5+ (incl. Sonnet 5) and the Fable/Mythos class.
-func SupportsProgrammaticTools(model string) bool {
-	if claude55Tier(model) != "" {
-		return true
-	}
-	m := strings.ToLower(model)
-	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
-		return true
-	}
-	for _, s := range []string{
-		"opus-4-5", "opus-4.5", "opus-4-6", "opus-4.6", "opus-4-7", "opus-4.7", "opus-4-8", "opus-4.8",
-		"sonnet-4-5", "sonnet-4.5", "sonnet-4-6", "sonnet-4.6", "sonnet-5",
-	} {
 		if strings.Contains(m, s) {
 			return true
 		}
@@ -271,6 +172,7 @@ func ThinkingClass(model string) string {
 // GPT-6 keeps the adaptive class, while ThinkingTiersForProvider applies its
 // verified CLI-specific tiers rather than inheriting the generic off/ultra list.
 func ThinkingClassForProvider(providerKind, model string) string {
+	model = BareModelForKind(providerKind, model)
 	if providerKind == "codex-cli" && codexEffortModel(model) {
 		return "adaptive"
 	}
@@ -291,27 +193,11 @@ func codexEffortModel(model string) bool {
 // EffortForThinkingBudget), so offering it would promise a depth the wire format
 // cannot carry.
 func ThinkingTiersForProvider(providerKind, model string) []string {
+	model = BareModelForKind(providerKind, model)
 	if tier := gpt6Tier(model); providerKind == "codex-cli" && tier != "" {
 		return codexGPT6ThinkingTiers(tier)
 	}
-	tiers := thinkingTiersForClass(ThinkingClassForProvider(providerKind, model), model)
-	if usesNativeEffort(providerKind) {
-		tiers = withoutTier(tiers, "ultra")
-	}
-	return tiers
-}
-
-// usesNativeEffort reports whether a provider kind sends its turns over the
-// Anthropic Messages API, where reasoning depth rides output_config.effort
-// rather than a CLI effort flag. Both kinds share the anthropic.go request
-// builder and therefore the same effort enum.
-func usesNativeEffort(providerKind string) bool {
-	switch providerKind {
-	case "anthropic", "anthropic-compat":
-		return true
-	default:
-		return false
-	}
+	return thinkingTiersForClass(ThinkingClassForProvider(providerKind, model), model)
 }
 
 // withoutTier returns tiers with one token removed, leaving the input untouched.

@@ -32,12 +32,12 @@
     "done": "tamam",
     "goProviders": "Sağlayıcılar'a git →",
     "account": {
-      "title": "Sağlayıcı hesabı",
-      "text": "Sağlayıcı örneklerine bir OpenRouter hesabı ekle ve API anahtarını gir. Yerel bir model (LM Studio, Ollama, OpenJev) ya da kendi anahtarıyla bir karar sağlayıcısı kullanacaksan bu adım gerekmez."
+      "title": "API anahtarı",
+      "text": "Karar sağlayıcısına kendi anahtarını ver: Jev için OpenRouter API anahtarı (karar sağlayıcısı kartında girilir) ya da TypeSafe anahtarı. Yerel bir model (LM Studio, Ollama, OpenJev) için gerekmez."
     },
     "provider": {
       "title": "Karar sağlayıcısı",
-      "text": "“+ Yeni karar sağlayıcısı” ile ekle (“Jev · OpenRouter” şablonu yukarıdaki hesabı ödünç alır), sonra kartında Dene'ye bas.",
+      "text": "“+ Yeni karar sağlayıcısı” ile ekle (“Jev · OpenRouter” şablonu OpenRouter anahtarını ister), sonra kartında Dene'ye bas.",
       "action": "{{preset}} ekle"
     },
     "enable": {
@@ -76,7 +76,6 @@
     "endpoint": "uç nokta",
     "usedBy": "kullanan",
     "usedByDefault": "varsayılan",
-    "viaProvider": "{{id}} sağlayıcısı üzerinden",
     "free": "ücretsiz · yerel",
     "approximate": "yaklaşık olasılıklar",
     "statsLine": "{{calls}} çağrı · p50 {{p50}} ms · {{cost}}",
@@ -99,14 +98,6 @@
     "model": "Model",
     "modelCustom": "Özel model kimliği…",
     "modelCustomPlaceholder": "Sunucunun listelediği model kimliği",
-    "credentials": "Kimlik bilgisi",
-    "credentialsOwn": "Kendi uç noktası ve anahtarı",
-    "credentialsProvider": "Sağlayıcı hesabını ödünç al",
-    "credentialsProviderHint": "O sağlayıcının anahtarını ve uç noktasını kullanır; anahtar iki kez girilmez.",
-    "provider": "Sağlayıcı hesabı",
-    "providerAuto": "Otomatik (kullanılabilir ilk hesap)",
-    "providerMissing": "Bu tür için kullanılabilir sağlayıcı hesabı yok. Yukarıdan bir tane ekle ya da kendi uç noktası ve anahtarını kullan.",
-    "providerUnavailable": "{{id}} (şu an kullanılamıyor)",
     "baseUrl": "Taban URL",
     "baseUrlHint": "Boş = {{url}}",
     "apiKey": "API anahtarı",

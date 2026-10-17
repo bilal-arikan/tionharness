@@ -9,12 +9,19 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
+func withNativeInstance(rt *Runtime) {
+	rt.providers = providers.NewRegistry()
+	rt.providers.SetInstances([]providers.Instance{{
+		ID: "native-main", KindID: "claude-cli", Enabled: true,
+		Values: map[string]string{providers.FieldKeyCLIPath: "/usr/bin/claude"},
+	}})
+}
+
 func TestUnpinnedSystemAuthFallsBackAndQuarantines(t *testing.T) {
-	rt, tun := newTestRuntime(t, t.TempDir())
-	withAnthropicInstance(rt)
-	tun.SetAuxNativeRouting(false)
+	rt, _ := newTestRuntime(t, t.TempDir())
+	withNativeInstance(rt)
 	ctx := context.Background()
-	caller, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "anthropic", ProviderInstanceID: "anthropic-main", Model: "claude-sonnet-4-6"})
+	caller, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "claude-cli", ProviderInstanceID: "native-main", Model: "claude-sonnet-4-6"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +38,7 @@ func TestUnpinnedSystemAuthFallsBackAndQuarantines(t *testing.T) {
 	if !rt.systemRouteQuarantined("claude-cli") {
 		t.Fatal("rejected default was not quarantined")
 	}
-	rt.providers.SetInstances([]providers.Instance{{ID: "anthropic-main", KindID: "anthropic", Enabled: true, Values: map[string]string{providers.FieldKeyAPIKey: "updated-key"}}})
+	rt.providers.SetInstances([]providers.Instance{{ID: "native-main", KindID: "claude-cli", Enabled: true, Values: map[string]string{providers.FieldKeyCLIPath: "/usr/local/bin/claude"}}})
 	if rt.systemRouteQuarantined("claude-cli") {
 		t.Fatal("provider changes did not clear quarantine")
 	}
@@ -45,9 +52,9 @@ func TestUnpinnedSystemAuthFallsBackAndQuarantines(t *testing.T) {
 
 func TestPinnedSystemAuthNeverChangesProvider(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
-	withAnthropicInstance(rt)
+	withNativeInstance(rt)
 	ctx := context.Background()
-	caller, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "anthropic", ProviderInstanceID: "anthropic-main"})
+	caller, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "claude-cli", ProviderInstanceID: "native-main"})
 	if err != nil {
 		t.Fatal(err)
 	}

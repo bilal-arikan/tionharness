@@ -58,12 +58,6 @@ export function CliOptions({ draft, set }: PanelProps) {
         checked={draft.claudeCliNativeSubagents}
         onChange={(v) => set('claudeCliNativeSubagents', v)}
       />
-      <Toggle
-        label={t('cli.auxRouting.label')}
-        hint={t('cli.auxRouting.hint')}
-        checked={draft.auxNativeRouting}
-        onChange={(v) => set('auxNativeRouting', v)}
-      />
     </>
   )
 }

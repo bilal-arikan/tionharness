@@ -114,14 +114,17 @@ dokümantasyon sitesi, Astro — Go modülünün dışındadır).
 
 ## Sağlayıcılar
 
-12 sağlayıcı türü (provider kind) yerleşiktir; her türden birden çok **örnek** tanımlanabilir
-ve ajanlar tek tek örneklere bağlanır:
+Üç sağlayıcı türü (provider kind) vardır, hepsi CLI köprüsüdür; her türden birden çok
+**örnek** tanımlanabilir ve ajanlar tek tek örneklere bağlanır:
 
-`claude-cli` · `codex-cli` · `anthropic` · `minimax` · `minimax-anthropic` · `openrouter` ·
-`zai` · `deepseek` · `deepseek-anthropic` · `anthropic-compat` · `openai-compat` · `lmstudio`
+`claude-cli` · `codex-cli` · `opencode-cli`
 
-`claude-cli` ve `codex-cli` anahtarsızdır — makinede giriş yapılmış CLI'ı kullanır. Yeni CLI
+`claude-cli` ve `codex-cli` anahtarsızdır (makinede giriş yapılmış CLI); `opencode-cli`
+[OpenCode](https://github.com/anomalyco/opencode) üzerinden 75+ sağlayıcıya ulaşır
+(OpenRouter, DeepSeek, yerel modeller, OpenAI/Anthropic API anahtarları — hepsi opencode
+evinde, `opencode auth login`). TionHarness'in kendi HTTP LLM istemcisi yoktur. Yeni CLI
 örnekleri `<dataDir>/provider-homes/<instance-id>` altında kendi izole login evini alır.
+Karar katmanı (decider) modelleri kendi API anahtarını taşır.
 
 ## Arayüz
 

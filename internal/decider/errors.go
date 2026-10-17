@@ -19,9 +19,10 @@ var (
 	ErrNoModel = errors.New("no decision model is configured")
 	// ErrModelDisabled: the decision model is switched off in its settings.
 	ErrModelDisabled = errors.New("decision model is disabled")
-	// ErrNoEndpoint: no enabled provider instance can lend the decision model
+	// ErrNoEndpoint: the decision model has no usable endpoint — a hosted
+	// backend whose API key was never entered. (Historically also: no provider
 	// its credentials.
-	ErrNoEndpoint = errors.New("no provider instance can reach the decision backend")
+	ErrNoEndpoint = errors.New("decision model has no API key for its backend")
 	// ErrBackoff: the model failed recently and is being rested; callers fall
 	// back to their own logic instead of paying another timeout.
 	ErrBackoff = errors.New("decision model is backing off after recent failures")

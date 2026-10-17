@@ -79,7 +79,7 @@ func TestDecisionEvidenceBoundsUTF8AndFitsSmallerDecisionWindow(t *testing.T) {
 	if _, err := h.Update(cfg); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.UpsertModel(decider.ModelInput{ID: m.ID, Backend: m.Backend, Model: m.Model, Enabled: true, Credentials: m.Credentials, ProviderInstanceID: m.ProviderInstanceID, ContextTokens: 4000}); err != nil {
+	if _, err := h.UpsertModel(decider.ModelInput{ID: m.ID, Backend: m.Backend, Model: m.Model, Enabled: true, Credentials: m.Credentials, BaseURL: m.BaseURL, ContextTokens: 4000}); err != nil {
 		t.Fatal(err)
 	}
 	fragments := []map[string]string{{"key": "constraint", "text": text}}

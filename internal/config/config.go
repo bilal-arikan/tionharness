@@ -15,7 +15,6 @@ type Config struct {
 	AccessKey    string // dashboard auth token (optional)
 
 	// Provider keys (loaded lazily; empty means unset).
-	AnthropicAPIKey string
 }
 
 // Load reads configuration from the environment, applying sensible defaults.
@@ -33,11 +32,10 @@ func Load() (*Config, error) {
 		// API over localhost, and binding to 127.0.0.1 avoids the Windows
 		// Firewall "allow inbound" prompt that a 0.0.0.0 bind triggers on every
 		// rebuild. Set TIONHARNESS_ADDR (e.g. ":8090" or "0.0.0.0:8090") to expose it.
-		Addr:            envOr("TIONHARNESS_ADDR", "127.0.0.1:8080"),
-		DataDir:         dataDir,
-		WorkspaceDir:    workspaceDir,
-		AccessKey:       os.Getenv("ACCESS_KEY"),
-		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
+		Addr:         envOr("TIONHARNESS_ADDR", "127.0.0.1:8080"),
+		DataDir:      dataDir,
+		WorkspaceDir: workspaceDir,
+		AccessKey:    os.Getenv("ACCESS_KEY"),
 	}
 
 	// Ensure base directories exist.

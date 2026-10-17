@@ -164,37 +164,3 @@ func TestNativeLoopDefersSteerWhilePendingProgrammatic(t *testing.T) {
 		t.Fatalf("delivered message = {%q, %q}", last.Role, last.Text)
 	}
 }
-
-// namedProvider is a fakeProvider that answers to a chosen provider name, so the
-// anthropic-only branch of steerRoleFor can be exercised without a real client.
-type namedProvider struct {
-	fakeProvider
-	name string
-}
-
-func (p *namedProvider) Name() string { return p.name }
-
-// TestSteerRoleForPicksOperatorChannel pins the role foldSteer rides on: only an
-// anthropic provider whose model accepts {"role":"system"} in messages gets the
-// operator channel; every other combination stays user-role so the provider can
-// fold it without breaking turn alternation.
-func TestSteerRoleForPicksOperatorChannel(t *testing.T) {
-	cases := []struct {
-		name     string
-		provider string
-		model    string
-		want     string
-	}{
-		{"anthropic model with operator channel", "anthropic", "claude-opus-5", providers.RoleSystem},
-		{"anthropic model without operator channel", "anthropic", "claude-3-5-sonnet", providers.RoleUser},
-		{"non-anthropic provider", "minimax", "claude-opus-5", providers.RoleUser},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := steerRoleFor(&namedProvider{name: tc.provider}, tc.model)
-			if got != tc.want {
-				t.Fatalf("steerRoleFor(%q, %q) = %q, want %q", tc.provider, tc.model, got, tc.want)
-			}
-		})
-	}
-}

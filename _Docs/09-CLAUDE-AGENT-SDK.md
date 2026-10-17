@@ -9,6 +9,11 @@
 
 ## Özet Karar
 
+> **Güncelleme (2026-10-13):** "native (anthropic) yolda parite" maddesi kapandı — native
+> Anthropic HTTP istemcisi kaldırıldı; Anthropic modellerine yalnız `claude-cli`
+> (abonelik) ve `opencode-cli` (API anahtarı, opencode üzerinden) ile ulaşılır.
+> Ayrıntı: [95-OPENCODE-CLI-SAGLAYICI.md](95-OPENCODE-CLI-SAGLAYICI.md).
+
 - **Tam geçiş (backend'i TS/Python'a taşımak) YAPILMAYACAK.** Projenin varlık
   sebebini (Go, CGO-free, tek binary, çapraz derleme — bkz. `01-MIMARI.md`,
   `04-TEKNOLOJI-SECIMLERI.md`) yok eder.

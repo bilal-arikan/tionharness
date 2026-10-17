@@ -73,7 +73,6 @@ const model = (id: string, patch: Partial<DeciderModelInstance> = {}): DeciderMo
   enabled: true,
   model: 'openjev-latest',
   credentials: 'own',
-  providerInstanceId: '',
   baseUrl: '',
   timeoutMs: 3000,
   contextTokens: 0,
@@ -166,7 +165,6 @@ describe('models', () => {
   const backend: DeciderBackend = {
     id: 'openrouter',
     label: 'OpenRouter Decisions',
-    providerKinds: ['openrouter'],
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
     keyRequired: true,
     models: [
@@ -246,7 +244,6 @@ describe('setup steps', () => {
       {
         id: 'openrouter',
         label: 'OpenRouter Decisions',
-        providerKinds: ['openrouter'],
         defaultBaseUrl: '',
         keyRequired: true,
         models: [],
@@ -261,7 +258,6 @@ describe('setup steps', () => {
     groups: [],
     authorities: [],
     models: [],
-    providerCandidates: { openrouter: [] },
     stats: [],
     recent: [],
     statsDays: 7,
@@ -272,9 +268,7 @@ describe('setup steps', () => {
     expect(setupSteps(view()).map((s) => s.done)).toEqual([false, false, false])
   })
 
-  it('counts a borrowable account, or an own key, as the credential', () => {
-    const account = { id: 'PRV1', kind: 'openrouter', label: '', enabled: true, available: true }
-    expect(setupSteps(view({ providerCandidates: { openrouter: [account] } }))[0].done).toBe(true)
+  it('counts an own key, or a keyless local backend, as the credential', () => {
     const keyless = model('DM1', { backend: 'openrouter', status: { ready: false } })
     expect(setupSteps(view({ models: [keyless] }))[0].done).toBe(false)
     const keyed = model('DM1', {

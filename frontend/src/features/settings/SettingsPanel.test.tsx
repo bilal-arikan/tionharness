@@ -100,7 +100,6 @@ beforeEach(() => {
     keepAwake: false,
     autoTitleEnabled: false,
     autoTagSessions: false,
-    autonomousTaskBudgetTokens: 0,
   } as AppSettings
   vi.mocked(api.getSettings).mockImplementation(async () => saved)
   vi.mocked(api.getPrompts).mockResolvedValue({ dir: '', prompts: [] })
@@ -238,7 +237,7 @@ describe('settings navigation and persistence', () => {
     expect(container.querySelector('[aria-label="Keep screen awake"]')).not.toBeNull()
   })
 
-  it('shows provider saving only within advanced options and blocks invalid numeric input', async () => {
+  it('shows provider saving only within advanced options', async () => {
     await render('providers')
     const saveButton = [...container.querySelectorAll('button')].find(
       (node) => node.textContent === 'Save',
@@ -247,12 +246,6 @@ describe('settings navigation and persistence', () => {
     const toggleButton = container.querySelector('[role="switch"]') as HTMLButtonElement
     await act(async () => toggleButton.click())
     expect(saveButton.disabled).toBe(false)
-    const input = container.querySelector('input[type="number"]') as HTMLInputElement
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '-1')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(saveButton.disabled).toBe(true)
     expect(api.updateSettings).not.toHaveBeenCalled()
   })
 })

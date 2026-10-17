@@ -36,7 +36,13 @@ export function ProviderInstanceList({
         const kind = kinds.find((k) => k.id === inst.kindId)
         const secretKeys = Object.keys(inst.secretsSet)
         const secretsOk = secretKeys.length === 0 || secretKeys.every((k) => inst.secretsSet[k])
-        const supportsAuth = inst.kindId === 'claude-cli' || inst.kindId === 'codex-cli'
+        const supportsAuth =
+          inst.kindId === 'claude-cli' ||
+          inst.kindId === 'codex-cli' ||
+          inst.kindId === 'opencode-cli'
+        // opencode signs in through its own CLI (`opencode auth login`); only the
+        // status line is shown, there is no in-app dialog to open.
+        const hasAuthDialog = inst.kindId === 'claude-cli' || inst.kindId === 'codex-cli'
         const auth = authById[inst.id]
         const authStatus = auth && auth !== 'pending' && !('error' in auth) ? auth : undefined
         return (
@@ -119,15 +125,17 @@ export function ProviderInstanceList({
                             })
                           : t('providerList.loggedOut')}
                   </span>
-                  <button
-                    data-testid="provider-instance-auth"
-                    data-provider-id={inst.id}
-                    onClick={() => onAuthOpen(inst)}
-                    className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
-                  >
-                    <KeyRound size={12} />
-                    {authStatus?.loggedIn ? t('providerList.status') : t('providerList.signIn')}
-                  </button>
+                  {hasAuthDialog && (
+                    <button
+                      data-testid="provider-instance-auth"
+                      data-provider-id={inst.id}
+                      onClick={() => onAuthOpen(inst)}
+                      className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+                    >
+                      <KeyRound size={12} />
+                      {authStatus?.loggedIn ? t('providerList.status') : t('providerList.signIn')}
+                    </button>
+                  )}
                 </>
               )}
               <button

@@ -71,10 +71,9 @@ function trendMetrics(t: TFunction<'budget'>): TrendMetricDef[] {
 
 // Provider display labels; claude-cli is a flat subscription, not metered.
 const PROVIDER_LABEL: Record<string, string> = {
-  anthropic: 'Anthropic',
   'claude-cli': 'Claude CLI',
-  minimax: 'MiniMax',
-  'minimax-anthropic': 'MiniMax (Anthropic)',
+  'codex-cli': 'Codex CLI',
+  'opencode-cli': 'OpenCode CLI',
 }
 
 function providerLabel(p: string): string {

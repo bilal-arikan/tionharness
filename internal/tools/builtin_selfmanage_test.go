@@ -100,7 +100,7 @@ func TestCreateAgentSeedsSkills(t *testing.T) {
 func TestCreateAgentInheritsCreatorProviderModel(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
-	creator, err := d.CreateAgent(ctx, db.Agent{Name: "Coordinator", Provider: "deepseek-anthropic", Model: "deepseek-v4-flash"})
+	creator, err := d.CreateAgent(ctx, db.Agent{Name: "Coordinator", Provider: "codex-cli", Model: "gpt-5.5"})
 	if err != nil {
 		t.Fatalf("seed creator: %v", err)
 	}
@@ -118,13 +118,13 @@ func TestCreateAgentInheritsCreatorProviderModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	child, _ := d.GetAgent(ctx, r.ID)
-	if child.Provider != "deepseek-anthropic" || child.Model != "deepseek-v4-flash" {
-		t.Fatalf("inherited provider/model = %q/%q, want deepseek-anthropic/deepseek-v4-flash", child.Provider, child.Model)
+	if child.Provider != "codex-cli" || child.Model != "gpt-5.5" {
+		t.Fatalf("inherited provider/model = %q/%q, want codex-cli/gpt-5.5", child.Provider, child.Model)
 	}
 
 	// Explicit provider given → no inheritance; model stays whatever the caller
 	// set (here empty, the provider's own default), never the creator's model.
-	out, err = create.Call(ctx, json.RawMessage(`{"name":"Anthropic child","provider":"anthropic"}`))
+	out, err = create.Call(ctx, json.RawMessage(`{"name":"Anthropic child","provider":"opencode-cli"}`))
 	if err != nil {
 		t.Fatalf("create_agent: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestCreateAgentInheritsCreatorProviderModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	child2, _ := d.GetAgent(ctx, r.ID)
-	if child2.Provider != "anthropic" || child2.Model != "" {
+	if child2.Provider != "opencode-cli" || child2.Model != "" {
 		t.Fatalf("explicit provider = %q/%q, want anthropic/<empty>", child2.Provider, child2.Model)
 	}
 

@@ -148,8 +148,8 @@ describe('thinking options', () => {
         ],
       },
       {
-        id: 'zai',
-        label: 'Z.ai GLM',
+        id: 'openrouter',
+        label: 'OpenRouter',
         needsKey: true,
         allowCustomModel: true,
         appliesToolHooks: true,
@@ -177,7 +177,7 @@ describe('thinking options', () => {
       expect(tier(value)?.hint).toContain('Maks')
     }
 
-    const glm = thinkingOptionsForModel(chatOptions, catalog, 'zai', 'glm-5.3', '')
+    const glm = thinkingOptionsForModel(chatOptions, catalog, 'openrouter', 'glm-5.3', '')
     const off = glm.find((option) => option.value === 'off')
     expect(off?.disabled).toBe(true)
     expect(off?.hint).toContain('kapatılamaz')
@@ -187,8 +187,8 @@ describe('thinking options', () => {
   it('explains the ultra tier on native-effort providers as a max fallback, not high', () => {
     const catalog: CatalogEntry[] = [
       {
-        id: 'anthropic',
-        label: 'Anthropic',
+        id: 'openrouter',
+        label: 'OpenRouter',
         needsKey: true,
         allowCustomModel: true,
         appliesToolHooks: false,
@@ -207,7 +207,7 @@ describe('thinking options', () => {
     const filtered = thinkingOptionsForModel(
       agentOptions,
       catalog,
-      'anthropic',
+      'openrouter',
       'claude-opus-4-8',
       '',
     )

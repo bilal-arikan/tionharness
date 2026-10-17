@@ -108,10 +108,8 @@ func TestTestProvider_UnknownFieldRejected(t *testing.T) {
 var settingsPatchGoldenFields = []string{
 	"theme", "accent", "themePreset", "language", "uiLanguage",
 	"defaultPermissionMode", "claudeCliAuthKind",
-	"claudeCliAuthToken", "anthropicKey",
-	"extendedPromptCache", "anthropicContextEditing", "anthropicNativeToolSearch",
-	"anthropicProgrammaticTools", "anthropicRefusalFallback", "anthropicWebTools",
-	"anthropicServerCompaction", "autonomousTaskBudgetTokens",
+	"claudeCliAuthToken",
+
 	"desktopNotifications", "keepAwake",
 	"userName", "userTimezone", "userCity", "userCountry", "userNotes",
 	"maxContextTokens", "keepRecentMsgs",
@@ -130,7 +128,7 @@ var settingsPatchGoldenFields = []string{
 	"autoTitleEnabled",
 	"enableShell", "enableCliHooks", "enableCodeMode",
 	"claudeResume", "claudePersistentSession", "claudeSysPromptFile",
-	"claudeCliToolAllowlist", "claudeCliNativeSubagents", "auxNativeRouting",
+	"claudeCliToolAllowlist", "claudeCliNativeSubagents",
 	"delegationMaxDepth", "delegationMaxCalls",
 	"spawnMaxConcurrent", "spawnQueueMax", "spawnMaxPerTurn", "spawnIdleTimeoutMin",
 	"chatTurnIdleTimeoutMin", "codexStdoutIdleSec",

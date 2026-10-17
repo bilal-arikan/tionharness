@@ -16,7 +16,7 @@ import "context"
 // backfill in models.go (a row predating the provider field is a CLI row).
 func LegacyThinkingLevelFor(providerKind string) string {
 	switch providerKind {
-	case "", "claude-cli", "codex-cli":
+	case "", "claude-cli", "codex-cli", "opencode-cli":
 		return "high"
 	default:
 		return "off"

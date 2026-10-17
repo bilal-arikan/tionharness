@@ -2,7 +2,7 @@
 
 import type { Locale } from '@/i18n/locales'
 
-// Mirrors settings.DTO — the Anthropic key is never returned; anthropicKeySet
+// Mirrors settings.DTO — secrets are never returned;
 // reports whether one is stored.
 type Theme = 'dark' | 'light' | 'system'
 
@@ -28,22 +28,6 @@ export interface AppSettings {
   // var: "oauth" → CLAUDE_CODE_OAUTH_TOKEN, "apikey" → ANTHROPIC_API_KEY, "" → none.
   claudeCliAuthKind: string
   claudeCliAuthSet: boolean // whether a token is stored (the token itself is never returned)
-  // anthropicKeySet reflects the one legacy built-in provider key still live
-  // (the ANTHROPIC_API_KEY env boot-seed, see internal/app/app.go). The other
-  // legacy typed provider fields (MiniMax/OpenRouter/Z.ai/DeepSeek/custom
-  // providers) were removed — those are configured as provider instances now
-  // (GET /api/providers), same as any other kind (_Docs/71 Faz 5).
-  anthropicKeySet: boolean
-
-  extendedPromptCache: boolean
-  anthropicContextEditing: boolean
-  anthropicNativeToolSearch: boolean
-  anthropicProgrammaticTools: boolean
-  anthropicWebTools: boolean
-  anthropicServerCompaction: boolean
-  anthropicRefusalFallback: boolean
-  autonomousTaskBudgetTokens: number
-
   desktopNotifications: boolean
   keepAwake: boolean
 
@@ -112,9 +96,6 @@ export interface AppSettings {
   // claude-cli's native Explore/Plan subagents stay on the menu (transcript folded
   // into the trace under the launching Agent call).
   claudeCliNativeSubagents: boolean
-  // Auxiliary system-agent calls (title/summary/compaction/lessons/judge) run on a
-  // configured anthropic API instance instead of the caller's CLI.
-  auxNativeRouting: boolean
   // run_subagent is always installed; availability is per-tool from the Tools screen.
   // These remain as per-turn delegation guards.
   delegationMaxDepth: number
@@ -177,10 +158,9 @@ export interface AppSettings {
   backupDir: string // "" → <dataDir>/backups
 }
 
-// Partial update. anthropicKey is write-only: "" clears, non-empty sets.
+// Partial update. claudeCliAuthToken is write-only: "" clears, non-empty sets.
 export type SettingsPatch = Partial<
-  Omit<AppSettings, 'anthropicKeySet' | 'claudeCliAuthSet'> & {
-    anthropicKey: string
+  Omit<AppSettings, 'claudeCliAuthSet'> & {
     claudeCliAuthToken: string // write-only: "" clears, non-empty stores
   }
 >

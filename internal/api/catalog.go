@@ -39,32 +39,6 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	instanceEntries := s.providers.InstanceCatalog()
 	entries := providers.MergeCatalog(providers.Catalog(), instanceEntries)
 
-	// A TemplateOnly kind (openai-compat, anthropic-compat) exists only to be
-	// instantiated from — it ships with no default/migrated instance, so its
-	// per-kind entry is a permanently unavailable, model-less placeholder
-	// unless MergeCatalog already replaced it with a same-ID instance above.
-	// Drop the ones nothing replaced instead of showing that noise in the
-	// model picker (provider-kinds — not this endpoint — is where a user
-	// picks a template to build a new instance from).
-	hasInstance := make(map[string]bool, len(instanceEntries))
-	for _, e := range instanceEntries {
-		hasInstance[e.ID] = true
-	}
-	templateOnlyKind := make(map[string]bool)
-	for _, k := range providers.Kinds() {
-		if k.Manifest().TemplateOnly {
-			templateOnlyKind[k.Manifest().Kind] = true
-		}
-	}
-	filtered := entries[:0]
-	for _, e := range entries {
-		if templateOnlyKind[e.ID] && !hasInstance[e.ID] {
-			continue
-		}
-		filtered = append(filtered, e)
-	}
-	entries = filtered
-
 	out := make([]catalogEntryDTO, 0, len(entries))
 	wsp := ws(r)
 	for _, e := range entries {
@@ -98,6 +72,14 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			dto.Subscription = codexSubscriptionTier(home)
+		}
+		if e.ID == "opencode-cli" && dto.Available {
+			dto.CliVersion = opencodeCLIVersion(r.Context(), s.providers.OpenCodeCLIPath())
+			home, ok := s.resolveAppCLIHome(w, "opencode-cli")
+			if !ok {
+				return
+			}
+			dto.Subscription = opencodeAuthSummary(home)
 		}
 		out = append(out, dto)
 	}

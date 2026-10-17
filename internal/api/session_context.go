@@ -123,7 +123,7 @@ type cliOverheadPreview struct {
 // no breakpoint of its own, but --resume (ClaudeResume, warm) keeps the system +
 // the first CachedMsgCount messages server-side, sending only the newest delta.
 type cachePreview struct {
-	Mode          string `json:"mode"` // "anthropic" | "claude-resume" | "none"
+	Mode          string `json:"mode"` // "claude-resume" | "none"
 	Note          string `json:"note"` // one-line human explanation
 	SystemCached  bool   `json:"systemCached"`
 	DynamicCached bool   `json:"dynamicCached"`
@@ -142,46 +142,6 @@ type cachePreview struct {
 func (s *Server) computeCachePreview(provider string, session db.Session, msgCount int, hasSystem, hasDynamic, hasTools bool) cachePreview {
 	set := s.settings.Get()
 	switch provider {
-	case "anthropic":
-		if !set.ExtendedPromptCache {
-			return cachePreview{Mode: "none", Note: "Genişletilmiş prompt-cache kapalı → cache breakpoint yok; tüm istek her tur taze gönderilir."}
-		}
-		// Three breakpoints: tools + static System + a rolling breakpoint on the last
-		// message. The volatile Dinamik now rides the message TAIL (after the rolling
-		// breakpoint), so it no longer busts the prefix → Araçlar + Sistem + mesaj
-		// geçmişi hepsi cache'li; yalnız en yeni mesaj + dinamik ek taze.
-		c := cachePreview{Mode: "anthropic", ToolsCached: hasTools, SummaryCached: true}
-		if msgCount > 1 {
-			c.CachedMsgCount = msgCount - 1
-		}
-		if hasSystem {
-			c.SystemCached = true
-			c.Note = "Anthropic genişletilmiş cache: Araçlar + Sistem promptu + mesaj geçmişi cache'li (1s TTL); yalnız en yeni mesaj + dinamik ek (mesaj kuyruğuna taşındı) taze. İlk turda cache yazılır."
-		} else {
-			c.Note = "Anthropic genişletilmiş cache: statik Sistem yok → Araçlar + mesaj geçmişi cache'li; dinamik ek + en yeni mesaj taze."
-		}
-		_ = hasDynamic // dynamic now rides the message tail, not a cached system block
-		return c
-	case "openrouter":
-		// TionHarness sends an Anthropic-style cache_control breakpoint on the static
-		// System prefix for OpenRouter. It is honoured by Anthropic/Gemini backends;
-		// OpenAI/DeepSeek models cache implicitly anyway. Either way the Tools +
-		// System prefix is the warm part; Dynamic + messages go fresh.
-		c := cachePreview{Mode: "openrouter", ToolsCached: hasTools, SummaryCached: true}
-		// Two breakpoints: one on the static System prefix, one on the tail of the
-		// transcript → in steady state the whole history except the newest message
-		// is a cache hit (the first turn pays a cache write).
-		if msgCount > 1 {
-			c.CachedMsgCount = msgCount - 1
-		}
-		if hasSystem {
-			c.SystemCached = true
-			c.Note = "OpenRouter prompt-cache: Araçlar + Sistem + mesaj geçmişi cache breakpoint'li (Anthropic/Gemini'de cache'li, OpenAI/DeepSeek'te otomatik); yalnız en yeni mesaj taze (ilk turda cache yazılır)."
-		} else {
-			c.DynamicCached = hasDynamic
-			c.Note = "OpenRouter prompt-cache: statik Sistem yok → breakpoint Dinamik + mesaj geçmişine düştü; yalnız en yeni mesaj taze."
-		}
-		return c
 	case "claude-cli":
 		// Not extended to codex-cli: this preview mirrors resumeGateEnabled's
 		// sentCount-delta model (chat_resume.go), which does not apply to codex — its
@@ -407,16 +367,9 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	skillsTok := conversation.EstimateText(skillsText)
 	dynTok := conversation.EstimateText(dynText)
 	toolTok := estimateToolCatalog(defs)
-	// Exact prefix count when one is cached for this very prefix (read-only
-	// panel: never counts on a miss). The fingerprint covers the FULL system
-	// field (before the skills carve-out) plus the shipped schemas.
+	// Exact server-side prefix counting left with the native Anthropic client;
+	// every CLI transport reports the heuristic estimate only.
 	prefixAccurate := false
-	if counter, ok := s.tokenCounterFor(agent); ok {
-		if exact, ok := exactPrefixTokens(ctx, wsp.DB, counter, agent, req.System, defs, false); ok {
-			scaleToExact(exact, &sysTok, &skillsTok, &toolTok)
-			prefixAccurate = true
-		}
-	}
 
 	cache := s.computeCachePreview(
 		agent.Provider, session, len(msgs),
@@ -441,17 +394,6 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	// provider's REAL tokenizer, so the UI can show heuristic drift. One free
 	// HTTP call, no generation; skipped silently on providers without support.
 	accurateTok := 0
-	if ok, _ := strconv.ParseBool(r.URL.Query().Get("accurate")); ok {
-		if p, perr := s.providers.Get(agent.ProviderRef()); perr == nil {
-			if tc, isTC := p.(providers.TokenCounter); isTC {
-				countReq := req
-				countReq.Tools = defs
-				if n, cerr := tc.CountTokens(ctx, countReq); cerr == nil {
-					accurateTok = n
-				}
-			}
-		}
-	}
 
 	writeJSON(w, http.StatusOK, sessionContextPreview{
 		AgentName:           agent.Name,

@@ -3,7 +3,6 @@ package decider
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 )
 
@@ -38,7 +37,6 @@ func (openRouterBackend) Manifest() Manifest {
 		ID:             OpenRouterBackendID,
 		Label:          "OpenRouter Decisions",
 		Description:    "OpenRouter's Decisions API (alpha). Serves TypeSafe's Jev: yes/no, pick-one and score answers with calibrated probabilities in well under a second.",
-		ProviderKinds:  []string{"openrouter", "openai-compat"},
 		DefaultBaseURL: openRouterDefaultBase,
 		KeyRequired:    true,
 		Models: []Model{
@@ -55,39 +53,16 @@ func (openRouterBackend) Manifest() Manifest {
 		Presets: []Preset{{
 			ID:          "jev-openrouter",
 			Label:       "Jev · OpenRouter",
-			Description: "TypeSafe Jev through the key of an OpenRouter provider you already have.",
-			Credentials: CredentialsProvider,
+			Description: "TypeSafe Jev through OpenRouter with your OpenRouter API key.",
+			Credentials: CredentialsOwn,
+			BaseURL:     openRouterDefaultBase,
 			Model:       JevModel,
 		}},
 	}
 }
 
-// Accepts takes any openrouter instance, and an openai-compat instance only
-// when its base URL is on openrouter.ai (the Marketplace "openrouter" pack
-// installs as openai-compat).
-func (openRouterBackend) Accepts(kind, baseURL string) bool {
-	return acceptsOpenRouter(kind, baseURL)
-}
-
-func acceptsOpenRouter(kind, baseURL string) bool {
-	switch kind {
-	case "openrouter":
-		return true
-	case "openai-compat":
-		u, err := url.Parse(strings.TrimSpace(baseURL))
-		return err == nil && strings.EqualFold(u.Hostname(), openRouterHost)
-	}
-	return false
-}
-
 func (b openRouterBackend) New(ep Endpoint, opts ClientOptions) (Decider, error) {
-	if ep.Kind != "" && !b.Accepts(ep.Kind, ep.BaseURL) {
-		return nil, fmt.Errorf("provider instance %q (%s) cannot reach OpenRouter", ep.InstanceID, ep.Kind)
-	}
-	root, err := endpointBase(ep)
-	if err != nil {
-		return nil, err
-	}
+	root := endpointBase(ep)
 	endpoint, err := DecisionsURL(root)
 	if err != nil {
 		return nil, err

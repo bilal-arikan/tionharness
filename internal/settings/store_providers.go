@@ -149,6 +149,8 @@ func legacyDefaultConfigDir(dataDir, kindID string) string {
 		return filepath.Join(dataDir, "claude-home")
 	case "codex-cli":
 		return filepath.Join(dataDir, "codex-home")
+	case "opencode-cli":
+		return filepath.Join(dataDir, "opencode-home")
 	default:
 		return ""
 	}

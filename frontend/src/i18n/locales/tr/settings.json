@@ -135,7 +135,6 @@
   "providerOptions": {
     "title": "Gelişmiş sağlayıcı seçenekleri",
     "description": "Bu seçenekler ilgili sağlayıcıyı kullanan tüm workspace'lere uygulanır. Değişiklikleri burada kaydet; yukarıdaki sağlayıcı bağlantıları kendi formlarıyla ayrı kaydedilir.",
-    "anthropic": "Anthropic API",
     "cli": "CLI oturumları ve yardımcı çağrılar"
   },
   "providers": {

@@ -20,7 +20,6 @@ func init() {
 			AppliesToolHooks: false,
 			Label:            "Codex CLI (abonelik · anahtarsız)",
 			NeedsKey:         false,
-			NeedsBaseURL:     false,
 			AllowCustomModel: true,
 			// The contract asks for Order 1 (directly after claude-cli), but that
 			// slot is taken by anthropic and a duplicate Order makes the catalog

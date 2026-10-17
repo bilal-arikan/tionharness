@@ -12,36 +12,11 @@ import (
 	"time"
 )
 
-// InstanceInfo is a credential-free view of one provider instance.
-type InstanceInfo struct {
-	ID        string `json:"id"`
-	Kind      string `json:"kind"`
-	Label     string `json:"label"`
-	BaseURL   string `json:"baseUrl,omitempty"`
-	Enabled   bool   `json:"enabled"`
-	Available bool   `json:"available"`
-}
-
-// EndpointSource resolves provider instances into endpoints, for decision
-// models that borrow provider credentials. The provider registry backs it in
-// production (adapted in the API layer, since this package imports nothing
-// internal); tests pass a fake.
-type EndpointSource interface {
-	// Endpoint returns the endpoint of one enabled, usable instance.
-	Endpoint(instanceID string) (Endpoint, error)
-	// Instances lists the configured provider instances.
-	Instances() []InstanceInfo
-	// Generation changes whenever the provider configuration is re-applied, so
-	// a cached client or quarantine never outlives the settings it was built on.
-	Generation() uint64
-}
-
 // HubOptions configure a Hub.
 type HubOptions struct {
 	// DataDir holds decider.json and decider/{models.json,ledger.jsonl}.
 	// "" = in memory only.
 	DataDir string
-	Source  EndpointSource
 	// Secrets seals the API keys decision models carry themselves.
 	Secrets SecretBox
 	Logger  *slog.Logger
