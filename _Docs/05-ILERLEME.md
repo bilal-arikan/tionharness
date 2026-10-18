@@ -9,6 +9,23 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Sessizlik zaman aşımları birleştirildi; eski sağlayıcı ayarları kaldırıldı (2026-10-18)
+
+`spawnIdleTimeoutMin`, `chatTurnIdleTimeoutMin` ve `turnIdleWatchdogMin` tek
+`turnIdleTimeoutMin` ayarında (varsayılan 10 dk, 1–1440) birleşti: sohbet, spawn, zamanlama
+ve otomasyon turları aynı pencereyle kesilir; kuyruğun dış watchdog'u (`runQueuedTurn`) artık
+ayrı bir ayar değil, `Tunables.QueueIdleBackstop` = 2 × pencere, böylece turun kendi kesmesi
+her zaman önce gelir (önceki 10/20 sıralaması korunur). Sohbet için "0 = kapalı" seçeneği
+kalktı. Ayarlar ekranında üç alan tek alana indi.
+
+`settings.json`'daki eski sağlayıcı alanları (`claudeCliPath`, `claudeCliAuthKind`,
+`claudeCliAuthTokenEnc`, `codexCliPath`, `codexConfigDir`) ve DTO/Patch karşılıkları
+kaldırıldı; yalnız `providers.json`'a tek seferlik taşıma için okunuyorlardı.
+`MigrateFromSettings`/`EnsureMigrated` → `EnsureSeeded` (`internal/settings/provider_migrate.go`):
+`providers.json` yoksa varsayılan claude-cli + codex-cli örneklerini yazar. Katalogdaki Claude
+abonelik etiketi auth türünü artık `claude-cli` örneğinin `authKind` alanından okur;
+`ClaudeAuthGate` yalnız sağlayıcı örneklerine bakar.
+
 ## Bağlam bütçe tavanı 256K → 400K (2026-10-18)
 
 `ContextBudgetCeil` varsayılanı ve canlı ayar 262144 → 400000 (`internal/settings/settings.go`,

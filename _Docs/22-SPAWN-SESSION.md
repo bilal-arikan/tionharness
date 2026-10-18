@@ -1,6 +1,6 @@
 # Faz / Özellik 22 — Spawn Session (Fire-and-Forget Paralel İşçi)
 
-> **Not (2026-10-18):** `spawn_worker`/koordinatör modu kaldırıldı; spawn_session detached araçtır; `SpawnMaxConcurrent` 16→4, `SpawnQueueMax` 16→8, `SpawnIdleTimeoutMin` 5→10.
+> **Not (2026-10-18):** `spawn_worker`/koordinatör modu kaldırıldı; spawn_session detached araçtır; `SpawnMaxConcurrent` 16→4, `SpawnQueueMax` 16→8, `SpawnIdleTimeoutMin` 5→10 (aynı gün tek `turnIdleTimeoutMin` ayarında birleştirildi).
 
 > `spawn_session` deseni: bir prompt'tan **yeni,
 > bağımsız bir oturum** başlatıp **beklemeden** bırakmak. Çıktı, Faz U "Birleşik

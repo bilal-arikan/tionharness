@@ -58,7 +58,7 @@ func TestTurnIdleForIgnoresAnotherRunProgress(t *testing.T) {
 
 func TestInboxWatchdogDefaultsWithoutTunables(t *testing.T) {
 	s := &Server{}
-	if got, want := s.inboxTurnIdleWatchdog(), agent.DefaultTurnIdleWatchdogMinutes*time.Minute; got != want {
+	if got, want := s.inboxTurnIdleWatchdog(), agent.DefaultQueueIdleBackstop; got != want {
 		t.Fatalf("idle window = %v, want %v", got, want)
 	}
 }

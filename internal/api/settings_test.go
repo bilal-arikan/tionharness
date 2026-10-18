@@ -107,8 +107,7 @@ func TestTestProvider_UnknownFieldRejected(t *testing.T) {
 // a Patch field, update this list AND the frontend type in the same change.
 var settingsPatchGoldenFields = []string{
 	"theme", "accent", "themePreset", "language", "uiLanguage",
-	"defaultPermissionMode", "claudeCliAuthKind",
-	"claudeCliAuthToken",
+	"defaultPermissionMode",
 
 	"desktopNotifications", "keepAwake",
 	"userName", "userTimezone", "userCity", "userCountry", "userNotes",
@@ -130,9 +129,9 @@ var settingsPatchGoldenFields = []string{
 	"claudeResume", "claudePersistentSession", "claudeSysPromptFile",
 	"claudeCliToolAllowlist", "claudeCliNativeSubagents",
 	"delegationMaxDepth", "delegationMaxCalls",
-	"spawnMaxConcurrent", "spawnQueueMax", "spawnMaxPerTurn", "spawnIdleTimeoutMin",
-	"chatTurnIdleTimeoutMin", "codexStdoutIdleSec",
-	"idleResumeMax", "turnIdleWatchdogMin",
+	"spawnMaxConcurrent", "spawnQueueMax", "spawnMaxPerTurn",
+	"turnIdleTimeoutMin", "codexStdoutIdleSec",
+	"idleResumeMax",
 	"shellDefaultTimeoutSec", "shellMaxTimeoutSec", "maxToolOutputKB",
 	"autonomousConfine", "autonomousBootSeq",
 	"backupEnabled", "backupIntervalHours", "backupRetain", "backupDir",

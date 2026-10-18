@@ -47,7 +47,7 @@ func newWorkspaceServer(t testing.TB) (*Server, *workspace.Workspace) {
 	if err != nil {
 		t.Fatalf("provider store: %v", err)
 	}
-	if _, err := providerStore.EnsureMigrated(settingsStore.Get(), settingsStore.Decrypt); err != nil {
+	if _, err := providerStore.EnsureSeeded(); err != nil {
 		t.Fatalf("provider store migrate: %v", err)
 	}
 	s := NewServer(manager, registry, providerStore, settingsStore, tun, logs, bus, logger)

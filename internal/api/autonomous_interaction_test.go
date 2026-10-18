@@ -130,7 +130,7 @@ func TestAutonomousInteractionRegistersTurnTracker(t *testing.T) {
 	if run.activityTracker() == nil || run.activityTracker() != agent.ActivityTrackerFrom(turnCtx) {
 		t.Fatal("autonomous run does not carry the turn's activity tracker")
 	}
-	if run.idleLimitFor() != s.tun.SpawnIdleTimeout() {
-		t.Fatalf("idle limit = %s, want the spawn idle window %s", run.idleLimitFor(), s.tun.SpawnIdleTimeout())
+	if run.idleLimitFor() != s.tun.TurnIdleTimeout() {
+		t.Fatalf("idle limit = %s, want the turn idle window %s", run.idleLimitFor(), s.tun.TurnIdleTimeout())
 	}
 }

@@ -203,7 +203,7 @@ func TestInboxQueueDrainsAfterStalledTurnIsReclaimed(t *testing.T) {
 // bounds a turn, so nothing about production timing changed.
 func TestChatTurnIdleFallsBackToTunable(t *testing.T) {
 	tun := agent.NewTunables()
-	tun.SetChatTurnIdleTimeoutMinutes(7)
+	tun.SetTurnIdleTimeoutMinutes(7)
 	s := &Server{tun: tun}
 	if got, want := s.chatTurnIdle(), 7*time.Minute; got != want {
 		t.Fatalf("chatTurnIdle() = %v, want %v", got, want)

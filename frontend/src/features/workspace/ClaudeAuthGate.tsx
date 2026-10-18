@@ -36,16 +36,12 @@ interface Props {
 }
 
 // hasNoUsableProvider reports whether this workspace has no way to run a turn:
-// no claude-cli token is stored, and no enabled provider instance is fully
-// configured (GET /api/providers covers every provider kind now, including
+// no enabled provider instance is fully configured (GET /api/providers covers every provider kind now, including
 // Anthropic — _Docs/71 Faz 5). A claude-cli login living only in the
 // workspace's claude-home is caught separately by the login probe.
 async function hasNoUsableProvider(): Promise<boolean> {
-  const [s, instances] = await Promise.all([api.getSettings(), api.listProviders()])
-  const hasUsableInstance = instances.some(
-    (i) => i.enabled && Object.values(i.secretsSet).every(Boolean),
-  )
-  return !s.claudeCliAuthSet && !hasUsableInstance
+  const instances = await api.listProviders()
+  return !instances.some((i) => i.enabled && Object.values(i.secretsSet).every(Boolean))
 }
 
 export function ClaudeAuthGate({

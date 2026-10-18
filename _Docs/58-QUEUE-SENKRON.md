@@ -182,6 +182,8 @@ type PendingInteraction struct {
 - **Tarihsel hub-etkinliği tasarımı (2026-08-16, TSK760 ile geçersiz):** watchdog tek duvar-saati
   değil, **çift** bağ: `runQueuedTurn` 15 sn'de bir yoklar, turu **ya** tavanda **ya da**
   `TurnIdleWatchdogMin` (varsayılan 20 dk) boyunca **hiç olay üretmemişse** keser.
+  **(2026-10-18):** bu ayar kaldırıldı; tek `turnIdleTimeoutMin` (10 dk) her tur türünü
+  keser, kuyruk güvenlik ağı bunun 2 katıdır (`Tunables.QueueIdleBackstop`).
   Canlılık `Hub.LastActivity()` — `sessionState.lastPublish` her `Publish`'te (ephemeral
   delta'lar dâhil, mevcut kilidin altında) damgalanır; ölçüm `(workspace, session)`
   kapsamlı. Böylece adım yayan tur ne kadar uzarsa uzasın kesilmez, sessiz kalan tur

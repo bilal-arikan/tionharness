@@ -60,10 +60,13 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			dto.Subscription = claudeSubscriptionTier(
-				home,
-				s.settings.Get().ClaudeCliAuthKind,
-			)
+			// The built-in instance (id == kind) runs against this app-global home;
+			// its auth kind says whether an API key, not the login, pays for it.
+			var authKind string
+			if inst, ok := s.providerStore.Get("claude-cli"); ok {
+				authKind = inst.Config[providers.FieldKeyAuthKind]
+			}
+			dto.Subscription = claudeSubscriptionTier(home, authKind)
 		}
 		if e.ID == "codex-cli" && dto.Available {
 			dto.CliVersion = codexCLIVersion(r.Context(), s.providers.CodexCLIPath())

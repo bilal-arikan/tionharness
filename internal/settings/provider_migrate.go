@@ -1,79 +1,43 @@
 package settings
 
-import "strings"
-
-// MigrateFromSettings derives the provider-instance set implied by a legacy
-// Settings document, per the mapping table in _Docs/71-SAGLAYICI-ORNEKLERI-PLANI.md
-// §3. decrypt opens an *Enc field to plaintext (return "" on failure — this
-// function never fails the boot sequence over an undecryptable legacy secret,
-// it just migrates that provider without a working key).
-//
-// The key invariant this preserves: a migrated instance's ID equals its kind
-// ID ("anthropic", "claude-cli", ...) so existing Agent.Provider values (which
-// already hold a kind id) resolve to the right instance with no separate
-// per-agent migration pass (_Docs/71 §3).
-func MigrateFromSettings(s Settings, decrypt func(enc string) string) []ProviderInstance {
-	var out []ProviderInstance
+// defaultProviderInstances is the instance set a fresh install starts with: the
+// two keyless CLI transports, each running against its app-global config home.
+// An instance's ID equals its kind ID ("claude-cli", "codex-cli") so
+// Agent.Provider values, which hold a kind id, resolve with no per-agent
+// migration (_Docs/71 §3). It used to be derived from legacy settings.json
+// fields (CLI paths, config dirs, a claude-cli token); those were removed on
+// 2026-10-18 once every install had a providers.json.
+func defaultProviderInstances() []ProviderInstance {
 	now := currentTime()
-
-	// claude-cli migrates unconditionally: it runs keyless against the ambient
-	// or configured CLI login, so "no fields set" is still a valid, usable
-	// instance (_Docs/71 §3).
-	{
-		cfg := map[string]string{
-			"cliPath":   s.ClaudeCLIPath,
-			"configDir": defaultClaudeConfigDir(),
-			"authKind":  s.ClaudeCliAuthKind,
-		}
-		secrets := map[string]string{}
-		if s.ClaudeCliAuthTokenEnc != "" {
-			secrets["authToken"] = s.ClaudeCliAuthTokenEnc
-		}
-		out = append(out, ProviderInstance{
+	return []ProviderInstance{
+		{
 			ID:         "claude-cli",
 			KindID:     "claude-cli",
 			Label:      "Claude CLI",
 			Enabled:    true,
-			Config:     cfg,
-			SecretsEnc: secrets,
-			CreatedAt:  now,
-		})
-	}
-
-	if strings.TrimSpace(s.CodexCLIPath) != "" || strings.TrimSpace(s.CodexConfigDir) != "" {
-		out = append(out, ProviderInstance{
-			ID:      "codex-cli",
-			KindID:  "codex-cli",
-			Label:   "Codex CLI",
-			Enabled: true,
-			Config: map[string]string{
-				"cliPath":   s.CodexCLIPath,
-				"configDir": s.CodexConfigDir,
-			},
+			Config:     map[string]string{"configDir": defaultClaudeConfigDir()},
 			SecretsEnc: map[string]string{},
 			CreatedAt:  now,
-		})
+		},
+		{
+			ID:         "codex-cli",
+			KindID:     "codex-cli",
+			Label:      "Codex CLI",
+			Enabled:    true,
+			Config:     map[string]string{},
+			SecretsEnc: map[string]string{},
+			CreatedAt:  now,
+		},
 	}
-
-	// _ silences decrypt-unused when no *Enc field above ever needed live
-	// plaintext — every field here migrates its *Enc value as-is (still
-	// AES-GCM sealed under the same cipher), so decrypt is reserved for
-	// callers that need to re-derive a value rather than just relocate it.
-	// Kept as a parameter (rather than dropped) so a future field that DOES
-	// need plaintext-at-migration-time (e.g. re-deriving a default label from
-	// a decrypted value) doesn't require an API change.
-	_ = decrypt
-
-	return out
 }
 
-// EnsureMigrated runs MigrateFromSettings and persists the result, but ONLY
-// if providers.json did NOT already exist on disk when this ProviderStore
-// was opened (s.fileExisted false). It never overwrites an existing file —
-// including one OpenProviderStore itself just created as an empty `[]`,
-// since that already counts as "existed" for the next EnsureMigrated call on
-// the same store, and migration is a boot-time, run-at-most-once operation.
-func (s *ProviderStore) EnsureMigrated(sett Settings, decrypt func(string) string) (bool, error) {
+// EnsureSeeded writes defaultProviderInstances, but ONLY if providers.json did
+// NOT already exist on disk when this ProviderStore was opened (s.fileExisted
+// false). It never overwrites an existing file — including one
+// OpenProviderStore itself just created as an empty `[]`, since that already
+// counts as "existed" for the next call on the same store. Returns whether it
+// seeded.
+func (s *ProviderStore) EnsureSeeded() (bool, error) {
 	s.mu.Lock()
 	if s.fileExisted {
 		s.mu.Unlock()
@@ -82,7 +46,7 @@ func (s *ProviderStore) EnsureMigrated(sett Settings, decrypt func(string) strin
 	s.fileExisted = true // claim the run before releasing the lock
 	s.mu.Unlock()
 
-	instances := MigrateFromSettings(sett, decrypt)
+	instances := defaultProviderInstances()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -95,7 +59,7 @@ func (s *ProviderStore) EnsureMigrated(sett Settings, decrypt func(string) strin
 
 // EnsureKindInstance adds a default instance for kindID (id == kindID, like
 // the migrated built-ins) when providers.json holds no instance of that kind
-// yet. It runs on every boot — unlike EnsureMigrated, which is one-shot — so a
+// yet. It runs on every boot — unlike EnsureSeeded, which is one-shot — so a
 // keyless CLI transport added after the first boot (opencode-cli, _Docs/95)
 // still shows up for an existing install once its binary is found. A kind the
 // user deliberately removed comes back only if they removed every instance of

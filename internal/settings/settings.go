@@ -23,20 +23,6 @@ func defaultClaudeConfigDir() string {
 	return filepath.Join(home, ".tionharness", "claude-home")
 }
 
-// defaultCodexConfigDir is the baseline CODEX_HOME for codex-cli, the sibling of
-// defaultClaudeConfigDir: a TionHarness-managed config home (~/.tionharness/codex-home)
-// so the CLI runs against a config.toml and login we own rather than the user's
-// shared ~/.codex. Requires a one-time `codex login` in that directory. As with
-// the claude side, an unresolvable home dir yields "" — inheriting the ambient
-// ~/.codex is the correct fallback, not a swallowed error.
-func defaultCodexConfigDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return ""
-	}
-	return filepath.Join(home, ".tionharness", "codex-home")
-}
-
 // Theme options for the UI.
 const (
 	ThemeDark   = "dark"
@@ -72,26 +58,9 @@ type Settings struct {
 	// DefaultPermissionMode seeds new agents' tool-use permission gate:
 	// "read-only" | "ask" | "auto". "" falls back to "auto".
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
-	// ClaudeCLIPath and CodexCLIPath: no live functional reader remains outside
-	// MigrateFromSettings (kept for that one-time boot migration; never exposed
-	// to the API — see DTO/Patch below).
-	ClaudeCLIPath string `json:"claudeCliPath"` // "" = auto-detect on PATH
-	// claude-cli credential injected into the subprocess env so an isolated config
-	// dir authenticates without an interactive in-dir `claude login`. The token is
-	// AES-GCM encrypted (never serialized to the API); the kind selects the env var:
-	//   "oauth"  → CLAUDE_CODE_OAUTH_TOKEN (Max/Pro subscription, from `claude setup-token`)
-	//   "apikey" → ANTHROPIC_API_KEY       (API billing)
-	//   ""       → none injected (rely on the config dir's own login)
-	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
-	ClaudeCliAuthTokenEnc string `json:"claudeCliAuthTokenEnc"` // AES-GCM, never exposed
-	// codex-cli (the second keyless CLI transport). CodexCLIPath resolves the
-	// binary; CodexConfigDir is its CODEX_HOME — the exact analogue of
-	// CLAUDE_CONFIG_DIR, holding the subscription login (auth.json) and the
-	// generated config.toml. There is no token-injection counterpart: Codex has
-	// no env-var credential channel, so authentication is always the config
-	// home's own `codex login`.
-	CodexCLIPath   string `json:"codexCliPath"`   // "" = auto-detect on PATH
-	CodexConfigDir string `json:"codexConfigDir"` // CODEX_HOME for codex-cli; "" = inherit ~/.codex
+	// CLI paths, config homes and credentials live on the provider instances
+	// (providers.json). The legacy claudeCli*/codexCli* fields here only fed the
+	// one-time migration into that file and were removed on 2026-10-18.
 
 	// Desktop / display behaviour (applied client-side).
 	DesktopNotifications bool `json:"desktopNotifications"` // browser notifications
@@ -254,27 +223,26 @@ type Settings struct {
 
 	// Spawn guards — the detached background surface: spawn_session + the UI
 	// spawn button.
-	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`     // max concurrent spawned sessions (0 = default 4)
-	SpawnQueueMax          int `json:"spawnQueueMax"`          // max queued spawned sessions (0 = default 8)
-	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`        // max spawns per agent turn (0 = default 4)
-	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn inactivity watchdog in minutes (0 = default 10); cancels a turn that emits no step for this long
-	FlowRunRetention       int `json:"flowRunRetention"`       // finished flow run TREES kept per flow (0 = unlimited); older ones are pruned every 10 min (_Docs/77 R8)
-	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled; default 10); reclaims a turn whose provider stream stalled
+	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 4)
+	SpawnQueueMax      int `json:"spawnQueueMax"`      // max queued spawned sessions (0 = default 8)
+	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
+	FlowRunRetention   int `json:"flowRunRetention"`   // finished flow run TREES kept per flow (0 = unlimited); older ones are pruned every 10 min
+	// TurnIdleTimeoutMin cancels any turn (chat, spawn, schedule, automation) that
+	// emits NOTHING (no step, no token) for this long; the queue's outer backstop
+	// is twice this value. Wall clock cannot tell a wedged turn from a slow one;
+	// silence can (0 = default 10). Replaced spawnIdleTimeoutMin,
+	// chatTurnIdleTimeoutMin and turnIdleWatchdogMin on 2026-10-18.
+	TurnIdleTimeoutMin int `json:"turnIdleTimeoutMin"`
 	// CodexStdoutIdleSec is the codex-cli stdout-silence watchdog, in SECONDS: a
 	// codex subprocess that has started streaming and then emits NOTHING for this
 	// long is killed (whole process tree) and reported as a wedge instead of an
-	// empty answer. It must stay BELOW the chat/turn idle watchdogs (whose default
-	// is 10 minutes) so the specific, actionable codex diagnosis wins the race
+	// empty answer. It must stay BELOW TurnIdleTimeoutMin (default 10 minutes) so
+	// the specific, actionable codex diagnosis wins the race
 	// against the generic turn cancel. Seconds, not minutes: minute granularity is
 	// too coarse to tune against the minute-granular turn watchdogs
 	// (0 = disabled, no stdout-silence watchdog).
 	CodexStdoutIdleSec int `json:"codexStdoutIdleSec"`
 	IdleResumeMax      int `json:"idleResumeMax"` // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
-	// TurnIdleWatchdogMin cancels a queued turn that emits NOTHING (no step, no
-	// token) for this long. Wall clock cannot tell a wedged turn from a slow one;
-	// silence can, so this is the measure that reclaims a hang quickly while a
-	// productive turn remains alive regardless of elapsed wall clock (0 = default 20).
-	TurnIdleWatchdogMin int `json:"turnIdleWatchdogMin"`
 
 	// Tool execution guards (process-global tool behaviour).
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 120); per-call timeout_sec still overrides
@@ -310,10 +278,6 @@ func Default() Settings {
 		UILanguage:  "", // follow Language until the user picks an interface language
 
 		DefaultPermissionMode: "auto",
-		ClaudeCLIPath:         "",
-		ClaudeCliAuthKind:     "",
-		CodexCLIPath:          "",
-		CodexConfigDir:        defaultCodexConfigDir(),
 
 		// MaxContextTokens is a FLOOR under the derived budget (see EffectiveBudget):
 		// 800K used to override the ceil/fraction below for every known model, so the
@@ -415,21 +379,19 @@ func Default() Settings {
 
 		// Each spawn is a full CLI process; 4 concurrent keeps a laptop responsive and
 		// the queue absorbs bursts (2026-10-18; was 16/16).
-		SpawnMaxConcurrent:     4,
-		SpawnQueueMax:          8,
-		SpawnMaxPerTurn:        4,
-		SpawnIdleTimeoutMin:    10,
-		FlowRunRetention:       0,
-		ChatTurnIdleTimeoutMin: 10,
+		SpawnMaxConcurrent: 4,
+		SpawnQueueMax:      8,
+		SpawnMaxPerTurn:    4,
+		FlowRunRetention:   0,
+		TurnIdleTimeoutMin: 10,
 		// 300 seconds: `codex exec --json` emits NOTHING while the model reasons
 		// (measured 2026-10-18: no reasoning items even with reasoning summaries on),
 		// so high-effort reasoning is indistinguishable from a wedge until it ends.
-		// Five minutes covers long reasoning yet stays under the 10-minute chat/spawn
-		// idle watchdogs, so a truly wedged codex subprocess is still diagnosed and
+		// Five minutes covers long reasoning yet stays under the 10-minute turn idle
+		// watchdog, so a truly wedged codex subprocess is still diagnosed and
 		// killed HERE, with its stdout tail, before the generic turn cancel fires.
-		CodexStdoutIdleSec:  300,
-		IdleResumeMax:       1,
-		TurnIdleWatchdogMin: 20,
+		CodexStdoutIdleSec: 300,
+		IdleResumeMax:      1,
 
 		// Same as Claude Code's documented Bash defaults (2 min default, 10 min max):
 		// builds and test suites routinely exceed 30 s.
@@ -460,8 +422,6 @@ type DTO struct {
 	UILanguage  string `json:"uiLanguage"`
 
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
-	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
-	ClaudeCliAuthSet      bool   `json:"claudeCliAuthSet"`
 
 	DesktopNotifications bool `json:"desktopNotifications"`
 	KeepAwake            bool `json:"keepAwake"`
@@ -536,15 +496,13 @@ type DTO struct {
 	DelegationMaxDepth  int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls  int  `json:"delegationMaxCalls"`
 
-	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`
-	SpawnQueueMax          int `json:"spawnQueueMax"`
-	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`
-	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`
-	FlowRunRetention       int `json:"flowRunRetention"`
-	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"`
-	CodexStdoutIdleSec     int `json:"codexStdoutIdleSec"`
-	IdleResumeMax          int `json:"idleResumeMax"`
-	TurnIdleWatchdogMin    int `json:"turnIdleWatchdogMin"`
+	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
+	SpawnQueueMax      int `json:"spawnQueueMax"`
+	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
+	FlowRunRetention   int `json:"flowRunRetention"`
+	TurnIdleTimeoutMin int `json:"turnIdleTimeoutMin"`
+	CodexStdoutIdleSec int `json:"codexStdoutIdleSec"`
+	IdleResumeMax      int `json:"idleResumeMax"`
 
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
@@ -569,8 +527,6 @@ func (s Settings) ToDTO() DTO {
 		UILanguage:  s.UILanguage,
 
 		DefaultPermissionMode: s.DefaultPermissionMode,
-		ClaudeCliAuthKind:     s.ClaudeCliAuthKind,
-		ClaudeCliAuthSet:      s.ClaudeCliAuthTokenEnc != "",
 
 		DesktopNotifications: s.DesktopNotifications,
 		KeepAwake:            s.KeepAwake,
@@ -633,15 +589,13 @@ func (s Settings) ToDTO() DTO {
 		DelegationMaxDepth:       s.DelegationMaxDepth,
 		DelegationMaxCalls:       s.DelegationMaxCalls,
 
-		SpawnMaxConcurrent:     s.SpawnMaxConcurrent,
-		SpawnQueueMax:          s.SpawnQueueMax,
-		SpawnMaxPerTurn:        s.SpawnMaxPerTurn,
-		SpawnIdleTimeoutMin:    s.SpawnIdleTimeoutMin,
-		FlowRunRetention:       s.FlowRunRetention,
-		ChatTurnIdleTimeoutMin: s.ChatTurnIdleTimeoutMin,
-		CodexStdoutIdleSec:     s.CodexStdoutIdleSec,
-		IdleResumeMax:          s.IdleResumeMax,
-		TurnIdleWatchdogMin:    s.TurnIdleWatchdogMin,
+		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
+		SpawnQueueMax:      s.SpawnQueueMax,
+		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
+		FlowRunRetention:   s.FlowRunRetention,
+		TurnIdleTimeoutMin: s.TurnIdleTimeoutMin,
+		CodexStdoutIdleSec: s.CodexStdoutIdleSec,
+		IdleResumeMax:      s.IdleResumeMax,
 
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
 		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
@@ -668,8 +622,6 @@ type Patch struct {
 	UILanguage  *string `json:"uiLanguage"`
 
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
-	ClaudeCliAuthKind     *string `json:"claudeCliAuthKind"`
-	ClaudeCliAuthToken    *string `json:"claudeCliAuthToken"` // write-only
 
 	DesktopNotifications *bool `json:"desktopNotifications"`
 	KeepAwake            *bool `json:"keepAwake"`
@@ -732,15 +684,13 @@ type Patch struct {
 	DelegationMaxDepth       *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls       *int  `json:"delegationMaxCalls"`
 
-	SpawnMaxConcurrent     *int `json:"spawnMaxConcurrent"`
-	SpawnQueueMax          *int `json:"spawnQueueMax"`
-	SpawnMaxPerTurn        *int `json:"spawnMaxPerTurn"`
-	SpawnIdleTimeoutMin    *int `json:"spawnIdleTimeoutMin"`
-	FlowRunRetention       *int `json:"flowRunRetention"`
-	ChatTurnIdleTimeoutMin *int `json:"chatTurnIdleTimeoutMin"`
-	CodexStdoutIdleSec     *int `json:"codexStdoutIdleSec"`
-	IdleResumeMax          *int `json:"idleResumeMax"`
-	TurnIdleWatchdogMin    *int `json:"turnIdleWatchdogMin"`
+	SpawnMaxConcurrent *int `json:"spawnMaxConcurrent"`
+	SpawnQueueMax      *int `json:"spawnQueueMax"`
+	SpawnMaxPerTurn    *int `json:"spawnMaxPerTurn"`
+	FlowRunRetention   *int `json:"flowRunRetention"`
+	TurnIdleTimeoutMin *int `json:"turnIdleTimeoutMin"`
+	CodexStdoutIdleSec *int `json:"codexStdoutIdleSec"`
+	IdleResumeMax      *int `json:"idleResumeMax"`
 
 	ShellDefaultTimeoutSec *int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     *int `json:"shellMaxTimeoutSec"`

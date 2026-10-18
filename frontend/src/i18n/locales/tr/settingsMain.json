@@ -148,12 +148,8 @@
       "hint": "Bir ajanın tek turda başlatabileceği en fazla oturum (1–64)."
     },
     "idle": {
-      "label": "Arka plan boşta kalma penceresi (dakika)",
-      "hint": "Anlamlı ilerleme olmadan bu süreyi aşan arka plan veya zamanlanmış çalışmayı iptal et."
-    },
-    "chatIdle": {
-      "label": "Sohbet boşta kalma penceresi (dakika)",
-      "hint": "Anlamlı adımı olmayan etkileşimli turu iptal et. Ağ heartbeat'leri sayılmaz. 0 sınırı kapatır."
+      "label": "Tur boşta kalma penceresi (dakika)",
+      "hint": "Sohbet, arka plan, zamanlanmış ya da otomasyon fark etmeksizin, anlamlı ilerleme olmadan bu süreyi aşan turu iptal et. Ağ heartbeat'leri sayılmaz; üretken çalışmaların toplam süre sınırı yoktur. Kuyruk güvenlik ağı bu değerin iki katıdır."
     },
     "codexIdle": {
       "label": "Codex çıktı boşta kalma penceresi (saniye)",
@@ -162,10 +158,6 @@
     "recovery": {
       "label": "Boşta kalma kurtarma denemeleri",
       "hint": "Boşta kalma kesintisinden sonra en fazla otomatik devam denemesi."
-    },
-    "watchdog": {
-      "label": "Tur watchdog penceresi (dakika)",
-      "hint": "Tur watchdog'u tarafından kullanılan boşta kalma penceresi."
     }
   },
   "cli": {

@@ -208,7 +208,8 @@ kanalına maplenebilir (gelecek iş).
    yerelde sık kullanılan 8080 ile çakışmaz. **Tek seferlik ön koşul:** tailnet admin konsolunda
    "HTTPS Certificates" açık olmalı (`https://login.tailscale.com/admin/dns`).
 2. **claude-cli VPS'te kimlik:** izole config home + `claude setup-token` (oauth) ya
-   da `ANTHROPIC_API_KEY` (`claudeCliAuthKind`/`Token`, `03` maddesi). VPS'te login
+   da `ANTHROPIC_API_KEY` (claude-cli sağlayıcı örneğinin `authKind`/`authToken` alanları;
+   eski `claudeCliAuthKind`/`Token` ayarları 2026-10-18'de kaldırıldı). VPS'te login
    akışı headless olacağından **setup-token** önerilir.
    - **In-app tarayıcı girişi (ClaudeAuthDialog):** "Otomatik (loopback)" alt-modu
      backend'de efemer `127.0.0.1:<port>` dinleyici açıp `redirect_uri`'yi

@@ -45,16 +45,8 @@ export function BackgroundLimits({ draft, set }: PanelProps) {
         hint={t('background.idle.hint')}
         min={1}
         max={1440}
-        value={draft.spawnIdleTimeoutMin}
-        onChange={(v) => set('spawnIdleTimeoutMin', v)}
-      />
-      <NumberField
-        label={t('background.chatIdle.label')}
-        hint={t('background.chatIdle.hint')}
-        min={0}
-        max={1440}
-        value={draft.chatTurnIdleTimeoutMin}
-        onChange={(v) => set('chatTurnIdleTimeoutMin', v)}
+        value={draft.turnIdleTimeoutMin}
+        onChange={(v) => set('turnIdleTimeoutMin', v)}
       />
       <NumberField
         label={t('background.codexIdle.label')}
@@ -71,14 +63,6 @@ export function BackgroundLimits({ draft, set }: PanelProps) {
         max={5}
         value={draft.idleResumeMax}
         onChange={(v) => set('idleResumeMax', v)}
-      />
-      <NumberField
-        label={t('background.watchdog.label')}
-        hint={t('background.watchdog.hint')}
-        min={1}
-        max={1440}
-        value={draft.turnIdleWatchdogMin}
-        onChange={(v) => set('turnIdleWatchdogMin', v)}
       />
     </>
   )

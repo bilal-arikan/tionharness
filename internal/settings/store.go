@@ -102,12 +102,6 @@ func (s *Store) DTO() DTO {
 	return s.Get().ToDTO()
 }
 
-// ClaudeCliAuthToken returns the decrypted claude-cli credential (OAuth token or
-// API key, per ClaudeCliAuthKind), or "" if none/undecryptable.
-func (s *Store) ClaudeCliAuthToken() string {
-	return s.decrypt(s.Get().ClaudeCliAuthTokenEnc)
-}
-
 // decrypt opens an encrypted value, returning "" on empty/failure.
 func (s *Store) decrypt(enc string) string {
 	if enc == "" {
@@ -146,7 +140,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.UILanguage, p.UILanguage)
 
 	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
-	applyString(&next.ClaudeCliAuthKind, p.ClaudeCliAuthKind)
 
 	applyBool(&next.DesktopNotifications, p.DesktopNotifications)
 	applyBool(&next.KeepAwake, p.KeepAwake)
@@ -230,12 +223,10 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)
 	applyInt(&next.SpawnQueueMax, p.SpawnQueueMax)
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
-	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
 	applyInt(&next.FlowRunRetention, p.FlowRunRetention)
-	applyInt(&next.ChatTurnIdleTimeoutMin, p.ChatTurnIdleTimeoutMin)
+	applyInt(&next.TurnIdleTimeoutMin, p.TurnIdleTimeoutMin)
 	applyInt(&next.CodexStdoutIdleSec, p.CodexStdoutIdleSec)
 	applyInt(&next.IdleResumeMax, p.IdleResumeMax)
-	applyInt(&next.TurnIdleWatchdogMin, p.TurnIdleWatchdogMin)
 	applyInt(&next.ShellDefaultTimeoutSec, p.ShellDefaultTimeoutSec)
 	applyInt(&next.ShellMaxTimeoutSec, p.ShellMaxTimeoutSec)
 	applyInt(&next.MaxToolOutputKB, p.MaxToolOutputKB)
@@ -250,18 +241,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.BackupDir = strings.TrimSpace(*p.BackupDir)
 	}
 
-	// Secrets: write-only. Empty string clears; non-empty encrypts and replaces.
-	if p.ClaudeCliAuthToken != nil {
-		if *p.ClaudeCliAuthToken == "" {
-			next.ClaudeCliAuthTokenEnc = ""
-		} else {
-			enc, err := s.cipher.Encrypt(*p.ClaudeCliAuthToken)
-			if err != nil {
-				return Settings{}, err
-			}
-			next.ClaudeCliAuthTokenEnc = enc
-		}
-	}
 	next = normalize(next)
 	if err := s.persist(next); err != nil {
 		return Settings{}, err
@@ -436,10 +415,12 @@ func normalize(v Settings) Settings {
 	if v.SpawnMaxPerTurn > 64 {
 		v.SpawnMaxPerTurn = 64
 	}
-	// Deprecated absolute turn limits stay wire/storage compatible. Zero means
-	// disabled and must not be rewritten into an active one-minute ceiling.
-	if v.SpawnIdleTimeoutMin < 1 {
-		v.SpawnIdleTimeoutMin = 1
+	// One idle window for every turn kind: at least a minute, at most a day.
+	if v.TurnIdleTimeoutMin < 1 {
+		v.TurnIdleTimeoutMin = Default().TurnIdleTimeoutMin
+	}
+	if v.TurnIdleTimeoutMin > 1440 {
+		v.TurnIdleTimeoutMin = 1440
 	}
 	// Flow run retention: 0 = unlimited; a hard ceiling keeps the sweeper cheap.
 	if v.FlowRunRetention < 0 {
@@ -447,13 +428,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.FlowRunRetention > 1000 {
 		v.FlowRunRetention = 1000
-	}
-	// Interactive chat timeouts use 0 as an explicit disabled value.
-	if v.ChatTurnIdleTimeoutMin < 0 {
-		v.ChatTurnIdleTimeoutMin = Default().ChatTurnIdleTimeoutMin
-	}
-	if v.ChatTurnIdleTimeoutMin > 1440 {
-		v.ChatTurnIdleTimeoutMin = 1440
 	}
 	// Codex stdout-silence watchdog: 0 disables it entirely; a negative value is a
 	// typo, not an intent, so it falls back to the default. The value is in seconds;
@@ -471,12 +445,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.IdleResumeMax > 5 {
 		v.IdleResumeMax = 5
-	}
-	// Legacy absolute watchdog is retained for storage/API compatibility only.
-	// Zero consistently means disabled; active cancellation uses semantic idle.
-	// Semantic inactivity is independent from the deprecated absolute setting.
-	if v.TurnIdleWatchdogMin < 1 {
-		v.TurnIdleWatchdogMin = 1
 	}
 	// Workspace backups: interval ≥ 1h, retention ≥ 1 archive; clamp ceilings.
 	if v.BackupIntervalHours < 1 {

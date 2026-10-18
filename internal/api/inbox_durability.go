@@ -21,12 +21,13 @@ import (
 // forever and block the whole queue behind it. See _Docs/58.
 const maxInboxAttempts = 3
 
-// inboxTurnIdleWatchdog is the run-scoped semantic inactivity window.
+// inboxTurnIdleWatchdog is the run-scoped semantic inactivity window: the queue's
+// backstop, a multiple of the turn's own idle window so that cut fires first.
 func (s *Server) inboxTurnIdleWatchdog() time.Duration {
 	if s.tun == nil {
-		return agent.DefaultTurnIdleWatchdogMinutes * time.Minute
+		return agent.DefaultQueueIdleBackstop
 	}
-	return s.tun.TurnIdleWatchdog()
+	return s.tun.QueueIdleBackstop()
 }
 
 // turnIdleFor reads only the registered run's semantic tracker. Hub traffic is

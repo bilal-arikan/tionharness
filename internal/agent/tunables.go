@@ -25,25 +25,21 @@ const (
 	DefaultSpawnMaxPerTurn    = 4 // max spawns one agent turn may launch
 )
 
-// DefaultSpawnIdleTimeoutMinutes bounds INACTIVITY inside a background spawn
-// work turn: the idle watchdog cancels a turn that emits no step (tool/thinking/
-// token) for this long, so a truly hung turn is reclaimed fast while a long-but-
-// productive one (heavy exploration streaming tool calls) runs on. Settings-driven (SpawnIdleTimeoutMin) via applySettings;
-// 0 selects this default.
-const DefaultSpawnIdleTimeoutMinutes = 10
+// DefaultTurnIdleTimeoutMinutes is the one inactivity window every turn kind
+// shares (chat, spawn, schedule, automation): a turn that emits no step (tool/
+// thinking/token) for this long is cancelled, so a hung turn — a provider stream
+// that died with the socket half-open, a CLI subprocess that never exits — is
+// reclaimed while a long-but-productive one runs on. 10 minutes because codex
+// exec emits nothing while it reasons. A long-but-step-less operation (one big
+// tool call) is bounded by a separate operation lease derived from the same
+// window. Settings-driven (TurnIdleTimeoutMin); 0 selects this default. The three
+// per-kind windows were merged into this one on 2026-10-18.
+const DefaultTurnIdleTimeoutMinutes = 10
 
-// Interactive chat turn bounds. The legacy hard ceiling defaults disabled; the
-// semantic idle window reclaims a
-// turn whose PROVIDER STREAM died silently — the socket stays half-open, the CLI
-// subprocess never exits, and without this the session hangs forever and its
-// queued inbox messages are never delivered. 10 minutes matches the settings
-// default (2026-10-18; was 3): codex exec emits nothing while it reasons, so a
-// short window cut live turns. A long-but-step-less operation (non-streaming
-// completion, one big tool call) is bounded by a separate operation lease
-// derived from the same window.
-const (
-	DefaultChatTurnIdleTimeoutMinutes = 10
-)
+// queueBackstopFactor sizes the queue's outer watchdog (runQueuedTurn) against
+// the turn's own idle cut: the outer one is only a backstop for a turn whose own
+// watchdog failed to fire, so it must always lose the race.
+const queueBackstopFactor = 2
 
 // DefaultIdleResumeMax is the single-shot budget for the OUT-OF-LOOP idle-timeout
 // resume (see runTurnWithIdleResume in turnoutcome.go): a background turn cut
@@ -53,11 +49,6 @@ const (
 // the resume entirely (turn is reported unfinished on the first idle cut, as it was
 // before the fix). Settings-driven (IdleResumeMax) via applySettings.
 const DefaultIdleResumeMax = 1
-
-// DefaultTurnIdleWatchdogMinutes bounds semantic inactivity inside a queued run.
-// Only new assistant/tool output and terminal state transitions advance it.
-// Settings-driven (TurnIdleWatchdogMin); 0 selects this default.
-const DefaultTurnIdleWatchdogMinutes = 20
 
 // Tunables holds process-wide, settings-driven knobs that cut across every
 // workspace runtime: an optional model override for auto-title generation and
@@ -84,14 +75,12 @@ type Tunables struct {
 	delegMaxDepth      int // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls      int // 0 → DefaultMaxDelegationCalls
 
-	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
-	spawnQueueMax       int // 0 → DefaultSpawnQueueMax
-	flowRunRetention    int // finished root runs kept per flow; 0 → unlimited
-	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
-	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn inactivity watchdog, in minutes)
-	chatTurnIdleMin     int // 0 = disabled (interactive chat turn inactivity window, in minutes)
-	idleResumeMax       int // <0 → DefaultIdleResumeMax; 0 = disabled; N = N single-shot idle-timeout resumes
-	turnIdleWatchdogMin int // 0 → DefaultTurnIdleWatchdogMinutes (queued-turn inactivity window, in minutes)
+	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
+	spawnQueueMax      int // 0 → DefaultSpawnQueueMax
+	flowRunRetention   int // finished root runs kept per flow; 0 → unlimited
+	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
+	turnIdleMin        int // 0 → DefaultTurnIdleTimeoutMinutes (every turn's inactivity window, in minutes)
+	idleResumeMax      int // <0 → DefaultIdleResumeMax; 0 = disabled; N = N single-shot idle-timeout resumes
 	// Turn recovery (A1) — structural handling of output-token cutoffs and
 	// context overflow inside the native agentic tool loop.
 	reactiveCompact    bool // fold older in-flight history + retry on context overflow
@@ -210,7 +199,6 @@ func NewTunables() *Tunables {
 		reactiveKeepRecent: DefaultReactiveKeepRecent,
 		providerRetryMax:   DefaultProviderRetryMax,
 		idleResumeMax:      DefaultIdleResumeMax,
-		chatTurnIdleMin:    DefaultChatTurnIdleTimeoutMinutes,
 		// Guardrail warnings on by default (gentle nudge appended to failing
 		// results); the hard stop stays opt-in from settings.
 		toolGuardWarnings:  true,
@@ -436,38 +424,33 @@ func (t *Tunables) SpawnMaxPerTurn() int {
 	return t.spawnMaxPerTurn
 }
 
-// SetSpawnIdleTimeoutMinutes sets the inactivity window (in minutes) after which
-// the idle watchdog cancels a background spawn turn that has emitted no
-// step. 0 selects the built-in default.
-func (t *Tunables) SetSpawnIdleTimeoutMinutes(minutes int) {
+// SetTurnIdleTimeoutMinutes sets the inactivity window (in minutes) after which
+// any turn that has emitted no step is cancelled. 0 selects the built-in default.
+func (t *Tunables) SetTurnIdleTimeoutMinutes(minutes int) {
 	t.mu.Lock()
-	t.spawnIdleTimeoutMin = minutes
+	t.turnIdleMin = minutes
 	t.mu.Unlock()
 }
 
-// SpawnIdleTimeout returns the spawn inactivity window as a duration
-// (default when unset).
-func (t *Tunables) SpawnIdleTimeout() time.Duration {
+// TurnIdleTimeout returns the turn inactivity window (default when unset).
+func (t *Tunables) TurnIdleTimeout() time.Duration {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	m := t.spawnIdleTimeoutMin
+	m := t.turnIdleMin
 	if m <= 0 {
-		m = DefaultSpawnIdleTimeoutMinutes
+		m = DefaultTurnIdleTimeoutMinutes
 	}
 	return time.Duration(m) * time.Minute
 }
 
-func (t *Tunables) SetChatTurnIdleTimeoutMinutes(minutes int) {
-	t.mu.Lock()
-	t.chatTurnIdleMin = minutes
-	t.mu.Unlock()
+// QueueIdleBackstop returns the queue's outer inactivity watchdog: a multiple of
+// TurnIdleTimeout, so the turn's own, more specific cut always fires first.
+func (t *Tunables) QueueIdleBackstop() time.Duration {
+	return queueBackstopFactor * t.TurnIdleTimeout()
 }
 
-func (t *Tunables) ChatTurnIdleTimeout() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return time.Duration(t.chatTurnIdleMin) * time.Minute
-}
+// DefaultQueueIdleBackstop is QueueIdleBackstop for an unconfigured process.
+const DefaultQueueIdleBackstop = queueBackstopFactor * DefaultTurnIdleTimeoutMinutes * time.Minute
 
 // SetIdleResumeMax configures how many times an idle-cut background turn is
 // auto-restarted under a fresh idle window (see runTurnWithIdleResume). Negative
@@ -487,26 +470,6 @@ func (t *Tunables) IdleResumeMax() int {
 		return DefaultIdleResumeMax
 	}
 	return t.idleResumeMax
-}
-
-// SetTurnIdleWatchdogMinutes sets the inactivity window (in minutes) after which a
-// queued turn that has emitted nothing is force-cancelled. 0 selects the built-in
-// default.
-func (t *Tunables) SetTurnIdleWatchdogMinutes(minutes int) {
-	t.mu.Lock()
-	t.turnIdleWatchdogMin = minutes
-	t.mu.Unlock()
-}
-
-// TurnIdleWatchdog returns the semantic inactivity window.
-func (t *Tunables) TurnIdleWatchdog() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	m := t.turnIdleWatchdogMin
-	if m <= 0 {
-		m = DefaultTurnIdleWatchdogMinutes
-	}
-	return time.Duration(m) * time.Minute
 }
 
 // SetRecoveryLimits configures the A1 turn-recovery knobs: whether reactive

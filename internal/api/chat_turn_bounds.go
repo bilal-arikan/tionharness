@@ -12,5 +12,5 @@ func (s *Server) chatTurnIdle() time.Duration {
 	if s.chatTurnIdleOverride > 0 {
 		return s.chatTurnIdleOverride
 	}
-	return s.tun.ChatTurnIdleTimeout()
+	return s.tun.TurnIdleTimeout()
 }

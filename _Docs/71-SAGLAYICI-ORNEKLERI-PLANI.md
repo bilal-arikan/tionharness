@@ -197,6 +197,10 @@ Geçiş dönemindeki onarım aracı `cmd/repair-provider-migration` ve `Settings
 `customProviders`/`claudeConfigDir`) **2026-09-06'da kaldırıldı**: boot tohumu
 (`MigrateFromSettings`) artık yalnız anthropic / claude-cli / codex-cli örneklerini
 türetir, claude-cli config evi `defaultClaudeConfigDir()` ile sabittir.
+**2026-10-18:** son eski alanlar (`claudeCliPath`, `claudeCliAuthKind`/`TokenEnc`,
+`codexCliPath`, `codexConfigDir`) de kaldırıldı; `MigrateFromSettings`/`EnsureMigrated`
+yerini `EnsureSeeded`'e bıraktı — `providers.json` yoksa varsayılan claude-cli +
+codex-cli örneklerini yazar, ayarlardan hiçbir şey okumaz.
 
 `openai-compat` / `anthropic-compat` iki **yeni generic kind**'dır: bugünkü
 `buildCustom()` fonksiyonunun (registry.go) kind'laştırılmış hâli. Bu ikisi

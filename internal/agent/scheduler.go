@@ -366,7 +366,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// now holds the per-session turn slot, so a hung wake (a provider that never
 	// returns) would otherwise block every other turn on the session indefinitely —
 	// the slot's Cond wait ignores ctx, so nothing else could release it.
-	hardCap, idleCap := time.Duration(0), s.rt.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), s.rt.tun.TurnIdleTimeout()
 	// Single-shot idle-resume (FND-708844f8): an idle-cut wake turn gets ONE more
 	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
 	// Prefer the history-aware runner (installed by the api server) so the woken agent
@@ -630,7 +630,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Bound the scheduled turn with the spawn watchdog: it holds the per-session turn
 	// slot, so a hung turn must not block the session's queue forever (the slot's Cond
 	// wait ignores ctx).
-	hardCap, idleCap := time.Duration(0), s.rt.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), s.rt.tun.TurnIdleTimeout()
 	// Single-shot idle-resume (FND-708844f8): an idle-cut scheduled turn gets ONE more
 	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
 	var (

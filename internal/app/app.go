@@ -128,23 +128,21 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	}
 
 	// Provider instances (Faz 2, _Docs/71 §2.4/§3): a second, independent
-	// file-backed store from settings.json. EnsureMigrated derives the initial
-	// instance set from the legacy typed settings fields (including the just-
-	// applied env-seeded Anthropic key above) exactly once, only if
-	// providers.json did not already exist — every boot after the first is a
-	// no-op here.
+	// file-backed store from settings.json. EnsureSeeded writes the default
+	// claude-cli + codex-cli instances exactly once, only if providers.json did
+	// not already exist — every boot after the first is a no-op here.
 	providerStore, err := settings.OpenProviderStore(cfg.DataDir, secret)
 	if err != nil {
 		ln.Close()
 		lock.release()
 		return nil, err
 	}
-	if migrated, err := providerStore.EnsureMigrated(settingsStore.Get(), settingsStore.Decrypt); err != nil {
+	if migrated, err := providerStore.EnsureSeeded(); err != nil {
 		ln.Close()
 		lock.release()
 		return nil, err
 	} else if migrated {
-		logger.Info("providers.json created from legacy settings", "path", providerStore.Path())
+		logger.Info("providers.json created with the default CLI instances", "path", providerStore.Path())
 	}
 
 	registry := providers.NewRegistry()

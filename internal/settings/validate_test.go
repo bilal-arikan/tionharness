@@ -77,14 +77,17 @@ func TestApplyClampsNumerics(t *testing.T) {
 	}
 }
 
-func TestChatTurnIdleTimeoutDefaultsAndDisable(t *testing.T) {
+func TestTurnIdleTimeoutDefaultsAndClamp(t *testing.T) {
 	d := Default()
-	if d.ChatTurnIdleTimeoutMin != 10 {
-		t.Fatalf("chat idle timeout default = %d, want 10", d.ChatTurnIdleTimeoutMin)
+	if d.TurnIdleTimeoutMin != 10 {
+		t.Fatalf("turn idle timeout default = %d, want 10", d.TurnIdleTimeoutMin)
 	}
-	d.ChatTurnIdleTimeoutMin = 0
-	d = normalize(d)
-	if d.ChatTurnIdleTimeoutMin != 0 {
-		t.Fatalf("disabled chat idle timeout normalized to %d", d.ChatTurnIdleTimeoutMin)
+	d.TurnIdleTimeoutMin = 0
+	if got := normalize(d).TurnIdleTimeoutMin; got != 10 {
+		t.Fatalf("unset turn idle timeout normalized to %d, want the default 10", got)
+	}
+	d.TurnIdleTimeoutMin = 5000
+	if got := normalize(d).TurnIdleTimeoutMin; got != 1440 {
+		t.Fatalf("turn idle timeout not clamped: %d", got)
 	}
 }

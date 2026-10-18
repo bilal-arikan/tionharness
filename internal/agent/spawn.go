@@ -320,7 +320,7 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 
 	// Spawn lifetime is bounded only by semantic inactivity. Productive work has
 	// no elapsed wall-clock ceiling; SpawnTimeout remains storage/API compatibility.
-	hardCap, idleCap := time.Duration(0), r.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), r.tun.TurnIdleTimeout()
 
 	// Serialize this detached spawn turn on the session's turn slot so it never
 	// overlaps a user/wake turn opened on the same session (all of which claim

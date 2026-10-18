@@ -148,12 +148,8 @@
       "hint": "Maximum sessions an agent can start in one turn (1–64)."
     },
     "idle": {
-      "label": "Background idle window (minutes)",
-      "hint": "Cancel a background or scheduled run after this long without meaningful progress. Productive runs have no total duration cap."
-    },
-    "chatIdle": {
-      "label": "Chat idle window (minutes)",
-      "hint": "Cancel an interactive turn with no meaningful steps. Network heartbeats do not count. 0 disables the limit."
+      "label": "Turn idle window (minutes)",
+      "hint": "Cancel any turn (chat, background, scheduled or automation) after this long without meaningful progress. Network heartbeats do not count, and productive runs have no total duration cap. The queue backstop is twice this value."
     },
     "codexIdle": {
       "label": "Codex output idle window (seconds)",
@@ -162,10 +158,6 @@
     "recovery": {
       "label": "Idle recovery attempts",
       "hint": "Maximum automatic resume attempts after an idle interruption."
-    },
-    "watchdog": {
-      "label": "Turn watchdog window (minutes)",
-      "hint": "Idle window used by the turn watchdog."
     }
   },
   "cli": {

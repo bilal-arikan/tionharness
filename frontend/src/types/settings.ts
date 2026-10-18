@@ -23,11 +23,6 @@ export interface AppSettings {
   uiLanguage: Locale | ''
 
   defaultPermissionMode: string
-  // claude-cli credential injected into the subprocess env so an isolated config
-  // dir authenticates without an interactive in-dir login. kind selects the env
-  // var: "oauth" → CLAUDE_CODE_OAUTH_TOKEN, "apikey" → ANTHROPIC_API_KEY, "" → none.
-  claudeCliAuthKind: string
-  claudeCliAuthSet: boolean // whether a token is stored (the token itself is never returned)
   desktopNotifications: boolean
   keepAwake: boolean
 
@@ -105,13 +100,13 @@ export interface AppSettings {
   spawnMaxConcurrent: number
   spawnQueueMax: number
   spawnMaxPerTurn: number
-  spawnIdleTimeoutMin: number
-  // Finished flow run trees kept per flow; 0 = unlimited (_Docs/77 R8).
+  // Finished flow run trees kept per flow; 0 = unlimited.
   flowRunRetention: number
-  chatTurnIdleTimeoutMin: number
+  // One inactivity window for every turn kind (chat, spawn, schedule, automation);
+  // the queue's outer backstop is twice this.
+  turnIdleTimeoutMin: number
   codexStdoutIdleSec: number
   idleResumeMax: number
-  turnIdleWatchdogMin: number
 
   // Tool execution guards (process-global tool behaviour).
   shellDefaultTimeoutSec: number
@@ -133,12 +128,8 @@ export interface AppSettings {
   backupDir: string // "" → <dataDir>/backups
 }
 
-// Partial update. claudeCliAuthToken is write-only: "" clears, non-empty sets.
-export type SettingsPatch = Partial<
-  Omit<AppSettings, 'claudeCliAuthSet'> & {
-    claudeCliAuthToken: string // write-only: "" clears, non-empty stores
-  }
->
+// Partial update.
+export type SettingsPatch = Partial<AppSettings>
 
 // Live backup subsystem status (GET /api/backups). Mirrors backup.Status.
 export interface BackupStatus {

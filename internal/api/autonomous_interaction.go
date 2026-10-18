@@ -56,7 +56,7 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// The background turn's idle tracker (installed by runTurnWithIdleResume
 		// before this hook runs): bridged calls report into it, and the run's
 		// activity info shows its real window.
-		run.setActivityTracker(agent.ActivityTrackerFrom(ctx), s.tun.SpawnIdleTimeout())
+		run.setActivityTracker(agent.ActivityTrackerFrom(ctx), s.tun.TurnIdleTimeout())
 
 		// A turn with no session id is a degraded turn: every session-scoped sink
 		// below is skipped, so artifacts/notify/focus_view/update_session/

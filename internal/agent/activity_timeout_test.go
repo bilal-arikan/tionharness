@@ -250,13 +250,13 @@ func TestActivityStopIsConcurrentAndIdempotent(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSpawnIdleTimeoutTunable(t *testing.T) {
+func TestTurnIdleTimeoutTunable(t *testing.T) {
 	var tun Tunables
-	if got := tun.SpawnIdleTimeout(); got != time.Duration(DefaultSpawnIdleTimeoutMinutes)*time.Minute {
+	if got := tun.TurnIdleTimeout(); got != time.Duration(DefaultTurnIdleTimeoutMinutes)*time.Minute {
 		t.Fatalf("default idle = %v", got)
 	}
-	tun.SetSpawnIdleTimeoutMinutes(12)
-	if got := tun.SpawnIdleTimeout(); got != 12*time.Minute {
+	tun.SetTurnIdleTimeoutMinutes(12)
+	if got := tun.TurnIdleTimeout(); got != 12*time.Minute {
 		t.Fatalf("override idle = %v", got)
 	}
 }

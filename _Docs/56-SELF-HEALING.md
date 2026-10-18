@@ -1,6 +1,6 @@
 # 56 — Kendi Kendini Onaran Oturum Akışları (Self-Healing)
 
-> **Not (2026-10-18):** worker/koordinatör kurtarma yolları kaldırıldı; varsayılanlar: `chatTurnIdleTimeoutMin` 3→10, `codexStdoutIdleSec` 90→300, `spawnIdleTimeoutMin` 5→10.
+> **Not (2026-10-18):** worker/koordinatör kurtarma yolları kaldırıldı; varsayılanlar: `chatTurnIdleTimeoutMin` 3→10, `codexStdoutIdleSec` 90→300, `spawnIdleTimeoutMin` 5→10. Aynı gün sohbet/spawn/kuyruk sessizlik ayarları tek `turnIdleTimeoutMin`'de (10 dk; kuyruk güvenlik ağı 2×) birleştirildi.
 
 > Durum: **Tamamlandı** (2026-07-07). İlham: external-context-agent projesinin
 > `error_classifier` / `tool_guardrails` / `message_sanitization` / stuck-loop

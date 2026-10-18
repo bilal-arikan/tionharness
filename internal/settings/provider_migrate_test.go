@@ -11,62 +11,42 @@ func findInstance(list []ProviderInstance, id string) (ProviderInstance, bool) {
 	return ProviderInstance{}, false
 }
 
-// TestMigrateFromSettings_SeedsBuiltInInstances: the boot seed derives the
-// claude-cli / codex-cli instances from the app settings. claude-cli is always
-// present (it runs keyless), codex-cli only when configured.
-func TestMigrateFromSettings_SeedsBuiltInInstances(t *testing.T) {
-	s := Settings{
-		ClaudeCLIPath:         "/usr/bin/claude",
-		ClaudeCliAuthKind:     "oauth",
-		ClaudeCliAuthTokenEnc: "enc:claude-token",
-
-		CodexCLIPath:   "/usr/bin/codex",
-		CodexConfigDir: "/home/u/.tionharness/codex-home",
+// TestEnsureSeeded_WritesDefaultCLIInstancesOnce: a fresh install starts with the
+// keyless claude-cli and codex-cli instances on their app-global homes; a store
+// whose providers.json already existed is never reseeded.
+func TestEnsureSeeded_WritesDefaultCLIInstancesOnce(t *testing.T) {
+	dir := t.TempDir()
+	store, err := OpenProviderStore(dir, testCipher{})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	instances := MigrateFromSettings(s, func(enc string) string { return enc })
-
-	wantIDs := map[string]string{ // id -> kindId
-		"claude-cli": "claude-cli",
-		"codex-cli":  "codex-cli",
+	seeded, err := store.EnsureSeeded()
+	if err != nil || !seeded {
+		t.Fatalf("first seed: seeded=%v err=%v", seeded, err)
 	}
-	if len(instances) != len(wantIDs) {
-		t.Fatalf("expected %d instances, got %d: %+v", len(wantIDs), len(instances), instances)
+	instances := store.List()
+	if len(instances) != 2 {
+		t.Fatalf("expected claude-cli + codex-cli, got %+v", instances)
 	}
-	for id, kind := range wantIDs {
+	for _, id := range []string{"claude-cli", "codex-cli"} {
 		inst, ok := findInstance(instances, id)
-		if !ok {
-			t.Fatalf("missing expected instance %q", id)
-		}
-		if inst.KindID != kind {
-			t.Fatalf("instance %q: expected kindId %q, got %q", id, kind, inst.KindID)
+		if !ok || inst.KindID != id || !inst.Enabled {
+			t.Fatalf("instance %q = %+v ok=%v", id, inst, ok)
 		}
 	}
-
-	cli, _ := findInstance(instances, "claude-cli")
-	if cli.Config["cliPath"] != "/usr/bin/claude" || cli.Config["configDir"] != defaultClaudeConfigDir() || cli.Config["authKind"] != "oauth" {
-		t.Fatalf("claude-cli config not migrated: %+v", cli.Config)
+	if codex, _ := findInstance(instances, "codex-cli"); codex.Config["configDir"] != "" {
+		t.Fatalf("codex-cli must use the app-global home, got configDir %q", codex.Config["configDir"])
 	}
-	if cli.SecretsEnc["authToken"] != "enc:claude-token" {
-		t.Fatalf("claude-cli authToken not migrated: %+v", cli.SecretsEnc)
+	if seeded, err := store.EnsureSeeded(); err != nil || seeded {
+		t.Fatalf("second seed on the same store: seeded=%v err=%v", seeded, err)
 	}
 
-	codex, _ := findInstance(instances, "codex-cli")
-	if codex.Config["cliPath"] != "/usr/bin/codex" || codex.Config["configDir"] != "/home/u/.tionharness/codex-home" {
-		t.Fatalf("codex-cli config not migrated: %+v", codex.Config)
+	reopened, err := OpenProviderStore(dir, testCipher{})
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-// TestMigrateFromSettings_EmptySettingsStillSeedClaudeCLI: a fresh install has
-// nothing configured, yet the keyless claude-cli instance must exist so the
-// first agent has a provider to run on.
-func TestMigrateFromSettings_EmptySettingsStillSeedClaudeCLI(t *testing.T) {
-	instances := MigrateFromSettings(Settings{}, func(enc string) string { return enc })
-	if len(instances) != 1 {
-		t.Fatalf("expected only claude-cli, got %+v", instances)
-	}
-	if instances[0].ID != "claude-cli" || !instances[0].Enabled {
-		t.Fatalf("unexpected seed instance: %+v", instances[0])
+	if seeded, err := reopened.EnsureSeeded(); err != nil || seeded {
+		t.Fatalf("seed over an existing providers.json: seeded=%v err=%v", seeded, err)
 	}
 }
 
@@ -77,7 +57,7 @@ func TestEnsureKindInstance_AddsOnceForMissingKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.EnsureMigrated(Settings{}, func(enc string) string { return enc }); err != nil {
+	if _, err := store.EnsureSeeded(); err != nil {
 		t.Fatal(err)
 	}
 	added, err := store.EnsureKindInstance("opencode-cli", "OpenCode CLI")
@@ -91,7 +71,7 @@ func TestEnsureKindInstance_AddsOnceForMissingKind(t *testing.T) {
 	if added, err := store.EnsureKindInstance("opencode-cli", "OpenCode CLI"); err != nil || added {
 		t.Fatalf("second call: added=%v err=%v", added, err)
 	}
-	if n := len(store.List()); n != 2 {
-		t.Fatalf("instances = %d, want claude-cli + opencode-cli", n)
+	if n := len(store.List()); n != 3 {
+		t.Fatalf("instances = %d, want claude-cli + codex-cli + opencode-cli", n)
 	}
 }
