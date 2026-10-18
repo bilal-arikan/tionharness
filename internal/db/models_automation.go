@@ -15,6 +15,8 @@ const (
 //   - TriggerCounterLegacy: message/tool count crossings (removed 2026-09-05).
 //   - TriggerTokenLegacy: cumulative token-spend threshold crossings (removed
 //     2026-10-04).
+//   - phase / trajectory_end: Rota phase gates (removed 2026-10-18).
+//   - flow: a finished flow run (removed 2026-10-18 with the flow trigger node).
 const (
 	TriggerCounterLegacy = "counter"
 	TriggerTokenLegacy   = "token"
@@ -23,7 +25,11 @@ const (
 // retiredTriggerKind reports whether k is a removed trigger kind whose stored
 // rules are skipped on load.
 func retiredTriggerKind(k string) bool {
-	return k == TriggerCounterLegacy || k == TriggerTokenLegacy
+	switch k {
+	case TriggerCounterLegacy, TriggerTokenLegacy, "phase", "trajectory_end", "flow":
+		return true
+	}
+	return false
 }
 
 // Automation session modes. An agent-backed automation either spawns a FRESH
@@ -48,8 +54,7 @@ func ValidSessionMode(mode string) bool {
 }
 
 // EffectiveSessionMode resolves the stored SessionMode to a concrete mode. An
-// explicit value wins; empty falls back to spawning a fresh session. (Meaningful
-// only for agent-backed rules; the fire path ignores it for flow-backed ones.)
+// explicit value wins; empty falls back to spawning a fresh session.
 func (a Automation) EffectiveSessionMode() string {
 	if a.SessionMode != "" {
 		return a.SessionMode
@@ -102,17 +107,16 @@ func ValidBoardAction(action string) bool {
 	}
 }
 
-// Automation is an event-driven rule that starts a NEW session whenever a
-// session carrying TriggerTag finishes a turn (StopReason end_turn). It takes
-// the finishing session's final reply as the "result", renders it into
-// PromptTemplate, and spawns TargetAgentID with the composed prompt. When the
-// spawned session itself carries TriggerTag (the default — see SpawnTags) each
-// completion re-fires the rule, forming a self-continuing loop.
+// Automation is an event-driven rule with two trigger kinds. A tag rule fires
+// whenever a session carrying TriggerTag finishes a turn: it takes the finishing
+// session's final reply as the "result", renders it into PromptTemplate, and runs
+// TargetAgentID with the composed prompt. When the spawned session itself carries
+// TriggerTag (the default — see SpawnTags) each completion re-fires the rule,
+// forming a self-continuing loop. A board rule fires on a kanban card change
+// (BoardOp/BoardFromState/BoardToState) and spawns, archives or moves the card.
 //
-// Automations are the tag-triggered complement to cron Schedules: a Schedule
-// fires on a clock, an Automation fires on a tagged session completing. They are
-// surfaced in the same Schedules screen (a separate "Automations" section) but
-// kept a distinct entity so the cron Schedule model stays clean.
+// Automations are the event-driven complement to cron Schedules and share the
+// Schedules screen, but stay a distinct entity so the Schedule model stays clean.
 //
 // Guardrails bound the loop: MaxIterations caps total fires, CooldownSec spaces
 // them out, and Enabled is the kill switch. IterationCount accumulates across the
@@ -126,14 +130,6 @@ type Automation struct {
 	// board (kanban) card changes. The board fields apply only when
 	// TriggerKind == TriggerBoard.
 	TriggerKind string `json:"triggerKind,omitempty"`
-	// Flow trigger fields (TriggerFlow, _Docs/93): FlowAgentID narrows the rule
-	// to runs of one agent's flow ("" = every agent); FlowStatus to one
-	// outcome ("" = any, FlowSuccess, FlowFailure); FlowMaxGrade (1..5) fires
-	// only for runs the decision model graded at or below it (0 = ignore the
-	// grade).
-	FlowAgentID  string `json:"flowAgentId,omitempty"`
-	FlowStatus   string `json:"flowStatus,omitempty"`
-	FlowMaxGrade int    `json:"flowMaxGrade,omitempty"`
 	// TriggerTag is the session tag this rule watches (TriggerTag kind). A
 	// finishing session whose Tags contain TriggerTag fires the rule.
 	TriggerTag string `json:"triggerTag"`
@@ -219,11 +215,4 @@ type Automation struct {
 	CreatedBy string `json:"createdBy,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
-
-	// Seed is the stable identity of a built-in default automation provisioned by
-	// EnsureDefaultAutomations. Empty for user/agent-created automations. It
-	// is used both to skip re-seeding an existing default and to record it in the
-	// deletion ledger so a user-deleted default is never resurrected (mirrors
-	// Flow.Seed).
-	Seed string `json:"seed,omitempty"`
 }

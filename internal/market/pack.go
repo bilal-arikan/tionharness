@@ -233,21 +233,20 @@ type WorkspaceTemplateSchedule struct {
 }
 
 // WorkspaceTemplateAutomation is a starter automation rule. Like a template flow
-// it references its agent by AgentKey (a WorkspaceTemplateAgent.Key) and its flow
-// by FlowName rather than by id, so the rule is portable; both are resolved
-// against the freshly seeded team at install time and a rule whose reference does
-// not resolve is skipped rather than seeded broken.
+// it references its agent by AgentKey (a WorkspaceTemplateAgent.Key) rather than
+// by id, so the rule is portable; the key is resolved against the freshly seeded
+// team at install time and a rule whose reference does not resolve is skipped
+// rather than seeded broken.
 //
-// It is disabled by default, exactly like WorkspaceTemplateSchedule and the
-// built-in board automations. A template may explicitly enable rules that are
-// part of its advertised runtime behavior.
+// It is disabled by default, exactly like WorkspaceTemplateSchedule. A template
+// may explicitly enable rules that are part of its advertised runtime behavior.
 //
 // Mirrors the portable subset of db.Automation. Runtime bookkeeping (iteration
 // count, last fired…) and ExpiresAt (an absolute timestamp, meaningless once
 // shared) are deliberately absent.
 type WorkspaceTemplateAutomation struct {
 	Name string `json:"name"`
-	// TriggerKind: "tag" | "board" | ... ("" = tag; see db.TriggerKinds).
+	// TriggerKind: "tag" | "board" ("" = tag; see db.TriggerKinds).
 	TriggerKind string `json:"triggerKind,omitempty"`
 	TriggerTag  string `json:"triggerTag,omitempty"`
 
@@ -259,8 +258,8 @@ type WorkspaceTemplateAutomation struct {
 	BoardExclusive bool   `json:"boardExclusive,omitempty"`
 	BoardAction    string `json:"boardAction,omitempty"` // "spawn" | "archive" | "move"
 
-	// Target: an agent (by template key). A rule
-	// leaves AgentKey empty. An archive-action board rule needs neither.
+	// Target: an agent (by template key). An archive-action board rule leaves
+	// AgentKey empty.
 	AgentKey string `json:"agentKey,omitempty"`
 
 	SessionMode    string   `json:"sessionMode,omitempty"` // "spawn" | "continue"

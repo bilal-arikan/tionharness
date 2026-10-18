@@ -1,6 +1,12 @@
 # 46 — Etiketler + Etiket/Pano-Tetikleyicili Otomasyonlar
 
-> **Not (2026-10-18):** Rota otomasyon tetikleri (`phase` / `trajectory_end`) kaldırıldı; otomasyon türleri tag/board/flow'dur.
+> **Not (2026-10-18):** Otomasyon türleri yalnız **tag** ve **board**'dur. Rota tetikleri
+> (`phase` / `trajectory_end`) ve `flow` türü (akış koşusu bitince ateşlenen kural) ile akışın
+> `trigger` düğümü kaldırıldı; bu türlerle kalmış kurallar yüklenirken atlanır. Varsayılan
+> otomasyon tohumlama (`EnsureDefaultAutomations`, `.seeded-automations.json`) ve boş
+> şablonun PM pano kuralları + "CEO board heartbeat" zamanlaması da kaldırıldı. `spawnTags: []`
+> artık korunur (döngüyü kırar; eskiden `nil`'e indirgenip `[triggerTag]` olarak varsayılıyordu).
+> Aşağıdaki flow/FlowID/tohum anlatımları tarihseldir.
 
 > Durum: **Uygulandı + canlı doğrulandı** (2026-07-02/03, WS2, sonnet/claude-cli).
 > Pano (kart) tetikleyicisi eklendi 2026-07-06.

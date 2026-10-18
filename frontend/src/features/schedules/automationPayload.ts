@@ -1,10 +1,4 @@
-import type {
-  AutomationTriggerKind,
-  BoardAction,
-  BoardOp,
-  FlowRuleStatus,
-  SessionMode,
-} from '@/types'
+import type { AutomationTriggerKind, BoardAction, BoardOp, SessionMode } from '@/types'
 import { DEFAULT_MAX_ITERATIONS } from './automationMeta'
 import { localInputToUnix } from './timeUtils'
 
@@ -19,9 +13,6 @@ export interface AutomationPayloadInput {
   boardExclusive: boolean
   boardAction: BoardAction
   boardMoveToState: string
-  flowAgentId: string
-  flowStatus: FlowRuleStatus
-  flowMaxGrade: number
   targetAgentId: string
   sessionMode: SessionMode
   promptTemplate: string
@@ -44,13 +35,7 @@ export function buildAutomationPayload(input: AutomationPayloadInput) {
         boardAction: input.boardAction,
         boardMoveToState: input.boardMoveToState,
       }
-    : input.kind === 'flow'
-      ? {
-          flowAgentId: input.flowAgentId.trim(),
-          flowStatus: input.flowStatus,
-          flowMaxGrade: input.flowMaxGrade,
-        }
-      : { triggerTag: input.triggerTag.trim() }
+    : { triggerTag: input.triggerTag.trim() }
   const target = isTargetlessAction ? { targetAgentId: '' } : { targetAgentId: input.targetAgentId }
 
   return {

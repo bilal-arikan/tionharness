@@ -18,9 +18,6 @@ func TestLaunchRun_ValidatesTarget(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "target agent gone") {
 		t.Fatalf("spec should fail on the session path, got res=%+v err=%v", res, err)
 	}
-	if res.Driver != "session" {
-		t.Errorf("expected driver=session, got %q", res.Driver)
-	}
 }
 
 // TestLaunchRun_PauseGate verifies the shared launchGate: while the workspace
@@ -35,9 +32,6 @@ func TestLaunchRun_PauseGate(t *testing.T) {
 	res, err := rt.LaunchRun(ctx, RunSpec{Trigger: TriggerSchedule, AgentID: "AGT-nope", Input: "x", Autonomous: true})
 	if !errors.Is(err, ErrAutonomyPaused) {
 		t.Fatalf("paused autonomous launch should return ErrAutonomyPaused, got res=%+v err=%v", res, err)
-	}
-	if res.Driver != "session" {
-		t.Errorf("expected driver=session on the refusal, got %q", res.Driver)
 	}
 
 	_, err = rt.LaunchRun(ctx, RunSpec{Trigger: TriggerManual, AgentID: "AGT-nope", Input: "x", Autonomous: false})

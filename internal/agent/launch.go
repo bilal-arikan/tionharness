@@ -17,10 +17,6 @@ const (
 	TriggerSchedule        RunTrigger = "schedule"
 	TriggerAutomationTag   RunTrigger = "automation:tag"
 	TriggerAutomationBoard RunTrigger = "automation:board"
-	// Flows (_Docs/93): a flow run finished (flow-kind automation), or a
-	// trigger node inside a run fired an automation of any kind.
-	TriggerAutomationFlow RunTrigger = "automation:flow"
-	TriggerFlowNode       RunTrigger = "flow:node"
 )
 
 // RunSpec describes a spawned-session run to launch. Trigger records the
@@ -41,7 +37,6 @@ type RunSpec struct {
 
 // LaunchResult is the outcome of a launch: the session it produced.
 type LaunchResult struct {
-	Driver    string // always "session"
 	SessionID string
 }
 
@@ -62,17 +57,16 @@ type LaunchResult struct {
 // the lifecycle itself stays per-caller by design (folding it would need a
 // dozen-knob runner that reads worse than the callers).
 func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, error) {
-	driver := launchDriver(spec)
-	if err := r.launchGate(spec, driver); err != nil {
-		return LaunchResult{Driver: driver}, err
+	if err := r.launchGate(spec); err != nil {
+		return LaunchResult{}, err
 	}
 	if spec.IdempotencyKey != "" {
 		if session, err := r.db.GetSessionByDispatchKey(ctx, spec.IdempotencyKey); err == nil {
-			return LaunchResult{Driver: "session", SessionID: session.ID}, nil
+			return LaunchResult{SessionID: session.ID}, nil
 		}
 	}
 	if _, err := r.db.GetAgent(ctx, spec.AgentID); err != nil {
-		return LaunchResult{Driver: "session"}, fmt.Errorf("target agent gone: %w", err)
+		return LaunchResult{}, fmt.Errorf("target agent gone: %w", err)
 	}
 	spec.Spawn.NoQueue = true
 	spec.Spawn.IdempotencyKey = spec.IdempotencyKey
@@ -81,14 +75,10 @@ func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, er
 	}
 	res, err := r.SpawnSession(ctx, spec.AgentID, spec.Input, spec.Spawn)
 	if err != nil {
-		return LaunchResult{Driver: "session"}, fmt.Errorf("spawn failed: %w", err)
+		return LaunchResult{}, fmt.Errorf("spawn failed: %w", err)
 	}
-	return LaunchResult{Driver: "session", SessionID: res.SessionID}, nil
+	return LaunchResult{SessionID: res.SessionID}, nil
 }
-
-// launchDriver reports the driver label a spec routes to, for gating and result
-// labeling before the dispatch runs. Only the session driver remains.
-func launchDriver(RunSpec) string { return "session" }
 
 // launchGate is the single pre-dispatch gate every fresh triggered run passes
 // through — the unified-Run (Model C) choke point the doc reserved on LaunchRun.
@@ -96,14 +86,14 @@ func launchDriver(RunSpec) string { return "session" }
 // is spawned, so a paused workspace never creates a session that would
 // only fail at its first provider call (guardedComplete gates there too, but only
 // after the junk row already exists). Manual launches bypass the brake. It also
-// stamps one launch-telemetry line per run (trigger, driver, autonomous). Per-
+// stamps one launch-telemetry line per run (trigger, autonomous). Per-
 // launcher guards (cooldown, iteration caps) still run in the caller beforehand.
-func (r *Runtime) launchGate(spec RunSpec, driver string) error {
+func (r *Runtime) launchGate(spec RunSpec) error {
 	if spec.Autonomous && r.Paused() {
 		return ErrAutonomyPaused
 	}
 	r.logger.Info("launch",
-		"trigger", spec.Trigger, "driver", driver, "autonomous", spec.Autonomous,
+		"trigger", spec.Trigger, "autonomous", spec.Autonomous,
 		"agent", spec.AgentID)
 	return nil
 }

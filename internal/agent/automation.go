@@ -61,8 +61,8 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 		return
 	}
 	for _, a := range autos {
-		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerFlow {
-			continue // board/flow automations react to their own events, not turns
+		if a.TriggerKind == db.TriggerBoard {
+			continue // board automations react to card changes, not turns
 		}
 		if a.TriggerTag == "" || !containsTag(sess.Tags, a.TriggerTag) {
 			continue
@@ -101,29 +101,27 @@ func (e *AutomationEngine) OnBoardChange(ctx context.Context, ev db.BoardChangeE
 }
 
 // dispatchFire runs an automation's rendered prompt against its target, choosing
-// the session strategy from EffectiveSessionMode. Three routes, checked in order:
-//   - continue    → reuse the persistent per-automation thread (deliverAutomationTurn,
+// the session strategy from EffectiveSessionMode. Two routes:
+//   - continue → reuse the persistent per-automation thread (deliverAutomationTurn,
 //     history-aware). It bypasses LaunchRun's launch brake, so the workspace
 //     autonomy pause is honored here instead; SpawnOptions are ignored (no fresh
 //     session to tag/parent);
-//   - spawn        → LaunchRun spawns a FRESH session with the caller's SpawnOptions.
+//   - spawn    → LaunchRun spawns a FRESH session with the caller's SpawnOptions.
 //
-// Returns the fired session id and a driver label ("session"). Shared by
-// every fire path so the mode choice lives in one place.
-func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, prompt string, trigger RunTrigger, spawn SpawnOptions) (sessionID, driver string, err error) {
-	// Lineage: whichever driver runs, the session it produces was started by THIS
-	// automation, tripped (for a session-scoped trigger) by the session the caller
-	// put in ParentSessionID; the session driver stamps it on the spawn.
+// Returns the fired session id. Shared by every fire path so the mode choice
+// lives in one place.
+func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, prompt string, trigger RunTrigger, spawn SpawnOptions) (sessionID string, err error) {
+	// Lineage: either route's session was started by THIS automation, tripped (for
+	// a session-scoped trigger) by the session the caller put in ParentSessionID.
 	origin := &db.SessionOrigin{Kind: db.OriginAutomation, EntityID: a.ID, TriggerSessionID: spawn.ParentSessionID}
 	if spawn.Origin == nil {
 		spawn.Origin = origin
 	}
 	if a.EffectiveSessionMode() == db.SessionModeContinue {
 		if e.rt.Paused() {
-			return "", "session", ErrAutonomyPaused
+			return "", ErrAutonomyPaused
 		}
-		sid, derr := e.rt.deliverAutomationTurn(ctx, a, prompt)
-		return sid, "session", derr
+		return e.rt.deliverAutomationTurn(ctx, a, prompt)
 	}
 	// A one-shot automation fire (session mode != continue) still opens a NEW
 	// session via SpawnSession, whose default Kind is "spawned" — landing under the
@@ -139,7 +137,7 @@ func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, pr
 		AgentID:    a.TargetAgentID,
 		Spawn:      spawn,
 	})
-	return res.SessionID, res.Driver, serr
+	return res.SessionID, serr
 }
 
 // notifyFired records a successful fire and publishes the standard success event.
@@ -156,7 +154,7 @@ func (e *AutomationEngine) notifyFired(ctx context.Context, a db.Automation, ses
 	}); err != nil {
 		e.logger.Warn("automation: ledger append failed", "automation", a.ID, "error", err)
 	}
-	e.rt.emitAutomationFire(a, db.AutomationFireFired, "", sessionID, "")
+	e.rt.emitAutomationFire(a, db.AutomationFireFired, "", sessionID)
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "success",
@@ -290,7 +288,7 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 	// board fire does not tag its spawned session — board rules match on card
 	// changes, not tags, so there is no self-loop to seed. (Ignored on the
 	// continue driver.)
-	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationBoard, SpawnOptions{
+	firedSessionID, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationBoard, SpawnOptions{
 		Title:     "🗂 " + automationLabel(a),
 		CreatedBy: "automation:" + a.ID,
 		Tags:      a.SpawnTags,
@@ -302,7 +300,7 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 	suffix := " (pano)"
 	e.logger.Info("automation: fired (board)",
 		"automation", a.ID, "op", ev.Op, "task", ev.TaskID,
-		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
+		"session", firedSessionID, "iteration", a.IterationCount+1)
 	e.notifyFired(ctx, a, firedSessionID, "🗂", suffix, prompt)
 }
 
@@ -330,7 +328,7 @@ func (e *AutomationEngine) recordSkip(ctx context.Context, a db.Automation, reas
 	}); err != nil {
 		e.logger.Warn("automation: ledger append failed", "automation", a.ID, "error", err)
 	}
-	e.rt.emitAutomationFire(a, db.AutomationFireSkipped, reason, "", "")
+	e.rt.emitAutomationFire(a, db.AutomationFireSkipped, reason, "")
 }
 
 // guardReason evaluates the guard chain and returns the skip reason ("" =
@@ -458,7 +456,7 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 	// persistent per-automation thread. In continue mode the spawn-only options
 	// (parent link, loop tags) are ignored — the maintenance thread carries no
 	// trigger tag, so the tag self-loop is not seeded.
-	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationTag, SpawnOptions{
+	firedSessionID, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationTag, SpawnOptions{
 		Title:                    "🔁 " + automationLabel(a),
 		CreatedBy:                "automation:" + a.ID,
 		ParentSessionID:          sess.ID,
@@ -473,7 +471,7 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 	suffix := ""
 	e.logger.Info("automation: fired",
 		"automation", a.ID, "tag", a.TriggerTag, "from", sess.ID,
-		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
+		"session", firedSessionID, "iteration", a.IterationCount+1)
 	e.notifyFired(ctx, a, firedSessionID, "🔁", suffix, prompt)
 }
 
@@ -491,7 +489,7 @@ func (e *AutomationEngine) recordFailure(ctx context.Context, a db.Automation, m
 	}); err != nil {
 		e.logger.Warn("automation: ledger append failed", "automation", a.ID, "error", err)
 	}
-	e.rt.emitAutomationFire(a, db.AutomationFireFailed, msg, "", "")
+	e.rt.emitAutomationFire(a, db.AutomationFireFailed, msg, "")
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "error",
@@ -593,15 +591,6 @@ func automationTrigger(a db.Automation) string {
 			op = db.BoardOpMove
 		}
 		return "board:" + op
-	case db.TriggerFlow:
-		ag, st := a.FlowAgentID, a.FlowStatus
-		if ag == "" {
-			ag = "*"
-		}
-		if st == "" {
-			st = "*"
-		}
-		return "flow:" + ag + ":" + st
 	}
 	return "tag:" + a.TriggerTag
 }

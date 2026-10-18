@@ -122,14 +122,13 @@ func (r *Runtime) emitScheduleArmed(sc db.Schedule, fireAt int64) {
 // Outcome is "fired" today; the trigger registry (_Docs/77 R5) adds "skipped"
 // with a Reason (cooldown, max_iterations, expired, disabled, autonomy_paused).
 type AutomationFirePayload struct {
-	AutomationID     string `json:"automationId"`
-	Name             string `json:"name,omitempty"`
-	TriggerKind      string `json:"triggerKind"`
-	Outcome          string `json:"outcome"`
-	Reason           string `json:"reason,omitempty"`
-	SessionID        string `json:"sessionId,omitempty"` // produced session (fired)
-	TriggerSessionID string `json:"triggerSessionId,omitempty"`
-	IterationCount   int    `json:"iterationCount,omitempty"`
+	AutomationID   string `json:"automationId"`
+	Name           string `json:"name,omitempty"`
+	TriggerKind    string `json:"triggerKind"`
+	Outcome        string `json:"outcome"`
+	Reason         string `json:"reason,omitempty"`
+	SessionID      string `json:"sessionId,omitempty"` // produced session (fired)
+	IterationCount int    `json:"iterationCount,omitempty"`
 }
 
 // automationTriggerKind resolves the legacy empty TriggerKind to its meaning (tag).
@@ -141,12 +140,12 @@ func automationTriggerKind(a db.Automation) string {
 }
 
 // emitAutomationFire publishes one automation fire outcome.
-func (r *Runtime) emitAutomationFire(a db.Automation, outcome, reason, sessionID, triggerSessionID string) {
+func (r *Runtime) emitAutomationFire(a db.Automation, outcome, reason, sessionID string) {
 	r.emitWorkspaceEvent(events.TypeWSAutomationFire,
 		map[string]string{"automationId": a.ID, "sessionId": sessionID, "outcome": outcome},
 		AutomationFirePayload{
 			AutomationID: a.ID, Name: a.Name, TriggerKind: automationTriggerKind(a), Outcome: outcome,
-			Reason: reason, SessionID: sessionID, TriggerSessionID: triggerSessionID,
+			Reason: reason, SessionID: sessionID,
 			IterationCount: a.IterationCount,
 		})
 }

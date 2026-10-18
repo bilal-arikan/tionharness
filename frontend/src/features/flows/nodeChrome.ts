@@ -1,5 +1,5 @@
 // Per-type look of a flow node: icon, accent and the i18n label key.
-import { Bot, GitBranch, Play, Puzzle, Square, Zap, type LucideIcon } from 'lucide-react'
+import { Bot, GitBranch, Play, Puzzle, Square, type LucideIcon } from 'lucide-react'
 import type { FlowNodeType } from '@/types'
 import type { NodeStatus } from './flowGraph'
 
@@ -13,12 +13,10 @@ export const NODE_CHROME: Record<FlowNodeType, NodeChrome> = {
   llm: { Icon: Bot, accent: 'var(--color-accent)' },
   route: { Icon: GitBranch, accent: 'var(--color-warning)' },
   transform: { Icon: Puzzle, accent: 'var(--color-info)' },
-  // The automations screen's tag-lane purple, so a trigger reads as "an automation".
-  trigger: { Icon: Zap, accent: '#8b5cf6' },
   output: { Icon: Square, accent: 'var(--color-success)' },
 }
 
-export const ADDABLE_TYPES: FlowNodeType[] = ['llm', 'route', 'transform', 'trigger']
+export const ADDABLE_TYPES: FlowNodeType[] = ['llm', 'route', 'transform']
 
 export function statusRing(status?: NodeStatus): string {
   switch (status) {

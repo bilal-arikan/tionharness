@@ -194,9 +194,9 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
     }
   }
 
-  // Automation fires mark the lane they were triggered from (or produced).
+  // Automation fires mark the lane of the session they produced.
   for (const f of state.fires) {
-    const rowId = pickRow(rowById, f.triggerSessionId, f.sessionId)
+    const rowId = pickRow(rowById, f.sessionId)
     if (!rowId) continue
     marks.push({
       id: 'fire:' + f.seq,

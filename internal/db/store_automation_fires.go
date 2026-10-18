@@ -29,30 +29,24 @@ const (
 
 // Skip reasons written by the engine's guard chain.
 const (
-	AutomationSkipArchived       = "archived"
-	AutomationSkipDisabled       = "disabled"
-	AutomationSkipExpired        = "expired"
-	AutomationSkipCooldown       = "cooldown"
-	AutomationSkipMaxIterations  = "max_iterations"
-	AutomationSkipBackstop       = "absolute_backstop"
-	AutomationSkipAutonomyPaused = "autonomy_paused"
-	AutomationSkipTargetMissing  = "target_missing"
+	AutomationSkipArchived      = "archived"
+	AutomationSkipExpired       = "expired"
+	AutomationSkipCooldown      = "cooldown"
+	AutomationSkipMaxIterations = "max_iterations"
+	AutomationSkipBackstop      = "absolute_backstop"
 	// AutomationSkipAgentArchived: the rule's target agent is archived and
 	// archived agents never run (Agent.RunnableErr).
 	AutomationSkipAgentArchived = "agent_archived"
-	AutomationSkipEmptyPrompt   = "empty_prompt"
 )
 
 // AutomationFireRecord is one ledger line.
 type AutomationFireRecord struct {
-	At               int64  `json:"at"`
-	Outcome          string `json:"outcome"`
-	Reason           string `json:"reason,omitempty"`
-	TriggerKind      string `json:"triggerKind,omitempty"`
-	TriggerSessionID string `json:"triggerSessionId,omitempty"`
-	// SessionID is the session (or flow transcript session) the fire produced.
+	At          int64  `json:"at"`
+	Outcome     string `json:"outcome"`
+	Reason      string `json:"reason,omitempty"`
+	TriggerKind string `json:"triggerKind,omitempty"`
+	// SessionID is the session the fire produced.
 	SessionID string `json:"sessionId,omitempty"`
-	Driver    string `json:"driver,omitempty"` // session | flow
 	Error     string `json:"error,omitempty"`
 	// Iteration is the rule's IterationCount after this attempt.
 	Iteration int `json:"iteration,omitempty"`

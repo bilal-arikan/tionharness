@@ -520,6 +520,8 @@ graph LR
    sözleşme: düz bir workspace'te sürpriz maliyet/mutasyon olmasın. Açmak için **Otomasyon**
    ekranı ▸ 🏷 Etiket otomasyonları şeridi ▸ ilgili kartın aç-kapa düğmesi. Kullanıcı kuralı
    silerse `.seeded-automations.json` defteri sayesinde bir sonraki açılışta **dirilmez**.
+   **(2026-10-18):** varsayılan otomasyon tohumlama kaldırıldı; bu kural artık kendiliğinden
+   eklenmez. İsteyen `insight-scan` etiketine bağlı bir etiket otomasyonunu elle kurar.
 4. **`insight-applier`'ın izin sınırı bir güvenlik sözleşmesidir.** Yalnız `channel:workspace-opt`
    + `status:new` bulguları uygular, `app-fix` kanalına dokunmaz, uyguladığını
    `insight_apply_finding` ile `applied` işaretler. `AllowedTools` yedi giriş taşır

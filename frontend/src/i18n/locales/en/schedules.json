@@ -3,8 +3,6 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "agent": "Agent",
-    "flow": "Flow",
-    "selectFlow": "Select a flow…",
     "loading": "Loading…",
     "close": "Close",
     "delete": "Delete",
@@ -44,13 +42,11 @@
   },
   "triggerKinds": {
     "tag": "Tag",
-    "board": "Board",
-    "flow": "Flow run"
+    "board": "Board"
   },
   "automationKinds": {
     "tag": "tag automation",
-    "board": "board automation",
-    "flow": "flow-run automation"
+    "board": "board automation"
   },
   "fires": {
     "title": "Fire ledger: every attempt (fired / skipped with a reason / failed)",
@@ -60,15 +56,11 @@
   },
   "fireReasons": {
     "archived": "archived",
-    "disabled": "disabled",
     "expired": "expired",
     "cooldown": "cooldown",
     "maxIterations": "iteration limit",
     "absoluteBackstop": "absolute limit",
-    "autonomyPaused": "autonomy paused",
-    "targetMissing": "target missing",
-    "agentArchived": "target agent archived",
-    "emptyPrompt": "empty prompt"
+    "agentArchived": "target agent archived"
   },
   "board": {
     "runFailed": "Run failed: {{error}}",
@@ -108,12 +100,6 @@
       "description": "Runs with card context when a kanban card is moved, created, or changed.",
       "add": "New board automation",
       "empty": "No board automations yet."
-    },
-    "flow": {
-      "title": "Flow-run automations",
-      "description": "Runs when an agent's flow run finishes (success, failure or a low grade) with the reply and run context; trigger nodes inside flows can also fire automations of any kind.",
-      "add": "New flow automation",
-      "empty": "No flow automations yet."
     }
   },
   "fields": {
@@ -134,23 +120,12 @@
       "priorityHint": "Fire order among automations watching the same card change. Lower numbers run first.",
       "exclusive": "Exclusive",
       "exclusiveHint": "This automation exclusively owns a matching card change and suppresses every other matching board automation."
-    },
-    "flow": {
-      "agent": "Agent",
-      "agentHint": "Only this agent's flow runs. Empty matches every agent.",
-      "anyAgent": "any agent",
-      "status": "Outcome",
-      "maxGrade": "Grade",
-      "maxGradeHint": "Only runs the decision model (flow-grade authority) graded at or below this. With grading off nothing matches.",
-      "ignoreGrade": "ignore grade",
-      "gradeAtMost": "at most {{n}}/5"
     }
   },
   "form": {
     "deleteRule": "Delete this rule"
   },
   "scheduleCard": {
-    "flowBased": "Flow-based schedule",
     "oneShotAt": "One time · {{time}}",
     "next": "Next",
     "last": "Last",
@@ -162,13 +137,11 @@
   },
   "validation": {
     "cronRequired": "Cron expression is required",
-    "flowRequired": "Select a flow",
     "agentRequired": "Agent is required",
     "promptRequired": "Prompt is required",
     "expiryFuture": "Expiration must be in the future",
     "triggerTagRequired": "Trigger tag is required; an empty tag never fires",
     "moveTargetRequired": "Target column is required for a move",
-    "targetFlowRequired": "Target flow is required",
     "targetAgentRequired": "Target agent is required",
     "promptTemplateRequired": "Prompt template is required"
   },
@@ -191,14 +164,12 @@
     "cronHint": "Choose a preset or enter an expression.",
     "selectPreset": "Choose a preset…",
     "cronPlaceholder": "cron: min hour day month weekday",
-    "flowInputOptional": "Flow input (optional)",
     "promptRequired": "Prompt (required)",
     "promptPlaceholder": "Instruction to send to the agent",
     "expiryHint": "The schedule will not run after this time."
   },
   "automationCard": {
     "targetlessBoardAction": "Targetless board action — no LLM call",
-    "flowBased": "Flow-based automation",
     "boardTriggered": "Board card-triggered automation",
     "archivesCard": "Archives the card without an LLM call",
     "movesCard": "Moves the card to the target column without an LLM call",
@@ -219,12 +190,8 @@
     "cooldownSecondsValue": "Cooldown: {{seconds}}s",
     "last": "Last",
     "boardNoLoop": "Board-triggered — cannot loop itself (spawn tags are ignored).",
-    "flowNoLoop": "Flow-based — cannot loop itself (spawn tags are ignored).",
     "spawnTags": "Spawn tags",
-    "spawnTagsPlaceholder": "leave empty to break the loop",
-    "flowTriggered": "Flow-run automation — runs when a flow run finishes",
-    "flowSummary": "{{agent}} · {{status}}",
-    "flowGrade": "grade ≤ {{n}}"
+    "spawnTagsPlaceholder": "leave empty to break the loop"
   },
   "automationModal": {
     "updated": "Automation updated",
@@ -368,34 +335,7 @@
         "date": "Current date",
         "time": "Current time",
         "datetime": "Current date and time"
-      },
-      "flow": {
-        "result": "The trigger node's payload, else the run's reply (the error text when it failed)",
-        "input": "The run's input (user message)",
-        "output": "The run's reply",
-        "error": "Error text (failed run)",
-        "status": "success / failure",
-        "grade": "The decision model's grade (1–5), empty when not graded",
-        "runId": "Run id (RUN…)",
-        "flowId": "Flow id (FLW…)",
-        "flowName": "Flow name",
-        "version": "Flow version the run used",
-        "agent": "Name of the agent that owns the flow",
-        "agentId": "Id of the agent that owns the flow",
-        "sessionId": "Session the run belonged to",
-        "nodeId": "Triggering node (flow-node fires only)",
-        "iteration": "One-based fire number",
-        "maxIterations": "Cap; zero means unlimited on legacy rows",
-        "automation": "Automation name",
-        "date": "Current date",
-        "time": "Current time",
-        "datetime": "Current date and time"
       }
-    },
-    "flowStatuses": {
-      "any": "any outcome",
-      "success": "success",
-      "failure": "failure"
     }
   }
 }

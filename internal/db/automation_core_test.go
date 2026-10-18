@@ -41,10 +41,6 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 		{"retired counter kind", func(a *Automation) { a.TriggerKind = TriggerCounterLegacy }, "unknown triggerKind"},
 		{"retired token kind", func(a *Automation) { a.TriggerKind = TriggerTokenLegacy }, "unknown triggerKind"},
 		{"unknown kind", func(a *Automation) { a.TriggerKind = "teleport"; a.TriggerTag = "x" }, "unknown triggerKind"},
-		{"flow rule ok", func(a *Automation) { a.TriggerKind, a.FlowStatus, a.FlowMaxGrade = TriggerFlow, FlowFailure, 2 }, ""},
-		{"flow rule any outcome ok", func(a *Automation) { a.TriggerKind = TriggerFlow }, ""},
-		{"flow rule bad status", func(a *Automation) { a.TriggerKind, a.FlowStatus = TriggerFlow, "running" }, "flowStatus"},
-		{"flow rule bad grade", func(a *Automation) { a.TriggerKind, a.FlowMaxGrade = TriggerFlow, 9 }, "flowMaxGrade"},
 		{"common: target required", func(a *Automation) { a.TriggerTag = "x"; a.TargetAgentID = "" }, "targetAgentId is required"},
 	}
 	for _, tc := range cases {
@@ -63,7 +59,7 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 			}
 		})
 	}
-	if ValidTriggerKind("teleport") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) || !ValidTriggerKind(TriggerFlow) {
+	if ValidTriggerKind("teleport") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) || ValidTriggerKind("flow") {
 		t.Fatal("ValidTriggerKind mismatch")
 	}
 }

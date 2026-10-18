@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
@@ -80,7 +79,7 @@ func TestBundledTemplatePacksIntegrity(t *testing.T) {
 	}
 }
 
-func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
+func TestBlankTemplateSeedsCEOAndPM(t *testing.T) {
 	store := market.New("", "")
 	pack, ok := store.Get(blankTemplateID)
 	if !ok {
@@ -160,34 +159,10 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 		}
 	}
 
-	if len(wp.Schedules) != 1 {
-		t.Fatalf("blank template schedules = %d, want 1", len(wp.Schedules))
-	}
-	schedule := wp.Schedules[0]
-	if schedule.AgentKey != "ceo" || schedule.CronExpr != "7 * * * *" || !schedule.Enabled {
-		t.Errorf("unexpected CEO schedule: %+v", schedule)
-	}
-
-	wantStates := map[string]bool{"failed": false, "review": false}
-	for _, automation := range wp.Automations {
-		if _, wanted := wantStates[automation.BoardToState]; !wanted {
-			continue
-		}
-		if automation.TriggerKind != db.TriggerBoard || automation.BoardOp != db.BoardOpMove ||
-			automation.AgentKey != "pm" || automation.SessionMode != db.SessionModeContinue || !automation.Enabled {
-			t.Errorf("unexpected PM automation: %+v", automation)
-			continue
-		}
-		if strings.TrimSpace(automation.PromptTemplate) == "" ||
-			!strings.Contains(automation.PromptTemplate, "{{taskId}}") ||
-			!strings.Contains(automation.PromptTemplate, "{{title}}") {
-			t.Errorf("PM automation for %q has invalid promptTemplate %q", automation.BoardToState, automation.PromptTemplate)
-		}
-		wantStates[automation.BoardToState] = true
-	}
-	for state, found := range wantStates {
-		if !found {
-			t.Errorf("blank template has no enabled PM automation for %q", state)
-		}
+	// The blank template starts quiet: no schedule or automation drives the CEO
+	// or PM until the user adds one (the heartbeat and PM board rules were
+	// removed on 2026-10-18).
+	if len(wp.Schedules) != 0 || len(wp.Automations) != 0 {
+		t.Errorf("blank template ships schedules=%d automations=%d, want none", len(wp.Schedules), len(wp.Automations))
 	}
 }

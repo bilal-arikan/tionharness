@@ -12,7 +12,6 @@ export interface FlowNodeData extends Record<string, unknown> {
   // Where a route node's outgoing arms go (label → target id), for the card body.
   arms?: { when: string; to: string }[]
   agentName?: string
-  automationName?: string
 }
 
 export type FlowRFNode = Node<FlowNodeData, 'flow'>
@@ -83,8 +82,6 @@ export function defaultNode(type: FlowNodeType, id: string, title: string): Flow
     case 'route':
       return { id, type, title, mode: 'contains', maxVisits: 3 }
     case 'transform':
-      return { id, type, title, template: '{{last}}' }
-    case 'trigger':
       return { id, type, title, template: '{{last}}' }
     case 'output':
       return { id, type, title, template: '{{last}}' }
@@ -163,7 +160,6 @@ export function toReactFlow(
   g: FlowGraph,
   statuses: Map<string, NodeStatus>,
   agentNames: Map<string, string>,
-  automationNames: Map<string, string> = new Map(),
 ): { nodes: FlowRFNode[]; edges: FlowRFEdge[] } {
   const nodes: FlowRFNode[] = g.nodes.map((n) => ({
     id: n.id,
@@ -177,7 +173,6 @@ export function toReactFlow(
           ? outgoing(g, n.id).map((e) => ({ when: e.when ?? '', to: e.to }))
           : undefined,
       agentName: n.agentId ? agentNames.get(n.agentId) : undefined,
-      automationName: n.automationId ? automationNames.get(n.automationId) : undefined,
     },
     draggable: true,
   }))
@@ -219,10 +214,7 @@ export function lint(g: FlowGraph): { key: string; params?: Record<string, unkno
   }
   for (const n of g.nodes) {
     const outs = outgoing(g, n.id).length
-    if (
-      (n.type === 'llm' || n.type === 'transform' || n.type === 'trigger' || n.type === 'input') &&
-      outs !== 1
-    ) {
+    if ((n.type === 'llm' || n.type === 'transform' || n.type === 'input') && outs !== 1) {
       out.push({ key: 'lint.oneOutgoing', params: { id: n.id, count: outs } })
     }
     if (n.type === 'route' && outs === 0) out.push({ key: 'lint.routeNoArm', params: { id: n.id } })
@@ -233,8 +225,6 @@ export function lint(g: FlowGraph): { key: string; params?: Record<string, unkno
       if (!labels.includes('pass') && !labels.includes('fail'))
         out.push({ key: 'lint.criteriaArms', params: { id: n.id } })
     }
-    if (n.type === 'trigger' && !n.automationId?.trim())
-      out.push({ key: 'lint.triggerAutomation', params: { id: n.id } })
     if (n.type === 'output' && outs !== 0)
       out.push({ key: 'lint.outputNoOutgoing', params: { id: n.id } })
     if (n.type === 'transform' && !n.template?.trim())

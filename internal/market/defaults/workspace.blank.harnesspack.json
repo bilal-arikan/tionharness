@@ -28,37 +28,6 @@
           "name": "PM",
           "soul": "You are the workspace's execution lead. Keep the project moving by managing board cards with create_task, update_task, and move_task; delegate focused work to specialist agents; launch insight scans; and run prompt, skill, automation, and flow optimization. Follow work through verification and completion. You have full tool access and should act directly whenever execution is needed."
         }
-      ],
-      "schedules": [
-        {
-          "name": "CEO board heartbeat",
-          "agentKey": "ceo",
-          "cronExpr": "7 * * * *",
-          "prompt": "Read the board with get_view{kind:\"board\"}. If any card is failed, stuck, blocked, or overdue, if the PM is idle, or if no work is progressing, start the PM with spawn_session{agent:\"PM\", prompt:\"...\"} — a new, independent PM session, never a subagent of yours (no run_subagent). Give it a self-contained prompt naming the cards and what \"done\" means. Group independent cards into separate clusters and spawn one PM session per cluster (max 4 per turn); never give the same card to two sessions. Do not perform the work yourself.",
-          "enabled": true
-        }
-      ],
-      "automations": [
-        {
-          "name": "PM handles failed cards",
-          "triggerKind": "board",
-          "boardOp": "move",
-          "boardToState": "failed",
-          "agentKey": "pm",
-          "sessionMode": "continue",
-          "promptTemplate": "Card {{taskId}} \"{{title}}\" moved to {{toLabel}} from {{fromLabel}} (priority: {{priority}}, owner: {{owner}}, tags: {{tags}}). Diagnose the failure, choose the next concrete action, and either resolve it directly or delegate it to a specialist agent. Update the card state after the work is verified.",
-          "enabled": true
-        },
-        {
-          "name": "PM handles review cards",
-          "triggerKind": "board",
-          "boardOp": "move",
-          "boardToState": "review",
-          "agentKey": "pm",
-          "sessionMode": "continue",
-          "promptTemplate": "Card {{taskId}} \"{{title}}\" moved to {{toLabel}} from {{fromLabel}} (priority: {{priority}}, owner: {{owner}}, tags: {{tags}}). Verify the completed work against its requirements, resolve or delegate any remaining issues, and approve it only when the evidence is sufficient. Update the card state to reflect the review outcome.",
-          "enabled": true
-        }
       ]
     }
   }

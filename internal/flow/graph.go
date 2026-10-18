@@ -26,7 +26,6 @@ const (
 	NodeLLM       = "llm"       // one model call (the owner agent by default)
 	NodeRoute     = "route"     // pick an outgoing edge by matching the last output
 	NodeTransform = "transform" // render a template, no model call
-	NodeTrigger   = "trigger"   // fire an automation with a rendered payload; passes the last output through
 	NodeOutput    = "output"    // the turn's reply; exactly one per graph
 )
 
@@ -100,11 +99,8 @@ type Node struct {
 	Criteria  []string `json:"criteria,omitempty"`  // criteria mode: yes/no statements the value must satisfy
 	MaxVisits int      `json:"maxVisits,omitempty"` // loop cap; 0 = DefaultMaxVisits
 
-	// trigger
-	AutomationID string `json:"automationId,omitempty"` // the automation to fire
-
-	// transform / output / trigger
-	Template string `json:"template,omitempty"` // "" on output and trigger = {{last}}
+	// transform / output
+	Template string `json:"template,omitempty"` // "" on output = {{last}}
 }
 
 // Edge connects two nodes. When is the route arm label ("" = the default arm);
@@ -162,8 +158,6 @@ func (g Graph) Normalized() Graph {
 				}
 			}
 			n.Criteria = crit
-		case NodeTrigger:
-			n.AutomationID = strings.TrimSpace(n.AutomationID)
 		}
 	}
 	for i := range g.Edges {
@@ -390,10 +384,6 @@ func (g Graph) Validate() error {
 			if strings.TrimSpace(n.Template) == "" {
 				return fmt.Errorf("node %q: transform needs a template", n.ID)
 			}
-		case NodeTrigger:
-			if n.AutomationID == "" {
-				return fmt.Errorf("node %q: trigger needs automationId", n.ID)
-			}
 		default:
 			return fmt.Errorf("node %q has unknown type %q", n.ID, n.Type)
 		}
@@ -434,7 +424,7 @@ func (g Graph) Validate() error {
 			if len(out) != 0 {
 				return fmt.Errorf("output node %q must have no outgoing edge", n.ID)
 			}
-		case NodeLLM, NodeTransform, NodeTrigger:
+		case NodeLLM, NodeTransform:
 			if len(out) != 1 {
 				return fmt.Errorf("node %q must have exactly one outgoing edge, has %d", n.ID, len(out))
 			}

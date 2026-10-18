@@ -99,9 +99,6 @@ type automationReq struct {
 	BoardExclusive   *bool    `json:"boardExclusive"`
 	BoardAction      string   `json:"boardAction"`
 	BoardMoveToState string   `json:"boardMoveToState"`
-	FlowAgentID      string   `json:"flowAgentId"`
-	FlowStatus       string   `json:"flowStatus"`
-	FlowMaxGrade     *int     `json:"flowMaxGrade"`
 	SessionMode      string   `json:"sessionMode"`
 	TargetAgentID    string   `json:"targetAgentId"`
 	PromptTemplate   string   `json:"promptTemplate"`
@@ -193,10 +190,6 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	if req.BoardExclusive != nil {
 		boardExclusive = *req.BoardExclusive
 	}
-	flowMaxGrade := 0
-	if req.FlowMaxGrade != nil {
-		flowMaxGrade = *req.FlowMaxGrade
-	}
 	auto := db.Automation{
 		Name:             strings.TrimSpace(req.Name),
 		TriggerKind:      req.TriggerKind,
@@ -208,9 +201,6 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		BoardExclusive:   boardExclusive,
 		BoardAction:      req.BoardAction,
 		BoardMoveToState: req.BoardMoveToState,
-		FlowAgentID:      strings.TrimSpace(req.FlowAgentID),
-		FlowStatus:       strings.TrimSpace(req.FlowStatus),
-		FlowMaxGrade:     flowMaxGrade,
 		SessionMode:      req.SessionMode,
 		TargetAgentID:    req.TargetAgentID,
 		PromptTemplate:   req.PromptTemplate,
@@ -265,13 +255,6 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		if k == db.TriggerBoard {
 			cur.BoardAction = strings.TrimSpace(req.BoardAction)
 			cur.BoardMoveToState = strings.TrimSpace(req.BoardMoveToState)
-		}
-		if k == db.TriggerFlow {
-			cur.FlowAgentID = strings.TrimSpace(req.FlowAgentID)
-			cur.FlowStatus = strings.TrimSpace(req.FlowStatus)
-			if req.FlowMaxGrade != nil {
-				cur.FlowMaxGrade = *req.FlowMaxGrade
-			}
 		}
 	}
 	// Targeting: apply only when the request specifies a target, so partial

@@ -95,13 +95,11 @@ export interface Schedule {
 // spawned for targetAgentId. When the spawned session carries triggerTag too (the
 // default), each completion re-fires the rule — a self-continuing loop bounded by
 // maxIterations / cooldownSec / enabled. Surfaced in the Schedules screen.
-// Automation trigger kind: 'tag' (a tagged session finishing a turn), 'board'
-// (a kanban card change) or 'flow' (a finished flow run). '' from older files is
-// treated as 'tag'. (The 'counter' kind was retired 2026-09-05, the 'token' kind
-// 2026-10-04.)
-export type AutomationTriggerKind = 'tag' | 'board' | 'flow'
-// Flow-trigger outcome filter ('' = any finished run).
-export type FlowRuleStatus = '' | 'success' | 'failure'
+// Automation trigger kind: 'tag' (a tagged session finishing a turn) or 'board'
+// (a kanban card change). '' from older files is treated as 'tag'. (The 'counter'
+// kind was retired 2026-09-05, the 'token' kind 2026-10-04, the 'flow' kind
+// 2026-10-18.)
+export type AutomationTriggerKind = 'tag' | 'board'
 // Board card operation a board automation reacts to.
 export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
 // Automation session strategy (agent-backed only): 'spawn' runs a fresh session
@@ -118,13 +116,11 @@ export type BoardAction = 'spawn' | 'archive' | 'move'
 export interface AutomationFireRecord {
   at: number
   outcome: 'fired' | 'skipped' | 'failed'
-  // skipped: archived | disabled | expired | cooldown | max_iterations |
-  // absolute_backstop | autonomy_paused | target_missing | empty_prompt
+  // skipped: archived | expired | cooldown | max_iterations |
+  // absolute_backstop | agent_archived
   reason?: string
   triggerKind?: string
-  triggerSessionId?: string
   sessionId?: string
-  driver?: 'session'
   error?: string
   iteration?: number
 }
@@ -150,13 +146,6 @@ export interface Automation {
   boardAction?: BoardAction
   // Explicit destination for a targetless move action.
   boardMoveToState?: string
-  // Flow-trigger fields (triggerKind 'flow'): fires when a flow run finishes.
-  // flowAgentId narrows to one agent's flow ('' = any); flowStatus to one
-  // outcome; flowMaxGrade (1..5) to runs the decision model graded at or
-  // below it (0 = ignore the grade).
-  flowAgentId?: string
-  flowStatus?: FlowRuleStatus
-  flowMaxGrade?: number
   // Session strategy for an agent-backed automation (default resolves per kind).
   sessionMode?: SessionMode
   targetAgentId: string

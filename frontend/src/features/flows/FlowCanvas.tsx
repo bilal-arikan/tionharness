@@ -38,7 +38,7 @@ function excerpt(s: string | undefined, n = 90): string {
 
 const FlowNodeCard = memo(function FlowNodeCard({ data, selected }: NodeProps<FlowRFNode>) {
   const { t } = useTranslation('flows')
-  const { node, status, arms, agentName, automationName } = data as FlowNodeData
+  const { node, status, arms, agentName } = data as FlowNodeData
   const chrome = NODE_CHROME[node.type]
   const Icon = chrome.Icon
   const ring = statusRing(status)
@@ -95,17 +95,6 @@ const FlowNodeCard = memo(function FlowNodeCard({ data, selected }: NodeProps<Fl
                 <span className="opacity-60">→ {a.to}</span>
               </div>
             ))}
-          </div>
-        )
-      case 'trigger':
-        return (
-          <div className="space-y-0.5 text-[11px]">
-            <div className="truncate text-[var(--color-text-dim)]">
-              {automationName ?? (node.automationId ? node.automationId : t('node.triggerUnset'))}
-            </div>
-            <p className="line-clamp-2 font-mono text-[10px] text-[var(--color-text-dim)]">
-              {excerpt(node.template) || '{{last}}'}
-            </p>
           </div>
         )
       case 'transform':

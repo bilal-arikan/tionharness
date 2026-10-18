@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
-import { Brush, Clock, LayoutGrid, Repeat, Workflow } from 'lucide-react'
+import { Brush, Clock, LayoutGrid, Repeat } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_AUTOMATIONS, SIGNAL_SCHEDULES } from '@/app/eventToRefreshSignals'
@@ -279,14 +279,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       addLabel: t('lanes.board.add'),
       emptyLabel: t('lanes.board.empty'),
     },
-    flow: {
-      title: t('lanes.flow.title'),
-      icon: Workflow,
-      accent: COLUMN_ACCENT.flow,
-      description: t('lanes.flow.description'),
-      addLabel: t('lanes.flow.add'),
-      emptyLabel: t('lanes.flow.empty'),
-    },
   }
 
   const renderAutomationLane = (kind: AutomationTriggerKind) => {
@@ -391,7 +383,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         />
       )}
 
-      {/* Eight lanes side by side, each with its own vertical card scroll. The
+      {/* The lanes sit side by side, each with its own vertical card scroll. The
           row scrolls HORIZONTALLY at every width: below `md` it is a snapping
           carousel (one near-full-width lane per screen); on md+ every lane keeps
           a readable minimum width (BoardColumn) and only grows when there is
@@ -435,7 +427,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
 
         {renderAutomationLane('tag')}
         {renderAutomationLane('board')}
-        {renderAutomationLane('flow')}
       </div>
 
       {editor?.lane === 'schedules' && (

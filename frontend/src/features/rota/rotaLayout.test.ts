@@ -85,7 +85,7 @@ function fixture() {
       name: 'pano',
       triggerKind: 'tag',
       outcome: 'fired',
-      triggerSessionId: 'W1',
+      sessionId: 'W1',
     }),
   )
   s = applyLaneEvent(
@@ -95,7 +95,7 @@ function fixture() {
       triggerKind: 'tag',
       outcome: 'skipped',
       reason: 'cooldown',
-      triggerSessionId: 'ZZ',
+      sessionId: 'ZZ',
     }),
   )
   s = applyLaneEvent(
@@ -131,7 +131,7 @@ describe('layoutRota', () => {
     expect(bar('bar:W1')).toMatchObject({ live: false, end: NOW - 300, state: 'completed' })
   })
 
-  it('marks fires on the trigger lane and drops unknown lanes', () => {
+  it('marks fires on the produced session lane and drops unknown lanes', () => {
     const l = layoutRota(fixture(), { now: NOW })
     expect(l.marks.map((m) => [m.rowId, m.kind])).toEqual([['W1', 'fired']])
     expect(l.marks[0].label).toBe('pano')

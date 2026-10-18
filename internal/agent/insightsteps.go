@@ -11,6 +11,10 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/insight"
 )
 
+// insightScanSessionTag marks insight scan sessions so a tag automation can
+// fire when a scan finishes.
+const insightScanSessionTag = "insight-scan"
+
 // insightAnalysisTool is the card name a live analysis step renders under. It is
 // not a callable tool — the scan drives the analyzer itself — but the step trace
 // (and the UI that reads it) is uniform, so an analysis reads like any other
@@ -205,9 +209,8 @@ func (r *Runtime) openInsightSession(ctx context.Context, runID, agentID, title 
 		SourceID: runID,
 		Origin:   &db.SessionOrigin{Kind: db.OriginInsight, RunID: runID},
 		Title:    title,
-		// The scan session carries the trigger tag the insight-apply automation
-		// waits for (see insightScanSessionTag). Without it OnTurnFinished has
-		// nothing to match and the rule can never fire.
+		// The scan session carries insightScanSessionTag so a tag automation can
+		// react to a finished scan (e.g. apply its workspace-opt findings).
 		Tags: []string{insightScanSessionTag},
 	})
 	if err != nil {

@@ -91,7 +91,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [43-REWIND.md](43-REWIND.md) | `/rewind` — sohbet checkpoint geri sarma (yalnız-sohbet MVP) |
 | [44-CODE-EXECUTION-MCP.md](44-CODE-EXECUTION-MCP.md) | Code Execution with MCP — occupancy'yi kökten düşürme fizibilite + faz planı |
 | [45-COKLU-SECIM.md](45-COKLU-SECIM.md) | Çoklu seçim (Ctrl/Cmd+Click) + toplu eylemler (frontend-only; eski 40 numarasından taşındı) |
-| [46-ETIKET-OTOMASYON.md](46-ETIKET-OTOMASYON.md) | Etiketler (session/flow/schedule tags) + etiket-tetikleyicili döngü otomasyonları |
+| [46-ETIKET-OTOMASYON.md](46-ETIKET-OTOMASYON.md) | Etiketler (session/flow/schedule tags) + etiket/pano-tetikleyicili otomasyonlar (2026-10-18: yalnız tag + board; flow türü, tohumlama ve şablon PM kuralları kaldırıldı) |
 | [arsiv/47-KOORDINATOR-COKLU-AJAN.md](arsiv/47-KOORDINATOR-COKLU-AJAN.md) | ~~Koordinatör & çoklu-ajan koordinasyonu (M2 koordinatör/worker, spawn_worker + task-notification)~~ (**arşiv — kaldırıldı 2026-10-18**; tarihsel kayıt) |
 | [48-VPS-REMOTE-CLIENT.md](48-VPS-REMOTE-CLIENT.md) | VPS uzak sunucu + mobil ince istemci (PWA/WebView APK) — tek kullanıcı/VPN, dosya önizle-indir-editle (fizibilite/tasarım) |
 | [49-MOBIL-RESPONSIVE-UI.md](49-MOBIL-RESPONSIVE-UI.md) | Mobil/dikey ekran uyumlu UI (responsive) — NavRail→alt tab bar, çok-panel→drawer/stack, full-screen sheet modallar; **2026-09-05'ten beri dört katmanlı kabuk** (narrow/square/wide/ultra + en-boy oranı: `useViewport`/`useShellLayout`, kare katmanda peek rail + drawer detay, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri; tüm sol liste panelleri daraltılabilir, varsayılan açık, yeniden-açma rayı) |

@@ -28,16 +28,14 @@
     "route": "Route",
     "transform": "Transform",
     "input": "Input",
-    "output": "Output",
-    "trigger": "Trigger"
+    "output": "Output"
   },
   "types": {
     "input": "input",
     "llm": "model",
     "route": "route",
     "transform": "transform",
-    "output": "output",
-    "trigger": "trigger"
+    "output": "output"
   },
   "context": {
     "thread": "thread",
@@ -60,8 +58,7 @@
     "criteriaCount": "{{count}} criteria"
   },
   "node": {
-    "inputHint": "The turn's input enters here.",
-    "triggerUnset": "no automation picked"
+    "inputHint": "The turn's input enters here."
   },
   "canvas": {
     "addNode": "Add {{type}} node",
@@ -111,14 +108,7 @@
     "deleteNode": "Delete node",
     "criteria": "Criteria",
     "criteriaHint": "One yes/no statement about the last output per line (e.g. \"The reply is in Turkish\", \"At most two sentences\"). The decision model checks them all in one call; every criterion met takes the arm labelled \"pass\", otherwise the arm labelled \"fail\". The unlabelled arm is the fallback when no model can answer.",
-    "criteriaPlaceholder": "The reply answers the question directly\nNo fabricated facts",
-    "automation": "Automation",
-    "automationHint": "When this node runs, the selected automation fires with the payload template as {{result}} (its own guards — enabled, cooldown, iteration cap — apply). The flow's last output passes through unchanged.",
-    "pickAutomation": "Pick an automation…",
-    "disabledSuffix": "(disabled)",
-    "noAutomations": "No automations yet; create a rule on the Automations screen.",
-    "payload": "Payload template",
-    "payloadHint": "Appears as {{result}} in the automation's prompt template; {{input}}, {{last}}, {{node.<id>}} are available. Empty = {{last}}."
+    "criteriaPlaceholder": "The reply answers the question directly\nNo fabricated facts"
   },
   "runs": {
     "empty": "No runs yet.",
@@ -241,7 +231,6 @@
     "routeNoArm": "Route {{id}} has no arm",
     "outputNoOutgoing": "The output node {{id}} cannot have outgoing edges",
     "transformTemplate": "Transform {{id}} has an empty template",
-    "triggerAutomation": "trigger {{id}} has no automation selected",
     "criteriaEmpty": "route {{id}} has no criteria",
     "criteriaArms": "route {{id}} has no arm labelled pass or fail"
   },

@@ -28,16 +28,14 @@
     "route": "Yönlendirme",
     "transform": "Dönüşüm",
     "input": "Girdi",
-    "output": "Çıktı",
-    "trigger": "Tetikleyici"
+    "output": "Çıktı"
   },
   "types": {
     "input": "girdi",
     "llm": "model",
     "route": "yönlendirme",
     "transform": "dönüşüm",
-    "output": "çıktı",
-    "trigger": "tetikleyici"
+    "output": "çıktı"
   },
   "context": {
     "thread": "sohbet bağlamı",
@@ -60,8 +58,7 @@
     "criteriaCount": "{{count}} ölçüt"
   },
   "node": {
-    "inputHint": "Turun girdisi buradan girer.",
-    "triggerUnset": "otomasyon seçilmedi"
+    "inputHint": "Turun girdisi buradan girer."
   },
   "canvas": {
     "addNode": "{{type}} düğümü ekle",
@@ -111,14 +108,7 @@
     "deleteNode": "Düğümü sil",
     "criteria": "Ölçütler",
     "criteriaHint": "Her satır, son çıktı için bir evet/hayır ifadesi (ör. \"Yanıt Türkçe\", \"İki cümleyi geçmiyor\"). Karar modeli hepsini tek çağrıda sorar; hepsi sağlanırsa \"pass\" etiketli kol, aksi halde \"fail\" etiketli kol seçilir. Etiketsiz kol, model cevap veremezse yedektir.",
-    "criteriaPlaceholder": "Yanıt soruyu doğrudan cevaplıyor\nUydurma bilgi içermiyor",
-    "automation": "Otomasyon",
-    "automationHint": "Bu düğüm çalışınca seçili otomasyon, yük şablonunu {{result}} olarak alıp tetiklenir (otomasyonun kendi korumaları — açık/kapalı, bekleme, iterasyon sınırı — geçerlidir). Akışın son çıktısı değişmeden devam eder.",
-    "pickAutomation": "Otomasyon seç…",
-    "disabledSuffix": "(kapalı)",
-    "noAutomations": "Henüz otomasyon yok; Otomasyonlar ekranından bir kural oluştur.",
-    "payload": "Yük şablonu",
-    "payloadHint": "Otomasyonun prompt şablonunda {{result}} olarak görünür; {{input}}, {{last}}, {{node.<id>}} kullanabilirsin. Boş = {{last}}."
+    "criteriaPlaceholder": "Yanıt soruyu doğrudan cevaplıyor\nUydurma bilgi içermiyor"
   },
   "runs": {
     "empty": "Henüz koşu yok.",
@@ -241,7 +231,6 @@
     "routeNoArm": "{{id}} yönlendirmesinin kolu yok",
     "outputNoOutgoing": "{{id}} çıktı düğümünden kenar çıkamaz",
     "transformTemplate": "{{id}} dönüşümünün şablonu boş",
-    "triggerAutomation": "{{id}} tetikleyicisi için otomasyon seçilmemiş",
     "criteriaEmpty": "{{id}} yönlendirmesinin ölçütü yok",
     "criteriaArms": "{{id}} yönlendirmesinde pass ya da fail etiketli kol yok"
   },

@@ -1,14 +1,6 @@
 import { PanelRightClose, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type {
-  Agent,
-  Automation,
-  FlowEdge,
-  FlowGraph,
-  FlowNode,
-  FlowNodeType,
-  RouteMode,
-} from '@/types'
+import type { Agent, FlowEdge, FlowGraph, FlowNode, FlowNodeType, RouteMode } from '@/types'
 import { PromptEditor } from '@/shared/components/PromptEditor'
 import { OptionPills } from '@/shared/components/OptionPills'
 import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
@@ -20,7 +12,6 @@ interface Props {
   nodeId: string | null
   edgeId: string | null
   agents: Agent[]
-  automations: Automation[]
   ownerAgentId: string
   readOnly: boolean
   onChangeNode: (id: string, patch: Partial<FlowNode>) => void
@@ -64,7 +55,6 @@ export function NodeInspector({
   nodeId,
   edgeId,
   agents,
-  automations,
   ownerAgentId,
   readOnly,
   onChangeNode,
@@ -338,45 +328,6 @@ export function NodeInspector({
               </div>
             ))}
           </div>
-        </>
-      )}
-      {n.type === 'trigger' && (
-        <>
-          <Field label={t('inspector.automation')} hint={t('inspector.automationHint')}>
-            <select
-              className={inputCls}
-              value={n.automationId ?? ''}
-              disabled={readOnly}
-              onChange={(e) => set({ automationId: e.target.value || undefined })}
-              data-testid="flow-node-automation"
-            >
-              <option value="">{t('inspector.pickAutomation')}</option>
-              {automations
-                .filter((a) => !a.archived)
-                .map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name || a.id}
-                    {a.enabled ? '' : ` ${t('inspector.disabledSuffix')}`}
-                  </option>
-                ))}
-            </select>
-            {automations.length === 0 && (
-              <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
-                {t('inspector.noAutomations')}
-              </p>
-            )}
-          </Field>
-          <Field label={t('inspector.payload')} hint={t('inspector.payloadHint')}>
-            <PromptEditor
-              value={n.template ?? ''}
-              onChange={(v) => set({ template: v })}
-              mono
-              rows={3}
-              autoSizeMax={200}
-              disabled={readOnly}
-              placeholder="{{last}}"
-            />
-          </Field>
         </>
       )}
       {(n.type === 'transform' || n.type === 'output') && (

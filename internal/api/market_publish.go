@@ -211,10 +211,6 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	}
 
 	// Automations → reference the agent by key (skip orphans).
-	// The built-in seeded board defaults are excluded: every workspace provisions
-	// its own copy at open time (EnsureDefaultAutomations), so exporting them
-	// would either duplicate the rule on install or resurrect one the installing
-	// user had deliberately deleted.
 	autos, aerr := wsp.DB.ListAutomations(ctx)
 	if aerr != nil {
 		return wp, aerr
@@ -222,9 +218,6 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	for _, a := range autos {
 		if !allAutos && !autoSet[a.ID] {
 			continue // not selected for this export
-		}
-		if a.Seed != "" {
-			continue // built-in default, provisioned per workspace
 		}
 		agentKey := ""
 		if a.TargetAgentID != "" {

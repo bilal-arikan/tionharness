@@ -13,7 +13,6 @@ import type {
   FlowProposal,
   FlowRun,
   FlowVersion,
-  Automation,
 } from '@/types'
 import { api } from '@/api'
 import {
@@ -123,25 +122,6 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
     return flows.find((f) => f.id === selectedId) ?? flows[0]
   }, [flows, selectedId])
   const agentNames = useMemo(() => new Map(agents.map((a) => [a.id, a.name])), [agents])
-  // Automations feed the trigger node's picker and the canvas labels; a load
-  // failure only leaves the picker empty.
-  const [automations, setAutomations] = useState<Automation[]>([])
-  useEffect(() => {
-    let cancelled = false
-    api
-      .listAutomations()
-      .then((list) => {
-        if (!cancelled) setAutomations(list)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [tick])
-  const automationNames = useMemo(
-    () => new Map(automations.map((a) => [a.id, a.name || a.id])),
-    [automations],
-  )
 
   const loadFlows = useCallback(() => {
     api
@@ -329,9 +309,8 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
   }
 
   const rf = useMemo(
-    () =>
-      draft ? toReactFlow(draft, statuses, agentNames, automationNames) : { nodes: [], edges: [] },
-    [draft, statuses, agentNames, automationNames],
+    () => (draft ? toReactFlow(draft, statuses, agentNames) : { nodes: [], edges: [] }),
+    [draft, statuses, agentNames],
   )
   const problems = useMemo(() => (draft ? lint(draft) : []), [draft])
   const filtered = useMemo(
@@ -548,7 +527,6 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
                       nodeId={selNode}
                       edgeId={selEdge}
                       agents={agents}
-                      automations={automations}
                       ownerAgentId={selected.agentId}
                       readOnly={false}
                       onChangeNode={changeNode}
@@ -589,7 +567,6 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
                     nodeId={selNode}
                     edgeId={selEdge}
                     agents={agents}
-                    automations={automations}
                     ownerAgentId={selected.agentId}
                     readOnly={false}
                     onChangeNode={changeNode}

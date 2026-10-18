@@ -3,8 +3,6 @@
     "enabled": "Etkin",
     "disabled": "Pasif",
     "agent": "Ajan",
-    "flow": "Akış",
-    "selectFlow": "Akış seç…",
     "loading": "Yükleniyor…",
     "close": "Kapat",
     "delete": "Sil",
@@ -44,13 +42,11 @@
   },
   "triggerKinds": {
     "tag": "Etiket",
-    "board": "Pano",
-    "flow": "Akış koşusu"
+    "board": "Pano"
   },
   "automationKinds": {
     "tag": "etiket otomasyonu",
-    "board": "pano otomasyonu",
-    "flow": "akış koşusu otomasyonu"
+    "board": "pano otomasyonu"
   },
   "fires": {
     "title": "Ateşleme defteri: her deneme (ateşlendi / atlandı + sebep / başarısız)",
@@ -60,15 +56,11 @@
   },
   "fireReasons": {
     "archived": "arşivli",
-    "disabled": "kapalı",
     "expired": "süresi doldu",
     "cooldown": "bekleme süresi",
     "maxIterations": "iterasyon tavanı",
     "absoluteBackstop": "mutlak tavan",
-    "autonomyPaused": "otonomi duraklatıldı",
-    "targetMissing": "hedef yok",
-    "agentArchived": "hedef ajan arşivli",
-    "emptyPrompt": "boş prompt"
+    "agentArchived": "hedef ajan arşivli"
   },
   "board": {
     "runFailed": "Çalıştırma başarısız: {{error}}",
@@ -108,12 +100,6 @@
       "description": "Bir kanban kartı taşınınca, oluşturulunca veya değişince kart bağlamıyla çalışır.",
       "add": "Yeni pano otomasyonu",
       "empty": "Henüz pano otomasyonu yok."
-    },
-    "flow": {
-      "title": "Akış koşusu otomasyonları",
-      "description": "Bir ajanın akış koşusu bitince (başarı, hata ya da düşük puan) yanıt ve koşu bağlamıyla çalışır; akışlardaki tetikleyici düğümler de her türden otomasyonu ateşleyebilir.",
-      "add": "Yeni akış otomasyonu",
-      "empty": "Henüz akış otomasyonu yok."
     }
   },
   "fields": {
@@ -134,23 +120,12 @@
       "priorityHint": "Aynı kart değişimini yakalayan otomasyonlar arasındaki ateşleme sırası. Küçük olan önce çalışır.",
       "exclusive": "Tek sahip",
       "exclusiveHint": "Bu otomasyon eşleşen kart değişimini tek başına sahiplenir; aynı olaya uyan diğer pano otomasyonları bastırılır."
-    },
-    "flow": {
-      "agent": "Ajan",
-      "agentHint": "Yalnız bu ajanın akış koşuları. Boşsa her ajan eşleşir.",
-      "anyAgent": "her ajan",
-      "status": "Sonuç",
-      "maxGrade": "Puan",
-      "maxGradeHint": "Yalnız karar modelinin (flow-grade mercii) bu puan ve altında değerlendirdiği koşular. Puanlama kapalıysa hiçbir koşu eşleşmez.",
-      "ignoreGrade": "puana bakma",
-      "gradeAtMost": "en çok {{n}}/5"
     }
   },
   "form": {
     "deleteRule": "Bu kuralı sil"
   },
   "scheduleCard": {
-    "flowBased": "Akış tabanlı zamanlama",
     "oneShotAt": "Tek seferlik · {{time}}",
     "next": "Sonraki",
     "last": "Son",
@@ -162,13 +137,11 @@
   },
   "validation": {
     "cronRequired": "Cron ifadesi zorunlu",
-    "flowRequired": "Akış seçilmeli",
     "agentRequired": "Ajan zorunlu",
     "promptRequired": "Prompt zorunlu",
     "expiryFuture": "Son tarih gelecekte olmalı",
     "triggerTagRequired": "Tetikleyici etiket zorunlu; boş etiket hiç tetiklenmez",
     "moveTargetRequired": "Taşıma hedef sütunu zorunlu",
-    "targetFlowRequired": "Hedef akış zorunlu",
     "targetAgentRequired": "Hedef ajan zorunlu",
     "promptTemplateRequired": "Prompt şablonu zorunlu"
   },
@@ -191,14 +164,12 @@
     "cronHint": "Hazır ifadeyi seç ya da elle yaz.",
     "selectPreset": "Hazır ifade seç…",
     "cronPlaceholder": "cron: dk sa gün ay haftagünü",
-    "flowInputOptional": "Akış girdisi (opsiyonel)",
     "promptRequired": "Prompt (zorunlu)",
     "promptPlaceholder": "Ajana gönderilecek talimat",
     "expiryHint": "Bu tarihten sonra zamanlama çalışmaz."
   },
   "automationCard": {
     "targetlessBoardAction": "Hedefsiz pano aksiyonu — LLM çağrısı yapılmaz",
-    "flowBased": "Akış tabanlı otomasyon",
     "boardTriggered": "Pano kartı tetikleyicili otomasyon",
     "archivesCard": "Kartı LLM çağrısı olmadan arşivler",
     "movesCard": "Kartı LLM çağrısı olmadan hedef sütuna taşır",
@@ -219,12 +190,8 @@
     "cooldownSecondsValue": "Bekleme: {{seconds}} sn",
     "last": "Son",
     "boardNoLoop": "Pano tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).",
-    "flowNoLoop": "Akış tabanlı — kendini döngülemez (spawn etiketleri yok sayılır).",
     "spawnTags": "Spawn etiketleri",
-    "spawnTagsPlaceholder": "döngüyü kırmak için boş bırak",
-    "flowTriggered": "Akış koşusu otomasyonu — bir akış koşusu bitince çalışır",
-    "flowSummary": "{{agent}} · {{status}}",
-    "flowGrade": "puan ≤ {{n}}"
+    "spawnTagsPlaceholder": "döngüyü kırmak için boş bırak"
   },
   "automationModal": {
     "updated": "Otomasyon güncellendi",
@@ -368,34 +335,7 @@
         "date": "Geçerli tarih",
         "time": "Geçerli saat",
         "datetime": "Geçerli tarih ve saat"
-      },
-      "flow": {
-        "result": "Tetikleyici düğümün yükü, yoksa koşunun yanıtı (başarısızsa hata metni)",
-        "input": "Koşunun girdisi (kullanıcı mesajı)",
-        "output": "Koşunun yanıtı",
-        "error": "Hata metni (başarısız koşuda)",
-        "status": "success / failure",
-        "grade": "Karar modelinin puanı (1–5), puanlanmadıysa boş",
-        "runId": "Koşu kimliği (RUN…)",
-        "flowId": "Akış kimliği (FLW…)",
-        "flowName": "Akışın adı",
-        "version": "Koşunun kullandığı akış sürümü",
-        "agent": "Akışın sahibi ajanın adı",
-        "agentId": "Akışın sahibi ajanın kimliği",
-        "sessionId": "Koşunun geçtiği oturum",
-        "nodeId": "Tetikleyen düğüm (yalnız akış düğümünden)",
-        "iteration": "Bir tabanlı ateşleme sıra numarası",
-        "maxIterations": "Üst sınır; eski kayıtlarda sıfır sınırsızdır",
-        "automation": "Otomasyonun adı",
-        "date": "Geçerli tarih",
-        "time": "Geçerli saat",
-        "datetime": "Geçerli tarih ve saat"
       }
-    },
-    "flowStatuses": {
-      "any": "her sonuç",
-      "success": "başarılı",
-      "failure": "başarısız"
     }
   }
 }

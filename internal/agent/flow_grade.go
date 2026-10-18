@@ -104,14 +104,8 @@ func flowGradeOf(resp *decider.Response, threshold float64) (int, float64, bool)
 	return grade, s, s >= threshold
 }
 
-// FlowRunFinished is the signal a finished (and, when enabled, graded) flow
-// run delivers to the flow-run hooks (the automation engine's flow rules).
-type FlowRunFinished struct {
-	Run db.FlowRun
-}
-
-// afterFlowRun is the detached tail of a flow run: grade it, tell the
-// flow-run hooks, and let the observer look. Nothing here delays the reply.
+// afterFlowRun is the detached tail of a flow run: grade it and let the
+// observer look. Nothing here delays the reply.
 func (r *Runtime) afterFlowRun(ctx context.Context, f db.Flow, run db.FlowRun, agent db.Agent) {
 	bg := context.WithoutCancel(ctx)
 	work := func() {
@@ -119,7 +113,6 @@ func (r *Runtime) afterFlowRun(ctx context.Context, f db.Flow, run db.FlowRun, a
 			run = graded
 			r.emitFlowRunEvent(run)
 		}
-		r.FireFlowRunFinished(FlowRunFinished{Run: run})
 		if run.Status == db.FlowSuccess {
 			r.maybeObserveFlow(bg, f.ID)
 		}

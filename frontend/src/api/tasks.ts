@@ -162,17 +162,11 @@ export const taskApi = {
     req<{ id: string; action: string }>(`/api/automations/${id}/reset`, { method: 'POST' }),
   deleteAutomation: (id: string) =>
     req<{ deleted: string }>(`/api/automations/${id}`, { method: 'DELETE' }),
-  // Archive (hide + stop, restorable) — the curator-safe alternative to delete.
   // Pin (Rota F3): exempt from the curator's automatic passes.
   pinAutomation: (id: string, pinned: boolean) =>
     req<{ id: string; pinned: boolean }>(`/api/automations/${id}/pin`, {
       method: 'POST',
       body: JSON.stringify({ pinned }),
-    }),
-  archiveAutomation: (id: string, archived: boolean) =>
-    req<{ id: string; archived: boolean }>(`/api/automations/${id}/archive`, {
-      method: 'POST',
-      body: JSON.stringify({ archived }),
     }),
   // Archived rules only (the default list hides them).
   listArchivedAutomations: () => req<Automation[]>('/api/automations?archived=true'),

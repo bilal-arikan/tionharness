@@ -2,7 +2,7 @@
 // with one run per turn, observer proposals and prompt versions. Mirrors
 // internal/flow (graph) and internal/db/models_flow.go (store rows).
 
-export type FlowNodeType = 'input' | 'llm' | 'route' | 'transform' | 'trigger' | 'output'
+export type FlowNodeType = 'input' | 'llm' | 'route' | 'transform' | 'output'
 export type FlowContextMode = 'thread' | 'fresh'
 export type FlowToolsMode = 'inherit' | 'none'
 export type RouteMode = 'contains' | 'equals' | 'regex' | 'json' | 'judge' | 'criteria'
@@ -31,9 +31,7 @@ export interface FlowNode {
   question?: string
   criteria?: string[] // criteria mode: yes/no statements the last output must satisfy
   maxVisits?: number
-  // trigger
-  automationId?: string
-  // transform / output / trigger (payload)
+  // transform / output
   template?: string
 }
 
@@ -122,7 +120,7 @@ export interface FlowRunStep {
   input?: string
   output?: string
   edge?: string
-  detail?: string // criteria verdicts / what a trigger launched
+  detail?: string // criteria verdicts
   startedAt: number // unix ms
   endedAt: number
   durationMs: number

@@ -9,9 +9,6 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   get archived() {
     return reason('archived')
   },
-  get disabled() {
-    return reason('disabled')
-  },
   get expired() {
     return reason('expired')
   },
@@ -24,17 +21,8 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   get absolute_backstop() {
     return reason('absoluteBackstop')
   },
-  get autonomy_paused() {
-    return reason('autonomyPaused')
-  },
-  get target_missing() {
-    return reason('targetMissing')
-  },
   get agent_archived() {
     return reason('agentArchived')
-  },
-  get empty_prompt() {
-    return reason('emptyPrompt')
   },
 }
 

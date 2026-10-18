@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LayoutGrid, Repeat, Sparkles, Workflow, X } from 'lucide-react'
+import { LayoutGrid, Repeat, Sparkles, X } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -9,7 +9,6 @@ import type {
   BoardAction,
   BoardColumnDef,
   BoardOp,
-  FlowRuleStatus,
   SessionMode,
 } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
@@ -21,7 +20,7 @@ import {
   MAX_ITERATIONS_HARD_CAP,
   STUCK_TEMPLATE,
 } from './automationMeta'
-import { BoardTriggerFields, FlowTriggerFields, PromptVarsField } from './AutomationFields'
+import { BoardTriggerFields, PromptVarsField } from './AutomationFields'
 import { FieldError } from './FieldError'
 import { useFieldErrors } from './useFieldErrors'
 import { FormModal } from './FormModal'
@@ -56,7 +55,6 @@ export function AutomationModal({
 }: Props) {
   const { t } = useTranslation('schedules')
   const isBoardKind = kind === 'board'
-  const isFlowKind = kind === 'flow'
 
   const [name, setName] = useState(editing?.name ?? '')
   const [triggerTag, setTriggerTag] = useState(editing?.triggerTag ?? '')
@@ -67,9 +65,6 @@ export function AutomationModal({
   const [boardExclusive, setBoardExclusive] = useState(editing?.boardExclusive ?? false)
   const [boardAction, setBoardAction] = useState<BoardAction>(editing?.boardAction ?? 'spawn')
   const [boardMoveToState, setBoardMoveToState] = useState(editing?.boardMoveToState ?? '')
-  const [flowAgentId, setFlowAgentId] = useState(editing?.flowAgentId ?? '')
-  const [flowStatus, setFlowStatus] = useState<FlowRuleStatus>(editing?.flowStatus ?? '')
-  const [flowMaxGrade, setFlowMaxGrade] = useState(editing?.flowMaxGrade ?? 0)
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
   // Session strategy: default matches the backend's default (spawn a fresh session).
   const [sessionMode, setSessionMode] = useState<SessionMode>(editing?.sessionMode ?? 'spawn')
@@ -137,9 +132,6 @@ export function AutomationModal({
       boardExclusive,
       boardAction,
       boardMoveToState,
-      flowAgentId,
-      flowStatus,
-      flowMaxGrade,
       targetAgentId,
       sessionMode,
       promptTemplate,
@@ -173,10 +165,8 @@ export function AutomationModal({
       title={t(editing ? 'automationModal.editTitle' : 'automationModal.newTitle', {
         kind: kindLabel,
       })}
-      icon={isBoardKind ? LayoutGrid : isFlowKind ? Workflow : Repeat}
-      accent={
-        isBoardKind ? COLUMN_ACCENT.board : isFlowKind ? COLUMN_ACCENT.flow : COLUMN_ACCENT.tag
-      }
+      icon={isBoardKind ? LayoutGrid : Repeat}
+      accent={isBoardKind ? COLUMN_ACCENT.board : COLUMN_ACCENT.tag}
       submitLabel={editing ? t('common.save') : t('automationModal.add')}
       onSubmit={submit}
       onClose={onClose}
@@ -237,18 +227,6 @@ export function AutomationModal({
               if (p.priority !== undefined) setBoardPriority(p.priority)
               if (p.exclusive !== undefined) setBoardExclusive(p.exclusive)
               if (p.action !== undefined) setBoardAction(p.action)
-            }}
-          />
-        ) : isFlowKind ? (
-          <FlowTriggerFields
-            agents={agents}
-            agentId={flowAgentId}
-            status={flowStatus}
-            maxGrade={flowMaxGrade}
-            onChange={(p) => {
-              if (p.agentId !== undefined) setFlowAgentId(p.agentId)
-              if (p.status !== undefined) setFlowStatus(p.status)
-              if (p.maxGrade !== undefined) setFlowMaxGrade(p.maxGrade)
             }}
           />
         ) : (

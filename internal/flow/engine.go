@@ -23,10 +23,6 @@ type Runner interface {
 	// Check reports, per criterion, whether value satisfies it. An error (or a
 	// short slice) sends the route down its default arm.
 	Check(ctx context.Context, node Node, value string, criteria []string) ([]bool, error)
-	// Trigger fires the node's automation with the rendered payload and
-	// returns a short description of what happened (the node's recorded
-	// output). The flow's last output passes through unchanged.
-	Trigger(ctx context.Context, node Node, payload string) (string, error)
 }
 
 // Event is one live node-lifecycle frame (start / done / error).
@@ -137,21 +133,6 @@ func Run(ctx context.Context, g Graph, input string, r Runner, onEvent func(Even
 			e, edgeLabel, detail, err = pickEdge(ctx, g, cur, st.Input, visit, r)
 			out = res.Last
 			nextID = e.To
-		case NodeTrigger:
-			// Pass-through: the automation gets the rendered payload, the flow
-			// keeps its last output so a trigger can sit anywhere in the chain.
-			tpl := strings.TrimSpace(cur.Template)
-			if tpl == "" {
-				tpl = "{{last}}"
-			}
-			st.Input = Render(tpl, vars)
-			out = res.Last
-			if r != nil {
-				detail, err = r.Trigger(ctx, cur, st.Input)
-			} else {
-				err = errors.New("no runner to fire the automation")
-			}
-			nextID = firstOut(g, cur.ID)
 		default:
 			err = fmt.Errorf("node %q has unknown type %q", cur.ID, cur.Type)
 		}
@@ -169,12 +150,7 @@ func Run(ctx context.Context, g Graph, input string, r Runner, onEvent func(Even
 			return res
 		}
 		res.Steps = append(res.Steps, st)
-		if cur.Type == NodeTrigger {
-			// {{node.<trigger>}} reads what the trigger did; {{last}} stays.
-			res.Outputs[cur.ID] = detail
-		} else {
-			res.Outputs[cur.ID] = out
-		}
+		res.Outputs[cur.ID] = out
 		res.Last = out
 		emit(Event{Phase: "done", NodeID: cur.ID, Type: cur.Type, Title: cur.Title, Index: step, Visit: visit, Output: out, Edge: edgeLabel, Detail: detail, DurationMs: st.DurationMs})
 		if cur.Type == NodeOutput {

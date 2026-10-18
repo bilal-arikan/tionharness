@@ -28,6 +28,20 @@ func normalizeTags(tags []string) []string {
 	return out
 }
 
+// normalizeSpawnTags is normalizeTags for an automation's SpawnTags, where nil
+// and empty differ: nil means "default to the trigger tag" (the self-loop),
+// while a non-nil empty slice deliberately breaks the loop (e.g. the stuck
+// repairer, whose fixer must not re-trigger itself).
+func normalizeSpawnTags(tags []string) []string {
+	if tags == nil {
+		return nil
+	}
+	if out := normalizeTags(tags); out != nil {
+		return out
+	}
+	return []string{}
+}
+
 func (d *DB) persistAutomationLocked(a Automation) error {
 	return dbPersistLocked(d, d.automations, dirAutomations, a.ID, a)
 }
@@ -38,7 +52,7 @@ func (d *DB) CreateAutomation(ctx context.Context, a Automation) (Automation, er
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
 	a.TriggerTag = strings.TrimSpace(a.TriggerTag)
-	a.SpawnTags = normalizeTags(a.SpawnTags)
+	a.SpawnTags = normalizeSpawnTags(a.SpawnTags)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return a, d.persistAutomationLocked(a)
@@ -108,7 +122,7 @@ func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 	a.CreatedAt = cur.CreatedAt
 	a.CreatedBy = cur.CreatedBy
 	a.TriggerTag = strings.TrimSpace(a.TriggerTag)
-	a.SpawnTags = normalizeTags(a.SpawnTags)
+	a.SpawnTags = normalizeSpawnTags(a.SpawnTags)
 	a.UpdatedAt = now()
 	return d.persistAutomationLocked(a)
 }

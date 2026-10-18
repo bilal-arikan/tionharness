@@ -30,7 +30,7 @@ type TriggerSpec struct {
 var triggerSpecs = map[string]TriggerSpec{}
 
 // RegisterTrigger adds (or replaces) a trigger kind. Called from init() by each
-// kind's file; a later Rota package may register more at boot.
+// kind's file.
 func RegisterTrigger(spec TriggerSpec) {
 	if spec.Kind == "" {
 		panic("db: RegisterTrigger with empty kind")

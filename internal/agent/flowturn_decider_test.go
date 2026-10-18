@@ -112,28 +112,16 @@ func TestFlowCriteriaRouteUsesDecider(t *testing.T) {
 	waitBackground(rt)
 }
 
-// TestFlowRunGradingFiresFlowAutomation: with grading on, a finished run gets
-// a grade; a flow-kind automation narrowed to that grade fires once with the
-// run rendered into its prompt, and the session it spawns does not re-fire it.
-func TestFlowRunGradingFiresFlowAutomation(t *testing.T) {
+// TestFlowRunGrading: with grading on, a finished run gets a grade and the
+// flow's stats accumulate it.
+func TestFlowRunGrading(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t) // score answers are level 2 → grade 3
 	wireDecider(t, tun, stub, map[string]decider.Mode{authFlowGrade: decider.ModeOn})
 	installFlowTestProvider(t, rt, okProvider(nil))
 	a := flowTestAgent(t, rt, "G")
-	reviewer := flowTestAgent(t, rt, "R")
 	ctx := context.Background()
 	f, _ := rt.db.EnsureAgentFlow(ctx, a.ID)
-	engine := NewAutomationEngine(rt.db, rt, rt.logger)
-	rt.AddFlowRunHook(engine.OnFlowRunFinished)
-	rule, err := rt.db.CreateAutomation(ctx, db.Automation{
-		Name: "review weak replies", TriggerKind: db.TriggerFlow, FlowMaxGrade: 3,
-		TargetAgentID: reviewer.ID, PromptTemplate: "Review run {{runId}} of {{agent}} (grade {{grade}}, {{status}}): {{result}}",
-		Enabled: true, MaxIterations: 5,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	if _, _, err := runTurn(t, rt, a, "hello"); err != nil {
 		t.Fatal(err)
 	}
@@ -145,92 +133,6 @@ func TestFlowRunGradingFiresFlowAutomation(t *testing.T) {
 	if cur, _ := rt.db.GetFlow(ctx, f.ID); cur.Stats.Graded != 1 || cur.Stats.GradeSum != 3 {
 		t.Fatalf("stats = %+v", cur.Stats)
 	}
-	waitUntil(t, "the flow rule to fire", func() bool {
-		got, _ := rt.db.GetAutomation(ctx, rule.ID)
-		return got.IterationCount == 1
-	})
-	drainSpawns(t, rt)
-	sessions, _ := rt.db.ListSessions(ctx, reviewer.ID)
-	if len(sessions) != 1 {
-		t.Fatalf("reviewer sessions = %d", len(sessions))
-	}
-	msgs, _ := rt.db.ListMessages(ctx, sessions[0].ID)
-	if len(msgs) == 0 || !strings.Contains(msgs[0].Text, "Review run "+runs[0].ID+" of G (grade 3, success): ok") {
-		t.Fatalf("spawned prompt = %+v", msgs)
-	}
-	if o := sessions[0].Origin; o == nil || o.Kind != db.OriginAutomation || o.EntityID != rule.ID {
-		t.Fatalf("origin = %+v", sessions[0].Origin)
-	}
-	// The reviewer's own run (spawned by the rule) matched the rule too — any
-	// agent, grade 3 — but must not re-fire it.
-	waitBackground(rt)
-	time.Sleep(150 * time.Millisecond)
-	drainSpawns(t, rt)
-	if got, _ := rt.db.GetAutomation(ctx, rule.ID); got.IterationCount != 1 {
-		t.Fatalf("rule re-fired from its own session: %+v", got)
-	}
-	// A rule narrowed to another agent never matches.
-	if flowRuleMatches(db.Automation{FlowAgentID: "AGT-x"}, runs[0]) || !flowRuleMatches(db.Automation{FlowStatus: db.FlowSuccess}, runs[0]) ||
-		flowRuleMatches(db.Automation{FlowMaxGrade: 2}, runs[0]) || flowRuleMatches(db.Automation{FlowMaxGrade: 3}, db.FlowRun{Status: db.FlowSuccess}) {
-		t.Error("flowRuleMatches filters wrong")
-	}
-}
-
-// TestFlowTriggerNodeFiresAutomation: a trigger node fires an automation with
-// its rendered payload, passes the reply through untouched and records what
-// happened on the step; a disabled automation is skipped, not an error.
-func TestFlowTriggerNodeFiresAutomation(t *testing.T) {
-	rt, _ := newTestRuntime(t, t.TempDir())
-	installFlowTestProvider(t, rt, okProvider(nil))
-	a := flowTestAgent(t, rt, "T")
-	handler := flowTestAgent(t, rt, "H")
-	ctx := context.Background()
-	f, _ := rt.db.EnsureAgentFlow(ctx, a.ID)
-	rule, err := rt.db.CreateAutomation(ctx, db.Automation{
-		Name: "handoff", TriggerTag: "handoff", TargetAgentID: handler.ID,
-		PromptTemplate: "Handle: {{result}}", SpawnTags: []string{}, Enabled: true, MaxIterations: 5,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ops := []flow.Op{{Op: "insert_between", From: "respond", To: "output", Node: &flow.Node{ID: "notify", Type: flow.NodeTrigger, AutomationID: rule.ID, Template: "Reply: {{last}}"}}}
-	if _, err := rt.ApplyFlowOps(ctx, f.ID, ops, db.FlowAuthor{Kind: db.FlowAuthorUser}, "trigger", ""); err != nil {
-		t.Fatalf("apply ops: %v", err)
-	}
-	resp, _, err := runTurn(t, rt, a, "hello")
-	if err != nil || resp.Text != "ok" {
-		t.Fatalf("turn: %v %q", err, resp.Text)
-	}
-	runs, _ := rt.db.ListFlowRuns(ctx, f.ID, 0)
-	trace := flowTrace(t, runs[0])
-	if trace[2].Type != flow.NodeTrigger || !strings.HasPrefix(trace[2].Detail, "triggered handoff") || trace[2].Input != "Reply: ok" {
-		t.Fatalf("trigger step = %+v", trace[2])
-	}
-	drainSpawns(t, rt)
-	sessions, _ := rt.db.ListSessions(ctx, handler.ID)
-	if len(sessions) != 1 {
-		t.Fatalf("handler sessions = %d", len(sessions))
-	}
-	if msgs, _ := rt.db.ListMessages(ctx, sessions[0].ID); len(msgs) == 0 || msgs[0].Text != "Handle: Reply: ok" {
-		t.Fatalf("handoff prompt = %+v", msgs)
-	}
-	if got, _ := rt.db.GetAutomation(ctx, rule.ID); got.IterationCount != 1 {
-		t.Fatalf("rule bookkeeping = %+v", got)
-	}
-	// Disabled automation: the node reports the skip and the turn still answers.
-	if err := rt.db.SetAutomationEnabled(ctx, rule.ID, false); err != nil {
-		t.Fatal(err)
-	}
-	resp, _, err = runTurn(t, rt, a, "again")
-	if err != nil || resp.Text != "ok" {
-		t.Fatalf("turn 2: %v %q", err, resp.Text)
-	}
-	runs, _ = rt.db.ListFlowRuns(ctx, f.ID, 0)
-	if trace := flowTrace(t, runs[0]); runs[0].Status != db.FlowSuccess || !strings.Contains(trace[2].Detail, "disabled") {
-		t.Fatalf("disabled rule step = %+v (%s)", trace[2], runs[0].Status)
-	}
-	waitBackground(rt)
-	drainSpawns(t, rt)
 }
 
 // TestFlowProposalGateHoldsAutoApply: with the gate on, a "no" keeps a

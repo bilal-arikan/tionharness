@@ -456,13 +456,6 @@ func (m *Manager) open(meta Meta) error {
 	if n := database.FailOrphanedFlowRuns(context.Background()); n > 0 {
 		m.logger.Warn("flow runs interrupted by restart", "workspace", meta.ID, "count", n)
 	}
-	// Seed the built-in automations (board-driven execution: card→in_progress spawns
-	// an agent, card→done archives; plus the insight-apply rule). Idempotent,
-	// deletion-aware, and seeded DISABLED so activating one stays an explicit
-	// per-workspace opt-in.
-	if err := agent.EnsureDefaultAutomations(context.Background(), database, storeDir); err != nil {
-		m.logger.Warn("seed default automations failed", "workspace", meta.ID, "error", err)
-	}
 	// Per-workspace secret vault (AES-GCM encrypted), shared by the secret_* tools.
 	vault, err := secrets.Open(storeDir, m.cipher)
 	if err != nil {
@@ -522,7 +515,6 @@ func (m *Manager) open(meta Meta) error {
 	rt.AddFailedTurnHook(autoEngine.OnTurnFinished)
 	// Flows (_Docs/93): flow-kind automations fire when a flow run finished
 	// (and, when grading is on, was graded).
-	rt.AddFlowRunHook(autoEngine.OnFlowRunFinished)
 	// Every message append is session activity regardless of author (user, agent,
 	// or system). Notify open clients so their session list picks up the
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.

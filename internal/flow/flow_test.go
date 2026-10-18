@@ -31,14 +31,6 @@ func (s *scriptRunner) Check(_ context.Context, _ Node, value string, criteria [
 	return out, nil
 }
 
-func (s *scriptRunner) Trigger(_ context.Context, n Node, payload string) (string, error) {
-	if s.fail == n.ID {
-		return "", errors.New("automation gone")
-	}
-	s.fired = append(s.fired, n.AutomationID+":"+payload)
-	return "fired " + n.AutomationID, nil
-}
-
 func (s *scriptRunner) RunLLM(_ context.Context, n Node, prompt string, visit int) (string, error) {
 	s.calls = append(s.calls, n.ID+":"+prompt)
 	if s.fail == n.ID {
@@ -387,43 +379,5 @@ func TestCriteriaRoutePassFailAndFallback(t *testing.T) {
 	bad.Edges[2].When, bad.Edges[3].When = "yes", "no"
 	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "pass") {
 		t.Errorf("missing pass/fail arms must fail validation, got %v", err)
-	}
-}
-
-func TestTriggerNodePassesLastThrough(t *testing.T) {
-	g := Graph{Nodes: []Node{
-		{ID: "input", Type: NodeInput},
-		{ID: "respond", Type: NodeLLM, Prompt: "{{input}}"},
-		{ID: "notify", Type: NodeTrigger, AutomationID: "AUT1", Template: "Reply was: {{last}}"},
-		{ID: "output", Type: NodeOutput},
-	}, Edges: []Edge{
-		{From: "input", To: "respond"},
-		{From: "respond", To: "notify"},
-		{From: "notify", To: "output"},
-	}}
-	if err := g.Validate(); err != nil {
-		t.Fatalf("validate: %v", err)
-	}
-	r := &scriptRunner{replies: map[string]string{"respond": "fine"}}
-	res := Run(context.Background(), g, "hi", r, nil)
-	if res.Err != nil || res.Output != "fine" {
-		t.Fatalf("err=%v out=%q (the trigger must not replace the reply)", res.Err, res.Output)
-	}
-	if len(r.fired) != 1 || r.fired[0] != "AUT1:Reply was: fine" {
-		t.Errorf("fired = %v", r.fired)
-	}
-	if st := res.Steps[2]; st.Type != NodeTrigger || st.Detail != "fired AUT1" || res.Outputs["notify"] != "fired AUT1" {
-		t.Errorf("trigger step = %+v outputs=%v", st, res.Outputs)
-	}
-	// A failing automation fails the run (the trace keeps the partial steps).
-	r = &scriptRunner{fail: "notify"}
-	res = Run(context.Background(), g, "hi", r, nil)
-	if res.Err == nil || !strings.Contains(res.Err.Error(), "automation gone") || len(res.Steps) != 3 {
-		t.Errorf("failure: err=%v steps=%d", res.Err, len(res.Steps))
-	}
-	// Validation: a trigger needs its automation id.
-	g.Nodes[2].AutomationID = ""
-	if err := g.Validate(); err == nil || !strings.Contains(err.Error(), "automationId") {
-		t.Errorf("missing automationId must fail validation, got %v", err)
 	}
 }

@@ -1,13 +1,4 @@
-import {
-  RotateCcw,
-  Pencil,
-  LayoutGrid,
-  Archive,
-  MoveRight,
-  Workflow,
-  Pin,
-  PinOff,
-} from 'lucide-react'
+import { RotateCcw, Pencil, LayoutGrid, Archive, MoveRight, Pin, PinOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, Automation, BoardColumnDef } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -57,7 +48,6 @@ export function AutomationCard({
   const opLabel = boardOpLabel(a.boardOp)
   const isTargetlessRule = isBoardKind && (a.boardAction === 'archive' || a.boardAction === 'move')
   // Effective session mode (agent-backed only): explicit value wins, else spawn.
-  const kind = a.triggerKind ?? 'tag'
   const effectiveMode = a.sessionMode ?? 'spawn'
   const showContinue = !isTargetlessRule && effectiveMode === 'continue'
 
@@ -134,26 +124,6 @@ export function AutomationCard({
                     title={t('automationCard.movesCard')}
                   >
                     <MoveRight size={10} /> {colLabel(a.boardMoveToState)}
-                  </span>
-                )}
-              </span>
-            ) : kind === 'flow' ? (
-              <span
-                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title={t('automationCard.flowTriggered')}
-              >
-                <Workflow size={11} />
-                {t('automationCard.flowSummary', {
-                  agent: a.flowAgentId
-                    ? (agents.find((x) => x.id === a.flowAgentId)?.name ?? a.flowAgentId)
-                    : t('common.wildcard'),
-                  status: a.flowStatus
-                    ? t(`meta.flowStatuses.${a.flowStatus}`)
-                    : t('meta.flowStatuses.any'),
-                })}
-                {(a.flowMaxGrade ?? 0) > 0 && (
-                  <span className="opacity-80">
-                    {t('automationCard.flowGrade', { n: a.flowMaxGrade })}
                   </span>
                 )}
               </span>

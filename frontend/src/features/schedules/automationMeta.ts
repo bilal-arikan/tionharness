@@ -1,64 +1,7 @@
-import type {
-  AutomationTriggerKind,
-  BoardAction,
-  BoardColumnDef,
-  BoardOp,
-  FlowRuleStatus,
-} from '@/types'
+import type { AutomationTriggerKind, BoardAction, BoardColumnDef, BoardOp } from '@/types'
 import { i18next } from '@/i18n'
 
 const tr = (key: string) => i18next.t(key, { ns: 'schedules' })
-
-// Flow-trigger outcome filter options (_Docs/93).
-export const FLOW_STATUSES: { value: FlowRuleStatus; label: string }[] = [
-  {
-    value: '',
-    get label() {
-      return tr('meta.flowStatuses.any')
-    },
-  },
-  {
-    value: 'success',
-    get label() {
-      return tr('meta.flowStatuses.success')
-    },
-  },
-  {
-    value: 'failure',
-    get label() {
-      return tr('meta.flowStatuses.failure')
-    },
-  },
-]
-
-// Flow-trigger prompt placeholders (kept in sync with agent/automation_flow.go flowVars).
-export const FLOW_PROMPT_VARS: { name: string; desc: string }[] = [
-  'result',
-  'input',
-  'output',
-  'error',
-  'status',
-  'grade',
-  'runId',
-  'flowId',
-  'flowName',
-  'version',
-  'agent',
-  'agentId',
-  'sessionId',
-  'nodeId',
-  'iteration',
-  'maxIterations',
-  'automation',
-  'date',
-  'time',
-  'datetime',
-].map((name) => ({
-  name: `{{${name}}}`,
-  get desc() {
-    return tr(`meta.promptVars.flow.${name}`)
-  },
-}))
 
 // Fallback columns used until workspace board columns load (mirrors TaskBoard).
 export const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -219,10 +162,6 @@ export const BOARD_PROMPT_VARS: { name: string; desc: string }[] = [
 export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
   tag: 'Devam et. Önceki sonuç:\n{{result}}',
   board: 'Bir kart taşındı: {{title}} ({{op}} → {{toLabel}}). Gereğini yap.',
-  flow:
-    '{{agent}} ajanının akış koşusu {{runId}} {{status}} ile bitti (puan {{grade}}/5, v{{version}}). ' +
-    'Girdi: {{input}}\n\nYanıt: {{result}}\n\nYanıtı değerlendir; eksikse düzelt ve gerekiyorsa ' +
-    'ajanın akışına/promptuna bir iyileştirme öner.',
 }
 
 // Prefill body for the "stuck session repairer" template (self-healing, _Docs/56):
@@ -253,7 +192,6 @@ export const COLUMN_ACCENT = {
   schedules: '#6b8e23',
   tag: '#8b5cf6',
   board: '#0ea5e9',
-  flow: '#14b8a6',
 } as const
 
 // MAX_ITERATIONS_HARD_CAP is the ceiling the automation form allows.

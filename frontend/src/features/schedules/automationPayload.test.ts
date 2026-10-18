@@ -12,9 +12,6 @@ const baseInput: AutomationPayloadInput = {
   boardExclusive: true,
   boardAction: 'move',
   boardMoveToState: 'done',
-  flowAgentId: '',
-  flowStatus: '',
-  flowMaxGrade: 0,
   targetAgentId: 'stale-agent',
   sessionMode: 'continue',
   promptTemplate: '   ',
@@ -44,27 +41,5 @@ describe('buildAutomationPayload', () => {
       expiresAt: 0,
     })
     expect(payload).not.toHaveProperty('sessionMode')
-  })
-
-  it('builds a flow-run trigger with its agent, outcome and grade filters', () => {
-    const body = buildAutomationPayload({
-      ...baseInput,
-      kind: 'flow',
-      flowAgentId: ' AGT7 ',
-      flowStatus: 'failure',
-      flowMaxGrade: 2,
-      promptTemplate: 'Review {{result}}',
-    })
-    expect(body).toMatchObject({
-      triggerKind: 'flow',
-      flowAgentId: 'AGT7',
-      flowStatus: 'failure',
-      flowMaxGrade: 2,
-      targetAgentId: 'stale-agent',
-      sessionMode: 'continue',
-      promptTemplate: 'Review {{result}}',
-    })
-    expect(body).not.toHaveProperty('triggerTag')
-    expect(body).not.toHaveProperty('boardAction')
   })
 })

@@ -43,9 +43,7 @@ const SessionKindAutomationRun = "automation-run"
 // history-aware invoke, watchdog + single-shot idle-resume, reply/error record,
 // bounded auto-continue) but keys the session by (kind "automation", sourceId =
 // automation id) and runs the history-aware runSessionTurn so the agent sees the
-// whole prior thread. Only the session/agent driver uses this; flow-backed
-// automations keep running through LaunchRun (a flow already accumulates its own
-// per-flow transcript). Returns the reused session's id (for delivery bookkeeping)
+// whole prior thread. Returns the reused session's id (for delivery bookkeeping)
 // and any invoke error.
 func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, prompt string) (string, error) {
 	if strings.TrimSpace(prompt) == "" {

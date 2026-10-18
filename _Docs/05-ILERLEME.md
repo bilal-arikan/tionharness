@@ -9,6 +9,25 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Otomasyon sadeleştirmesi: flow türü, tohumlama ve gereksiz kurallar kaldırıldı (2026-10-18)
+
+Otomasyon türleri yalnız **tag** ve **board**: `flow` türü (`automation_trigger_flow.go`,
+`automation_flow.go`, flow-run hook'ları) ile akışın `trigger` düğümü (`flowturn_trigger.go`,
+`flow.Runner.Trigger`, `Node.AutomationID`) kaldırıldı; `flow` / `phase` / `trajectory_end`
+türlü eski kurallar yüklenirken atlanır. Varsayılan tohumlama (`automation_defaults.go`,
+`Automation.Seed`, `.seeded-automations.json`) ve boş şablonun PM pano kuralları + "CEO board
+heartbeat" zamanlaması kaldırıldı (şablon zamanlama/otomasyon mekanizması market paketleri için
+kalır). Hata: `spawnTags: []` `nil`'e indirgenip `[triggerTag]` varsayılıyordu → takılı-onarıcı
+şablonu kendini yeniden tetikleyebiliyordu; `normalizeSpawnTags` boş dilimi korur. Ölü kod:
+kullanılmayan atlama nedenleri (`disabled`, `autonomy_paused`, `target_missing`,
+`empty_prompt`), hiç yazılmayan `TriggerSessionID`/`Driver` alanları, `launchDriver`, sabit
+`LaunchResult.Driver`, kullanılmayan `api.archiveAutomation`, eski yorumlar. Frontend'de flow
+şeridi/alanları, akış düzenleyicideki trigger düğümü ve ilgili i18n anahtarları silindi.
+
+Veri: 4 workspace'te 19 kural (WS1/WS3/WS6'da 5'er, WS2'de 4), 4 "CEO board heartbeat" ve WS3'teki 10
+eski FootballOracle (18 Ekim'e sabitli) zamanlaması silindi; yalnız WS2'de açık olan "Kartı
+çalışmaya al" kuralı kaldı. Yedek scratchpad'de (`automations-schedules-backup-20261018.tgz`).
+
 ## Sessizlik zaman aşımları birleştirildi; eski sağlayıcı ayarları kaldırıldı (2026-10-18)
 
 `spawnIdleTimeoutMin`, `chatTurnIdleTimeoutMin` ve `turnIdleWatchdogMin` tek

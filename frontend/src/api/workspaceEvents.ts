@@ -74,7 +74,6 @@ export interface AutomationFireData {
   outcome: 'fired' | 'skipped'
   reason?: string
   sessionId?: string
-  triggerSessionId?: string
   iterationCount?: number
 }
 

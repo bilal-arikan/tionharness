@@ -14,7 +14,9 @@
 > mekanizmaları — `criteria` yönlendirme modu (`flow-criteria`), koşu puanlama
 > (`flow-grade`), öneri kapısı (`flow-proposal-gate`) — ve otomasyon bağlantısı:
 > `trigger` düğümü (akış içinden herhangi bir otomasyonu ateşler) + `flow` türü otomasyon
-> (koşu bitince ateşlenir). Beyin fırtınası ve uygulanmayan fikirler §8. **Ek (2026-10-17):**
+> (koşu bitince ateşlenir). **2026-10-18:** `trigger` düğümü ve `flow` türü otomasyon
+> kaldırıldı (hiç kullanılmıyordu, etiket kurallarıyla aynı anlarda ateşleniyordu); düğüm
+> tipleri input / llm / route / transform / output'tur, puanlama kalır. Beyin fırtınası ve uygulanmayan fikirler §8. **Ek (2026-10-17):**
 > workspace geneli **otomatik kabul** (`flowAutoAccept`): açıkken `propose` akışları da güven
 > eşiği + öneri kapısından geçen öneriyi elle kabulle aynı yoldan uygular, açıldığında bekleyen
 > öneriler taranır, uygulanan öneriye `autoApplied` yazılır (§3). flow gözlemcisi (flow-optimizer) varsayılan olarak KAPALI (`DefaultFlowPolicy` mode `off`); koordinatör akışı kuralı koordinatör modu ile birlikte kaldırıldı.
@@ -143,8 +145,8 @@ yalnız yerleşim değiştiyse `changed:false`) · `PUT /api/flows/{id}/meta` (a
 `POST /api/flow-proposals/{id}/apply|reject` · `POST /api/flows/{id}/test` (girdiyi
 `flow-test` etiketli yeni sohbet oturumunda bir tur olarak kuyruğa alır) ·
 `GET /api/agents/{id}/flow` · `GET /api/agents/{id}/prompt-versions` ·
-`POST /api/agents/{id}/prompt-versions/{n}/restore`. Otomasyon API'si (`/api/automations`)
-`triggerKind: "flow"` ile `flowAgentId` / `flowStatus` / `flowMaxGrade` alanlarını alır.
+`POST /api/agents/{id}/prompt-versions/{n}/restore`. (`flow` türü otomasyon alanları
+2026-10-18'de kaldırıldı.)
 
 ## 5. Ekran (`frontend/src/features/flows/`)
 
@@ -153,8 +155,7 @@ sekmeler **Kanvas · Koşular · Evrim · Test** (`#/w/{ws}/flows/{tab}`). Kanva
 üzerinde: tipli düğüm kartları (prompt özeti, bağlam/araç çipleri, route kolları), etiketli
 kenarlar (geri besleme kenarı kesikli/sarı), düğüm ekleme/otomatik dizme/sığdır araç çubuğu,
 seçili düğüm/kenar için inceleyici, istemci tarafı lint, canlı düğüm durumu (çalışıyor/bitti/hata
-halkası). İnceleyici `criteria` modunda satır başına bir ölçüt alanı, `trigger` düğümünde
-otomasyon seçici + yük şablonu sunar; koşu listesi ve ayrıntısı puan rozetini (★ n/5) ve
+halkası). İnceleyici `criteria` modunda satır başına bir ölçüt alanı sunar; koşu listesi ve ayrıntısı puan rozetini (★ n/5) ve
 adım `detail` satırını gösterir. Evrim sekmesindeki politika kartında workspace geneli
 **"tüm akışlarda evrimi otomatik kabul et"** anahtarı vardır (hemen kaydedilir; açıkken
 `propose` akışında "Otomatik gibi davranır" notu çıkar); otomatik uygulanan öneri
