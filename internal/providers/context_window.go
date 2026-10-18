@@ -151,10 +151,12 @@ func ContextWindowFor(provider, model string) int {
 	}
 	switch {
 	case gptFamily(m):
+		// Codex serves its own, smaller windows (codex_gpt6.go); the API tiers
+		// below would over-estimate them and let the fold fire too late.
+		if provider == "codex-cli" {
+			return codexCLIContextWindow(m)
+		}
 		if gpt6Tier(m) != "" {
-			if provider == "codex-cli" {
-				return codexGPT6ContextWindow
-			}
 			return windowGPTLarge
 		}
 		// Tier order matters: "gpt-5.6-sol" must hit the large tier, not the
@@ -209,9 +211,10 @@ func AdaptiveBudgetFraction(provider, model string) float64 {
 	}
 	switch {
 	case gptFamily(m):
-		// The codex window (272K) is far smaller than the 1M families, so 0.35 folded
-		// at ~95K — every few turns on a tool-heavy run. 0.6 (~163K) stays well under
-		// codex's own ~90% auto-compact while keeping folds rare (2026-10-18).
+		// Codex windows (272K, 500K for gpt-6.1-sol) are far smaller than the 1M
+		// families, so 0.35 folded at ~95K — every few turns on a tool-heavy run. 0.6
+		// (~163K on 272K; 500K hits the 256K ceiling) stays well under codex's own
+		// 95% auto-compact while keeping folds rare (2026-10-18).
 		return 0.6
 	case glmFamily(m):
 		// Same rationale as the other long-context families: even the 1M tiers lose

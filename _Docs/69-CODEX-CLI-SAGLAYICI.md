@@ -1442,6 +1442,16 @@ Standart API eşdeğeri tahmin 1 milyon token başına **$2 giriş / $10 çıkt�
 aşıldığında giriş/cache için 2×, çıktı için 1,5× uygulanır. Bu değerler abonelik
 faturalandırması oluşturmaz; yalnız mevcut eşdeğer API tahminini sağlar.
 
+**Güncelleme (2026-10-18):** Codex 0.163.0 kataloğu (`models_cache.json`,
+`context_window`) Sol 6.1'i artık **500.000** ile sunuyor; diğer bütün Codex
+slug'ları (GPT-6 Astra/Sol/Luna, GPT-5.6 Sol/Terra/Luna, `codex-auto-review`)
+272.000'de kaldı. `ContextWindowFor("codex-cli", …)` artık bu CLI değerlerini
+`codexCLIContextWindow` (`internal/providers/codex_gpt6.go`) üzerinden döndürüyor.
+Bu, ters yöndeki bir hatayı da kapattı: codex-cli üzerindeki `gpt-5.6-sol`/`terra`
+API'nin 1.048.576 penceresiyle bütçeleniyordu, CLI ise 272.000 sunuyor. Sol 6.1 ile
+bağlam bütçesi 0,6 × 500K = 300K yerine 256K tavanına (262.144) oturur; bu,
+yukarıdaki 272K uzun-bağlam fiyat eşiğinin hemen altında kalır.
+
 PATH'teki Node 24.21.0 kurulumu ile TionHarness sağlayıcısında `cliPath` üzerinden
 seçilmiş Node 24.18.1 kurulumu **Codex CLI 0.159.1** sürümüne güncellendi.
 Uygulamanın `~/.tionharness/codex-home` hesabıyla, üretim Codex taşıyıcısı üzerinden

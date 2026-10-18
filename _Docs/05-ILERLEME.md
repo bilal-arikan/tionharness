@@ -9,6 +9,16 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Codex CLI bağlam pencereleri Codex kataloğuna eşitlendi (2026-10-18)
+
+Codex 0.163.0'ın kendi kataloğu `gpt-6.1-sol`'u 500K ile sunuyor, TionHarness ise bütün
+Codex GPT-6 modelleri için 272K varsayıyordu; Sol 6.1 oturumlarının bütçesi bu yüzden
+163,2K'da kalıyordu (SES361). Ayrıca codex-cli üzerindeki `gpt-5.6-sol`/`terra` API'nin
+1,05M penceresiyle bütçeleniyordu (CLI 272K sunuyor; katlama çok geç tetiklenirdi).
+`codexCLIContextWindow` (`internal/providers/codex_gpt6.go`) artık codex-cli için CLI
+değerlerini döndürüyor: Sol 6.1 → 500K (bütçe 256K tavanında, ~262K), diğer Codex
+slug'ları → 272K. Testler güncellendi; ayrıntı `_Docs/69` §15.
+
 ## Codex resume home çöp toplayıcı (2026-10-18)
 
 Codex her chat scope'u (oturum + ajan + sağlayıcı + model + sistem promptu) için

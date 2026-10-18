@@ -10,8 +10,8 @@ func TestGPT61SolAliases(t *testing.T) {
 			if got := gpt6Tier(model); got != "sol" {
 				t.Fatalf("tier = %q, want sol", got)
 			}
-			if got := ContextWindowFor("codex-cli", model); got != codexGPT6ContextWindow {
-				t.Fatalf("CLI context = %d, want %d", got, codexGPT6ContextWindow)
+			if got := ContextWindowFor("codex-cli", model); got != codexCLIWindowGPT61Sol {
+				t.Fatalf("CLI context = %d, want %d", got, codexCLIWindowGPT61Sol)
 			}
 			if err := ValidateThinkingLevelForProvider("codex-cli", model, "off"); err == nil {
 				t.Fatal("unsupported off level accepted for alias")

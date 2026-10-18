@@ -32,7 +32,23 @@ func codexGPT6ThinkingTiers(tier string) []string {
 	return tiers
 }
 
-// codexGPT6ContextWindow is the verified CLI catalog window, not the larger
-// published API ceiling. Recheck this value when upgrading Codex; TionHarness
-// does not currently discover per-instance model context overrides.
-const codexGPT6ContextWindow = 272_000
+// Context windows Codex itself serves, from the context_window field of the
+// Codex 0.163.0 model catalog (codex-home/models_cache.json, fetched
+// 2026-10-18). These are the CLI's windows, not the larger API ceilings: the
+// same gpt-5.6-sol is 1.05M on the API but 272K through Codex. Recheck when
+// upgrading Codex; TionHarness does not read per-instance overrides.
+const (
+	codexCLIWindowGPT61Sol = 500_000 // gpt-6.1-sol
+	codexCLIWindowDefault  = 272_000 // every other Codex slug (GPT-6, GPT-5.6, codex-*)
+)
+
+// codexCLIContextWindow returns the Codex-served window for a GPT-family slug.
+func codexCLIContextWindow(model string) int {
+	m := strings.ToLower(strings.TrimSpace(model))
+	m = strings.TrimPrefix(m, "openai/")
+	m = strings.Replace(m, "gpt6.1-", "gpt-6.1-", 1)
+	if m == "gpt-6.1-sol" {
+		return codexCLIWindowGPT61Sol
+	}
+	return codexCLIWindowDefault
+}

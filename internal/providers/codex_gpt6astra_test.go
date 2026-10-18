@@ -29,8 +29,8 @@ func TestGPT6AstraFamilyGates(t *testing.T) {
 // compaction past the CLI catalog's advertised capacity.
 func TestGPT6AstraWindowAndOutput(t *testing.T) {
 	for _, m := range []string{"gpt-6-astra", "GPT-6-Astra", " gpt-6-astra "} {
-		if got := ContextWindowFor("codex-cli", m); got != codexGPT6ContextWindow {
-			t.Errorf("window(%q) = %d, want %d", m, got, codexGPT6ContextWindow)
+		if got := ContextWindowFor("codex-cli", m); got != codexCLIWindowDefault {
+			t.Errorf("window(%q) = %d, want %d", m, got, codexCLIWindowDefault)
 		}
 	}
 	if got := MaxOutputFor("codex-cli", "gpt-6-astra"); got != maxOutGPT {

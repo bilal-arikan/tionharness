@@ -31,8 +31,8 @@ func TestCodexGPT6CatalogAndWire(t *testing.T) {
 			if !slices.Equal(found.ThinkingTiers, want) {
 				t.Errorf("tiers = %v, want %v", found.ThinkingTiers, want)
 			}
-			if found.ContextWindow != 272_000 {
-				t.Errorf("CLI context = %d, want 272000", found.ContextWindow)
+			if want := codexCLIContextWindow(model); found.ContextWindow != want {
+				t.Errorf("CLI context = %d, want %d", found.ContextWindow, want)
 			}
 			if found.ThinkingClass != "adaptive" {
 				t.Errorf("class = %s", found.ThinkingClass)
@@ -66,7 +66,7 @@ func TestCodexGPT6CatalogAndWire(t *testing.T) {
 func TestGPT6TransportWindows(t *testing.T) {
 	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
 		for _, alias := range []string{model, " " + strings.ToUpper(model) + " "} {
-			if got := ContextWindowFor("codex-cli", alias); got != 272_000 {
+			if got := ContextWindowFor("codex-cli", alias); got != codexCLIContextWindow(model) {
 				t.Errorf("CLI %q: %d", alias, got)
 			}
 			if got := ContextWindowFor("openai", alias); got != windowGPTLarge {
@@ -79,6 +79,30 @@ func TestGPT6TransportWindows(t *testing.T) {
 	}
 	if got := ContextWindowFor("openai", "gpt-5.6-luna"); got != windowGPTLuna {
 		t.Errorf("legacy Luna window changed: %d", got)
+	}
+}
+
+// TestCodexCLIWindowsFollowCodexCatalog pins the windows Codex itself serves
+// (models_cache.json context_window): only gpt-6.1-sol is 500K, and the API's
+// 1.05M Sol/Terra windows must never leak into the codex-cli budget.
+func TestCodexCLIWindowsFollowCodexCatalog(t *testing.T) {
+	for model, want := range map[string]int{
+		"gpt-6.1-sol":   500_000,
+		"gpt6.1-sol":    500_000,
+		"gpt-6-sol":     272_000,
+		"gpt-6-astra":   272_000,
+		"gpt-6-luna":    272_000,
+		"gpt-5.6-sol":   272_000,
+		"gpt-5.6-terra": 272_000,
+		"gpt-5.6-luna":  272_000,
+		"gpt-reserve":   0, // not a GPT-5/6 slug: unknown, the conservative fallback applies
+	} {
+		if got := ContextWindowFor("codex-cli", model); got != want {
+			t.Errorf("codex-cli %s window = %d, want %d", model, got, want)
+		}
+	}
+	if got := ContextWindowFor("openai", "gpt-5.6-sol"); got != windowGPTLarge {
+		t.Errorf("API gpt-5.6-sol window = %d, want %d", got, windowGPTLarge)
 	}
 }
 

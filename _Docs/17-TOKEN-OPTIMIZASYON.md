@@ -1084,7 +1084,7 @@ daha yüksek pay alır, küçük/bilinmeyen modeller muhafazakâr kalır:
 | Opus 4.8 / Sonnet 4.6 / Fable 5 | 1M | 0.45 | 450K → **256K** (tavan) |
 | Haiku 4.5 | 200K | 0.40 | **80K** |
 | MiniMax / DeepSeek / Gemini | 1M | 0.35 | 350K → **256K** (tavan) |
-| GPT / Codex | ~272K | **0.6** (2026-10-18; önce 0.35 idi, ~95K'da sık katlama yapıyordu) | ~**163K** (codex'in kendi ~%90 auto-compact eşiğinin altında) |
+| GPT / Codex | ~272K (gpt-6.1-sol: 500K) | **0.6** (2026-10-18; önce 0.35 idi, ~95K'da sık katlama yapıyordu) | ~**163K**; gpt-6.1-sol 256K tavanında (~**262K**) — ikisi de codex'in %95 auto-compact eşiğinin altında |
 | Genel Claude (bilinmeyen katman) | 200K | 0.40 | **80K** |
 | Bilinmeyen | 0 → **128K varsayılır** | — | `min(MaxContextTokens, 102400)` + tek seferlik uyarı log'u |
 
