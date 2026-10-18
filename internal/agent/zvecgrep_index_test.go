@@ -25,16 +25,14 @@ func newZvecIndexRuntime(t *testing.T) (*Runtime, <-chan string) {
 		t.Fatalf("create zvec-grep server: %v", err)
 	}
 	roots := make(chan string, 4)
-	original := runZvecGrepIndex
-	t.Cleanup(func() { runZvecGrepIndex = original })
-	runZvecGrepIndex = func(_ context.Context, command, root, embedding string) ([]byte, error) {
+	swapIndexHook(t, &runZvecGrepIndex, func(_ context.Context, command, root, embedding string) ([]byte, error) {
 		if command != shim || !strings.HasPrefix(embedding, "local/") {
 			roots <- "unexpected invocation: " + command + " --embedding " + embedding
 			return nil, nil
 		}
 		roots <- root
 		return nil, nil
-	}
+	})
 	return rt, roots
 }
 

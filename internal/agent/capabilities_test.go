@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/indexstate"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
@@ -166,20 +167,19 @@ func TestEnsureCodebaseIndexedSkipsConcurrentSamePath(t *testing.T) {
 		}
 	}
 
-	original := runIndexRepository
-	t.Cleanup(func() { runIndexRepository = original })
+	swapIndexHook(t, &indexLedger, indexstate.New())
 	stubCodebaseMemoryCLI(t, `{"status":"not_found"}`, nil)
 	started := make(chan struct{})
 	release := make(chan struct{})
 	finished := make(chan struct{})
 	var calls atomic.Int32
-	runIndexRepository = func(_ context.Context, _, _ string) ([]byte, error) {
+	swapIndexHook(t, &runIndexRepository, func(_ context.Context, _, _ string) ([]byte, error) {
 		defer close(finished)
 		calls.Add(1)
 		close(started)
 		<-release
 		return nil, nil
-	}
+	})
 
 	repo := filepath.Join(t.TempDir(), "repo")
 	r1.EnsureCodebaseIndexed(context.Background(), repo)
@@ -206,21 +206,20 @@ func TestEnsureCodebaseIndexedRunsDifferentPathsConcurrently(t *testing.T) {
 		t.Fatalf("create MCP server: %v", err)
 	}
 
-	original := runIndexRepository
-	t.Cleanup(func() { runIndexRepository = original })
+	swapIndexHook(t, &indexLedger, indexstate.New())
 	stubCodebaseMemoryCLI(t, `{"status":"not_found"}`, nil)
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})
 	var calls atomic.Int32
 	var finished sync.WaitGroup
 	finished.Add(2)
-	runIndexRepository = func(_ context.Context, _, _ string) ([]byte, error) {
+	swapIndexHook(t, &runIndexRepository, func(_ context.Context, _, _ string) ([]byte, error) {
 		defer finished.Done()
 		calls.Add(1)
 		started <- struct{}{}
 		<-release
 		return nil, nil
-	}
+	})
 
 	root := t.TempDir()
 	r.EnsureCodebaseIndexed(context.Background(), filepath.Join(root, "repo-a"))

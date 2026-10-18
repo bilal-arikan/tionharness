@@ -123,6 +123,6 @@ func (r *Runtime) requestZvecGrepRun(ctx context.Context, root, action string) (
 
 	r.logger.Info("search index run requested", "tool", exttoolsZvecGrepName,
 		"root", target, "action", effective)
-	go r.runZvecGrepAction(command, target, effective, entry.Run, want)
+	goIndexRun(func() { r.runZvecGrepAction(command, target, effective, entry.Run, want) })
 	return entry, nil
 }

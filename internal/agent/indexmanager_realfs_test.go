@@ -47,19 +47,16 @@ func newRealZvecGrepRuntime(t *testing.T) (*Runtime, *atomic.Int32) {
 		t.Fatalf("create zvec-grep server: %v", err)
 	}
 
-	prevLedger := indexLedger
-	indexLedger = indexstate.New()
-	t.Cleanup(func() { indexLedger = prevLedger })
+	swapIndexHook(t, &indexLedger, indexstate.New())
 
 	// Count runs while still executing the REAL indexer, so idempotency is
 	// measured against actual `zg index` invocations.
 	runs := new(atomic.Int32)
-	prevRun := runZvecGrepIndex
-	t.Cleanup(func() { runZvecGrepIndex = prevRun })
-	runZvecGrepIndex = func(ctx context.Context, command, root, embedding string) ([]byte, error) {
+	realRun := runZvecGrepIndex
+	swapIndexHook(t, &runZvecGrepIndex, func(ctx context.Context, command, root, embedding string) ([]byte, error) {
 		runs.Add(1)
-		return prevRun(ctx, command, root, embedding)
-	}
+		return realRun(ctx, command, root, embedding)
+	})
 	return rt, runs
 }
 

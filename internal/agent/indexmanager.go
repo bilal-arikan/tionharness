@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/indexstate"
@@ -20,6 +21,17 @@ var indexLedger = indexstate.New()
 // status endpoint. Read-only by convention: the transitions live here, next to
 // the code that actually runs the indexer.
 func IndexLedger() *indexstate.Manager { return indexLedger }
+
+// indexRuns counts the background goroutines that observe or run an indexer
+// (zvec-grep and codebase-memory, automatic and requested). Process-wide like
+// the ledger those goroutines write to. Nothing in production waits on it — a
+// first full index runs for minutes and must not hold up a shutdown — but it is
+// the only barrier that says when every run has stopped reading the package's
+// indexer hooks and the ledger, which tests need before swapping those back.
+var indexRuns sync.WaitGroup
+
+// goIndexRun starts fn as a counted background index goroutine.
+func goIndexRun(fn func()) { indexRuns.Go(fn) }
 
 // zvecGrepStaleAfter is how long an index may go without an update before the
 // manager calls it stale and schedules a refresh.
@@ -123,7 +135,7 @@ func (r *Runtime) EnsureZvecGrepIndex(ctx context.Context, cwd string) bool {
 		return true // a run claimed by another caller is still a run on its way
 	}
 
-	go r.runZvecGrepAction(command, root, action, entry.Run, want)
+	goIndexRun(func() { r.runZvecGrepAction(command, root, action, entry.Run, want) })
 
 	// True covers both "an index is here" and "one is on its way": the caller
 	// uses this to decide whether to tell the model an index is coming, and a

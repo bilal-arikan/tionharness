@@ -18,6 +18,39 @@ type indexRun struct {
 	embedding string
 }
 
+// swapIndexHook points a package-level indexer hook (a stubbed command, the
+// version probe, the ledger) at v for the rest of the test. Background index
+// goroutines read these hooks, so both the swap and the restore first wait for
+// every run in flight: a run left over from an earlier test, or started by this
+// one, must not read a hook while it is being reassigned.
+func swapIndexHook[T any](t *testing.T, hook *T, v T) {
+	t.Helper()
+	waitIndexRuns(t)
+	prev := *hook
+	*hook = v
+	t.Cleanup(func() {
+		waitIndexRuns(t)
+		*hook = prev
+	})
+}
+
+// waitIndexRuns waits for every background index goroutine to return. A run
+// that never returns is a test that left its stub blocked; that is reported
+// rather than waited on forever.
+func waitIndexRuns(t *testing.T) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		indexRuns.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Errorf("background index runs still in flight after 10s")
+	}
+}
+
 // newManagedIndexRuntime returns a runtime with an enabled zvec-grep server, the
 // indexer stubbed, the version probe pinned, and the process-wide ledger reset —
 // the ledger outlives a single test, so leaving entries behind would make the
@@ -32,24 +65,17 @@ func newManagedIndexRuntime(t *testing.T, version string) (*Runtime, chan indexR
 		t.Fatalf("create zvec-grep server: %v", err)
 	}
 
-	prevLedger := indexLedger
-	indexLedger = indexstate.New()
-	t.Cleanup(func() { indexLedger = prevLedger })
-
-	prevVer := zvecGrepToolVersion
-	zvecGrepToolVersion = func(context.Context, string) string { return version }
-	t.Cleanup(func() { zvecGrepToolVersion = prevVer })
+	swapIndexHook(t, &indexLedger, indexstate.New())
+	swapIndexHook(t, &zvecGrepToolVersion, func(context.Context, string) string { return version })
 
 	runs := make(chan indexRun, 4)
-	prevRun := runZvecGrepIndex
-	t.Cleanup(func() { runZvecGrepIndex = prevRun })
-	runZvecGrepIndex = func(_ context.Context, _, root, embedding string) ([]byte, error) {
+	swapIndexHook(t, &runZvecGrepIndex, func(_ context.Context, _, root, embedding string) ([]byte, error) {
 		runs <- indexRun{root: root, embedding: embedding}
 		// A real run leaves a manifest behind; the stub does the same so the next
 		// observation sees what the run produced.
 		writeManifest(t, root, embedding, time.Now())
 		return nil, nil
-	}
+	})
 	return rt, runs
 }
 
@@ -220,9 +246,9 @@ func TestManagedIndexDoesNothingForACurrentStore(t *testing.T) {
 func TestManagedIndexRecordsAFailureInsteadOfReportingReady(t *testing.T) {
 	rt, _ := newManagedIndexRuntime(t, "1.0.0")
 	repo := newRepo(t)
-	runZvecGrepIndex = func(context.Context, string, string, string) ([]byte, error) {
+	swapIndexHook(t, &runZvecGrepIndex, func(context.Context, string, string, string) ([]byte, error) {
 		return []byte("embedding model download failed"), context.DeadlineExceeded
-	}
+	})
 
 	rt.EnsureZvecGrepIndex(context.Background(), repo)
 
@@ -327,12 +353,12 @@ func TestManagedIndexRunsOnceAcrossRuntimesSharingARepository(t *testing.T) {
 	// Hold the run open so the second caller meets a claim in flight, the way a
 	// second workspace runtime on the same repository would.
 	release := make(chan struct{})
-	runZvecGrepIndex = func(_ context.Context, _, root, embedding string) ([]byte, error) {
+	swapIndexHook(t, &runZvecGrepIndex, func(_ context.Context, _, root, embedding string) ([]byte, error) {
 		runs <- indexRun{root: root, embedding: embedding}
 		<-release
 		writeManifest(t, root, embedding, time.Now())
 		return nil, nil
-	}
+	})
 
 	if !rt.EnsureZvecGrepIndex(context.Background(), repo) {
 		t.Fatal("first call did not schedule an index")

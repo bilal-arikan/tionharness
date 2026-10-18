@@ -255,7 +255,7 @@ func (r *Runtime) requestCodebaseMemoryRun(ctx context.Context, root, action str
 	// path must not start a second one on the next turn.
 	r.cbmIndexed.Store(root, true)
 	r.logger.Info("search index run requested", "tool", codebaseMemoryToolName, "root", root, "action", effective)
-	go r.runCodebaseMemoryAction(command, root, effective, entry.Run)
+	goIndexRun(func() { r.runCodebaseMemoryAction(command, root, effective, entry.Run) })
 	return entry, nil
 }
 

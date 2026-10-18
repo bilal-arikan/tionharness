@@ -332,7 +332,7 @@ func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 	if _, seen := r.cbmIndexed.LoadOrStore(cwd, true); seen {
 		return
 	}
-	go func() {
+	goIndexRun(func() {
 		// Observe first so the ledger records create vs refresh honestly; the run
 		// itself is the same incremental index_repository either way.
 		obs, obsErr := observeCodebaseMemory(context.Background(), command, cwd)
@@ -350,5 +350,5 @@ func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 		if !r.runCodebaseMemoryAction(command, cwd, action, entry.Run) {
 			r.cbmIndexed.Delete(cwd) // allow a later turn to retry
 		}
-	}()
+	})
 }

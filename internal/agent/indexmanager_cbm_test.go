@@ -46,9 +46,7 @@ func stubCodebaseMemoryCLI(t *testing.T, reply string, err error) *cliRecorder {
 func stubCodebaseMemoryCLIFunc(t *testing.T, reply func(tool string) (string, error)) *cliRecorder {
 	t.Helper()
 	rec := &cliRecorder{}
-	prev := codebaseMemoryCLI
-	t.Cleanup(func() { codebaseMemoryCLI = prev })
-	codebaseMemoryCLI = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	swapIndexHook(t, &codebaseMemoryCLI, func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		call := cliCall{tool: args[0]}
 		for i := 1; i+1 < len(args); i++ {
 			if args[i] == "--project" {
@@ -60,7 +58,7 @@ func stubCodebaseMemoryCLIFunc(t *testing.T, reply func(tool string) (string, er
 		rec.mu.Unlock()
 		out, err := reply(args[0])
 		return []byte(out), err
-	}
+	})
 	return rec
 }
 
@@ -76,14 +74,10 @@ func newCodebaseMemoryRuntime(t *testing.T) (*Runtime, chan error) {
 	}); err != nil {
 		t.Fatalf("create MCP server: %v", err)
 	}
-	prevLedger := indexLedger
-	indexLedger = indexstate.New()
-	t.Cleanup(func() { indexLedger = prevLedger })
+	swapIndexHook(t, &indexLedger, indexstate.New())
 
 	results := make(chan error, 4)
-	prevRun := runIndexRepository
-	t.Cleanup(func() { runIndexRepository = prevRun })
-	runIndexRepository = func(ctx context.Context, _, _ string) ([]byte, error) {
+	swapIndexHook(t, &runIndexRepository, func(ctx context.Context, _, _ string) ([]byte, error) {
 		select {
 		case err := <-results:
 			if err != nil {
@@ -93,7 +87,7 @@ func newCodebaseMemoryRuntime(t *testing.T) (*Runtime, chan error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
-	}
+	})
 	return rt, results
 }
 
