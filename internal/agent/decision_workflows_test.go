@@ -44,9 +44,6 @@ func TestDecisionWorkflowsOffMakesNoJudgeCalls(t *testing.T) {
 	rt.reviewDecisionFold(ctx, agent, "", []conversation.FoldSegment{{Key: "a", Text: "remember", Rendered: "remember"}})
 	rt.applyDecisionContext(ctx, agent, &req)
 	rt.ReviewClarification(ctx, agent, json.RawMessage(`{"question":"Which color?","required_input":false}`))
-	if got := rt.reviewDecisionWorker(ctx, SessionIDFrom(ctx), "worker-1", "original"); got != "original" {
-		t.Fatal("disabled worker review changed delivery")
-	}
 	if stub.calls() != 0 || req.System != "" || req.SystemDynamic != "" {
 		t.Fatalf("disabled workflows changed behavior or called the judge: %d", stub.calls())
 	}
@@ -113,7 +110,7 @@ func TestDecisionSetupBatchesLoadsAndActivatesPermittedCapabilities(t *testing.T
 }
 
 func TestDecisionShadowRecordsRecommendationsWithoutSideEffects(t *testing.T) {
-	rt, stub, ctx, agent := decisionWorkflowFixture(t, map[string]decider.Mode{authClarification: decider.ModeShadow, authWorkerReview: decider.ModeShadow, authCompactRetention: decider.ModeShadow})
+	rt, stub, ctx, agent := decisionWorkflowFixture(t, map[string]decider.Mode{authClarification: decider.ModeShadow, authCompactRetention: decider.ModeShadow})
 	stub.set(func(stub *decisionStub) {
 		stub.noul["answered"] = 0.99
 		for i := 0; i < 5; i++ {
@@ -124,16 +121,13 @@ func TestDecisionShadowRecordsRecommendationsWithoutSideEffects(t *testing.T) {
 	if _, skip := rt.ReviewClarification(ctx, agent, json.RawMessage(`{"question":"Which color?","required_input":false}`)); skip {
 		t.Fatal("shadow clarification suppressed user input")
 	}
-	if got := rt.reviewDecisionWorker(ctx, SessionIDFrom(ctx), "worker", "original"); got != "original" {
-		t.Fatal("shadow review changed worker delivery")
-	}
 	plan := rt.reviewDecisionFold(ctx, agent, "", []conversation.FoldSegment{{Key: "old", SourceID: "message", Text: "old", Rendered: "old rendered"}})
 	if plan.Rendered != "old rendered" || plan.Protected != "" {
 		t.Fatal("shadow fold modified context")
 	}
 	waitBackground(rt)
 	state, err := rt.db.ReadSessionDecisions(ctx, SessionIDFrom(ctx))
-	if err != nil || len(state.Entries) != 3 || len(state.Memories) != 0 {
+	if err != nil || len(state.Entries) != 2 || len(state.Memories) != 0 {
 		t.Fatalf("shadow state: %+v, %v", state, err)
 	}
 	for _, entry := range state.Entries {
@@ -330,19 +324,6 @@ func TestDecisionRemindersRecordOnlyFragmentsActuallyInjected(t *testing.T) {
 	}
 }
 
-func TestDecisionWorkerReviewAugmentsAndFailurePreservesDelivery(t *testing.T) {
-	rt, stub, ctx, _ := decisionWorkflowFixture(t, map[string]decider.Mode{authWorkerReview: decider.ModeOn})
-	stub.set(func(stub *decisionStub) { stub.noul[questionKey(0)] = 0.99 })
-	got := rt.reviewDecisionWorker(ctx, SessionIDFrom(ctx), "worker", "The implementation passed tests.")
-	if !strings.HasPrefix(got, "The implementation passed tests.") || !strings.Contains(got, "<worker_review>") || !strings.Contains(got, "Verify claimed results") {
-		t.Fatalf("review did not augment the delivery: %q", got)
-	}
-	stub.set(func(stub *decisionStub) { stub.status = 400 })
-	if got := rt.reviewDecisionWorker(ctx, SessionIDFrom(ctx), "worker", "Original note"); got != "Original note" {
-		t.Fatalf("judge failure changed delivery: %q", got)
-	}
-}
-
 func TestDecisionRouterRestrictsCandidatesAndKeepsPinnedOrResumedRoutes(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
@@ -500,49 +481,6 @@ func TestDecisionAuxiliaryIngressDoesNotPrepareSessionWorkflows(t *testing.T) {
 	_, _, err := rt.CompleteWithToolsTraced(WithCallKind(ctx, KindTitle), agent, provider, providers.Request{Model: agent.Model, Messages: []providers.Message{{Role: providers.RoleUser, Text: "Create a title"}}}, false)
 	if err != nil || stub.calls() != 0 || len(provider.requests) != 1 || provider.requests[0].SystemDynamic != "" || strings.Contains(provider.requests[0].System, "Do not load into titles") {
 		t.Fatalf("auxiliary completion ran session preparation: err=%v judge=%d requests=%+v", err, stub.calls(), provider.requests)
-	}
-}
-
-func TestDecisionWorkerReviewPerspectivesReachCanonicalNotification(t *testing.T) {
-	for _, failure := range []bool{false, true} {
-		name := "selected perspectives"
-		if failure {
-			name = "judge failure preserves terminal note"
-		}
-		t.Run(name, func(t *testing.T) {
-			rt, stub, ctx, agent := decisionWorkflowFixture(t, map[string]decider.Mode{authWorkerReview: decider.ModeOn})
-			worker, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID})
-			if err != nil {
-				t.Fatal(err)
-			}
-			stub.set(func(stub *decisionStub) {
-				stub.noul[questionKey(0)] = 0.99
-				if failure {
-					stub.status = 400
-				}
-			})
-			// Pause automatic coordinator synthesis, while exercising the complete
-			// durable notification and terminal-worker archive path.
-			slot := rt.coordSlotFor(SessionIDFrom(ctx))
-			slot.mu.Lock()
-			slot.stallHalted = true
-			slot.mu.Unlock()
-			note := "<task-notification>Terminal worker result</task-notification>"
-			if err := rt.notifyCoordinator(SessionIDFrom(ctx), note, false, nil, worker.ID); err != nil {
-				t.Fatal(err)
-			}
-			messages, err := rt.db.ListMessages(ctx, SessionIDFrom(ctx))
-			if err != nil || len(messages) != 1 || messages[0].Origin != "worker-note" || !strings.HasPrefix(messages[0].Text, note) {
-				t.Fatalf("terminal result was not delivered canonically: %+v, %v", messages, err)
-			}
-			if failure && messages[0].Text != note || !failure && !strings.Contains(messages[0].Text, "Verify claimed results") {
-				t.Fatalf("stored notification lost result or selected perspectives: %q", messages[0].Text)
-			}
-			storedWorker, err := rt.db.GetSession(ctx, worker.ID)
-			if err != nil || storedWorker.State != "archived" {
-				t.Fatalf("terminal delivery failed to archive worker: %+v, %v", storedWorker, err)
-			}
-		})
 	}
 }
 

@@ -32,7 +32,7 @@ import (
 // onSessionArchivedDisableSchedules disables every schedule bound to a session
 // that has just been archived. Wired into OnSessionChange, so it covers every
 // archive path at once — the HTTP endpoint, update_session, the archive_sessions
-// bulk sweep, the coordinator's terminal-worker archive and the insight sweeper
+// bulk sweep and the insight sweeper
 // all funnel through db.SetSessionState.
 //
 // Only the active→archived edge does work; any other transition (including an
@@ -94,7 +94,7 @@ var ErrSessionArchived = errors.New("session is archived: scheduled turn skipped
 // refused before the queue is touched.
 //
 // Refused, never resurrected — reviving on a wake would restart the runaway
-// coordinator loop archiving exists to break (see reactivatingKinds), so
+// auto-turn loop archiving exists to break (see reactivatingKinds), so
 // KindWake stays off that allowlist and dies here instead.
 //
 // The skip is LOGGED, not swallowed: a turn silently vanishing is precisely the

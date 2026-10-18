@@ -1,5 +1,7 @@
 # 19 — Lazy Tool Loading (Tasarım + Uygulama)
 
+> **Not (2026-10-18):** Otonom yol artık `run_subagent` / `spawn_session`; `spawn_worker` (koordinatör modu) 2026-10-18'de kaldırıldı.
+
 > Durum: **UYGULANDI** (2026-06-18) — 3 fazın tamamı. Skill sisteminin
 > "progressive disclosure" yaklaşımı built-in + MCP araçlarına taşındı.
 > Tamamlayıcı: [44-CODE-EXECUTION-MCP](44-CODE-EXECUTION-MCP.md) — MCP araçlarını
@@ -519,7 +521,7 @@ Blok **iki yolda da** enjekte edilir ve her ikisinde de Skills bloğundan hemen
 sonra gelir (cache prefix'i aynı kalsın diye):
 
 - sohbet: `internal/api/chat_turn.go` → `Runtime.LazyToolsCatalogBlock`
-- otonom (scheduler / flow / `run_subagent` / `spawn_worker`):
+- otonom (scheduler / flow / `run_subagent` / `spawn_session`):
   `internal/agent/runtime_prompt.go` → `autonomousSystemPrompt`
 
 Otonom yolda blok eksikken model deferred bir aracı şema yüklemeden çağırıp
@@ -1017,8 +1019,8 @@ pahalı, `Examples` yalnız `full` tier'ı büyütür).
 ## `use_skill` gövde tekrarı — oturum-kapsamlı dedupe (2026-09-01)
 
 Lazy yükleme skill **kataloğunu** ucuzlattı ama gövdenin **tekrar tekrar**
-yüklenmesine karşı bir koruma yoktu. Uzun bir koordinatör oturumunda
-(`SES2570`) `use_skill` 174 kez çağrıldı ve **167'si** aynı oturumda daha önce
+yüklenmesine karşı bir koruma yoktu. Uzun bir oturumda
+(`SES2570`, o dönemde koordinatör oturumu; mod 2026-10-18'de kaldırıldı) `use_skill` 174 kez çağrıldı ve **167'si** aynı oturumda daha önce
 yüklenmiş bir slug'dı — 2.25 MB ≈ ~560K token, iki fold arasındaki context
 büyümesinin neredeyse tamamı.
 
@@ -1027,4 +1029,4 @@ gövde yerine kısa bir işaretçi döner. Fold epoch'u (`Session.CompactionCoun
 doğruluk kapısıdır: fold gövdeyi pencereden düşürdüğü için fold sonrası ilk
 yükleme gerçek metni döndürür. Kaçış yolu `force: true`.
 
-Ayrıntı ve gerekçe: `_Docs\47-KOORDINATOR-COKLU-AJAN.md` §19.1.
+Ayrıntı ve gerekçe: `_Docs\arsiv\47-KOORDINATOR-COKLU-AJAN.md` §19.1 (arşiv).

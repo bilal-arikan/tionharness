@@ -2,21 +2,7 @@
 // internal/insight.
 import type { SeedDefaultState } from './seed'
 
-type InsightChannel = 'app-fix' | 'workspace-opt' | 'recipe-opt'
-
-// Recipe optimizer proposal (Rota F4, insight.RecipeProposal): one measured,
-// conditional change to one coordinator recipe. Suggestion-only in v1.
-interface RecipeProposal {
-  slug: string
-  version?: string
-  // prune_phase | make_optional | prune_watcher | change_profile | add_gate |
-  // bind_watcher | split_phase | merge_phase | rollback_version
-  action: string
-  target?: string
-  value?: string
-  removes?: string
-  evidence: string
-}
+type InsightChannel = 'app-fix' | 'workspace-opt'
 
 interface LensPrefilter {
   requiresAny?: string[]
@@ -73,8 +59,6 @@ export interface InsightFinding {
   /** Set when a closed (dismissed/applied/verified) finding recurred — a "fixed" issue came back. */
   regressed?: boolean
   regressedAt?: number
-  /** Structured recipe change behind a recipe-opt finding (Rota F4). */
-  proposal?: RecipeProposal
 }
 
 export interface InsightSettings {

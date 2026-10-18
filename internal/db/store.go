@@ -203,10 +203,10 @@ func validateSessionMeta(s Session) error {
 }
 
 func validateSessionEnums(s Session) error {
-	if !oneOf(s.ExecutionType, ExecutionInteractive, ExecutionSubagent, ExecutionWorker, ExecutionSchedule, ExecutionAutomation, ExecutionSystem) {
+	if !oneOf(s.ExecutionType, ExecutionInteractive, ExecutionSubagent, ExecutionSchedule, ExecutionAutomation, ExecutionSystem) {
 		return fmt.Errorf("invalid executionType %q", s.ExecutionType)
 	}
-	if !oneOf(s.Category, CategoryChat, CategorySubagent, CategoryWorker, CategoryAutomation, CategorySystem) {
+	if !oneOf(s.Category, CategoryChat, CategorySubagent, CategoryAutomation, CategorySystem) {
 		return fmt.Errorf("invalid category %q", s.Category)
 	}
 	if !oneOf(s.ContextMode, ContextIsolated, ContextInherited) {
@@ -261,26 +261,6 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 			s.Model = d.resolveAgentLocked(a).Model
 		}
 	}
-	// Seed coordinator mode from the agent's default, so an agent configured as a
-	// coordinator (a template's PM/CTO) arrives ready instead of needing a toggle
-	// on every new thread. Same shape as the model snapshot above: the agent holds
-	// the default, the session holds the live value everything else reads.
-	//
-	// Deliberately skipped inside a coordinator TREE (a spawned worker): there the
-	// spawner has already decided, and it is the only layer that knows the depth
-	// budget — see Runtime.SpawnWorker, which folds the agent default in itself and
-	// degrades to a plain worker at the depth limit. Without this exemption the db
-	// would silently re-enable a mode the spawner deliberately withheld.
-	if !s.CoordinatorMode && s.AgentID != "" && s.CoordinatorSessionID == "" && s.CoordinatorDepth == 0 {
-		if raw, ok := d.agents[s.AgentID]; ok {
-			if a := d.resolveAgentLocked(raw); a.CoordinatorMode {
-				s.CoordinatorMode = true
-				if s.CoordinatorWorkflow == "" {
-					s.CoordinatorWorkflow = a.CoordinatorWorkflow
-				}
-			}
-		}
-	}
 	d.messages[s.ID] = nil
 	return s, d.persistSessionLocked(s)
 }
@@ -288,18 +268,12 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 func normalizeSessionMeta(s Session) Session {
 	if s.ExecutionType == "" {
 		s.ExecutionType = ExecutionInteractive
-		if s.Kind == "worker" {
-			s.ExecutionType = ExecutionWorker
-		}
 		if s.Kind == "schedule" {
 			s.ExecutionType = ExecutionSchedule
 		}
 	}
 	if s.Category == "" {
 		s.Category = CategoryChat
-		if s.Kind == "worker" {
-			s.Category = CategoryWorker
-		}
 	}
 	if s.ContextMode == "" {
 		s.ContextMode = ContextIsolated
@@ -440,29 +414,6 @@ func (d *DB) SetSessionRunState(ctx context.Context, sessionID, state string, at
 	return err
 }
 
-// BumpSessionStallNudges increments the cumulative coordinator-stall counter and
-// returns the new value. Persisted (unlike the in-memory slot streak) so a later
-// escalation tier survives a restart. Does not bump UpdatedAt — bookkeeping.
-func (d *DB) BumpSessionStallNudges(ctx context.Context, sessionID string) (int, error) {
-	n := 0
-	err := d.mutateSessionLocked(sessionID, func(s *Session) {
-		s.StallNudges++
-		n = s.StallNudges
-	})
-	return n, err
-}
-
-// SetSessionStallNudges overwrites the cumulative coordinator-stall counter. The
-// counterpart of the bump above: a coordinator turn that genuinely drives workers
-// (a real coordination tool call) clears the tally with 0, so the cumulative halt
-// tier only ever fires on a coordinator that keeps relapsing without recovering.
-// Does not bump UpdatedAt — bookkeeping, same as the bump.
-func (d *DB) SetSessionStallNudges(ctx context.Context, sessionID string, n int) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
-		s.StallNudges = n
-	})
-}
-
 // SetSessionPinned pins/unpins a session to the top of the sidebar list. Does not
 // bump UpdatedAt (pinning is a view preference, not activity).
 func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) error {
@@ -518,9 +469,7 @@ func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func
 		return err
 	}
 	// Both the transcript lock and d.mu are released by now (deferred inside
-	// deleteSessionUnderLocks), which is the hook's contract — and the
-	// trajectory lock order's (never under d.mu).
-	d.dropTrajectoryForRoot(sessionID)
+	// deleteSessionUnderLocks), which is the hook's contract.
 	d.fireSessionHook(SessionChangeEvent{SessionID: sessionID, Op: SessionOpDelete, Session: removed})
 	return nil
 }

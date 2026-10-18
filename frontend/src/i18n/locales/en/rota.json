@@ -1,30 +1,12 @@
 {
   "title": "Rota",
-  "actions": { "close": "Close", "cancel": "Cancel", "add": "Add" },
-  "common": {
-    "unplanned": "unplanned",
-    "trajectory": "trajectory",
-    "workspace": "workspace",
-    "loading": "loading…"
-  },
-  "status": {
-    "planned": "planned",
-    "running": "running",
-    "waiting": "waiting",
-    "done": "done",
-    "failed": "failed",
-    "abandoned": "abandoned"
-  },
   "live": {
     "running": "running",
     "queued": "queued",
     "waiting_ask": "waiting for an answer",
-    "waiting_input": "waiting for input",
-    "awaiting_workers": "waiting for workers"
+    "waiting_input": "waiting for input"
   },
   "duration": {
-    "seconds_one": "{{count}} sec",
-    "seconds_other": "{{count}} sec",
     "minutes_one": "{{count}} min",
     "minutes_other": "{{count}} min",
     "hours_one": "{{count}} hr",
@@ -32,61 +14,11 @@
     "hoursMinutes": "{{hours}} hr {{minutes}} min",
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",
-    "daysHours": "{{days}} day {{hours}} hr",
-    "daysHoursShort": "{{days}} d {{hours}} hr"
-  },
-  "fork": {
-    "title": "Fork from here",
-    "subtitle": "Open a worker under {{session}}",
-    "agentProfile": "Agent / profile",
-    "agentPlaceholder": "explore | planner | coder | reviewer | validator | agent name",
-    "taskLabel": "Task (the worker sees only this: file paths, lines, and what “done” means)",
-    "taskPlaceholder": "Self-contained brief…",
-    "coordinator": "Make it a sub-coordinator (can open its own workers)",
-    "openWorker": "Open worker",
-    "queued": "Worker queued ({{name}}, position {{position}})",
-    "opened": "Worker opened: {{name}} ({{id}})"
-  },
-  "phase": {
-    "humanGateOpened": "Phase {{phase}}: human gate opened — answer the card in the root chat",
-    "moved": "Phase {{phase}} → {{state}}",
-    "forceConfirm": "Gate did not pass:\n{{message}}\n\nForce it?",
-    "changedWarning": "The trajectory changed in the meantime; the screen was refreshed. Try again.",
-    "added": "Phase added: {{id}}",
-    "finishConfirm": "Close the trajectory as {{status}}?",
-    "finished": "Trajectory closed",
-    "phaseName": "phase {{phase}}",
-    "makeActive": "make active",
-    "gateTitle": "Gate: {{kind}} {{value}}",
-    "markDone": "mark done",
-    "gate": "gate",
-    "skip": "skip",
-    "selectHint": "Click a phase column: make active / mark done / skip",
-    "idPlaceholder": "phase ID (for example, docs)",
-    "profilePlaceholder": "profile (optional)",
-    "addTitle": "Add a phase to the plan",
-    "add": "add phase",
-    "finishTitle": "Close the trajectory as done",
-    "finish": "finish",
-    "state": {
-      "pending": "pending",
-      "active": "active",
-      "done": "done",
-      "failed": "failed",
-      "skipped": "skipped",
-      "ghost": "ghost",
-      "none": "none"
-    }
+    "daysHours": "{{days}} day {{hours}} hr"
   },
   "activity": {
-    "trajectories": "Trajectories",
-    "noTrajectories": "No trajectories yet. One will appear here when a coordinator opens a worker or starts from a recipe.",
-    "trajectoryTitle_one": "{{id}} · {{template}} · rev {{revision}} · {{count}} node",
-    "trajectoryTitle_other": "{{id}} · {{template}} · rev {{revision}} · {{count}} nodes",
     "triggers": "Triggers",
     "noTriggers": "No triggers yet.",
-    "coordination": "Coordination",
-    "noEvents": "No events yet.",
     "armedSchedules": "Armed schedules",
     "noArmedSchedules": "No armed schedules."
   },
@@ -119,16 +51,10 @@
     "fit": "Fit to panel",
     "in": "Zoom in"
   },
-  "strip": {
-    "openTitle": "Trajectory {{id}} · {{template}} · rev {{revision}} · Open in Rota",
-    "noPhases": "trajectory · no phases declared",
-    "phaseTitle": "{{phase}} · {{state}}{{profile}}{{current}}",
-    "currentSessionHere": "this session is here"
-  },
   "panel": {
     "streamConnected": "Live stream connected",
     "streamConnecting": "Connecting to stream…",
-    "counts": "{{lanes}} lanes · {{sessions}} sessions · {{trajectories}} trajectories · {{triggers}} triggers",
+    "counts": "{{lanes}} lanes · {{sessions}} sessions · {{triggers}} triggers",
     "capacity": "spawn {{active}}/{{max}} · queue {{queue}}/{{queueMax}}",
     "autonomyPaused": "autonomy paused",
     "revisionTitle": "Stream seq / store revision",
@@ -140,7 +66,6 @@
     "openInChat": "Open in Chat",
     "rootSessionTitle": "Root session connected to this lane: {{session}}",
     "rootSession": "Root session",
-    "openTrajectory": "Open trajectory",
     "clearSelection": "Clear selection"
   },
   "canvas": {
@@ -149,67 +74,13 @@
     "future": "future",
     "trimmed": "{{duration}} trimmed",
     "now": "now",
-    "waitSummary_one": "{{count}} worker · {{duration}} waiting",
-    "waitSummary_other": "{{count}} workers · {{duration}} waiting",
     "segmentSummary_one": "{{count}} sitting · {{work}} working · {{idle}} idle",
     "segmentSummary_other": "{{count}} sittings · {{work}} working · {{idle}} idle"
-  },
-  "trajectory": {
-    "noPhaseColumn": "no phase",
-    "noPhases": "no phases declared",
-    "unassigned": "unassigned",
-    "backTitle": "Return to workspace lanes",
-    "ghostsTitle": "Nodes that were declared but have not happened yet",
-    "ghosts_one": "{{count}} ghost",
-    "ghosts_other": "{{count}} ghosts",
-    "columnsOverflowTitle": "Columns do not fit the panel; scroll the canvas to the right",
-    "columnsOverflow_one": "{{count}} column · scroll right ⇢ {{label}}",
-    "columnsOverflow_other": "{{count}} columns · scroll right ⇢ {{label}}",
-    "optimizerResult": "✦ Optimizer: {{proposals}} suggestions ({{dropped}} dropped) — Insight ▸ recipe-opt",
-    "optimizerSkipped": "Optimizer did not run: {{reason}}",
-    "optimizeTitle": "Run the optimizer now for this trajectory's recipe (creates suggestions, does not apply them)",
-    "optimize": "optimize",
-    "forkTitle": "Open a worker under the selected session (fork from here)",
-    "rootChatTitle": "Open the root session chat",
-    "rootChat": "root chat",
-    "revision": "rev {{revision}}",
-    "activePhase": "Active phase: {{phase}}",
-    "phaseProgress": "{{done}}/{{total}} phases",
-    "root": "root",
-    "lane": "lane {{lane}}",
-    "graphAria": "Trajectory {{id}} phase graph",
-    "optional": "optional",
-    "unassignedNodes": "Nodes not assigned to a phase",
-    "declared": "declared"
-  },
-  "summary": {
-    "durationTitle": "From root session start to finish",
-    "tokensTitle": "Total tokens of linked sessions{{unpriced}}",
-    "unpriced": " (some models are unpriced)",
-    "token": "tokens",
-    "workersTitle": "Worker sessions (failed)",
-    "workers_one": "{{count}} worker",
-    "workers_other": "{{count}} workers",
-    "runs_one": "{{count}} run",
-    "runs_other": "{{count}} runs",
-    "gatesTitle": "Time spent at human gates",
-    "gates_one": "{{count}} gate",
-    "gates_other": "{{count}} gates",
-    "unannouncedTitle": "Sessions / runs opened without a phase",
-    "unannounced_one": "{{count}} unplanned",
-    "unannounced_other": "{{count}} unplanned",
-    "ghostPhasesTitle": "Phases declared but never started",
-    "unfiredWatchersTitle": "Watchers declared but never fired",
-    "silent": "silent"
   },
   "edge": {
     "spawned": "spawned",
     "reported": "reported",
-    "forked_from": "forked from",
-    "fired": "fired",
-    "feeds": "feeds",
-    "blocked_by": "blocked by",
-    "next": "next"
+    "forked_from": "forked from"
   },
   "state": {
     "running": "running",
@@ -223,18 +94,7 @@
     "killed": "killed",
     "timeout": "timed out",
     "archived": "archived",
-    "pending": "pending",
-    "skipped": "skipped",
-    "active": "active",
-    "ghost": "ghost"
-  },
-  "nodeKind": {
-    "session": "session",
-    "flowrun": "flow run",
-    "gate": "gate",
-    "automation": "automation",
-    "optimizer": "optimizer",
-    "phase": "phase"
+    "pending": "pending"
   },
   "sessionKind": {
     "chat": "chat",
@@ -247,7 +107,6 @@
     "insight": "insight"
   },
   "origin": {
-    "coordinator": "coordinator",
     "subagent": "subagent",
     "flow": "flow",
     "schedule": "schedule",

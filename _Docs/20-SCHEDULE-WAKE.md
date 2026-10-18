@@ -103,9 +103,9 @@ Ajan turunda (native veya CLI)
 
 `schedule_wake` en fazla bir saat ileriye uzanır ve bir saatten fazla gecikmiş wake
 açılışta düşürülür. Saatler sonraki bir pencereye (örn. 16:05 maç başlangıcı) kendini
-uyandırmak isteyen bir koordinatörün bu yüzden yolu yoktu: cron zamanlaması yalnız
+uyandırmak isteyen bir koordinatörün (koordinatör modu 2026-10-18'de kaldırıldı) bu yüzden yolu yoktu: cron zamanlaması yalnız
 ajanın "schedule" dizisine ya da yeni bir oturuma teslim ediyordu. WS3'te PM'in
-kurduğu dokuz cron tetikleyici PM'e `send_message` atıyor, mesaj koordinatör oturumu
+kurduğu dokuz cron tetikleyici PM'e `send_message` atıyordu (araç 2026-10-18'de kaldırıldı), mesaj koordinatör oturumu
 yerine PM'in gelen kutusuna düşüyordu.
 
 `create_schedule` artık isteğe bağlı `sessionId` alır: verilen oturumun ajanı

@@ -4,82 +4,10 @@ import type {
   BoardColumnDef,
   BoardOp,
   FlowRuleStatus,
-  TrajEndStatus,
-  TrajEvent,
 } from '@/types'
 import { i18next } from '@/i18n'
 
 const tr = (key: string) => i18next.t(key, { ns: 'schedules' })
-
-// Rota (F2) trigger options.
-export const TRAJ_EVENTS: { value: TrajEvent; label: string }[] = [
-  {
-    value: 'exit',
-    get label() {
-      return tr('meta.trajectoryEvents.exit')
-    },
-  },
-  {
-    value: 'enter',
-    get label() {
-      return tr('meta.trajectoryEvents.enter')
-    },
-  },
-]
-
-export const TRAJ_END_STATUSES: { value: TrajEndStatus; label: string }[] = [
-  {
-    value: '',
-    get label() {
-      return tr('meta.trajectoryStatuses.any')
-    },
-  },
-  {
-    value: 'done',
-    get label() {
-      return tr('meta.trajectoryStatuses.done')
-    },
-  },
-  {
-    value: 'failed',
-    get label() {
-      return tr('meta.trajectoryStatuses.failed')
-    },
-  },
-  {
-    value: 'abandoned',
-    get label() {
-      return tr('meta.trajectoryStatuses.abandoned')
-    },
-  },
-]
-
-// Trajectory-trigger prompt placeholders (kept in sync with
-// agent/automation_trajectory.go trajectoryVars).
-export const TRAJ_PROMPT_VARS: { name: string; desc: string }[] = [
-  ...[
-    'trajectoryId',
-    'rootSessionId',
-    'sessionId',
-    'recipe',
-    'phase',
-    'phaseState',
-    'event',
-    'status',
-    'phases',
-    'iteration',
-    'maxIterations',
-    'automation',
-    'date',
-    'time',
-    'datetime',
-  ].map((name) => ({
-    name: `{{${name}}}`,
-    get desc() {
-      return tr(`meta.promptVars.trajectory.${name}`)
-    },
-  })),
-]
 
 // Flow-trigger outcome filter options (_Docs/93).
 export const FLOW_STATUSES: { value: FlowRuleStatus; label: string }[] = [
@@ -291,12 +219,6 @@ export const BOARD_PROMPT_VARS: { name: string; desc: string }[] = [
 export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
   tag: 'Devam et. Önceki sonuç:\n{{result}}',
   board: 'Bir kart taşındı: {{title}} ({{op}} → {{toLabel}}). Gereğini yap.',
-  phase:
-    'Rota {{trajectoryId}} ({{recipe}}) "{{phase}}" fazını {{phaseState}} ile bitirdi. ' +
-    'Fazlar: {{phases}}. Kök oturum {{rootSessionId}}. Bu fazın çıktısını gözden geçir ve gerekeni yap.',
-  trajectory_end:
-    'Rota {{trajectoryId}} ({{recipe}}) {{status}} ile bitti. Fazlar: {{phases}}. Kök oturum ' +
-    '{{rootSessionId}}. Koşuyu özetle, dersleri çıkar ve dokümanları/panoyu güncelle.',
   flow:
     '{{agent}} ajanının akış koşusu {{runId}} {{status}} ile bitti (puan {{grade}}/5, v{{version}}). ' +
     'Girdi: {{input}}\n\nYanıt: {{result}}\n\nYanıtı değerlendir; eksikse düzelt ve gerekiyorsa ' +
@@ -331,8 +253,6 @@ export const COLUMN_ACCENT = {
   schedules: '#6b8e23',
   tag: '#8b5cf6',
   board: '#0ea5e9',
-  phase: '#a855f7',
-  trajectory_end: '#ec4899',
   flow: '#14b8a6',
 } as const
 

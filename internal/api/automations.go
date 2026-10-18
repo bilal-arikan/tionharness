@@ -99,10 +99,6 @@ type automationReq struct {
 	BoardExclusive   *bool    `json:"boardExclusive"`
 	BoardAction      string   `json:"boardAction"`
 	BoardMoveToState string   `json:"boardMoveToState"`
-	TrajPhase        string   `json:"trajPhase"`
-	TrajRecipe       string   `json:"trajRecipe"`
-	TrajEvent        string   `json:"trajEvent"`
-	TrajStatus       string   `json:"trajStatus"`
 	FlowAgentID      string   `json:"flowAgentId"`
 	FlowStatus       string   `json:"flowStatus"`
 	FlowMaxGrade     *int     `json:"flowMaxGrade"`
@@ -212,10 +208,6 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		BoardExclusive:   boardExclusive,
 		BoardAction:      req.BoardAction,
 		BoardMoveToState: req.BoardMoveToState,
-		TrajPhase:        strings.TrimSpace(req.TrajPhase),
-		TrajRecipe:       strings.TrimSpace(req.TrajRecipe),
-		TrajEvent:        strings.TrimSpace(req.TrajEvent),
-		TrajStatus:       strings.TrimSpace(req.TrajStatus),
 		FlowAgentID:      strings.TrimSpace(req.FlowAgentID),
 		FlowStatus:       strings.TrimSpace(req.FlowStatus),
 		FlowMaxGrade:     flowMaxGrade,
@@ -273,12 +265,6 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		if k == db.TriggerBoard {
 			cur.BoardAction = strings.TrimSpace(req.BoardAction)
 			cur.BoardMoveToState = strings.TrimSpace(req.BoardMoveToState)
-		}
-		if k == db.TriggerPhase || k == db.TriggerTrajectoryEnd {
-			cur.TrajPhase = strings.TrimSpace(req.TrajPhase)
-			cur.TrajRecipe = strings.TrimSpace(req.TrajRecipe)
-			cur.TrajEvent = strings.TrimSpace(req.TrajEvent)
-			cur.TrajStatus = strings.TrimSpace(req.TrajStatus)
 		}
 		if k == db.TriggerFlow {
 			cur.FlowAgentID = strings.TrimSpace(req.FlowAgentID)

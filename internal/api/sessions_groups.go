@@ -11,8 +11,8 @@ import (
 // Sidebar tabs (frontend/src/features/sessions/sessionGroup.ts). The sessions
 // column splits into two tabs: "main" holds the conversations a person started
 // (plus the chats one of them spawned or handed off to), "other" holds every
-// machine-driven run — coordinator workers, subagents, tasks, schedules,
-// automations, insight scans, agent-to-agent message inboxes and system work.
+// machine-driven run — subagents, tasks, schedules,
+// automations, insight scans and system work.
 // Like the chips, the tab narrows
 // the list BEFORE paging so "Daha fazla yükle" pages through the rows the
 // selected tab actually shows.
@@ -26,8 +26,7 @@ const (
 // kind (spawned/handoff legacy kinds included), not a worker, not internal, not
 // system-agent work, and a lineage of a person (user), a detached spawn from
 // another conversation (spawn) or a context-reset continuation of one (handoff).
-// Workers are coordinator children (spawn_worker); a spawn_session child has no
-// coordinator link and stays a conversation.
+// A spawn_session child stays a conversation.
 //
 // Kind is checked rather than the chip key because new sessions of every kind
 // are stamped Category "chat" by default (db.normalizeSessionMeta), which would
@@ -38,7 +37,7 @@ func sessionGroup(s db.Session) string {
 	default:
 		return sessionGroupOther
 	}
-	if sessionIsWorker(s) || s.Visibility == db.VisibilityInternal {
+	if s.Visibility == db.VisibilityInternal {
 		return sessionGroupOther
 	}
 	switch s.Category {
@@ -57,11 +56,6 @@ func sessionGroup(s db.Session) string {
 		if strings.HasPrefix(tag, agent.SystemSessionTagPrefix) {
 			return sessionGroupOther
 		}
-	}
-	// The standing per-agent inbox send_message deliveries append to ("💬 … —
-	// Mesajlar"): a user-origin chat by every other field (agent.inboxSessionSource).
-	if strings.HasPrefix(s.SourceID, db.PeerThreadSourceID("")) {
-		return sessionGroupOther
 	}
 	switch s.Lineage().Kind {
 	case db.OriginUser, db.OriginSpawn, db.OriginHandoff:

@@ -57,9 +57,7 @@ func TestSystemAgentDefaults(t *testing.T) {
 		{key: "compaction", promptKey: "compact"},
 		{key: "lesson-extractor", promptKey: "lesson"},
 		{key: "insight", promptKey: "insight-analyzer"},
-		{key: "recipe-optimizer", promptKey: "recipe-optimizer"},
 		{key: "flow-optimizer", promptKey: "flow-optimizer"},
-		{key: "stall-judge", promptKey: "stall-judge"},
 		{key: "insight-applier", promptKey: "insight-applier"},
 		{key: "subagent-explore", promptKey: "subagent-explore"},
 		{key: "subagent-planner", promptKey: "subagent-planner"},
@@ -104,7 +102,7 @@ func TestSubagentSystemAgentDefaultsCarryProfileAllowlist(t *testing.T) {
 			t.Errorf("profile %q allowlist = %s, want %s", id, def.AllowedTools, want)
 		}
 		if def.SuggestedModel != "" {
-			t.Errorf("profile %q pins a model (%q); workers must inherit the coordinator's", id, def.SuggestedModel)
+			t.Errorf("profile %q pins a model (%q); subagents must inherit the caller's", id, def.SuggestedModel)
 		}
 	}
 }
@@ -125,7 +123,7 @@ func TestSystemAgentDefaultsReturnsCopy(t *testing.T) {
 func TestSystemAgentKeysGolden(t *testing.T) {
 	want := []string{
 		"titler", "overview-summarizer", "compaction", "lesson-extractor", "insight",
-		"recipe-optimizer", "flow-optimizer", "stall-judge", "insight-applier",
+		"flow-optimizer", "insight-applier",
 		"subagent-explore", "subagent-planner", "subagent-coder", "subagent-reviewer",
 		"subagent-validator", "subagent-config",
 	}

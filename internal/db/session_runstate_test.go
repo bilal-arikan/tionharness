@@ -60,39 +60,3 @@ func TestSessionRunStatePersists(t *testing.T) {
 		t.Fatalf("after reload run state = %q at %d, want failed at 1700000500", reloaded.RunState, reloaded.RunStateAt)
 	}
 }
-
-// TestSessionStallNudgesPersists verifies the cumulative coordinator-stall counter
-// increments and survives a reload — the in-memory slot streak resets on a clean
-// coordination call, so only this tally can inform a later escalation tier.
-func TestSessionStallNudgesPersists(t *testing.T) {
-	ctx := context.Background()
-	dir := filepath.Join(t.TempDir(), "store")
-	d, err := Open(dir)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	ag, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
-	sess, _ := d.CreateSession(ctx, Session{AgentID: ag.ID, Title: "T"})
-
-	for want := 1; want <= 3; want++ {
-		n, err := d.BumpSessionStallNudges(ctx, sess.ID)
-		if err != nil {
-			t.Fatalf("bump: %v", err)
-		}
-		if n != want {
-			t.Fatalf("bump returned %d, want %d", n, want)
-		}
-	}
-
-	d2, err := Open(dir)
-	if err != nil {
-		t.Fatalf("reopen: %v", err)
-	}
-	reloaded, err := d2.GetSession(ctx, sess.ID)
-	if err != nil {
-		t.Fatalf("get after reload: %v", err)
-	}
-	if reloaded.StallNudges != 3 {
-		t.Fatalf("after reload StallNudges = %d, want 3", reloaded.StallNudges)
-	}
-}

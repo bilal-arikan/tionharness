@@ -149,7 +149,7 @@
     },
     "idle": {
       "label": "Background idle window (minutes)",
-      "hint": "Cancel a background, worker or scheduled run after this long without meaningful progress. Productive runs have no total duration cap."
+      "hint": "Cancel a background or scheduled run after this long without meaningful progress. Productive runs have no total duration cap."
     },
     "chatIdle": {
       "label": "Chat idle window (minutes)",
@@ -259,39 +259,6 @@
       "hint": "Retry temporary provider errors within a turn (0–5). Permanent authentication or quota errors are not retried."
     }
   },
-  "coordinatorLimits": {
-    "description": "Worker capacity and nesting limits for multi-agent coordination. Automatic turns and total subtree sessions remain unlimited.",
-    "workers": {
-      "label": "Workers per coordinator",
-      "hint": "Maximum active workers for each coordinator (1–64)."
-    },
-    "depth": {
-      "label": "Coordinator depth",
-      "hint": "Root depth is 0. Use -1 for unlimited nesting."
-    },
-    "grace": {
-      "label": "Report grace period (seconds)",
-      "hint": "Wait this long after a branch becomes idle before sending a missing completion report. Allow enough time for synthesis."
-    }
-  },
-  "coordinatorRecovery": {
-    "detect": {
-      "label": "Detect stalled coordinators",
-      "hint": "Use a judge and periodic checks to recover coordinators that claim to have started workers without actually starting them."
-    },
-    "window": {
-      "label": "Stall check window (minutes)",
-      "hint": "0 uses the default window; -1 disables periodic checks while retaining the turn-end guard."
-    },
-    "nudges": {
-      "label": "Consecutive recovery nudges",
-      "hint": "Maximum corrective nudges before reporting a visible failure. 0 uses the default."
-    },
-    "notes": {
-      "label": "Show recovery notes in chat",
-      "hint": "Only controls visibility. Recovery notes are always recorded and passed to the coordinator."
-    }
-  },
   "delegation": {
     "description": "Limits for synchronous agent delegation. Individual tool availability is managed in the Tools screen.",
     "depth": {
@@ -317,8 +284,6 @@
     "delegation": "Delegation",
     "background": "Background runs and idle limits",
     "toolLimits": "Tool execution limits",
-    "coordinatorLimits": "Coordinator limits",
-    "coordinatorRecovery": "Coordinator recovery",
     "autonomous": "Autonomous work"
   },
   "general": {

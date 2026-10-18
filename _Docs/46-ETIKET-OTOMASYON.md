@@ -1,5 +1,7 @@
 # 46 — Etiketler + Etiket/Pano-Tetikleyicili Otomasyonlar
 
+> **Not (2026-10-18):** Rota otomasyon tetikleri (`phase` / `trajectory_end`) kaldırıldı; otomasyon türleri tag/board/flow'dur.
+
 > Durum: **Uygulandı + canlı doğrulandı** (2026-07-02/03, WS2, sonnet/claude-cli).
 > Pano (kart) tetikleyicisi eklendi 2026-07-06.
 
@@ -10,7 +12,7 @@ değişince, §2.5), (3) tur olaylarına göre **otomatik etiketleme** (§3).
 
 **Tetik türü (`Automation.TriggerKind`):** `""`/`"tag"` (varsayılan,
 geriye dönük uyumlu) = etiket tetikleyicili; `"board"` = pano tetikleyicili (2026-07-06);
-Rota türleri `"phase"` / `"trajectory_end"` (`_Docs/78`); `"flow"` (`_Docs/93`).
+`"flow"` (`_Docs/93`). (Rota türleri `"phase"` / `"trajectory_end"` 2026-10-18'de kaldırıldı.)
 `"counter"` (mesaj/tool sayacı, 2026-08-06) **2026-09-05'te** (§2.7) ve `"token"`
 (token-harcaması eşiği, 2026-08-03) **2026-10-04'te** (§2.6) tamamen kaldırıldı. Guardrail'ler
 (MaxIterations/CooldownSec/ExpiresAt/Enabled), hedefleme (TargetAgentID **veya** FlowID)
@@ -218,8 +220,8 @@ PM yürütmesi için `_Docs/21-MARKET.md` bölümüne bakın.
 ajan/akış **istemez**. UI: Otomasyon popup'ında pano tetikleyicisine "Aksiyon" seçici
 (`BoardTriggerFields`); arşiv seçilince hedef/prompt alanları gizlenir, kart bir arşiv rozeti gösterir.
 
-Koordinatöre (`prompts/defaults/coordinator.md`) board'ı **tek iş defteri** olarak kullan +
-durumu tekrar tekrar `list_tasks` yerine ucuz **`get_view board`** ile oku yönergesi eklendi.
+Koordinatör el kitabına (`prompts/defaults/coordinator.md`; 2026-10-18'de koordinatör modu ile birlikte silindi) board'ı **tek iş defteri** olarak kullan +
+durumu tekrar tekrar `list_tasks` yerine ucuz **`get_view board`** ile oku yönergesi eklenmişti.
 
 **Arşiv görünümü (UI + REST) — 2026-08-04.** Görevler ekranında başlık çubuğunda **"🗄 Arşiv"**
 toggle'ı (`TaskBoard.tsx`, `task-board-archived-toggle`): aktif pano ↔ yalnız arşivlenmiş kartlar.
@@ -581,7 +583,7 @@ gate + hatalı input'ta kırmızı kenarlık.
   (`internal/db/automation_trigger.go`): tür-özel doğrulama (`Validate`) ve
   "hedef/prompt gerektirmez" bayrağı (`NoTarget`, pano `archive`/`move`).
   `ValidateAutomationShape` ve API'nin `triggerKind` listesi registry'den okur;
-  yeni bir tür (Rota'nın `phase`/`trajectory_end` tetikleri) `RegisterTrigger` +
+  yeni bir tür (örn. `flow`; eski Rota `phase`/`trajectory_end` tetikleri kaldırıldı) `RegisterTrigger` +
   motorda bir `On*` giriş noktasıyla gelir, switch'e dal eklenmez.
 - **Ateşleme defteri.** `automation-fires/<id>.jsonl` her denemeyi tutar:
   `fired` (üretilen oturum), `skipped` (sebep: `archived`, `expired`, `cooldown`,

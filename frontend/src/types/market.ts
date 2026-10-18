@@ -63,12 +63,6 @@ interface WorkspaceTemplateAgent {
   /** Per-agent tool override map (JSON object: name/pattern → tier | "blocked"). */
   toolOverrides?: string
   skills?: string[]
-  /** Seed the agent as a coordinator by default (its sessions get the coordination tools). */
-  coordinatorMode?: boolean
-  /** Optional coordinator recipe slug pinned on those sessions. */
-  coordinatorWorkflow?: string
-  /** Coordinator-only prompt block, injected while the session coordinates. */
-  coordinatorPrompt?: string
 }
 
 /** A starter automation rule shipped with a workspace template. Always seeded

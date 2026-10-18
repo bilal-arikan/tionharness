@@ -1,0 +1,1937 @@
+# 47 — Koordinatör & Çoklu-Ajan Koordinasyonu
+
+> **Arşiv (2026-10-18):** Bu özellik kaldırıldı; belge yalnız tarihsel kayıttır.
+
+> **Özet (2026-09-06):** TionHarness'e Claude Code'un koordinatör moduna denk çok-ajan
+> koordinasyon katmanını tasarlayan ve **büyük ölçüde uygulanmış** (M2 tam, F0-F5) çok
+> uzun bir doküman. Dört koordinasyon yöntemi tanımlar: M1 (paralel fan-out, sync),
+> M2 (koordinatör-işçi, async notify-back — bu dokümanın asıl konusu), M3 (peer/takım
+> mesajlaşma), M4 (deterministik flow). Anahtar bileşenler: `spawn_worker`/`send_to_worker`/
+> `stop_worker`/`list_workers` araçları, `NotifyCoordinator` + per-session tur kuyruğu,
+> `<task-notification>` geri bildirim formatı, sınırsız derinlikte koordinatör ağacı
+> (rol≠ebeveynlik). Oturumu arşivlemek koordinatör için kesin bir **kill-switch**tir ve
+> öyle kalır: 2026-09-06'daki otomatik oturum canlandırması yalnız
+> `user`/`peer`/`worker`/`spawn` turlarını kapsar, koordinatör/wake/otomasyon turlarını
+> bilerek kapsamaz. Dayandığı dosyalar: `internal/agent/coordination.go`, `subagent.go`,
+> `spawn.go`, `internal/prompts/defaults/coordinator.md`. §1-§13 tek-seviyeli tasarımın
+> tarihçesidir, §14+ güncel ağaç modelini anlatır. §20: M1 fan-out'u artık **seçici
+> stratejiler** taşıyor (`majority`, `reviewer-selects`) — tek `run_subagent` çağrısı
+> kazananı kendisi döndürür, koordinatör N cevabı bağlamına alıp elemez. §21: M1 ile
+> M4 arasında **`run_adhoc_flow`** — çok turlu fan-out/dallanma planı tek çağrıda,
+> gizli (ephemeral) bir flow olarak motor üzerinde koşar (TSK912).
+
+> **EN YENİ (2026-08-17):** Ajanlara, **yalnız koordinatör modu açıkken** enjekte
+> edilen serbest metin bir alan eklendi (`Agent.CoordinatorPrompt`); ortak el
+> kitabının hemen ardından girer, boşken sıfır token maliyeti olur. Bkz. **"Ajana özel koordinatör promptu"**.
+>
+> **(2026-08-11):** Koordinatörlük artık bir **ajan varsayılanı** da olabilir
+> (`Agent.CoordinatorMode` → oturuma doğuşta tohumlanır) ve yeni bir `planner` profili
+>
+> - `coordinator-wf-plan-dev-test` reçetesi var. Bkz. **§15**.
+>
+> **GÜNCEL:** Koordinatör ağacı artık **sınırsız derinlikte** — bir worker kendi
+> worker'larını yönetebilir, her düğümden köke doğru izlenebilir, mod spawn anında
+> seçilir veya agent tarafından açılıp kapatılır. Bkz. **§14** (rol≠ebeveynlik,
+> ertelenmiş rapor, ağaç bütçeleri). §1–§13 tek-seviyeli tasarımın tarihçesidir;
+> mekanikler geçerli, ama `Role=="coordinator"` karşılaştırmaları artık
+> `Session.IsCoordinator()`'dır.
+>
+> **Durum:** M2 TAM UYGULANDI ✅ (2026-07-03, F0–F5 + CLI köprüsü + ayar UI'si +
+> M3 scratchpad + efemeral worker hedefi — bkz. §9 Uygulama Durumu). §1–§8 orijinal
+> tasarım metnidir. **LLM-in-the-loop görsel deneme ✅ canlı doğrulandı (2026-07-03,
+> bkz. §10)** — deneme sırasında bulunan non-stream CLI köprü boşluğu da düzeltildi.
+> **Amaç:** TionHarness'e Claude Code'un "koordinatör modu"na denk bir çok-ajan
+> koordinasyon katmanı eklemek — bir üst ajan (koordinatör) birden çok işçiyi
+> (worker) paralel yönetir; ayrıca **birden fazla koordinasyon yöntemi**
+> (parallel fan-out / koordinatör-işçi / takım-karatahta / flow) tek bir çatı
+> altında seçilebilir olsun.
+
+İlgili dokümanlar: `22-SPAWN-SESSION`, `28-PEER-MESAJLASMA`, `93-EVRILEN-AKISLAR`,
+`35-CONTEXT-RESET-HANDOFF`, `46-ETIKET-OTOMASYON`, `24-SELF-MANAGEMENT`.
+
+> **İnce koordinatör + validator (2026-08-06):** Amaç, koordinatörün context'ini
+> yavaş doldurmak — sadece yönlendirsin, doğrulama/commit/test alt-ajanlarda olsun.
+> **(P0)** Worker sonucu artık koordinatöre **cap'li** (rune-güvenli, `coordinatorResultCapChars`)
+> girer — eskiden worker'ın tüm final metni sınırsızca `<result>`'a enjekte ediliyordu
+> (`formatTaskNotification` + `buildWorkerResult`, `worker_report.go`). **(P2)** Cap'i
+> aşan çıktının tamamı worker oturumuna **artifact** olarak yazılır; bildirimde yalnız
+> kompakt baş + handle (artifact id + worker oturumu) geçer, koordinatör ayrıntıyı
+> **talep üzerine** çeker (`send_to_worker` / artifact) — hepsini context'e almaz.
+> **(P1)** Yeni **`validator` profili** (`subagent-validator` promptu): kodu
+> DÜZENLEMEDEN test/typecheck/build/e2e ile doğrular ve kompakt **PASS/FAIL verdict**
+> döner (`explore`/`coder`/`reviewer` yanına eklendi). `coordinator.md` artık
+> "doğrulamayı validator'a delege et, diff'leri kendi context'ine çekme, implementer
+> kendi testini koşup PASS sonrası kendi commit'ini atar" disiplinini öğretir.
+> **(P4)** Worker projeksiyonu (`view/workers.go`, her tur koordinatör prompt'una
+> PUSH edilir) validator'ın **sözleşmeli** `VERDICT: PASS|FAIL` ilk-satır markerını
+> okuyup satır başına **✅/❌ rozet** + özet satırında **PASS/FAIL tally** basar
+> (`parseVerdict`, kural-tabanlı L1 — LLM yok, serbest-prose regex'i değil; yalnız
+> tam marker tanınır). FAIL "bitmemiş iş, implementer'ı yeniden görevlendir" olarak
+> işaretlenir. Ayrı `get_view verdicts` kind'ı EKLENMEDİ (bilinçli): `KindWorkers`
+> zaten her tur push edilir + `list_workers` on-demand karşılar; yeni kind duplike olurdu.
+> Sıradaki (uygulanmadı): worker'lara yapılandırılmış `report_result(status,summary,evidence)`
+> tool'u; board-driven implement→validate→commit döngüsü + commit-gate (P3).
+
+---
+
+## 1. Motivasyon
+
+Claude Code'un koordinatör modu (`src/coordinator/coordinatorMode.ts`) şu deseni
+uygular:
+
+1. Koordinatör ajan, `Agent` aracıyla **async** işçiler başlatır (bloklamaz).
+2. Bir işçinin turu bitince sonucu, koordinatörün oturumuna **user-rolünde bir
+   `<task-notification>` mesajı** olarak enjekte edilir ve **yeni bir koordinatör
+   turu tetiklenir**.
+3. Koordinatör bulguları **kendisi sentezler**, işçileri `SendMessage` ile
+   (yüklü bağlamlarıyla) devam ettirir veya yenisini spawn eder, `TaskStop` ile
+   durdurur.
+4. Fazlar: Araştırma (paralel işçiler) → Sentez (koordinatör) → Uygulama →
+   Doğrulama.
+
+> **`schedule_wake` ile işçi yoklaması yasak.** Sonuç zaten (2)'deki
+> `<task-notification>` ile kendiliğinden yeni bir tur açar; yoklama için kurulan
+> her uyandırma, cevabı hep "hâlâ çalışıyor" olan fazladan bir LLM çağrısıdır ve
+> koordinatörün tüm bağlamını yeniden gönderir. Tüm hatları işçilere bağlıysa
+> koordinatör turu bitirip beklemelidir. Gözlemlenen israf: SES1992'de tek bir
+> işçi beklenirken 8 tur boyunca `schedule_wake` yoklaması. Kural, yerleşik
+> koordinatör prompt'unda (`internal/prompts/defaults/coordinator.md`, "How
+> worker results arrive") ve `schedule_wake` araç açıklamasında
+> (`internal/tools/builtin_wake.go`) yazılıdır.
+
+> **Saate bağlı uyanma ve worker mesajları (2026-10-18).** Aynı bölüm iki kural daha
+> söyler: (1) `schedule_wake` en fazla bir saat ileriye uzanır; daha ileriki bilinen
+> bir an için koordinatör kendi oturumuna bağlı bir zamanlama kurar
+> (`create_schedule` + `sessionId`, `expiresAt` ile). Kendine `send_message` atmak
+> onu uyandırmaz, bağlamsız gelen kutusuna düşer. (2) Bir worker'ın koordinatör
+> ajanına `send_message`'ı bu oturuma worker notu olarak gelir
+> (`messageOwnCoordinator`); yanıt `send_to_worker` ile verilir. WS3 PM'i maç
+> penceresi tetikleyicilerini önce gelen kutusu yoluyla kurmuştu.
+
+TionHarness bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
+geri bildirim → koordinatör devam eder" halkası eksik.
+
+### 1.1 TionHarness'te bugün ne var (yeniden kullanılacak)
+
+| Yetenek                                              | Kod                                                                          | Not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Paralel sync fan-out                                 | `agent/subagent.go: launchParallelSubagents`                                 | goroutine + WaitGroup + atomik ortak bütçe. Tek turda N `run_subagent`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Async detached spawn                                 | `agent/spawn.go: SpawnSession`/`runSpawn`                                    | fire-and-forget; `ParentSessionID`/`CreatedBy` kaydı; biten turda `FireTurnFinished`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Mevcut oturuma mesaj enjekte + history-aware tur** | `agent/agentmsg.go: runSessionTurn` → `api/wake_turn.go: wakeTurnRunner`     | **Kilit mekanizma.** Scheduler wake + inbox teslimi bunu kullanır.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Tur-bitti kancası                                    | `agent/runtime.go: FireTurnFinished` → `agent/automation.go: OnTurnFinished` | detached goroutine; chat/spawn/schedule/wake yollarından çağrılır.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Peer mesaj + inbox                                   | `agent/agentmsg.go: DeliverAgentMessage`/`deliverOne`/`runInboxDelivery`     | `<agent_message from=…>` Claude-Code tarzı etiket + broadcast. **Generic participant modeli (2026-07-06):** inbox mesajı `Role="user"` (recipient turunu sürer) ama katılımcı alanları gönderen ajana damgalanır — `AuthorKind=agent`, `AuthorID=fromAgentID`, `RecipientID=target.ID` — böylece roster + `labelMultiAgentHistory` mesajı `[Ada → Kai (you)]` diye **doğru atfeder** (insan "user" değil). `formatAgentMessage` wrapper'ı insan-görünümü + summary için korunur (bkz. `_Docs/07`). Test: `sendmessage_test.go`. **TSK507:** teslim artık ayrı bir salt-okunur `inbox` oturumuna değil, alıcının **sıradan `chat` thread'ine** düşer — `GetOrCreateSourceSession(kind="chat", sourceID="agent-messages:<agentID>")`. Böylece thread yazılabilir olur ve insan konuşmaya katılabilir. Arama `(agentID, kind)` ile **yapılamaz**: `"chat"` insanın açtığı ad-hoc oturumların da türü olduğundan peer mesajları kullanıcının kendi sohbetine sızardı (`TestDeliverAgentMessage_DoesNotHijackExistingChat`). |
+| Delegasyon guard'ları                                | `agent/subagent.go: delegState` (depth/visited/calls)                        | döngü/derinlik/bütçe koruması.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Flow paralel node                                    | `orchestration/engine.go`                                                    | deterministik fan-out (LLM koordinatörsüz).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+### 1.2 Eksik olan / riskli olan
+
+> Uygulama öncesi boşluk listesi (hepsi çözüldü) → [arsiv/47-KOORDINATOR-PLAN.md](47-KOORDINATOR-PLAN.md).
+
+---
+
+## 2. Koordinasyon Yöntemleri (seçilebilir "methods")
+
+Kullanıcı isteği: _"farklı agent koordinasyon methodlarını da kullanabilecek
+şekilde"_. Dört yöntemi tek çatı altında topluyoruz. Üçü zaten var; asıl yeni
+inşa **M2**.
+
+```mermaid
+graph TD
+    U[Kullanıcı / Görev] --> SEL{Koordinasyon<br/>yöntemi}
+    SEL -->|M1| M1[Parallel Fan-out<br/>sync run_subagent x N]
+    SEL -->|M2| M2[Koordinatör-İşçi<br/>async + notify-back ⭐YENİ]
+    SEL -->|M3| M3[Takım / Karatahta<br/>peer mesaj + inbox + scratchpad]
+    SEL -->|M4| M4[Flow<br/>deterministik graf]
+```
+
+| Yöntem                                        | Ne zaman                                                                                           | Durum                                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **M1 — Parallel fan-out (sync)**              | Kısa, bağımsız alt-görevler; koordinatör hepsini aynı turda toplamak istiyor (araştırma taraması). | ✅ VAR (`run_subagent` ×N). Belgelenip "method 1" olarak sunulacak.              |
+| **M2 — Koordinatör-İşçi (async notify-back)** | Uzun/çok-fazlı iş; koordinatör turlar boyunca canlı kalıp fan-out + sentez + doğrulama yapmalı.    | ⭐ **YENİ inşa.** Claude Code modeli.                                            |
+| **M3 — Takım / Karatahta (peer)**             | Eşdüzey ajanlar birbirine mesaj atarak işbirliği; merkezi koordinatör yok.                         | ✅ VAR (`DeliverAgentMessage`/inbox/broadcast) + ortak **scratchpad** eklenecek. |
+| **M4 — Flow (deterministik)**                 | LLM koordinatörü değil, sabit graf: paralel node + branch.                                         | ✅ VAR (`orchestration`). Belgelenecek.                                          |
+
+Bu doküman ağırlıklı olarak **M2**'yi tasarlar; M1/M3/M4 mevcut ve "yöntem"
+kavramı altında birleştirilir.
+
+---
+
+## 3. M2 — Koordinatör/İşçi Mimarisi
+
+### 3.1 Akış
+
+```mermaid
+sequenceDiagram
+    participant U as Kullanıcı
+    participant C as Koordinatör oturumu
+    participant K as runWorker (worker sürücüsü)
+    participant Q as Per-session tur kuyruğu (C)
+    participant W1 as Worker 1
+    participant W2 as Worker 2
+
+    U->>C: Görev
+    C->>C: spawn_worker (async) x2
+    Note over C: Tur biter, koordinatör "beklemede"
+    C-->>W1: SpawnSession (CoordinatorSessionID=C)
+    C-->>W2: SpawnSession (CoordinatorSessionID=C)
+    W1->>K: tur bitti (başarı / hata / killed)
+    W2->>K: tur bitti
+    K->>Q: NotifyCoordinator(<task-notification W1>)
+    K->>Q: NotifyCoordinator(<task-notification W2>)
+    Note over Q: İlk worker notu 5 sn pencere açar;<br/>sonrakiler deadline'ı uzatmadan aynı tura katılır
+    Q->>C: Ayrı history notlarını TEK runSessionTurn içinde işle
+    C->>C: Sentez; gerekirse send_to_worker / yeni spawn_worker
+    C->>U: Ara özet
+```
+
+**Worker sonucu coalescing sözleşmesi (2026-09-01).** Her worker sonucu önce
+ayrı, durable, user-role worker-note mesajı olarak yazılır; fiziksel mesaj
+birleştirmesi yapılmaz. İlk pending worker notunun geliş anı
+deadline = arrival + 5s değerini sabitler. Yakın notlar bu deadline'ı uzatmadan
+aynı history-aware LLM turuna katılır. Not aktif koordinatör turunda gelirse
+pencere yine o anda başlar: tur deadline'dan önce biterse yalnız kalan süre
+beklenir, sonra biterse follow-up hemen başlar.
+
+Flow start, recovery, kullanıcı resume'u ve stall nudge gibi generic wake'ler bu
+pencereye tabi değildir; bekleyen worker timer'ını kesip admission'a hemen geçer
+ve o ana dek persist edilmiş worker notlarını aynı turda tüketir. Batch bekleyişi
+turn-slot tutmaz. Admission sonrası archive, stall-halt ve runtime shutdown tekrar
+doğrulanır; reddedilen otomatik tur transient state'i temizler, durable notu
+korur. Runtime kapanışı batch timer/admission bekleyişini iptal edip drain'leri DB
+kapanmadan önce toplar.
+
+### 3.2 Yeni araçlar (self-management "coordination" ailesi)
+
+Koordinatör oturumundaki ajana açılır (worker oturumlarında gizli — recursion
+guard):
+
+| Araç             | Karşılığı (Claude Code)  | Davranış                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spawn_worker`   | `Agent` (async)          | Yeni worker oturumu aç: `Kind="worker"`, `CoordinatorSessionID=<caller session>`, `CreatedBy=<caller agent>`. Hemen worker id döner; tur arka planda koşar (`SpawnSession` yeniden kullanılır + yeni opts). Tek turda çoklu çağrı = paralel. **Çalışma dizini (2026-08-21):** opsiyonel `cwd` argümanı worker'ın dizinini sabitler; verilmezse worker **koordinatörün** `WorkingDir` değerini miras alır. Daha önce hiçbiri aktarılmıyordu ve `SpawnSession` workspace `defaultWorkingDir`'ine düşüyordu — koordinatör A deposunda çalışırken worker'lar B deposunda açılıyor, görev metnindeki yol yalnız düz metin kalıyordu (WS17/SES1034 vakası: `go build` → "does not contain main module"). Aynı miras kuralı diğer async yollara da uygulandı: CLI köprüsündeki `spawn_session` (`api/chat_stream.go`, `api/autonomous_interaction.go`) ve flow/flow-koordinatör oturumları (`flow.go`, `flow_coordinator.go`) artık çağıran turun dizinini alır. Çağıran oturum yoksa (zamanlanmış çalıştırma, UI'dan yeni oturum) davranış değişmedi: workspace `defaultWorkingDir`. |
+| `send_to_worker` | `SendMessage` (continue) | Var olan worker oturumuna mesaj ekle + turunu çalıştır (`runSessionTurn`/wake mekanizması). Yüklü bağlamı korur.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `stop_worker`    | `TaskStop`               | Çalışan worker turunu iptal et (context cancel). Kuyruktaki bekleyeni de düşürür.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `list_workers`   | `TaskList`               | Bu koordinatörün worker'ları + durumları (running/done/failed).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+> **Not:** M2 araçları, mevcut `run_subagent` (M1) ve `send_message` (M3) ile
+> **birlikte** yaşar; koordinatör ajan görev tipine göre birini seçer.
+
+### 3.3 Geri bildirim: `<task-notification>` formatı
+
+Claude Code ile birebir uyumlu (worker sonucu koordinatöre user-rolünde gelir):
+
+```xml
+<task-notification>
+<task-id>{workerSessionID}</task-id>
+<status>completed|timeout|incomplete|failed|killed</status>
+<summary>{kısa özet}</summary>
+<result>{worker'ın son yanıt metni}</result>
+<usage><total_tokens>N</total_tokens><tool_uses>N</tool_uses><duration_ms>N</duration_ms></usage>
+</task-notification>
+```
+
+Koordinatör sistem promptu bunun bir "kullanıcı mesajı gibi görünen ama
+konuşma partneri olmayan iç sinyal" olduğunu öğretir (Claude Code'daki gibi:
+"never thank or acknowledge them").
+
+**Yalnız `completed` "iş bitti" demektir** (2026-07-28). Bir tur hatasız dönse
+bile kesilmiş olabilir: claude-cli, subprocess öldürüldüğünde yakaladığı kısmi
+metni `err=nil` ile geri verir (`salvage`), native döngü de iterasyon limiti /
+guardrail halt / bağlam-çıktı tükenmesinde `StepRecovery` ekleyip `nil` döner.
+`internal/agent/turnoutcome.go` bu iki parmak izini okur:
+
+| Parmak izi                                       | Status       | Ne demek                            |
+| ------------------------------------------------ | ------------ | ----------------------------------- |
+| ctx cause `ErrTurnHardTimeout`                   | `timeout`    | Mutlak süre tavanı doldu, iş yarıda |
+| ctx cause `ErrTurnIdleTimeout`                   | `timeout`    | Tur adım üretmedi, asılı kaldı      |
+| `termMaxIters`                                   | `incomplete` | Araç iterasyon limiti tükendi       |
+| `termGuardrailHalt`                              | `incomplete` | Döngü koruması durdurdu             |
+| `termContextExhausted` / `termMaxTokenExhausted` | `incomplete` | Metin kesik                         |
+
+Kesik turlarda `<result>`, kurtarılan metnin **önüne** ne olduğunu Türkçe anlatan
+bir not alır (`applyTurnOutcome`) — koordinatör fragmanı sonuç sanamaz.
+`withActivityTimeout` artık `context.WithCancelCause` kullanır; aksi hâlde
+watchdog iptali ile kullanıcının "Durdur"u ayırt edilemezdi (ikisi de
+`context.Canceled`) ve süre dolması "killed" diye raporlanırdı.
+
+**Ayarlanabilir boşta-resume (FND-708844f8):** `ErrTurnIdleTimeout` ile kesilen
+worker (veya koordinatör drain) turu `timeout` raporlanmadan ÖNCE,
+`runTurnWithIdleResume` ile taze bir boşta penceresinde **bütçe kadar** (ayar
+`idleResumeMax`, varsayılan 1) otomatik yeniden başlatılır (her resume önceki
+denemenin fragmanını `resumeContinuationPrompt` ile taşır). Bütçe tükenince yine
+`timeout` raporlanır ve koordinatör re-task eder — yani resume, koordinatör
+re-task'ından ÖNCEKİ yerinde ilk savunmadır (çift kurtarma değil). Sert tavan resume
+edilmez. `workerCtl` her denemede `setCancel` ile güncellendiğinden `stop_worker`
+daima uçuştaki denemeyi keser; koordinatör drain turunda resume drain/stall
+makinesine şeffaftır. `idleResumeMax=0` kapatır. Ayrıntı: `_Docs/56` Faz E.
+
+**CLI spawn preflight ve sahiplik (2026-08-20):** `claude-cli`/`codex-cli`
+worker oturumu oluşturulmadan önce seçili binary ve etkin config ile `--version`
+preflight'ından geçer. Başarılı kontrol binary+config içeriği karmasına göre
+önbelleklenir; config değişirse yeniden çalışır, hata olursa oturum yaratılmadan
+`spawn refused` döner. Worker'ın `CoordinatorSessionID` değeri aynı zamanda
+`ParentSessionID` olarak yazılır; genel oturum tüketicileri de gerçek sahibini
+görür. Terminal `runState`, son worker mesajının sayaçları kalıcılaştırıldıktan
+sonra yazılır; restart sonrası tamamlanmış worker canlı sanılmaz ve kalıcı
+`MessageCount`/`ToolCallCount` geriye düşmez.
+
+### 3.4 Geri bildirim yolu + per-session tur kuyruğu
+
+Worker turu bittiğinde geri bildirim `runWorker` içinden **doğrudan**
+`Runtime.NotifyCoordinator` ile yapılır (`internal/agent/coordination.go`); planlanan ayrı
+`CoordinationEngine`/turn-hook kurulmadı — gerekçe §9 "Tasarımdan sapma".
+
+`Runtime.NotifyCoordinator(coordID, note)`:
+
+1. `<task-notification>` mesajını koordinatör oturumuna **user** rolüyle
+   `AddMessage` eder (Origin="worker-note" → UI "🤖 İşçi bildirimi" olarak
+   render eder, kullanıcı balonu değil). Bildirim zarfı agent id/ad/model
+   kimliğini taşır; worker turunun `TurnStep[]` izi de mesajın `Steps` alanına
+   kopyalanır. UI kimliği çalışan-worker listesindeki `AgentIdentity` ile,
+   tüm dosya değişikliklerini normal mesajlardaki `DiffCard` ile gösterir.
+2. **Per-session tur kuyruğuna** bir "tur talebi" bırakır.
+
+**Terminal worker arşivleme (2026-08-31, TSK568):** Her normal worker terminal
+turu (`completed`, `timeout`, `incomplete`, `failed`, `killed`) için worker
+session'ı, `<task-notification>` koordinatör geçmişine başarıyla yazıldıktan hemen
+sonra `State="archived"` yapılır; ardından koordinatör turu kuyruğa alınır.
+Bildirim persist edilemezse worker arşivlenmez ve hata `ERROR` olarak raporlanır.
+Yeni worker dalgası veya olası `send_to_worker` devamı için bekleme/kontrol yoktur;
+`send_to_worker`'ın archived session davranışı değişmemiştir. Alt koordinatörün
+alt dalı hâlâ çalışırken kullanılan `delegating` ara bildirimi terminal sayılmaz;
+bu sahiplik davranışı korunur.
+
+**Per-session tur kuyruğu** (`Runtime.sessionTurnQueue`): oturum başına tek bir
+sıralayıcı. Amaç: (a) aynı oturumda iki tur ASLA eşzamanlı koşmaz; (b) koordinatör
+meşgulken biriken **birden çok bildirim TEK sonraki turda birleşir** (4 worker
+biterse 4 ayrı tur değil, hepsini gören 1 tur). Inbox'ın "history-aware tur"
+mantığıyla aynı: tur çalışınca son user mesajları (tüm bekleyen bildirimler)
+zaten geçmişte olur.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Running: bildirim geldi → tur başlat
+    Running --> Running: tur sürerken yeni bildirim → geçmişe eklenir (kuyruk işareti)
+    Running --> Draining: tur bitti, bekleyen işaret var mı?
+    Draining --> Running: evet → yeni tur (biriken tüm bildirimleri görür)
+    Draining --> Idle: hayır
+```
+
+Uygulama seçeneği: oturum başına `struct{ mu sync.Mutex; pending atomic.Bool }`
+veya oturum başına bir goroutine + buffered channel. **Tercih:** keyed-lock +
+pending-flag (basit, kilitsiz drenaj). `sync.Map[sessionID]*coordSlot`.
+
+### 3.5 Session modeli değişiklikleri
+
+`internal/db/models.go` (`Session`):
+
+```go
+CoordinatorSessionID string   // worker → onu spawn eden koordinatör oturumu ("" = normal)
+Role                 string   // "coordinator" | "worker" | "" (normal)
+```
+
+- `ParentSessionID`'yi **kirletmiyoruz** (o handoff "devamı" anlamında).
+- `Kind="worker"` de eklenir (mevcut `spawned`/`inbox`/`scheduled` yanına).
+- Worker → koordinatör bağı `CoordinatorSessionID` üzerinden; `list_workers` bunu
+  sorgular.
+
+### 3.6 Guard'lar (recursion/storm/loop)
+
+| Risk                                                                                                                                                                                                           | Önlem                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worker kendi worker'ını spawn eder (sonsuz ağaç)                                                                                                                                                               | Derinlik sınırsız bir koordinatör ağacı olarak tasarlandı; üstel dallanma guard'ları §14.3'te. |
+| Spawn fırtınası                                                                                                                                                                                                | Mevcut `SpawnMaxConcurrent` slot + yeni `CoordinatorMaxWorkers` (koordinatör başına aktif worker).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Sonsuz notify döngüsü                                                                                                                                                                                          | Koordinatör turu sayacı `CoordinatorMaxTurns` (vars. ~50, automation MaxIterations gibi); aşılınca notify enjeksiyonu durur, kullanıcıya uyarı.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Koordinatör oturumu kapanınca kaçak worker                                                                                                                                                                     | Oturum silme/arşivde `stop_worker` hepsine (cascade cancel).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Aynı oturumda çift tur                                                                                                                                                                                         | §3.4 per-session kuyruk.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Spawn halüsinasyonu / donma** (uzun bağlamda koordinatör spawn'ı **yazar ama `spawn_worker` ÇAĞIRMAZ** → hiç worker yaratılmaz, koordinatör hayalî worker'ları bekleyip donar — SES1 + WS17/SES101 vakaları) | **Yargıç-tabanlı koruma** (`coordination_stall.go`, 2026-08-03; eski prose-regex `coordSpawnClaimRe` sözlük-kaymasında —"kol açıldı"/"SES144 açıldı"— kaçırdığı için **kaldırıldı**). Deterministik kapı: tur koordinasyon aracı çağırmadı **ve** 0 çalışan worker → ucuz-model yargıcı (title-model, yoksa koordinatör modeli) son mesaja bakar; fantom spawn derse (`{"stalled":true}`) `<coordination-guard>` notu enjekte edilir. İki katman: **(1)** tur-sonu `guardCoordinatorStall` → `slot.pending` ile aynı batch'te bir tur zorlar (`CoordinatorStallMaxNudges` vars. 2 ile sınırlı, gerçek araç çağrısı streak'i sıfırlar, yargıç hatası → nudge YOK/fail-safe). **(2)** gecikme tarayıcısı `StartCoordinatorStallSweeper` (60 sn tick): `CoordinatorStallSweepMin` (vars. 5 dk) sessiz + 0 worker olan canlı slot'ları yargılar, `enqueueCoordinatorTurn` ile uyandırır → restart/kaçırma horizonu da kapanır. **(3) Sert-halt eskalasyonu** (`escalateCoordinatorStallHalt`, 2026-08-04): nudge bütçesi (1) veya (2) katmanında tükendiği hâlde yargıç stall'ı **hâlâ** doğruluyorsa `slot.stallHalted` set edilir — drain döngüsü koordinatörü otomatik-turlamayı bırakır (re-arm YOK, idle-reconcile turu YOK) ve **kullanıcıya tek-seferlik** `coordination` bildirimi (sebep + nasıl devam edileceği) yayınlanır; gerçek bir koordinasyon aracı çağrısı bayrağı temizler, tarayıcı backstop olarak açık kalır. **UI (kalıcı rozet/CTA):** halt durumu `session_info.coordinatorStallHalted` ve koordinatör-ağacı düğümlerinin `stallHalted` alanıyla sunulur; koordinasyon panelinde (`CoordinatorSection`) kırmızı **"Koordinatör durduruldu"** rozeti + **"Devam ettir"** butonu (POST `/api/sessions/{id}/coordinator/resume` → `ResumeCoordinatorFromStall`: halt+streak temizler, bir tur kickler) gösterilir; ağaç görünümünde de OctagonAlert işaretlenir. Rozet in-memory slot'tan okunur → süreç yeniden başlatıldığında sweeper penceresi içinde yeniden kurulur. Ek olarak: koordinatör soul/prompt'una "worker'dan bahsetmeden ÖNCE `spawn_worker` çağır; düz metinde 'worker başlattım' demek stall'a düşürür" kuralı eklendi, ve `spawn_worker`/`list_workers` **eager** (CLI `core`/alwaysLoad) tier'da doğrulandı (deferred değil). Ayar: `CoordinatorStallGuard` (master) / `CoordinatorStallSweepMin` (−1=tarayıcı kapalı) / `CoordinatorStallMaxNudges` — Ayarlar ▸ Araçlar. **Kalıcı sayaç (2026-08-17):** `injectStallNudge` her düzeltici notta `db.BumpSessionStallNudges` çağırır → `Session.StallNudges` (`session.json`, `stallNudges`). Bellekteki `slot.spawnHallucStreak` **ardışık** seridir (temiz koordinasyon çağrısında sıfırlanır, süreçle ölür); `StallNudges` ise **kümülatif** ve yeniden başlatmaya dayanıklıdır — `StuckTurns` ile aynı desen. **(4) Kümülatif sayaç kademesi (2026-08-17):** artık `StallNudges` sayacına bağlı ikinci bir halt tetikleyicisi var (`CoordinatorStallHaltTotal`, vars. **3** — `StuckTurnThreshold` ile aynı desen ve aynı sayı; `internal/agent/tunables.go`). Her düzeltici nottan **sonra** kalıcı sayaç okunur; eşiğe ulaşıldıysa **mevcut** `escalateCoordinatorStallHalt` yolu çağrılır (yeni kanal/bildirim açılmaz, aynı tek-seferlik rozet + "Devam ettir" akışı). Hem tur-sonu guard'ı hem de sweeper bu kademeyi uygular. **Neden iki sayaç:** `slot.spawnHallucStreak` **ardışık** ve bellektedir — temiz bir koordinasyon çağrısı sıfırlar, süreçle ölür; nudge bütçesini (`CoordinatorStallMaxNudges`) tek bir donma sürecinde sınırlar. `Session.StallNudges` ise **kümülatif** ve kalıcıdır. İkincisi olmadan **nüks deseni** yakalanamaz: stall → nudge → bir gerçek çağrı (streak sıfırlanır) → yeniden stall döngüsü, streak nudge tavanına hiç ulaşmadan sonsuza kadar sürer. Gerçekten koordinasyon aracı çağıran temiz bir tur **her iki sayacı da** sıfırlar (`db.SetSessionStallNudges(…, 0)`), dolayısıyla kademe "toplam ömür" değil **toparlanmadan nüks** ölçer; "Devam ettir" de ikisini birden temizler (yoksa buton bozuk görünürdü). Sayaç kalıcılaştırılamazsa `injectStallNudge` 0 döner → hiçbir eşik eşleşmez, store arızası halt üretemez. Eşik 0 = kademe kapalı (sayaç yine tutulur, yalnız adli sinyal olarak). Testler: `coordination_stall_haltcount_test.go`. |
+
+> **Boş bekleme de takılmadır (2026-10-18).** Yargıç (`stall-judge` prompt'u ve `decide_stall.go` sorusu) artık yalnız yapılmamış devri anlatmayı değil, hiçbir çalışan işin üretmeyeceği bir sonucu "bekliyorum" demeyi ve kendi işindeki bir FAIL'i raporlayıp kimseyi görevlendirmeden bitirmeyi de `stalled=true` sayar (WS3 PM'i: "Doğrulama bekliyor … çalışan worker yok", "FAIL … yeniden görevlendirme yapılmadı"). Koordinatör prompt'u aynı kuralı söyler: bekleyen bir doğrulama/düzeltme varsa tur sonunda onu bir worker çalıştırıyor olmalı; boşta bitecekse beklemenin sahibi (kullanıcı, zamanlama, dış olay) adlandırılmalı.
+
+2026-08-20 düzeltmesi: en son gelen kullanıcı-kökenli mesaj taze bir
+`Origin="worker-note"` ise (`CoordinatorWorkerNoteGrace` penceresi), sıfır çalışan
+worker durumu stall yargıcına gönderilmez. Koordinatör sonucu sentezlerken yanlış
+halt böylece engellenir; daha yeni kullanıcı/runtime girdisi normal yargılamayı
+geri açar. Sert halt artık yalnız mevcut drain'i değil `enqueueCoordinatorTurn`
+girişini de kapatır: worker notu kalıcı yazılır fakat açıkça "durduruldu" görünen
+koordinatörü otomatik uyandırmaz; resume kuyruğu güvenle yeniden başlatır.
+
+2026-08-27: **arşiv de aynı girişi kapatır.** `enqueueCoordinatorTurn` artık slot'u
+almadan önce oturumun `State`'ine bakar ve `archived` ise dokunmadan döner. Önceden
+yalnız `RecoverOrphanedTurns` arşive bakıyordu, bu yüzden koordinatörü arşivlemek
+onu susturmuyordu: boot'ta kurtarılan her worker `NotifyCoordinator` çağırıyor, o da
+buraya düşüp arşivli oturumda yeni bir drain başlatıyordu — kaçak bir koordinatör
+ağacını durdurmak için 25 worker'ı da elle arşivlemek gerekti. Not `stallHalted`'da
+olduğu gibi kalıcı yazılmaya devam eder; arşivden çıkınca bir sonraki bildirim onu
+işler. Slot'a hiç dokunulmadığı için arşivden çıkan oturum `driving` takılı kalmaz.
+Regresyon: `coordination_archived_test.go`.
+
+2026-09-06 (TSK690): **oturum otomatik canlanması bu kill-switch'i bilerek
+dışarıda bırakır.** Arşivli bir oturum artık gerçek bir tur gelince kendini
+`active` yapıyor (`Runtime.reactivateArchivedSession`,
+`internal/agent/sessionreactivate.go`; `claimTurnSlot` içinden), ama canlandırma
+listesi bir **allowlist**tir: `KindUser`, `KindPeer`, `KindWorker`, `KindSpawn`.
+`KindCoordinator`, `KindWake` ve `KindAutomation` **dışarıdadır** — bunları
+diriltmek yukarıdaki arşiv kapısını anlamsızlaştırır, kaçak bir koordinatör ağacı
+kendi kendini arşivden çıkarabilirdi. Yani arşiv, koordinatör için hâlâ kesin bir
+durdurma düğmesidir; oturumu ancak **birinin gerçekten konuşması** geri açar.
+
+### 2026-08-28: taze worker notu artık muafiyet değil, yalnız halt bastırması
+
+**Belirti.** WS19/SES427 koordinatör oturumu dondu (`session.json` `tags:["blocked"]`).
+Worker sonucu (`<task-notification>`) geldikten **hemen sonraki** turda model
+"TSK103 bağımsız validator'a verildi: `/root/validate_tsk103_retry`" yazdı ama
+`messages.jsonl` o turda `toolCalls: []` — hiçbir `spawn_worker` çağrısı yok.
+Guard **hiç koşmadı**: 2026-08-20 düzeltmesindeki `hasRecentWorkerNoteInbound`
+muafiyeti yargıcı da nudge'ı da komple atlıyordu. Yani hayalet-spawn'ın **en sık
+görüldüğü** tur, korumanın tam kör noktasıydı. Bağlam şişmesi sebep değil (o
+turlarda prompt yalnız 31–46k token).
+
+**Yeni katman ayrımı.** Muafiyet erken `return` olmaktan çıktı; artık
+`freshWorkerNote` bool'u:
+
+| Katman                                      | Taze worker notu varken                                                |
+| ------------------------------------------- | ---------------------------------------------------------------------- |
+| Yargıç (`judgeCoordinatorStalled`)          | **Her zaman koşar**                                                    |
+| Düzeltici not + re-arm (`injectStallNudge`) | **Her zaman uygulanır** (nudge sayacı normal işler)                    |
+| Sert halt (`escalateCoordinatorStallHalt`)  | **Bastırılır** — ne ardışık nudge tavanı ne kümülatif eşik halt üretir |
+
+Böylece WS24/SES34 false-halt regresyonu korunur (taze worker notundan sonra
+**asla** halt yok), ama hayalet-spawn yakalanıp düzeltilir. Not grace penceresinden
+(`CoordinatorWorkerNoteGrace`) çıkınca hâlâ stall eden koordinatör normal yargılanır
+ve halt edilir.
+
+İki ek incelik:
+
+- **Guard kendi notunu saymaz.** `hasRecentWorkerNoteInbound` en son inbound'u
+  ararken `Origin="coordination-guard"` mesajlarını atlar; yoksa ilk nudge kendi
+  önkoşulunu geçersizler ve ikinci stall'da halt açılırdı.
+- **Yalnız standalone `<coordination-status>` muafiyet sağlamaz.** Eski oturumlarda
+  kalabilecek tek başına status mesajı worker sonucu değil, "harekete geç"
+  talimatıdır. Buna karşılık son worker'ın `<task-notification>` mesajına eklenen
+  status, gerçek sonucu sonuç olmaktan çıkarmaz; normal taze-worker grace süresini
+  korur. Böylece son raporu alan tur yanlışlıkla "worker açmadın" nudge'ına düşmez.
+
+**Notun görünürlüğü (2026-09-01).** Enjekte edilen `<coordination-guard>` notu
+artık sohbet transkriptinde **varsayılan olarak gizlidir**. Ayar:
+`CoordinatorStallNoteVisible` (`coordinatorStallNoteVisible`, varsayılan `false`)
+— Ayarlar ▸ Araçlar ▸ "Düzeltici notu sohbette göster". Bu **yalnızca gösterim**
+kararıdır: not her hâlükârda `recordInjectedUserNote` ile kaydedilir, koordinatörün
+bir sonraki turuna girer ve `hasRecentWorkerNoteInbound` mantığını değiştirmez —
+sadece okuyucunun ekranından düşer. Ön yüz akışı: `applyClientPrefs`
+(`useAppearance.ts`) değeri `setGuardNoteVisible` ile modül store'una yazar
+(`shared/lib/coordinationGuardNote.ts`), `ChatView` `dropGuardNotes` ile
+`MessageList`'e giden listeyi süzer. Değer `settings` SSE olayıyla canlı güncellenir;
+todo paneli / cache-warmth / rewind tam listeyle çalışmaya devam eder.
+
+**Yargıcın maliyeti ve memo (2026-09-03):** yargıç artık `stall-judge` sistem ajanıdır
+(`prompts/defaults/stall-judge.md`, haiku; `resolveAnalysisSystemAgent("stall-judge")`),
+ve `auxNativeRouting` ile CLI'daki koordinatörler için anthropic API'ye yönlendirilir —
+önceden koordinatörün kendi modeliyle taze bir `claude -p` açılıyor, 10 token'lık
+verdict için ~51k token prefix ödeniyordu. Ayrıca `Runtime.stallJudgeMemo`
+(koordinatör oturumu → son yargılanan metnin sha256 + verdict): tur-sonu guard'ı ve
+60 sn'lik sweeper aynı "son mesaj"ı yargılar, sessiz koordinatörün mesajı pencere
+boyunca değişmez → aynı metin **bir kez** yargılanır, metin değişince yeniden,
+yargıç hatası memo'ya girmez (`coordination_stall_memo_test.go`).
+
+Test seam: `Runtime.stallJudgeFn` (üretimde nil) — yargıç sonrası kademeler canlı
+sağlayıcı olmadan sürülebiliyor. Testler: `coordination_stall_worker_note_test.go`
+(`TestCoordinatorStallGuardJudgesAfterWorkerNote`,
+`TestCoordinatorStallGuardNudgesPhantomSpawnAfterWorkerNote`,
+`TestCoordinatorStallGuardNeverHaltsWhileWorkerNoteFresh`,
+`TestCoordinationStatusNoteIsNotAWorkerResult`).
+
+---
+
+## All-idle sinyali: son worker bildirimine iliştirme
+
+Tüm workerlar bittiğinde koordinatöre "hepsi bitti" sinyali gider. Bu sinyal
+yalnızca son worker'ın gerçek sonuç mesajına iliştirilerek ulaşır:
+
+- **İliştirilmiş (olağan yol).** Fleet'i sıfıra indiren worker'ın kendi
+  `<task-notification>`'ının sonuna `<coordination-status>` eklenir
+  (`attachCoordinationStatus`). Koordinatör son sonucu ve "herkes bitti"
+  bilgisini **aynı turda** okur.
+
+`drainCoordinator` artık standalone fleet-finished mesajı üretmez. Worker bitiren
+yollar sıfır-geçişi bilgisini `releaseOnce` üzerinden kendi bildirimine taşımak
+zorundadır; sonuç taşımayan ikinci bir turla bu bilgi sonradan üretilmez.
+
+Worker durum bloğundaki spawn nudge'ı da her `running == 0` durumunda değil, yalnız
+`VERDICT: FAIL` ile kanıtlanan bekleyen yeniden-delegasyon işi varken gösterilir.
+Tamamlanmış boş filo planın doğal sonu olabilir ve spawn eksikliği sayılmaz.
+
+**Neden:** eskiden her all-idle geçişi ikinci yoldan giderdi — son worker'ın
+sonucunu okuyan tur biter, ardından yalnızca "workerlar bitti" demek için tüm
+konuşmanın yeniden gönderildiği **ekstra bir LLM turu** daha koşardı. Kullanıcıya
+görünen davranış: "bütün workerlar cevaplarını döndü, sonra bir de _workerlar
+bitti_ cevabı geliyor." İliştirme bu turu kaldırır; sinyal aynı, taşıyıcı farklı.
+
+**Son worker kararı sayaç okumasıyla değil, sıfır-geçişiyle verilir.**
+`releaseOnce` (`coordination.go`) worker sayacını `slot.mu` altında düşürür ve
+"sıfıra ben indirdim" cevabını **tek** çağırana döner; `runWorker` bu cevabı
+`notifyCoordinator(..., lastWorker)`'a geçirir. Bildirim anında sayacı yeniden
+okumak yeterli değildi: eşzamanlı biten N worker'ın hepsi 0 görüp kendini son
+sanıyor ve not çoğalıyordu (yük altında 3 kopya ölçüldü).
+
+**Bayrak ikilisi.** `ackedIdle` "bu geçiş için reconcile yapıldı" demektir;
+`idleFolded` ise "bu geçiş iliştirme ile raporlandı" der. İkincisi olmadan,
+sıfır-geçişinden _sonra_ düşen kardeş bildirimleri `ackedIdle`'ı temizliyor ve
+drain loop notu tekrar basıyordu — iliştirmenin kazancı geri alınıyordu. Yeni
+`spawn_worker` / `send_to_worker` her iki bayrağı da temizler: yeni dalga kendi
+all-idle sinyalini hak eder.
+
+Yalnız `workers > 0` koşuluyla bastırmak **yanlıştır** — hiç worker'ı olmayan bir
+uyandırmada (orphan reclaim) tek sinyal kaynağı backstop'tur ve susturulmamalıdır.
+
+Testler (`coordination_idle_fold_test.go`):
+`TestLastWorkerNotificationCarriesIdleStatus` (tek tur, iliştirilmiş not),
+`TestIdleStatusNotFoldedWhileWorkersRemain` (koşan worker varken iliştirme yok),
+`TestIdleStatusFoldedOnceAcrossConcurrentFinishes` (eşzamanlı bitişte tek kopya,
+drain sonrası dahil), `TestSecondWaveGetsItsOwnIdleSignal`,
+`TestIdleReconcileStillFiresForUnobservedTransition` (backstop korunur),
+`TestReleaseOnceIsIdempotent`, `TestFoldReleasedWhenNotePersistFails`.
+
+---
+
+## 4–8. Prompt taslağı, UI planı, fazlama, kabul kriterleri, açık kararlar
+
+> Uygulama öncesi plan bölümleri (§4 koordinatör prompt taslağı, §5 UI planı, §6 F0–F5
+> fazlama, §7 M2 kabul kriterleri, §8 çözülmüş açık kararlar) →
+> [arsiv/47-KOORDINATOR-PLAN.md](47-KOORDINATOR-PLAN.md). Gerçekleşen durum §9'dan itibaren.
+
+---
+
+## 9. Uygulama Durumu (2026-07-03)
+
+**Karar:** F0–F5 tamamı; hem `Role` hem `CoordinatorSessionID`; kuyruk =
+keyed-lock+flag; M3 scratchpad ertelendi.
+
+### Ne yapıldı (F1–F4 + test)
+
+- **Session modeli** (`db/models.go`): `Role` + `CoordinatorSessionID`; worker
+  spawn'ları `Kind="worker"`.
+- **Çoklu turn-hook** (`agent/runtime.go`): `turnHook` → `turnHooks []` +
+  `AddTurnHook`/`SetTurnHook` (mutex); `FireTurnFinished` her hook'u ayrı
+  goroutine'de çağırır. (Automation hâlâ `SetTurnHook` kullanır.)
+- **Koordinasyon çekirdeği** (`agent/coordination.go`, YENİ): `coordSlot`
+  (per-session kuyruk `running`/`pending`/`turns`/`workers`) +
+  `enqueueCoordinatorTurn`/`drainCoordinator` (serileştirme + coalescing) +
+  `NotifyCoordinator` (`<task-notification>` `Origin="worker-note"`) +
+  `SpawnWorker`/`SendToWorker`/`StopWorker`/`ListWorkers` + `runWorker`
+  (history-aware; completed/failed/killed HER durumda notify) + `workerCancels` +
+  `formatTaskNotification`/`countToolSteps`.
+- **Araçlar** (`tools/builtin_coordination.go`, YENİ): `spawn_worker`/
+  `send_to_worker`/`stop_worker`/`list_workers`; context-injection
+  (`WithCoordination`) ile YALNIZ koordinatör oturumunda kayıtlı (recursion
+  engeli). Wiring: `toolloop.go withCoordination` + `toolsetup.go` koşullu kayıt.
+- **Prompt/skill** (F3): `api/coordinator_prompt.go` (`composeTurnRequest`'te
+  `Role=="coordinator"` iken enjekte → wake yolunu da kapsar) + gömülü default
+  skill `tionharness-coordinator`.
+- **Guard'lar** (`agent/tunables.go`): `CoordinatorMaxWorkers` (8) +
+  `CoordinatorMaxTurns` (50) + `SetCoordinatorLimits`.
+- **API** (F4): `session_info`'ya `role`+`coordinatorSessionId`; yeni
+  `PUT /api/sessions/{id}/role` + `GET /api/sessions/{id}/workers`.
+- **UI** (F4): `CoordinatorSection.tsx` (aç/kapa + canlı worker roster, running
+  varken 3sn poll) SessionDetailPanel'de; roster **Çalışan/Tamamlanan iki sekme**
+  (sayaçlı, `localStorage` ile kalıcı) + tüm listeyi katla/aç toggle;
+  `worker`+`coordination` SSE tipleri `eventViews`'te executions'a bağlı.
+  **Roster satırı tıklanabilir (2026-07-24):** her worker kendi oturumu olduğundan
+  satıra tıklayınca o worker oturumu açılır (`onSelectSession` prop'u
+  SessionDetailPanel'den zincirlenir; verilmezse satır düz div kalır).
+  **Sohbet içi banner (2026-07-27):** roster panel kapalıyken görünmediği için
+  composer'ın üstüne `WorkerWaitBanner.tsx` eklendi — çalışan worker sayısı +
+  "sonuçları bekleniyor" + M/T bitti sayacı + worker oturumunu açan çipler. Veri
+  `useRunningWorkers.ts` (aynı `GET .../workers`); yalnız `role==='coordinator'`
+  oturumlarda etkin.
+  **Çipler ajan kimliğiyle (2026-08-29):** banner çipi ortak `AgentIdentity`
+  bileşenini kullanır (avatar + ad + ajan id + model; geçen süre `trailing`'de).
+  `WorkerInfo` bunun için `AgentID/AgentAvatar/AgentColor/AgentProvider/AgentModel/
+AgentDeleted` alanlarını taşır — `workerInfoFor` ajanı bir kez okur, ajan satırı
+  yoksa alanlar bilinçli olarak boş kalır (UI `title`/`sessionId`'ye düşer). Alanlar
+  yalnız HTTP roster'ına (`internal/api/session_role.go`) eklendi; `internal/view/
+workers.go` koordinatörün metin görünümü olduğu için dokunulmadı.
+  **Roster satırı da aynı çiple (2026-08-29):** `CoordinatorSection.tsx` roster satırı
+  düz `agentName` metni yerine aynı `AgentIdentity`'yi kullanır (`size="sm"`,
+  `showId`, `subtitle="model"`); durum ikonu (`Play`/`CheckCircle2`) çipin solunda,
+  "kuyrukta" rozeti + durum etiketi (`dağıtıyor`/`çalışıyor`/`bitti`) `trailing`
+  içinde kalır, `w.summary` alt satırı değişmez. `WorkerInfo → AgentLike` eşlemesi
+  banner ile ortak: `frontend/src/shared/lib/workerAgent.ts`.
+  **Canlı süre + poll→SSE (2026-07-27):** iki eksik kapatıldı.
+  (a) `WorkerInfo.StartedAt` (unix sn) eklendi — `workerCtl.startedAt`'tan gelir,
+  yalnız ÇALIŞAN worker için dolu; ctl yoksa (worker oturumunda doğrudan açılmış
+  tur, ya da restart'ı atlatmış tur) 0 kalır ve UI süreyi **gizler** (uydurma süre
+  göstermez). Banner her çipte 1sn tick ile geçen süreyi yazar (`Xsn` / `Xdk Ysn`).
+  (b) Poll tamamen kaldırıldı: `runWorker` başında yeni **`emitWorkerStartEvent`**
+  `worker` event'i yayınlar (`Target.phase="start"`; spawn + `send_to_worker`
+  ikisini de kapsar), `useAppEvents` her `worker` event'ini `coordinatorId` ile
+  `shared/lib/workerBus.ts`'e fanlar, `useRunningWorkers` + `CoordinatorSection`
+  abone olup roster'ı tazeler. **İç içe ağaçta ikinci anahtar zorunlu:** emit
+  eden taraf (`tagRootCoordinator`) doğrudan koordinatörden farklıysa ağacın
+  kökünü `Target.rootCoordinatorId` olarak da yazar, `useAppEvents`
+  (`workerBusKeys`) iki anahtara birden fanlar. Aksi hâlde bir torun worker'ın
+  start/completed geçişi yalnız alt-koordinatörün anahtarına düşer; kök
+  koordinatörün açık sohbeti roster'ı hiç tazelemez ve ağacın derinliğinde iş
+  sürerken banner bayatlar.
+  **`phase="start"` gate'i kritik:** `useAppEvents`'in
+  otonom-tamamlanma dalı `worker` event'inde ghost balonu siler + transkripti
+  yeniden yükler + turn-end fanlar + masaüstü toast atar — bunların hepsi yeni
+  başlayan bir tur için yanlış, ayrıca 8'li fan-out 8 toast demekti; start
+  event'i bu dalların dışında tutuldu.
+  **SSE kopma toleransı (2026-07-27):** poll gittiği için feed koptuğunda arada
+  olan geçişler kaybolur (bus'ta replay yok) → banner rapor vermiş bir worker'da
+  asılı kalabilirdi. `api.subscribeReconnect` (feed ilk kez değil de **yeniden**
+  açılınca ateşler) → `useAppEvents.onReconnect` → `publishWorkerChangeAll()` tüm
+  roster abonelerini tazeler (+ `refreshSessions` + açık transkript reload).
+  **Worker'da "Koordinatöre dön" (2026-07-24):** worker oturumundaki pasif not
+  altına, `coordinatorSessionId` back-link'iyle koordinatör oturumunu açan buton
+  eklendi (ArrowLeft; yalnız `onSelectSession` + back-link varsa görünür).
+  Oturum listesinde (`SessionsSidebar.tsx`) Aktif/Arşiv yanında **Workers sekmesi**
+  (`role==='worker'` filtresi, sayaçlı); Aktif görünüm worker oturumlarını hariç
+  tutar. `Session` tipi `role`+`coordinatorSessionId` taşır (liste `db.Session`'ı
+  ham döndürür).
+- **Test** (`agent/coordination_test.go`): kuyruk serileştirme+coalescing (kritik
+  yarış), worker cap, coordinator-link, notification format, countToolSteps.
+  **Tüm paket testleri (221) geçiyor.**
+
+### Tasarımdan sapma (bilinçli)
+
+§3.4'teki ayrı `CoordinationEngine` **turn-hook** yerine geri bildirim `runWorker`
+içinden **doğrudan** (`NotifyCoordinator`) yapılır. Sebep: `runSpawn` başarısız
+turda `FireTurnFinished` çağırmıyor → hook yolu worker hatalarını iletemezdi.
+Explicit-notify başarı/başarısız/killed'ı kesin statüyle iletir, çift-tetiği eler.
+`AddTurnHook` altyapısı ileride başka gözlemciler için yine de eklendi.
+
+### İkinci tur — kalan adımların tamamı yapıldı ✅ (2026-07-03)
+
+- **CLI köprüsü ✅:** koordinasyon araçları `BridgeTools`'a eklendi
+  (`runtime.go`) — koordinatör oturumunda `coordinationBridgeDefs()` advertise
+  edilir, dispatch `dispatchCoordinationBridge` ile koordinasyon runner'ı üzerinden
+  (reg dışı). `autonomous_interaction.go` ctx'i `WithSessionID` ile stampliyor →
+  claude-cli koordinatör de worker sürebilir. Bridge defs zaten allowlist'e
+  (`splitInteractionTiers`) giriyor.
+- **Ayar UI'si ✅:** `settings.CoordinatorMaxWorkers`/`CoordinatorMaxTurns` (ana +
+  maskeli + patch struct'ları), `store.go` applyInt + clamp (worker 1–64, tur
+  1–500), `server.go applySettings` → `SetCoordinatorLimits`. Frontend:
+  `AppToolsPanel` "Koordinatör (çoklu-ajan) limitleri" + `types/settings.ts` +
+  `SettingsPanel` patch. Canlı doğrulandı (8/50 default → 5/42 patch).
+- **M3 ortak scratchpad ✅:** koordinatör + tüm worker'ları için ORTAK dizin
+  (`<SessionDir(coordID)>/scratchpad`), `coordinationScratchpadBlock`
+  (`coordinator_prompt.go`) ile context'e enjekte (`composeTurnRequest`);
+  normal dosya araçlarıyla okunur/yazılır (koordinatör + worker aynı mutlak yolda).
+- **spawn_worker efemeral hedef ✅:** profil (explore/coder/reviewer) hedefi
+  `resolveWorkerTarget` ile kalıcı, yeniden-kullanılabilir `worker:<profile>`
+  ajanına materyalize edilir (base ajandan provider/model/permission klonlanır,
+  `profileWorkerMu` ile dup önlenir). Test: `TestSpawnWorkerMaterializesProfile`.
+- **Canlı doğrulama ✅:** backend booted; API smoke (rol set/get, `/workers`,
+  ayar round-trip) uçtan uca geçti. `go build ./...` + **624 test** + `tsc` yeşil.
+- ~~**Kalan (opsiyonel):** LLM-in-the-loop görsel deneme~~ → ✅ yapıldı, bkz. §10.
+
+---
+
+## 10. LLM-in-the-loop Canlı Görsel Deneme ✅ (2026-07-03)
+
+Gerçek modelle (claude-cli / opus, ajan "Manager", WS5) koordinatör oturumu
+açılıp uçtan uca izlendi. **Sonuç: M2 döngüsü canlıda çalışıyor** — ayrıca deneme
+sırasında bir köprü boşluğu bulunup düzeltildi.
+
+### Doğrulanan akış (SES104)
+
+1. UI composer'dan görev: "Spawn 2 workers in parallel … synthesize yourself".
+2. İlk denemede model M1'i (`run_subagent` ×2, sync) seçti — meşru bir seçim
+   (prompt her iki yolu da sunuyor). Async'i zorlayan takip mesajıyla M2 tetiklendi.
+3. `spawn_worker` ×2 **tek turda** → `worker:explore` profili efemeral ajana
+   materyalize edildi (AGT25), SES105+SES106 paralel koştu; koordinatör turu
+   **19 sn'de bloklanmadan** bitti (kabul kriteri #1 ✅).
+4. UI ▸ SessionDetailPanel ▸ Koordinasyon roster'ı **canlı doldu**: 2 kart
+   "ÇALIŞIYOR" → bitişte 3 sn poll içinde "BITTI" + özet metni (kriter roster ✅).
+5. Worker'lar ayrık bitti (22:08:47 / 22:09:23): her `<task-notification>`
+   (Origin=worker-note, UI'da işçi bildirimi olarak) koordinatöre düştü ve
+   **otomatik tur** tetiklendi; ilk turda koordinatör doğru şekilde "SES105'i
+   bekliyorum" deyip turu kapattı, ikinci bildirimde sentezi yazdı (kriter #2 ✅,
+   çift tur yok #3 ✅). (Yakın bitişte tek-tur coalescing bu denemede
+   gözlenmedi — birim testi `coordination_test.go` kapsıyor.)
+
+Görseller + API çıktısı: `_Docs/gorseller/coord-02-before-ses104.png` (öncesi),
+`coord-03-workers-running.png` (roster canlı), `coord-04-workers-done.png`
+(BITTI kartları), `coord-05-synthesis-chat.png` (bildirimler + sentez),
+`coord-workers-api-output.json` (`GET /api/sessions/SES104/workers`).
+
+### Bulunan ve düzeltilen boşluk: non-stream CLI turunda köprü yok
+
+İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör TionHarness'in
+`spawn_worker`'ı yerine **claude-cli'nin kendi `Agent` aracını** kullandı: worker
+roster hiç dolmadı, log `cli mcp config written … interaction=false` gösterdi.
+
+- **Kök neden:** Interaction MCP endpoint'ini yalnız `/api/chat/stream` kendisi
+  kuruyordu; `toolloop.go`'daki on-demand kurulum ise `autonomous &&` koşuluyla
+  sınırlıydı. Non-stream `/api/chat` + claude-cli ikisine de girmiyordu →
+  köprü araçları (spawn_worker dahil) advertise edilmedi **ve** CLI'nin native
+  `Agent`/`Task` araçları disallow edilmedi (shadowing).
+- **Düzeltme:** `internal/agent/toolloop.go` — on-demand headless Interaction
+  kurulumundaki `autonomous` şartı kaldırıldı: endpoint'siz **her** CLI turu
+  (scheduler/spawn/flow + non-stream chat) `autoInteract` ile sarılır; stream
+  yolu kendi endpoint'ini kurduğundan (inter.URL != "") etkilenmez.
+  `go build ./...` + agent/tools 296 test yeşil.
+
+### UI: task-notification'a özel kart render'ı (2026-07-04)
+
+Kartın ajan kimliği, `<task-id>` dolu olduğunda worker session deep-link'idir
+(2026-08-31). Kimlik kontrolü fold kontrolünden ayrıdır; tıklama kart gövdesini
+açmaz. Legacy boş `<task-id>` kimliği navigasyon üretmez. Araç sayısı ve süre,
+sağdaki terminal durumunun altında sağ hizalıdır.
+
+`<task-notification>` enjeksiyonları eskiden genel "Otomatik devam" notu olarak
+ham XML'iyle basılıyordu (okunmaz bir blok). Artık `Origin=worker-note` mesajlar
+kendi bileşeniyle çiziliyor: **`frontend/src/features/chat/TaskNotificationNote.tsx`**
+(MessageList'te worker-note dalı). Kart; worker ajan adı + oturum id + durum
+rozeti (tamamlandı/başarısız/durduruldu), araç sayısı + süre satırı ve
+**varsayılan katlı** result gövdesi (tıklayınca açılır) gösterir. Parse
+edilemeyen eski/yabancı formatlar ham metniyle katlı gösterilir — hiçbir şey
+sessizce gizlenmez. DB'deki mesaj metni değişmez; salt görüntüleme. Görsel:
+`_Docs/gorseller/coord-06-notification-card.png`. `npx tsc --noEmit` temiz.
+
+### Canlı coalescing testi ✅ (2026-07-04)
+
+SES104'e tek turda 3 hızlı worker açtırıldı (`worker:explore`, görev: tek kelime
+yanıt — ALPHA/BETA/GAMMA, araçsız). Zaman çizelgesi (session.jsonl, epoch sn):
+
+| t   | Olay                                                                    |
+| --- | ----------------------------------------------------------------------- |
+| 524 | user: test prompt'u (stream turu başlar)                                |
+| 535 | worker-note **SES111** (ALPHA) → otomatik tur 1 başlar                  |
+| 536 | worker-note **SES113** (GAMMA) → tur 1 çalışıyor → `pending=true`       |
+| 537 | stream turunun assistant yanıtı persist edilir ("üç worker başlatıldı") |
+| 537 | worker-note **SES112** (BETA) → hâlâ `pending=true` (coalesce)          |
+| 564 | otomatik tur 1 yanıtı: yalnız ALPHA'yı gördü, "diğerlerini bekliyorum"  |
+| 588 | otomatik tur 2 yanıtı: **3/3 sentez tablosu**                           |
+
+**Tarihsel sonuç: 3 bildirim → 2 otomatik tur.** Bu saha kaydı eski, yalnız
+mid-turn coalescing davranışını gösterir. 2026-09-01 sözleşmesi ilk ALPHA notunda
+5 saniyelik sabit pencere açarak yakın SES113/SES112 notlarını fiziksel olarak
+birleştirmeden tek history-aware turda işlemeyi hedefler.
+
+### Bulgu: stream turu ile koordinatör oto-turu AYRI kilitte → DÜZELTİLDİ ✅
+
+Aynı testte yarış canlı gözlendi: worker-note'lar (t=535/536) stream turunun
+kendi yanıtından (t=537) ÖNCE history'ye düştü ve **oto-tur 1, stream turu hâlâ
+çalışırken başladı**. Kod teyidi:
+
+- `handleChatStream` (`api/chat_stream.go`) turu doğrudan koşar — `coordSlot`'a
+  bakmaz, `trackSession` çağırmaz; `wake_turn.go`'da da oturum kilidi yok.
+- `drainCoordinator` yalnız OTO turları serileştirir; `isSessionActive`
+  kontrolü yapmaz.
+- Yani kullanıcı stream'den yazarken oto-tur (veya tersi) aynı oturumda
+  **paralel** koşabilirdi: history append'leri DB'de serileşir ama iki LLM turu
+  birbirinin ara mesajlarını görmeden yanıt üretebilirdi (karışık sıra, mükerrer
+  tepki riski).
+
+**Düzeltme (2026-07-04, seçenek a+b birlikte):** koordinatör oturumunda "tek
+oturumda tek tur" garantisi.
+
+- `agent/coordination.go` — **`BeginCoordinatorUserTurn(sessionID) func()`**:
+  interaktif tur coordSlot'u `running` olarak sahiplenir; çalışan oto-tur varsa
+  `sync.Cond` ile bitmesini bekler (oto-tur `spawnTimeout` ile sınırlı → bekleme
+  sınırlı). Tur sırasında gelen worker bildirimleri `enqueueCoordinatorTurn`'da
+  `running=true` gördüğü için `pending`'e düşer; release'te pending varsa **tek**
+  coalesced oto-tur tetiklenir. Kullanıcı turu ayrıca `turns`/`capWarn`'ı
+  sıfırlar (insan döngüye girdi → cap sonrası oto-turlar yeniden açılır; uyarı
+  mesajındaki "manuel mesajla devam" vaadi artık gerçekten cap'i resetler).
+  `drainCoordinator`'ın iki çıkışı da `signalFree()` (Broadcast) yapar.
+- `api/chat_stream.go` + `api/chat.go` — session yüklendikten hemen sonra
+  `Role=="coordinator"` ise `BeginCoordinatorUserTurn` + `defer release()`.
+- Testler: `TestUserTurnBlocksAutoTurnsAndDrainsPending` +
+  `TestUserTurnWaitsForAutoTurnAndResetsCap` (`coordination_test.go`).
+  `go build ./...` + **653 test / 34 paket** yeşil.
+- **Otonom yollar da kapsandı (2026-07-04):**
+  `claimTurnSlotIfCoordinator(ctx, sessionID)` (coordination.go) — oturum
+  koordinatörse slotu claim eder (değilse no-op release döner). İç mekanizma
+  `claimCoordinatorSlot(id, resetCap)` olarak ortaklandı: kullanıcı turu
+  `resetCap=true` (insan döngüde → cap reset), otonom yollar `resetCap=false`
+  (cap korunur — periyodik wake, notify-loop korumasını deldirmesin).
+  Takılan yerler: **wake** (`scheduler.go` deliverWake — sc.SessionID
+  koordinatör olabilir), **scheduled prompt** (`scheduler.go` deliverPrompt —
+  schedule kind oturumuna rol verilmiş olabilir), **inbox** (`agentmsg.go`
+  runInboxDelivery). Test: `TestClaimTurnSlotIfCoordinator`. Kapsam dışı kalan
+  tek yol: `flow.go` (flow-run oturumları koordinatör olarak kullanılmıyor).
+
+---
+
+## 13. Per-session tur kilidi TÜM oturumlara genelleştirildi ✅ (2026-07-25)
+
+§10'daki "tek oturumda tek tur" garantisi **yalnız `Role=="coordinator"` oturumlar
+için** kuruluydu; düz (non-coordinator) oturumlarda `claimTurnSlotIfCoordinator`
+no-op release döndürüyordu. Bu, doc 58'in kapatmaya çalıştığı eşzamanlı-tur
+yarışını düz oturumlarda **açık** bırakıyordu: kullanıcı chat yazarken (inbox
+worker turu) aynı oturuma bir **zamanlanmış wake** / **peer teslimi** düşerse ya da
+legacy `/chat/stream`·`/chat` inbox worker koşarken çağrılırsa **aynı oturumda iki
+LLM turu paralel** koşabiliyordu (karışık sıra + mükerrer tepki riski).
+
+**Çözüm:** koordinatör-only geçit kaldırıldı, `coordSlot` artık **her oturumun**
+tek tur kilidi:
+
+- `BeginCoordinatorUserTurn` → **`BeginSessionUserTurn(sessionID)`**; `chat_stream.go`
+  - `chat.go` artık `Role` bakmadan **koşulsuz** claim eder (düz oturumda
+    `pending`/`turns` alanlarına dokunulmaz → release temiz unlock).
+- `claimTurnSlotIfCoordinator(ctx, id)` → **`claimSessionTurnSlot(id)`**; her zaman
+  claim eder (resetCap=false). Otonom yollar (deliverWake / deliverPrompt /
+  runInboxDelivery) buna bağlandı → wake/peer/scheduled artık inbox worker + direct
+  chat ile aynı slotta serileşir.
+- Düşük seviye `claimCoordinatorSlot` değişmedi (adı korundu; artık tüm oturumları
+  sırlayan primitive olduğu doc'ta belirtildi).
+- Testler: `TestClaimSessionTurnSlot` (yeniden yazıldı) + yeni
+  `TestPlainSessionSerializesConcurrentTurns` (#1 regresyon: düz oturumda ikinci
+  giriş yolu slotta bloklanır). `go build`/`go vet` temiz, agent+api **333 test**
+  yeşil.
+
+**Worker + spawn turları da kapsandı (aynı gün):** `runWorker` (worker oturumu) ve
+`runSpawn` (düz spawn) kendi oturumlarının tur slotunu **almıyordu** → yukarıdaki
+chat/wake/peer claim'iyle serileşmiyorlardı. Ek olarak `SendToWorker` eşzamanlı turu
+yalnız `isSessionActive` (UI göstergesi, **kilit değil**) ile kontrol ediyordu →
+check-then-act TOCTOU: iki hızlı `send_to_worker` iki paralel `runWorker`
+başlatabilirdi. Çözüm: `runWorker` `claimSessionTurnSlot(workerSessionID)` (koordinatör
+slotundan ayrı, worker oturumu anahtarlı), `runSpawn` `claimSessionTurnSlot(sessionID)`
+alır → worker/spawn turları aynı oturumdaki her turla serileşir; meşgul göstergesi
+hızlı-ret UX olarak kalır (bugün `workerTurnActive`, o gün `isSessionActive`), slot
+gerçek garantidir. (Serileştirme primitifi
+`TestPlainSessionSerializesConcurrentTurns` ile doğrulanır; iki çağrı yeri onu kullanır.)
+
+Kalan kapsam dışı: `flow.go` (flow-run oturumları interaktif/otonom tur almaz).
+
+### `send_to_worker` meşgul-worker kuyruğu (WS17, 2026-08-04)
+
+**Sorun** (FND-befa7846 / FND-c28c48d0 / FND-4ff2cecc): worker hâlâ önceki turunu
+işlerken `send_to_worker` çağrısı `worker ... is still running its previous turn`
+ile **reddediliyordu**; mesaj kayboluyor, tek çare yıkıcı `stop_worker` oluyordu.
+Worker başına backpressure yoktu.
+
+**Çözüm — tek-slotluk bekleyen-mesaj kuyruğu.** `Runtime`'a `workerQueueMu` +
+`workerQueue map[string]string` (worker oturum id → bekleyen mesaj) eklendi.
+`SendToWorker` artık:
+
+- Worker **boşsa** → mesajı hemen teslim eder (`dispatchWorkerTurn`), `SendResult{Delivered:true}`.
+- Worker **meşgulse** (`workerTurnActive`) → mesajı kuyruğa park eder,
+  `SendResult{Queued:true, RunningForSeconds:...}` döner (koordinatör böylece
+  worker'ın "meşgul, tıkalı değil" olduğunu görüp gereksiz `stop_worker`a
+  yönelmez). Kuyruk **zaten doluysa** ikinci mesaj **net hata** ile reddedilir
+  (worker başına yalnız bir bekleyen mesaj).
+
+**Teslim** worker tur-yaşam döngüsüne bağlıdır: `runWorker` en başta
+`defer r.drainWorkerQueue(...)` kaydeder → tüm slot release'leri ve turun kendi
+`run.release()` çağrısından **sonra** (LIFO) çalışır. `drainWorkerQueue` kuyruğu
+`workerQueueMu` altında pop eder ve varsa `dispatchWorkerTurn` ile sıradaki turu
+başlatır; teslim edilemezse (havuz/DB hatası) sessizce düşürmez, koordinatöre
+`failed` task-notification yollar.
+
+**Yarış güvenliği:** busy-check + enqueue tek kritik bölümde (`workerQueueMu`);
+`workerTurnActive` drain'den **önce** false'a döndüğü için, kabul edilen her mesajı
+(active==true iken) drain kesinlikle görür — lost-update yok. Kapı bilerek
+`isSessionActive` **değildir**: oturum başına kayıt listesiyle o gösterge, aynı
+oturumda kayıtlı yabancı bir tur varken de true kalır ve o pencerede kuyruklanan
+mesaj bir sonraki worker turuna kadar park ederdi; `workerTurnActive` yalnız
+`sessionRun.worker` etiketli kayıtları sayar, çünkü `drainWorkerQueue` yalnız
+worker turuyla eşleşir. Kuyruk erişimi hep
+mutex altında; TOCTOU'ya yer bırakılmaz. `dispatchWorkerTurn` üstündeki `workerRunFn`
+test tohumu, canlı sağlayıcı olmadan accept/refuse/deliver mantığını koşturur
+(`worker_queue_test.go`: busy→queued, ikinci mesaj→hata, tur bitince teslim, boş→hemen).
+İmza değişikliği: `CoordinationFuncs.Send` ve `SendToWorker` artık
+`(tools.SendResult, error)` döner; `send_to_worker` tool'u queued/delivered'a göre
+farklı özet basar.
+
+**UI:** `WorkerInfo`'ya `Queued bool` eklendi (`workerInfoFor` çalışan worker için
+`hasQueuedMessage`'i okur); `GET /sessions/{id}/workers` yanıtında `queued` alanı
+çıkar. Koordinasyon panelindeki worker roster'ı (`CoordinatorSection.tsx`) çalışan +
+bekleyen-mesajı olan worker'a **"kuyrukta"** rozeti (`Inbox` ikonu, warning rengi)
+gösterir → koordinatör mesajın düştüğünü değil kuyruğa alındığını görür. Roster
+mevcut worker-bus olayları/`refreshKey` ile tazelendiği için teslimde rozet
+kendiliğinden kalkar.
+
+**Koordinatör ağacı** (`CoordinatorTreeView.tsx`) da aynı sinyali taşır: tree
+endpoint (`handleSessionCoordinatorTree`) her node için `HasQueuedMessage`'i
+(`IsSessionActive` gibi dışa-açık sarmalayıcı) okuyup `queued` alanı ekler; çalışan +
+bekleyen node'a küçük `Inbox` işareti + tooltip düşer. Böylece derin bir node'daki
+bekleyen mesaj kökten de görünür.
+
+### Aktif tur kaydı: oturum başına TEK kayıt değil, LİSTE
+
+`activeSessions` bir zamanlar `sync.Map` idi ve oturum başına **tek** bir
+`context.CancelFunc` tutuyordu: aynı oturumda ikinci bir tur açıldığında ilkinin
+kaydını eziyor, `CancelSession` de yalnız o son kaydı iptal ediyordu. Sonuç:
+"Durdur" bazen koşan turu değil, tur-slotu kuyruğunda bekleyen başka bir turu
+öldürüyordu.
+
+Bugünkü model (`internal/agent/runtime.go`):
+
+- `activeMu sync.Mutex` + `activeSessions map[string][]*sessionRun` — oturum
+  başına kayıt **listesi**.
+- `trackSession(id, cancel)` (ve worker turu için `trackWorkerSession`) bir
+  `*sessionRun` **tutamacı** döndürür. Kaydı bırakmak `run.release()` ile
+  yapılır ve **pointer kimliğiyle** yalnız o tutamacı siler — arkada kuyrukta
+  bekleyen başka bir turun kaydına dokunmaz.
+- `CancelSession` artık **cancel-all**: o oturuma kayıtlı HER turu iptal eder
+  (koşan tur + slot kuyruğunda bekleyenler). Tek üretim çağıranı insan "Durdur"
+  düğmesidir (`internal/api/inbox.go`) ve kastı budur.
+- `isSessionActive` = `len(list) > 0`.
+- Worker backpressure kapısı `isSessionActive` **değil** `workerTurnActive`
+  kullanır (yukarıdaki kuyruk bölümüne bakın).
+
+**Dikkat:** bu modelde kaçırılan bir release **kendini onarmaz**. Eski
+tek-kayıtlı modelde sonraki `Store` bayat kaydı eziyordu; listede bayat kayıt
+kalıcı olarak birikir ve oturum sonsuza dek "running" görünür. Her
+`trackSession`'ın eşleşen bir `release()`'i olmalı. Ayrıntı ve tur-slotu
+etkileşimi: `_Docs/58-QUEUE-SENKRON.md`.
+
+---
+
+## 11. Workflow Desenleri (skill'e eklendi, 2026-07-14)
+
+Anthropic'in "dynamic workflows" altı orkestrasyon deseni (Fanout-And-Synthesize,
+Adversarial Verification, Loop Until Done, Classify-And-Act, Generate-And-Filter,
+Tournament) `tionharness-coordinator` skill'ine **§4 "Workflow desenleri"** olarak
+eklendi. Bunlar yeni araç değil, M1–M4 mekanikleri üstünde koşan **stratejiler**:
+
+- **Doğrudan M2 eşleşmesi (✅ mekanik):** Fanout-And-Synthesize (`spawn_worker`×N →
+  sentez), Adversarial Verification (taze `spawn_worker(reviewer)`), Loop Until Done
+  (notify + `CoordinatorMaxTurns` guard).
+- **Prompt-seviyesi (aynı araçlarla):** Classify-And-Act (`resolveWorkerTarget`
+  profile yönlendirme), Generate-And-Filter (fan-out + koordinatör rubric), Tournament
+  (ardışık `spawn_worker(judge)` + coalescing).
+
+**Gerçek boşluk (M5 adayı):** deseni "birinci-sınıf, isimli, tekrar-kullanılabilir
+workflow" olarak _kaydetme_ yok — her seferinde koordinatör prompt'undan doğuyor
+(ephemeral). Claude Code'da workflow skill gibi saklanabiliyor; bizde M4 (Flow) buna
+en yakın ama LLM-koordinatörsüz deterministik graf.
+
+## 12. M5-A — Kayıtlı Koordinatör Recipe'leri (uygulandı, 2026-07-15)
+
+Yukarıdaki boşluğu kapatan **Seçenek A** uygulandı: bir workflow = **özel
+frontmatter'lı skill** (`kind: coordinator-workflow`). Skill altyapısını (seed,
+market, import, frontmatter-aware re-seed) tümüyle devralır; LLM-döngü dinamizmi
+korunur; yeni entity yok.
+
+### Yapıldı
+
+- **Frontmatter (`internal/skills/skill.go`, `store.go`):** `kind` + `pattern` +
+  `worker_targets` + `stop_condition` + `max_turns` alanları `Skill`'e eklendi.
+  `PatternValues` allow-list + `KnownPattern()` + `IsCoordinatorWorkflow()`.
+  Geçersiz `max_turns` sessizce 0'a düşer (=default kullan); geçersiz `pattern`
+  **apply anında** hata verir (sessiz yutma yok).
+- **Session bağı (`internal/db/models.go`, `store.go`):** `CoordinatorWorkflow`
+  (seçili recipe slug) + `CoordinatorMaxTurns` (per-session notify-loop cap
+  override); `SetSessionCoordinatorWorkflow`.
+- **Cap enforcement (`agent/coordination.go`):** `drainCoordinator` cap'i artık
+  `Session.CoordinatorMaxTurns > 0` ise onu, yoksa workspace default'unu kullanır.
+- **Prompt enjeksiyonu (`api/coordinator_prompt.go`, `chat_turn.go`):**
+  `coordinatorRecipeBlock` recipe gövdesi + önerilen worker hedefleri + stop
+  condition'ı koordinatör manual'ı ile persona arasına, **cache'li static
+  prefix'e** enjekte eder. `ResolveCoordinatorRecipe` seçimi doğrular.
+- **API (`api/session_role.go`, `server.go`):** `PUT /api/sessions/{id}/workflow`
+  (recipe seç/temizle, geçersizi reddeder); `session_info`'da `coordinatorWorkflow`.
+- **6 default recipe (`skills/defaults/coordinator-wf-*`):** fanout, adversarial,
+  loop, classify, generate-filter, tournament (`access: shared`,
+  `auto_summary: false` → picker'da listelenir, prompt'u şişirmez).
+- **Test:** `skills/coordinator_workflow_test.go` + `api/coordinator_recipe_test.go`.
+  `go build ./...` + skills/agent/api/db testleri yeşil.
+
+### F4 UI ✅ (2026-07-15)
+
+- **API client (`api/sessions.ts`):** `setSessionWorkflow(sessionId, slug)`.
+- **Tipler:** `Skill`'e `kind`/`pattern`/`workerTargets`/`stopCondition`/`maxTurns`;
+  `SessionInfo`'ya `coordinatorWorkflow`.
+- **Picker (`CoordinatorSection.tsx`):** koordinatör modu açıkken **Workflow**
+  dropdown'u — `kind==='coordinator-workflow'` skill'lerini listeler, seçince
+  `PUT /api/sessions/{id}/workflow`; seçili recipe açıklaması altında gösterilir.
+  "Serbest (recipe yok)" ile temizlenir. `npx tsc --noEmit` temiz.
+- **Picker `<select>` → radio listesi (2026-07-28):** `<option>` başına buton
+  taşıyamadığı için dropdown, **satır başına kontrol** taşıyan bir radio listesine
+  çevrildi (`role="radiogroup"` + native `<input type="radio">` → ok tuşu/ekran
+  okuyucu davranışı korunur). Her recipe satırında:
+  - **(ⓘ)** `InfoPopover` — `recipeHelp(r)` frontmatter'dan not üretir: açıklama,
+    `pattern` (insan-okur etiket, `PATTERN_LABEL`), `workerTargets`, `stopCondition`,
+    `maxTurns`, slug. Alanların hepsi opsiyonel; yalnız var olanlar satır olur.
+  - **(📖)** `onOpenSkill(slug)` — o recipe'nin skill dosyasını Skills ekranında açar
+    (artık yalnız seçili olan için değil, **her** recipe için).
+    Etiket yanındaki (ⓘ) genel "workflow nedir" notu olarak kalır. Buton grubu
+    `<label>`'ın DIŞINDA — aksi halde tıklama seçim yapardı.
+    Balonlar **`fixed` modda**: oturum paneli `overflow-hidden` + `overflow-y-auto` ve
+    balondan ancak birkaç piksel geniş, dolayısıyla `absolute` balon hangi kenara
+    hizalanırsa hizalansın kırpılıyordu (flow paletindeki durumun aynısı).
+    Bir recipe seçiliyken altında **"Skill'i aç"** butonu: `onOpenSkill(slug)` →
+    `App.openSkill` seçimi `setSessionState('skills.activeSlug', slug)` ile tohumlar
+    ve Skills ekranına geçer (SkillsPanel view geçişinde mount olup bu değeri
+    initializer'ında okur → URL şeması değişmedi).
+
+### F5 Flow şablonları ✅ (2026-07-15)
+
+Deterministik 3 desen `frontend/src/features/flows/flowTemplates.ts` galerisine
+eklendi (mevcut `branch`+`parallel` düğümleri, **sıfır motor değişikliği**):
+
+- **Sınıflandır & Yönlendir** (`classify-act`) — agent→branch 3-yollu router.
+- **Üret & Süz** (`generate-filter`) — 3 paralel üretici → join → süzme ajanı.
+- **Turnuva** (`tournament`) — 4 aday paralel → 2 yarı-final yargıcı (parallel→parallel)
+  → final yargıcı. `Validate` geçer (joinNext yalnız varlık kontrolü).
+
+## Akış içinden koordinatör: `coordinator` node tipi (2026-07-28)
+
+Koordinatör/worker mekanizması artık yalnız kullanıcı sohbetinden değil, bir
+**akış düğümünden** de tetiklenebilir. `coordinator` node'u seçilen ajanı kendi
+`Kind="flow-coordinator"` + `Role="coordinator"` oturumunda çalıştırır; ajan kaç
+worker açacağına anlık karar verir, düğüm hepsi bitene kadar bloklar ve
+koordinatörün son yanıtını akışın `{{last}}`'ine koyar.
+
+Bu, `parallel`/`spawn` ile kapatılamayan boşluğu doldurur: onların fan-out
+genişliği tasarım anında sabittir, koordinatörünki değildir.
+
+**Koordinasyon türü (recipe) düğümden seçilir.** Node'un `workflow` alanı, Oturum
+Bilgisi panelindeki listenin aynısını sunar; seçilen slug oturumun
+`CoordinatorWorkflow`'una yazılır, böylece reçete gövdesi prompt'a normal yoldan
+(`coordinatorRecipeBlock`) enjekte olur. Reçetenin `max_turns`'ü, düğüm kendi
+`maxTurns`'ünü vermediyse uygulanır. Doğrulama tek geçitten geçer:
+`skills.ResolveCoordinatorWorkflow` (leaf pakete taşındı; `api.ResolveCoordinatorRecipe`
+artık onun alias'ı) — bilinmeyen/yanlış türdeki slug hem `validateFlowPreconditions`'ta
+hem düğüm çalışırken hata verdirir, **asla sessizce serbest koordinasyona düşmez**.
+UI tarafında seçici tek paylaşılan bileşendir: `shared/components/CoordinatorWorkflowPicker`
+(`CoordinatorSection` de ona taşındı) → iki liste ayrışamaz.
+Seçici `classify`, `loop` ve `tournament` desenlerini varsayılan kapalı
+**Gelişmiş / opsiyonel** grubunda gösterir; gelişmiş bir reçete seçiliyse grup
+kaydın görünür kalması için açık başlar. Serbest seçenek daima listenin ilkidir.
+Yerleşik **Loop Until Done** reçetesinin güvenlik üst sınırı `max_turns: 10`'dur.
+
+Bu dokümandaki tüm mekanikler (notify-loop, coalesce, idle reconcile, canlı
+worker-state bloğu, `CoordinatorMaxTurns`) aynen geçerlidir — düğüm yalnız
+oturumu açar, prompt'u yazar ve yerleşmeyi bekler. İki koordinatör-özel fark:
+
+- **Crash kurtarma dışlaması.** `RecoverOrphanedTurns`, `flow-coordinator`
+  oturumlarını yeniden kuyruğa almaz ve bunlara bağlı yetim worker'lar için
+  `NotifyCoordinator` çağırmaz — çünkü `ResumeRunningFlows` düğümü zaten yeni bir
+  koordinatör oturumuyla baştan çalıştırır; ikisi birlikte işi iki kez yapardı.
+- **Yerleşme (settle) beklemesi.** `waitCoordinatorIdle` slot'u yoklar
+  (`!running && !pending && workers==0`) **ve ayrıca `activeSubtreeWorkers==0`**
+  ister. Slot sayacı yalnız DOĞRUDAN worker'ları izler; bir alt-koordinatör kendi
+  turu biter bitmez sayacı düşürür (dalı çalışmaya devam ederken), dolayısıyla
+  tek başına slot "yerleşti" der ve düğüm yarım sonucu alırdı. Doğrudan
+  çocuklarda yarış yok: `runWorker`, worker sayacını azaltan `defer`'inden önce
+  `NotifyCoordinator`'ı çağırır.
+
+Sözleşme + alanlar + UI: `_Docs/arsiv/15-FLOW-CANVAS.md` (tarihsel; `coordinator` node tipi 2026-10-04'te kaldırıldı) → "`coordinator` node tipi".
+
+---
+
+## 14. Sınırsız derinlikte koordinatör ağacı (2026-08-01)
+
+Koordinatör/worker ilişkisi tek seviyeyle sınırlıydı: `withCoordination`
+`Role=="coordinator"` bakıyordu, worker ise `Role=="worker"` olduğu için
+koordinasyon araçlarını asla göremiyordu (bilinçli recursion guard, §3.6).
+Artık bir agent **sınırsız derinlikte** koordinatör ağacı kurabilir.
+
+### 14.1 Taşıyıcı karar: rol ≠ ebeveynlik
+
+`Role` ile yetenek ayrıldı — çünkü ağaçtaki bir **ara düğüm aynı anda hem worker
+hem koordinatördür** ve tek değerli bir alan bunu ifade edemez:
+
+| Alan                               | Anlam                                                                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Session.Role`                     | **Soyağacı**: `"worker"` (bir koordinatör tarafından spawn edildi) veya `""`. Eski `"coordinator"` değeri okumada hâlâ kabul edilir (migrasyon yok). |
+| `Session.CoordinatorMode`          | **Yetenek**: worker açıp yönetebilir.                                                                                                                |
+| `Session.CoordinatorSessionID`     | Ebeveyn (var olan alan).                                                                                                                             |
+| `Session.RootCoordinatorSessionID` | Ağacın kökü (`""` = kendisi kök).                                                                                                                    |
+| `Session.CoordinatorDepth`         | Kökten uzaklık (kök = 0).                                                                                                                            |
+
+**Kural:** hiçbir yerde `Role == "coordinator"` karşılaştırması yapılmaz →
+`Session.IsCoordinator()` / `IsWorker()` / `RootCoordinator()` kullanılır
+(frontend'de `shared/lib/coordination.ts`). Root/depth deseni `FlowRun.RootRunID`
+ile birebir aynıdır (`_Docs/62`), `ListCoordinatorTree` de `ListFlowRunTree` gibi
+**ağacın herhangi bir üyesinin** id'siyle çağrılıp köke normalize edilir.
+
+Eski worker'larda `RootCoordinatorSessionID` boştur; `RootCoordinator()` bu
+durumda **ebeveyni** kök sayar — rework öncesi her ağaç zaten tek seviyeydi, bu
+sayede paylaşılan scratchpad yolu mevcut oturumlar için kaymaz.
+
+### 14.2 En kritik semantik: ara düğüm ne zaman "bitti" der?
+
+Bir ara düğümün turu, işini kendi worker'larına dağıttığı anda biter. Bu turu
+`completed` olarak yukarı raporlamak, **koordinatörüne dal daha başlamadan "bitti"
+demek** olurdu. Üç parçalı çözüm (`coordination_tree.go`):
+
+1. **Ertelenmiş rapor** — `deferWorkerReport`: düğüm koordinatörse ve kendi
+   worker'ları canlıysa **hiçbir mesaj yukarı gitmez** — ne `<task-notification>`
+   ne de ara bir ilerleme notu. Ebeveyn bir sonuç olmayan şey için tur harcamaz.
+   `CoordinatorReportPending` işaretlenir ve durum yalnızca ebeveynin **canlı
+   worker görünümünde** taşınır: `subCoordinatorBusy` bu bayrağı (veya canlı
+   worker sayacını) okur, düğüm `Delegating` olarak işaretlenir ve durum
+   bloğunda `DELEGATING` görünür — "finished" değil.
+   **Başarısız/kill/zaman aşımı turlarda ertelenmez** (dal bozuk, ebeveyn hemen
+   bilmeli) ve alt ağaç cascade durdurulur. **`incomplete` tur tamamlanmış gibi
+   ertelenir (2026-10-17):** teslim bekçisi, beklenen sonuç dosyası henüz yokken
+   turu `incomplete` işaretler; o dosyayı yazacak worker ise tam o anda başlatılmış
+   olur. Eski kural bu durumda yeni doğrulayıcıyı 2 sn içinde öldürüyordu
+   (SES314 → SES317, iki kez).
+2. **Açık rapor** — `report_to_coordinator(summary, status)` aracı: sentezini
+   bitiren düğüm görevini kendisi kapatır. Kendi worker'ları çalışırken
+   `completed` raporu **reddedilir**. Doğrulamalar çağrı anında koşar, ama not
+   **senkron gönderilmez**: turun `pendingUpwardReport` zulasına yazılır ve
+   `runWorkerWithCtl`'in terminal yolunda — yanıt diske yazıldıktan ve
+   `workerDone()` çağrıldıktan sonra — teslim edilir. Böylece ebeveyn, raporlayan
+   düğüm hâlâ tur ortasındayken uyanmaz. Tur `failed`/`killed` bitse bile zula
+   boşaltılır (claim zaten harcandı); aynı turda iki çağrı olursa **sonuncusu
+   kazanır**, ikisi birden gitmez.
+3. **Settle backstop** — `settleReportBackstop`: dal tamamen sustuğu hâlde
+   `CoordinatorSettleGraceSec` (vars. **30 sn**, ayarlanabilir 5–1800) içinde rapor
+   gelmezse otomatik rapor gider. Statüsü **daima `incomplete`** — runtime işin
+   bittiğini bilemez, "completed" demek yalan olurdu; gövdesinde son yanıt + "bu
+   doğrulanmış bir sonuç değildir" uyarısı taşınır. Süre modele bağlı olduğu için
+   ayardır: kısa olursa yavaş bir sentez turu yarışı kaybedip gereksiz
+   `incomplete` gönderir, uzun olursa takılmış dal koordinatörünü bekletir.
+
+**Rapor borcu kalıcıdır** (`Session.CoordinatorReportPending`). Bellekte tutmak
+tam da kapatması gereken boşluğu açık bırakıyordu: dalını bekleyen bir ara düğüm
+diskte **sağlıklı** görünür (son mesajı kendi asistan yanıtıdır), dolayısıyla
+yetim-tur kurtarması ona hiç dokunmaz — bayrak bellekte olsaydı restart'ta
+kaybolur, koordinatörü hiç gelmeyecek bir raporu sonsuza kadar beklerdi. Boot'ta
+`RecoverPendingReports` (orphan taramasından **sonra**) backstop'u yeniden kurar;
+kurtarılan worker'lardan tur alan düğüm slotu meşgul bulup kendisi rapor verir,
+yalnız gerçekten sessiz kalan otomatik raporlanır.
+
+Ayrıca `WorkerInfo.Delegating`: kendi turu olmayan ama worker'ları çalışan bir
+alt-koordinatör "bitti" değil **"dağıtıyor"** görünür (canlı worker-state bloğunda
+da, UI roster'ında da).
+
+> **Not (2026-08-04):** canlı worker-state bloğunun **render'ı**
+> `internal/view/workers.go` (`ProjectWorkers`) içine taşındı; `agent` yalnız
+> `ListWorkers` sonucunu map'ler. Davranış birebir korundu (otoriter çerçeve,
+> `DELEGATING`, filo boşalınca kapanış dürtüsü) ve iki şey eklendi: filo 20 satırla
+> **sınırlandı** (çalışanlar önce; özet satırı tüm filoyu sayar) ve çalışan
+> worker'lar artık **geçen süreyi** gösteriyor (`RUNNING for 14m00s`).
+> Detay [66](../66-VIEW-KATMANI.md).
+
+### 14.3 Guard'lar — üstel dallanma
+
+| Guard                               | Kapsam                                | Varsayılan                                                                |
+| ----------------------------------- | ------------------------------------- | ------------------------------------------------------------------------- |
+| `CoordinatorMaxWorkers`             | düğüm başına aktif worker             | 8                                                                         |
+| `CoordinatorMaxTurns`               | oturum başına otomatik tur            | **sınırsız** (`-1`; ayar UI'sinden kaldırıldı, `normalize`'da sabitlendi) |
+| **`CoordinatorMaxDepth`**           | ağacın seviye derinliği (kök = 0)     | **5** (`-1` = sınırsız)                                                   |
+| **`CoordinatorMaxSubtreeSessions`** | **tüm ağaçtaki** CANLI worker oturumu | **sınırsız** (`-1`; ayar UI'sinden kaldırıldı, `normalize`'da sabitlendi) |
+
+> **Not (2026-08-11):** `CoordinatorMaxTurns` ve `CoordinatorMaxSubtreeSessions`
+> artık kullanıcı tarafından ayarlanamaz — Ayarlar ekranındaki iki giriş kaldırıldı
+> ve `settings.normalize` her ikisini de `-1` (sınırsız) olarak sabitler; bu, mevcut
+> workspace'lerin `settings.json`'undaki eski sonlu değerleri de yükleme anında
+> sınırsıza çevirir. Fan-out'u sınırlayan kalan korumalar: `CoordinatorMaxWorkers`
+> (düğüm başına), `CoordinatorMaxDepth` ve stall-sweeper.
+
+Alt-ağaç bütçesi kritik: düğüm-başına worker limiti **düğüm bazında** uygulandığı
+için derinlikle **çarpılır** (8 worker × derinlik 4 ≈ 4096 oturum); üstel dallanmayı
+gerçekten durduran tek sınır budur. `spawn_worker(coordinator:true)` derinlik
+sınırında **hata verir, sessizce düz worker'a düşmez** — delegasyon yaptığını
+sanan bir koordinatör gelmeyecek bir raporu sonsuza kadar bekler.
+
+**Bütçe CANLI worker sayar (reclaim).** Sayım `len(tree)-1` değil — biten
+worker'lar (concluded/failed/stopped) kotadan **geri alınır**. Bir worker
+yalnız _iş yapabildiği/dallanabildiği_ sürece slot tutar: turu koşuyorsa ya da
+kendi dalı hâlâ canlı olan bir alt-koordinatörse (`countsAgainstTreeBudget` =
+`workerInfoFor.Running`'in mesaj çekmeyen ucuz ikizi). Böylece uzun ömürlü bir
+koordinatör, bitirdiği işin oturumlarıyla **kalıcı olarak brick olmaz** ve
+tükenme hatasının vaadi ("conclude existing workers before spawning more")
+artık **gerçekten** doğrudur (eskiden `len(tree)-1` sayımıyla concluding kotayı
+boşaltmıyordu — mesaj yanıltıcıydı). Ölçtüğü koruma değişmez: eşzamanlı
+patlamayı hâlâ durdurur; ardışık batch üretimi ise ajan başına günlük token
+bütçesiyle sınırlıdır.
+
+**Görünürlük.** Her başarılı `spawn_worker` sonucu artık `treeBudgetUsed/Total`
+taşır ve tool metnine `Tree budget: N/M live worker sessions in use (K
+remaining)` satırını ekler; %75 ve %90 eşiklerinde `⚠️` uyarısı çıkar. Tükenme
+hatası ayrıca **hangi worker'ların hâlâ aktif sayıldığını** listeler
+(`coordTreeBudget.activeList`) — koordinatör neyi concluding edeceğini görür.
+`total ≤ 0` (sınırsız) ise satır ve alanlar boştur.
+
+Deadlock notu: `SpawnMaxConcurrent` (16) global bir havuzdur ve `runWorker` tur
+boyunca bir slot tutar; `runCoordinatorTurn` **tutmaz**. Değişmez kural:
+_bir ara koordinatör, spawn slotu tutarken çocuklarını asla senkron beklemez._
+Bu bozulursa derin ağaçta gerçek kaynak kilitlenmesi oluşur.
+
+**Derinlik-farkında slot rezervasyonu** (`acquireSpawnSlotAtDepth`): havuz global
+olduğu için meşgul bir derin dal tüm slotları doldurup kardeşlerini — ve alakasız
+chat/schedule spawn'larını — "spawn limit reached" ile aç bırakabilirdi. Deadlock
+değil (koordinatörün otomatik turu slot almaz, ağaç ilerlemeye devam eder) ama tam
+da insanın izlediği seviyeleri açlığa sokar. Bu yüzden `depth >= 2` spawn'ları
+havuzun **dörtte biri boş kalmak** şartıyla slot alır; sığ spawn'lar tam havuzu
+kullanır → ağacın tepesi kendi torunlarını beklemez.
+
+### 14.4 Mod seçimi
+
+- **Spawn anında:** `spawn_worker(agent, task, coordinator: true, workflow?)`.
+  Reçete **miras alınmaz** — özyinelemeli bir reçete (tournament) aksi hâlde
+  ağaç boyunca kendini tekrarlardı; `workflow` yalnız `coordinator:true` ile
+  geçerlidir, aksi hâlde hata döner.
+- **Kendi kendine:** `set_coordinator_mode(enabled)` aracı ve `PUT
+/api/sessions/{id}/role` **aynı** runtime yolunu (`SetSessionCoordinatorMode`)
+  kullanır → iki kural her iki yolda da geçerli:
+  - Çalışan worker varken **kapatma reddedilir** (bildirimler yine gelir ama
+    agent'ın onlara müdahale edecek aracı kalmazdı).
+  - Toggle **prompt epoch'unu tazeler** (`RefreshPromptEpoch`). Bu olmadan
+    araç şemaları oturum başında donduğu için (`_Docs/57`) agent "mod açıldı"
+    yanıtını alır ama `spawn_worker`'ı asla göremezdi. Araç çıktısı değişikliğin
+    **bir sonraki turda** etkili olacağını açıkça söyler.
+
+### 14.5 Dayanıklılık
+
+- **Cascade stop** (`stopSubtree`): bir alt-koordinatör durdurulduğunda tüm alt
+  ağaç iptal edilir. Aksi hâlde torunlar bütçe yakmaya devam eder ve biten torun
+  artık kimsenin beklemediği bir düğüme notify atıp zombi tur uyandırırdı. Oturum
+  silme (`session_teardown.go`) ve flow düğümü vazgeçişi de bu yolu kullanır.
+- **Crash kurtarma BFS**: `RecoverOrphanedTurns` oturumları `CoordinatorDepth`'e
+  göre sığdan derine sıralar ve bu taramada kurtarılan bir düğüme notify
+  **atmaz** — ara düğüm hem worker hem koordinatör olduğu için, ölü ilan edilmiş
+  bir ebeveyni uyandırmak zombi tur demekti.
+- **Worker bir kez sürdürülür (2026-10-18)**: ebeveyni bu taramada kurtarılmamış
+  bir worker "killed" bildirilmez; `SendToWorker` ile `workerResumeNote`
+  ("[Süreç yeniden başlatıldı] …") notuyla kendi geçmişinden devam ettirilir.
+  Son mesajı bu not olan, yani sürdürme turunda yeniden kesilen bir worker ya da
+  sürdürülemeyen bir worker eskisi gibi `killed` bildirimine düşer; çökme döngüsü
+  worker'ı sürekli yeniden başlatamaz. Test: `TestRecoverResumesOrphanedWorkerOnce`.
+
+### 14.6 Araçlar ve uçlar
+
+| Yeni/değişen                                   | Ne                                                                                     |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `spawn_worker`                                 | `+ coordinator` `+ workflow`                                                           |
+| `list_workers`                                 | `+ scope: "children" \| "subtree"` (girintili ağaç çıktısı)                            |
+| `stop_worker`                                  | alt ağacı da durdurur; sahiplik kontrolü korunur                                       |
+| **`report_to_coordinator`**                    | ara düğüm görevini yukarı kapatır (yalnız ebeveyni olan oturumda kayıtlı)              |
+| **`set_coordinator_mode`**                     | agent kendi modunu açar/kapatır (her oturumda kayıtlı)                                 |
+| `GET /api/sessions/{id}/coordinator-tree`      | ağacın tamamı (herhangi bir üyenin id'siyle) + düğüm başına ve **ağaç geneli maliyet** |
+| `GET /api/sessions/{id}/coordinator-ancestors` | köke kadar breadcrumb                                                                  |
+
+**Maliyet rollup'ı:** billing per-session olduğu için derin bir ağaç görünmez bir
+harcamadır — kökün kartı yalnız koordinatörün turlarını gösterir, asıl iş (ve para)
+kullanıcının hiç açmadığı torunlardadır. `coordinator-tree` her düğümün
+`calls/tokens/costUSD`'sini verir ve **per-model istatistikleri birleştirip** tek
+seferde fiyatlar (`mergeModelStats` + `modelRowsFor`) → aritmetik Bütçe ekranıyla
+birebir aynı, prompt-cache tasarrufu dahil. Oturum başına dolar toplamak yuvarlama
+kayması yaratırdı ve cache tasarrufu token kırılımı olmadan hesaplanamaz.
+
+Araç kaydı artık **fonksiyon-varlığına** göre (`CoordinationFuncs.Spawn/Report/
+SetMode` nil mi) yapılır; CLI köprüsü (`coordinationBridgeDefs(f)`) aynı alt kümeyi
+ilan eder → native ve claude-cli turları araç seti konusunda ayrışamaz.
+
+### 14.7 UI
+
+- `CoordinatorSection` worker'da artık **erken dönmüyor**: worker başlığı + üst
+  zincir breadcrumb'ı (`CoordinatorBreadcrumb`) gösterilip **altında koordinatör
+  kontrolleri** de çizilir (ara düğüm ikisine birden sahip).
+- **`CoordinatorTreeView`** (katlanır, varsayılan kapalı): ağacın tamamı seviyeye
+  göre girintili + düğüm başına maliyet + altta **ağaç toplamı**. Düz roster yalnız
+  doğrudan çocukları gösteriyor — tek seviyeli ağaçlarda eksiksizdi, ama bir
+  alt-koordinatörün koşturduğu dal (ve maliyetin çoğu) orada görünmüyor. Panel
+  kapalıyken fetch edilmez (her düğümü gezip fiyatlıyor).
+  **Sağlık vurgusu:** düğümün `health` alanı (`stuck` > `error` > ``) mevcut
+  oto-etiketlerden türer — yeni bir "bozuk" kavramı icat etmez, oturum listesi ve
+  onarım otomasyonlarıyla aynı sinyali kullanır. Bozuk satır kırmızı isim + ikon +
+  hafif kırmızı zemin alır; sayaç **katlanmış başlıkta da** görünür, çünkü derindeki
+  bir hata tam olarak kimsenin açıp bakmayacağı şeydir. `reportPending` ayrı bir
+  kum saati rozetidir (bozuk değil ama üstündeki dalı tutan durum).
+- Roster satırı "dağıtıyor" durumunu ayrı gösterir.
+- Sidebar "Workers" sekmesi `role==='worker'` yerine `isWorkerSession()` ile
+  süzülür — aksi hâlde ara düğümler ve dolayısıyla tüm dallar sekmeden düşerdi.
+- Ayarlar ▸ Araçlar: derinlik + ağaç-başına oturum limitleri.
+
+### 14.8 Canlı LLM denemesi + ortaya çıkan auth hatası (2026-08-01)
+
+`claude-cli`/sonnet ile izole store'da 3 seviyeli ağaç (kök → alt-koordinatör →
+2 yaprak) uçtan uca koşturuldu. **M2 döngüsü ve derinlik mekanikleri doğrulandı:**
+
+- Kök `spawn_worker(coordinator=true)` ile alt-koordinatörü açtı; o da _worker
+  olmasına rağmen_ koordinasyon araçlarını görüp kendi worker'larını açtı.
+- **Ertelenmiş rapor sahada çalıştı:** alt-koordinatörün ilk turu `completed`
+  olarak yukarı gitmedi, `<task-progress status="delegating">` gitti; ağaçta
+  `reportPending` göründü ve kök doğru okudu ("bu bir sonuç değil, bekliyorum").
+  *(Not: o ara ilerleme notu sonradan kaldırıldı — ebeveyni boş yere uyandırıp bir
+  tur harcatıyordu. Durum artık yalnız canlı worker görünümünde taşınıyor; bkz.
+  §14.2 madde 1.)*
+- Alt-koordinatör `report_to_coordinator`'ı **kendisi** çağırdı (backstop
+  gerekmedi); kök `ALPHA+BETA` sentezini aldı.
+- Ayrı bir koşuda backstop **kasıtlı tetiklendi** (alt-koordinatöre "asla rapor
+  etme" denildi): dal sustuktan `CoordinatorSettleGraceSec` sonra otomatik
+  `status=incomplete` raporu gitti, gövdesinde "DOĞRULANMIŞ bir sonuç değildir"
+  uyarısı + son yanıt. **`completed` iddia edilmedi.**
+
+**Ortaya çıkan bug (koordinatör kodunda değil, claude-home yönetiminde):** koşu
+ortasında turlar `authentication_failed` vermeye başladı ve workspace'in
+`claude-home/.credentials.json`'ı **sıfırlandı** (token'lar boş, `expiresAt=0`;
+`.bak-empty` yedeğini CLI'nin kendisi yazıyor). Zincir:
+
+1. `~/.tionharness/claude-home` (self-heal'in 1. tercihi) **19 gün önce süresi
+   dolmuş** bir credential tutuyordu; `credentialUsable` yalnız "token boş mu"
+   baktığı için bunu geçerli saydı.
+2. CLI ölü refresh token ile yenilemeye çalıştı → `invalid_grant` → credential'ı
+   temizledi.
+3. Self-heal yalnız **workspace açılışında** koştuğu için hiçbir tur kendini
+   onaramadı; o workspace'teki her şey restart'a kadar öldü.
+4. Eşzamanlılık yangını büyüttü: refresh token'ları **tek kullanımlık**, ağaç ise
+   tek bir claude-home'a karşı 4+ eşzamanlı CLI süreci koşturuyor.
+
+**Üç parçalı düzeltme:**
+
+- **Aday sıralaması** (`credentialLiveness` + `credentialRank`, `claudehome.go`):
+  self-heal artık ilk uygun adayı değil, **en iyi sıralananı** seçer. Birincil
+  ölçüt **canlı access token** — çünkü diskte "bu refresh token harcanmış mı"
+  bilgisi _yok_. (İlk denemem sadece expiry damgalarına bakıyordu ve tuzağa
+  düştü: bayat home'un `refreshTokenExpiresAt`'i 4 gün ilerideydi, yani diskte
+  canlı görünüyordu. Canlı access token ise son bir saatte başarıyla kimlik
+  doğrulandığının kanıtıdır ve taklit edilemez.)
+- **Her tur self-heal** (`toolloop.go`, tek per-turn CLI dikişi): CLI credential'ı
+  silerse kayıp **tüm oturumu değil tek turu** götürür.
+- **Refresh serileştirme** (`claudeauth/refreshgate.go`): yalnız _yenileme gerekli
+  olan_ pencerede tek süreç kabul edilir, refresh dosyaya düşünce kapı açılır
+  (30 sn tavan). Token sağlıklıyken **hiç kilit yok** → fan-out etkilenmez.
+
+Doğrulama: aynı 3 seviyeli koşu tekrarlandı → **auth hatası 0**, credential
+bozulmadan kaldı, yeni workspace canlı credential'ı seçti.
+
+### 14.9 İstisna senaryoları — kapsanan ve kapsanmayan
+
+Ağaç, eşzamanlılığı **tasarım gereği** üretiyor (tek turda N `spawn_worker`), bu
+yüzden "check-then-act" desenleri burada teorik değil. Denetim sonucu:
+
+| Senaryo                                                                       | Durum                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sunucu ortada kapanır**                                                     | Yetim turlar `RecoverOrphanedTurns` (BFS, kurtarılan ebeveyne notify yok) + rapor borcu **diskte** (`CoordinatorReportPending`) → `RecoverPendingReports` boot'ta backstop'u yeniden kurar. `coordSlot` bellekte kaybolur ama boot'ta hiçbir şey çalışmadığı için "hepsi bitmiş" okuması doğrudur. Test: `TestPendingReportSurvivesProcessRestart` (iki Runtime, **aynı store**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Rapor çift gönderimi**                                                      | `owesReportNow` → `setOwesReport(false)` **atomik değildi**: iki backstop (her drain çıkışında bir tane) veya backstop⇄`report_to_coordinator` aynı anda geçip aynı görevi iki kez, çelişkili statülerle raporlayabilirdi. → `db.ClaimCoordinatorReport` (store kilidi altında true→false CAS); yalnız kazanan gönderir. Test: `TestReportClaimIsExclusive`, `TestSettleBackstopDoesNotDoubleReport`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Alt-ağaç bütçesi aşımı**                                                    | Bütçe canlı worker'ları sayıyor; say-sonra-yarat arasında N eşzamanlı spawn aynı "1 slot kaldı"yı okuyup hepsi yaratabilirdi (düğüm-başına worker cap'i atomic add ile güvenli, ağaç bütçesinin ekleyeceği bir şey yok). → kök başına spawn kilidi, kontrol + yaratma birlikte. Yaratma ucuz, tur zaten detached → iş değil muhasebe serileşir. Test: `TestSubtreeBudgetHoldsUnderConcurrentSpawns` (kapasiteye kadar canlı worker seed'lenir, tüm eşzamanlı spawn'lar reddedilmeli).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Biten worker kotayı sızdırıyor**                                            | `len(tree)-1` sayımı biten oturumları da sayıyordu → uzun ömürlü koordinatör bitmiş işin oturumlarıyla kalıcı brick oluyordu; hata mesajı "conclude…" diyordu ama concluding kotayı boşaltmıyordu. → `evalCoordinatorTreeBudget` yalnız CANLI worker'ları sayar, bitenler otomatik reclaim; hata artık aktif worker listesini de verir. Test: `TestSpawnWorkerSubtreeBudget` (kapasitede reddet → biri reclaim → tekrar spawn + `treeBudgetUsed/Total` görünürlüğü), `TestTreeBudgetLine` (eşik uyarıları).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Credential dosyası yarım okunur**                                           | `copyFile` truncate-sonra-stream yapıyordu; heal'i **her tura** taşıyınca eşzamanlı bir CLI 0 baytlık `.credentials.json` görebilirdi ("not logged in"). → tmp+rename (POSIX + Windows'ta atomik).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Taze login'in eski kaynakla ezilmesi**                                      | Heal "sırala → kopyala" arasında CLI dst'yi tazeleyebilir. → per-home kilit + kopyalamadan hemen önce dst'nin **yeniden** sıralanması; daha iyiyse kopyalama yapılmaz.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Çoklu pencere / ekran**                                                     | Rol toggle'ı ve worker geçişleri SSE ile yayılır (`emitCoordinationModeEvent` + `workerBus`); ağaç paneli aynı akışa abone. İki pencere aynı anda toggle ederse son yazan kazanır ve ikisi de olayı görür.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Aynı oturumda çift tur**                                                    | Tek tur kilidi artık `internal/turnqueue` (2026-08-11): her giriş yolu — worker, spawn, wake, peer, /compact, kullanıcı mesajı, koordinatör oto-turu — aynı FIFO'dan geçer. `coordSlot` yalnız koordinatör politikasını tutar. `_Docs/58`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Kullanıcı "Durdur" → idle-reconcile turu kaçağı** (2026-08-06)              | Kullanıcı koordinatörün canlı turunu durdurunca (`run.cancel` → tur `context.Canceled`) `runCoordinatorTurn` "⏹️ durduruldu" yazıyordu ama ayrı goroutine'deki `drainCoordinator` dönmeye devam edip idle-reconcile dalına düşüyordu; workerlar önceden bittiyse (`hadWorkers && workers==0`) `<coordination-status>...finished...</coordination-status>` notunu enjekte edip **bir tur daha** koşuyordu → durdurma "devam ediyor" gibi görünüyordu. → `runCoordinatorTurn` insan-stop dalında (watchdog kesintisinden `classifyTurnContext` ile ayrık plain `context.Canceled`) tek-seferlik `slot.stopRequested` set eder; `drainCoordinator` **yalnızca no-pending idle-reconcile'ı** bastırır: pending bir worker bildirimi VARSA (çalışan/yeni-biten worker) o bildirim Stop'u geçersizler ve tur yine koşar (`pending` dalı `stopRequested`'ı temizler) — **çalışan worker'lar Durdur'a rağmen koordinatörü sürdürebilir**. Pending yoksa idle-reconcile atlanıp temiz çıkılır (`running=false`, `scheduleSettleBackstop` korunur — mid-node üst-rapor borcu için). Kalıcı değil: hâlâ koşan bir worker bitince `enqueueCoordinatorTurn` ile loop'u yeniden başlatır. Testler: `TestUserStopSkipsIdleReconcile` (worker yok → tam durur), `TestUserStopHonoursPendingWorker` (pending bildirim Stop'u geçersizler). |
+| **Kuyrukta beklerken "Durdur" yutuluyordu** (2026-09-01)                       | Yukarıdaki düzeltme yalnız CANLI turu kapsıyordu. `drainCoordinator` tur yuvasını iptal edilemez `claimSessionTurnSlot` ile alıyor, iptal edilebilir ctx'i ise `runCoordinatorTurn` içinde — yani claim döndükten SONRA — açıyordu. Öndeki tur uzun sürdüğünde bu pencere üst sınırsızdır: o sırada gelen "Durdur" `CancelSession`'da `false` alıp yutuluyor, `stopRequested` hiç set edilmiyor, sıra gelince tur başlayıp sonuna kadar koşuyordu. → Ctx `go r.drainCoordinator(...)`'dan ÖNCE mint edilip `trackSession`'a yazılır, drain'e parametre geçer; claim `claimSessionTurnSlotCtx(runCtx, …)` ile yapılır. Bail: `turns++` atlanır, `pending` korunur, `driving` temizlenir (yoksa kalıcı donma), `stopRequested` parite için set edilir, `markCoordinatorBlocked` çağrılmaz (insan durdurdu, koordinatör sıkışmadı), `scheduleSettleBackstop` yalnız `!pending` iken. Ctx iterasyon başınadır ve `endTurnCtx()`/`release()` defer DEĞİL açık çağrıdır — aksi hâlde slot tüm drain boyunca tutulur. Testler: `TestCoordinatorDrainCancelledWhileQueuedNeverRuns`, `TestCoordinatorDrainBailDoesNotSpendBudgetOrEatTheNote`, `TestCoordinatorDrainReArmsAfterQueuedStop`, `TestCoordinatorDrainBailUntracksSession`. Detay: `_Docs/58` §"Claim penceresinde Durdur". |
+| **All-idle sinyali için ekstra LLM turu** (2026-08-29, 2026-08-31 daraltması) | Tüm workerlar bitince koordinatör önce son worker'ın `<task-notification>`'ını okuyup turunu bitiriyor, ardından `drainCoordinator` yalnızca `<coordination-status>` notunu enjekte etmek için **bir tur daha** koşuyordu. → Sinyal fleet'i sıfıra indiren worker'ın kendi bildirimine iliştiriliyor (`attachCoordinationStatus`); standalone backstop tamamen kaldırıldı. Son worker kararı `releaseOnce`'ın `slot.mu` altındaki sıfır-geçişiyle verilir. `idleFolded`, aynı dalganın geç kalan kardeş bildirimlerinin status claim'ini yeniden açmasını engeller. Piggyback mesajı stall guard açısından hâlâ gerçek worker sonucudur; worker görünümündeki spawn nudge'ı yalnız `VERDICT: FAIL` ile kanıtlı bekleyen yeniden-delegasyonda çıkar. Testler: `coordination_idle_fold_test.go`, `coordination_stall_worker_note_test.go`, `workers_test.go`.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+
+**Bilinçli kapsam dışı (bilinmesi gerekenler):**
+
+- **`claudeauth.SerializeRefresh` süreç-içidir.** Aynı claude-home'a karşı **iki
+  TionHarness süreci** koşarsa (ör. masaüstü uygulaması + dev sunucu) kapı işlemez.
+  Süreçler-arası koruma için dosya kilidi gerekir; şu an yok.
+- **Yarış dedektörü çalıştırılamadı** — bu makinede `-race` cgo (gcc) istiyor,
+  kurulu değil. Eşzamanlılık testleri gerçek goroutine'lerle koşuyor ve mantık
+  hatalarını yakalar, ama veri yarışlarını **tespit etmez**. CI'da gcc varsa
+  `CGO_ENABLED=1 go test -race ./internal/...` koşulmalı.
+- **Backstop tam da açık raporla aynı mikrosaniyede ateşlerse** koordinatör önce
+  runtime'ın `incomplete` notunu, sonra ajanın gerçek sonucunu görür. Bilinçli:
+  ikincisi daha bilgilendiricidir ve düşürmek yerine iletmek daha doğrudur.
+
+### 14.10 Testler
+
+`coordination_tree_test.go`: subtree re-rooting (ara düğüm ebeveyninin diğer
+dallarını görmemeli), ertelenmiş rapor, erken `completed` reddi, mod toggle
+kuralları, derinlik limiti, araç geçitleri, legacy oturum uyumu.
+`coordination_test.go`: iç içe spawn, derinlik limiti, ağaç bütçesi.
+
+---
+
+## 15. Koordinatörlük bir AJAN varsayılanı (2026-08-11)
+
+**Sorun.** `CoordinatorMode` yalnızca oturum alanıydı. Bir workspace şablonu "bu ajan
+koordinatördür" diyemiyordu: şablonla gelen ajanla açılan her sohbet düz doğuyor,
+kullanıcının oturum başına anahtarı açması gerekiyordu. "Workspace açılır açılmaz
+çalışan PM/CTO ekibi" kurulamıyordu.
+
+**Çözüm: varsayılan ≠ canlı değer.** `db.Agent.CoordinatorMode` +
+`CoordinatorWorkflow` **varsayılanı** tutar; `db.Session.CoordinatorMode` canlı değeri
+tutar ve her gate'in okuduğu şey (`Session.IsCoordinator()`) odur. Aynı desen `Model`
+ile zaten vardı — ajanda konfigüre edilir, oturuma anlık görüntü olarak düşer. Oturum
+alanı ve `set_coordinator_mode` **aynen** kalır: taşıma değil, üstüne ekleme.
+
+### 15.1 Tohumlama noktası ve ağaç istisnası
+
+Tohum `db.createSessionLocked`'da, `Model` anlık görüntüsünün yanında — tek nokta,
+bütün oturum yaratma yolları (chat, task, flow, schedule, inbox, düz spawn) kapsanır.
+
+**Ağaç içinde tohumlama yapılmaz:** `CoordinatorSessionID != "" || CoordinatorDepth > 0`
+ise db katmanı karışmaz. Orada kararı **spawn eden** verir, çünkü derinlik bütçesini
+yalnız o bilir; db yine de bayrağı açsaydı `SpawnWorker`'ın bilinçli olarak esirgediği
+yetenek bir katman aşağıda sessizce geri gelirdi.
+
+### 15.2 `SpawnWorker` — OR kuralı ve asimetrik derinlik davranışı
+
+```
+etkin = spec.Coordinator || (ajanVarsayılanı && derinlikUygun)
+```
+
+Ajan varsayılanı yeteneği **ekler**, açıkça istenmiş olanı asla kaldırmaz. Derinlik
+tavanında davranış **kasıtlı olarak asimetriktir**:
+
+| İstek                    | Tavanda sonuç           | Neden                                                                                                                                             |
+| ------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Açık `coordinator: true` | **Hata**                | Çağıran cevap bekleyen bir talepte bulundu; sessizce düz worker vermek, delege ettiğini sanan bir koordinatörü gelmeyecek bir rapor için bekletir |
+| Ajan varsayılanı         | **Sessizce düz worker** | Çağıran zaten düz worker istedi; çalışan bir worker doğru cevaptır                                                                                |
+
+Aynı mantık pinlenmiş reçeteye de uygulanır: varsayılan reçete çözülemezse serbest
+koordinasyona düşülür ve `Warn` yazılır, spawn reddedilmez.
+
+### 15.3 Reçete doğrulaması katmana göre değişir
+
+- **API create/update** (`handleCreateAgent`/`handleUpdateAgent`): bilinmeyen slug
+  **reddedilir** — etkileşimli bir düzenlemede yazım hatası görünür olmalı.
+- **Seed / install** (`seedWorkspaceTeam`, `installAgentPack`): `resolvableRecipe` ile
+  **düşürülür** — paket kendi reçete skill'ini getiremediyse kurulum patlamamalı.
+  Zaten `coordinatorRecipeBlock` çözülemeyen slug'da boş döner, yani en kötü hâl
+  serbest koordinasyondur.
+
+### 15.4 `planner` profili
+
+`explore/coder/reviewer/validator/config` yanına beşincisi: **salt-okunur**, ürünü
+bulgu değil **uygulanabilir plan** (GOAL / FILES / STEPS / VERIFY / RISKS). Salt-okunur
+olmasının sebebi validator'ınkiyle aynı — "bu arada şunu da düzelttim" diyen bir planner,
+artık ağaca uymayan bir plan üretir. Prompt anahtarı `subagent-planner`.
+
+Yanında `coordinator-wf-plan-dev-test` reçetesi (gömülü skill): planner → coder →
+validator, en fazla **2** onarım turu, PASS olmadan commit yok. Bir özellik
+koordinatörüne `spawn_worker(coordinator: true, workflow: "coordinator-wf-plan-dev-test")`
+ile pinlenir; böylece diff/log/retry churn'ü o alt-koordinatörde kalır, üste yalnız tek
+bir kompakt verdict çıkar.
+
+### 15.5 Koordinasyon araçları allowlist'ten muaf (canlı testte bulundu)
+
+**Belirti (2026-08-11 canlı koşu).** CTO,
+`spawn_worker(agent:"explore", coordinator:true, workflow:"coordinator-wf-plan-dev-test")`
+çağırdı. Oturum koordinatör doğdu ve prompt'unda "worker aç" yazıyordu — ama
+`worker:explore` ajanının profil allowlist'i (`["Read","LS","Glob","Grep","WebFetch"]`)
+**tüm koordinasyon yüzeyini** süzdü: erişilebilir araç sayısı 5, içinde ne
+`spawn_worker` ne `report_to_coordinator` vardı. Alt-koordinatör ne delege
+edebildi ne rapor verebildi; **işi kendisi yaptı** ve bu hiç fark edilmedi, çünkü
+claude-cli yolunda `Read`/`Edit`/`Bash` CLI-native araçlardır ve bu süzgeçten
+geçmezler. Yani hiçbir çağrı hata vermedi — yalnızca delegasyon sessizce buharlaştı.
+
+Bu, `SpawnWorker`'ın başka yerde bilerek reddettiği durumun ta kendisiydi:
+_"delegasyon isteyen bir çağıran, delege edemeyen ve bunu hiç söylemeyen bir worker
+almamalı."_
+
+**Kök neden — iki gate'in karıştırılması.** Allowlist, bir profil personasının hangi
+**iş** araçlarını kullanabileceğini tarif eder (ajan-özelliği). Bir oturumun worker
+sürüp süremeyeceği ya da yukarı rapor borcu olup olmadığı ise **oturum** özelliğidir
+ve `CoordinationFuncs` ile zaten hassas biçimde kapılıdır. Kayıt katmanı (native
+`buildRegistry`, CLI `coordinationBridgeDefs`) o kapıya göre zaten yalnız oturumun
+hak ettiği aracı ekliyordu; allowlist ikinci ve **yanlış** bir kapıydı.
+
+**Düzeltme.** `toolFilter` koordinasyon araçlarını **yalnız allowlist'ten** muaf
+tutar (`tools.IsCoordinationTool`). Workspace anahtarı ve ajanın açık denylist'i
+aynen geçerlidir — "spawn_worker'ı bu ajanda kapat" bilinçli bir karardır. Tek
+noktada düzeltildiği için hem native hem CLI köprüsü kapsanır (`BridgeTools` da
+aynı `toolFilter`'ı kullanır).
+
+`tools.CoordinationToolNames` kanonik listedir; bir test onu CLI köprüsünün
+dispatch switch'iyle karşılaştırır — listede eksik kalan bir araç, o araç için
+hatayı sessizce geri getirirdi.
+
+Ayrıca `spawn_worker` açıklamasına not eklendi: alt-koordinatör hedefi olarak
+profil değil **var olan bir ajan** tercih edilmeli (profil yaprak personadır).
+
+### 15.6 Testler
+
+`coordination_agent_default_test.go`: yeni oturum tohumu (+ sıradan ajana sızmama),
+ağaç-içi dokunulmazlık, `SpawnWorker` OR kuralı, derinlik tavanında düşürme.
+`toolfilter_coordination_test.go`: allowlist muafiyeti (+ iş araçlarının hâlâ
+kısıtlı kalması), denylist'in hâlâ kazanması, ad listesi ↔ köprü tutarlılığı.
+
+### 15.7 Skill araçları da allowlist'ten muaf (2026-08-27)
+
+**Belirti.** Sistem promptu **her** ajana "# Available Skills" bloğunu ve "eşleşen
+bir skill varsa davranmadan önce `use_skill` ile yükle, gizli olanları
+`skill_search` ile bul" yönergesini basıyordu. Ama hiçbir profil allowlist'i
+(`explore`, `coder`, `reviewer` ...) bu iki aracı listelemiyor; `toolFilter` de
+onları süzüyordu. Sonuç, §15.5'teki koordinasyon hatasının aynı sınıfı:
+worker'a var olmayan bir aracı çağırması söyleniyor, worker aracı bulamayıp
+skill'i **sessizce atlıyor** — hiçbir çağrı hata vermediği için de fark edilmiyor.
+
+**Düzeltme.** `tools.IsSkillTool` (yeni `internal/tools/skilltools.go`,
+`SkillToolNames = ["use_skill", "skill_search"]`) skill-keşif yüzeyini tek
+kaynaktan tanımlar; ad hem çıplak biçimde hem de CLI köprüsünün gördüğü
+namespace'li biçimde (`...__use_skill` son eki) eşleşir. `toolFilter` bu araçları
+koordinasyon araçları gibi **yalnız allowlist'ten** muaf tutar. Skill okumak
+salt-okunur bir iştir, dolayısıyla muafiyet salt-okunur profiller için de güvenli.
+
+**Katman sırası (`Runtime.toolFilter`, `internal/agent/toolsetup.go`).** Sıra
+anlamlıdır — muafiyetler yalnız en alttaki allowlist'i atlar, üstündeki bilinçli
+kapatmaları değil:
+
+1. **workspace disabled** — araç workspace düzeyinde kapalıysa hiç kimse göremez.
+2. **agent block (denylist)** — "bu ajanda bu aracı kapat" bilinçli bir karardır.
+3. **koordinasyon muafiyeti** (`tools.IsCoordinationTool`) — oturum-kapılı, §15.5.
+4. **skill muafiyeti** (`tools.IsSkillTool`) — prompt her ajana skill yüklemesini
+   söylediği için (bu bölüm).
+5. **allowlist** — profilin iş araçları yüzeyi; muaf olmayan her ad buradan geçer.
+
+Yani skill araçları workspace'te kapatılırsa veya ajanın denylist'inde ise **hâlâ
+engellidir**; muafiyet sadece "allowlist'i olan profil bunları listelemiyor"
+durumunu kapatır. Tek noktada düzeltildiği için hem native hem CLI köprüsü
+kapsanır (`BridgeTools` da aynı `toolFilter`'ı kullanır).
+
+**Test.** `internal/agent/toolfilter_skill_test.go`: allowlist'li profilde
+muafiyet, workspace-disabled'ın hâlâ kazanması, ajan denylist'inin hâlâ kazanması.
+
+## Ajana özel koordinatör promptu (2026-08-17)
+
+**Sorun.** Manager tipi ajanların soul'una "işi böl, worker aç, delege et" yazılıyordu.
+Ama soul **koşulsuz** enjekte edilir: aynı ajan koordinatör modu kapalı bir oturumda
+çalıştığında bu yönerge yine bağlama giriyor — hem token yakıyor, hem de elinde
+`spawn_worker` bile yokken delege etmesi söylenmiş oluyordu. Ortak koordinatör el
+kitabı ise her koordinatörde **aynı**; "bu ajan işi nasıl bölsün" gibi ajana özel
+yönergenin gideceği bir yer yoktu.
+
+**Çözüm.** Ajana tek bir serbest metin alanı eklendi: `Agent.CoordinatorPrompt`
+(`internal/db/models.go`, json: `coordinatorPrompt`, `omitempty`). İçeriği sistem
+bağlamına **yalnızca oturum gerçekten koordine ederken** — yani manuel enjeksiyonunu
+kapılayan `Session.IsCoordinator()` doğruyken — ve **ortak el kitabının hemen
+ardından** girer.
+
+Enjeksiyon sırası (`coordinatorLeadBlock`, `internal/api/coordinator_prompt.go`):
+
+| #   | Parça                                | Kaynak                        |
+| --- | ------------------------------------ | ----------------------------- |
+| 1   | Ortak koordinatör el kitabı          | registry prompt `coordinator` |
+| 2   | **Ajanın kendi koordinatör promptu** | `Agent.CoordinatorPrompt`     |
+| 3   | Seçili reçete (M5)                   | `coordinatorRecipeBlock`      |
+| 4   | Ara-düğüm/rapor sözleşmesi           | `coordinatorSubordinateBlock` |
+
+Her parça isteğe bağlıdır ve **boş olan parça tamamen düşer**: boş bir
+`CoordinatorPrompt` ne başlık ne boş blok üretir — koordine etmeyen bir ajana
+**sıfır token** maliyeti olur. Alan opsiyoneldir; bu alandan önce yazılmış
+`agents.json` dosyaları sıfır değerle (boş metin) sorunsuz yüklenir, **migration
+gerekmez**.
+
+### Nereden ayarlanır
+
+- **HTTP**: `POST /api/agents` ve `PUT /api/agents/{id}` gövdesinde
+  `coordinatorPrompt` (`internal/api/agents.go`). Update tarafında pointer — alanı
+  hiç göndermezsen mevcut metin korunur, açıkça `""` gönderirsen temizlenir.
+- **Araç**: `create_agent` / `update_agent`
+  (`internal/tools/builtin_agentmgmt.go`) — ajanlar birbirinin koordinatör
+  promptunu kendileri yazabilir.
+- **UI**: Ajan ayarları formunda **"Koordinatör promptu"** alanı, yalnız
+  koordinatör modu açıkken görünür (`AgentSettingsForm.tsx`). Reçete alanıyla aynı
+  mantık: mod kapatılıp kaydedilirse alan temizlenir, çünkü mod kapalıyken zaten
+  hiç enjekte edilmeyecek ölü metindir. Aynı üçlü (mod anahtarı + reçete + prompt)
+  **yeni ajan oluşturma formunda** da vardır (`AgentsView.tsx`), böylece koordinatör
+  doğrudan doğru yapılandırmayla açılır; mod kapalıyken reçete ve prompt boş
+  gönderilir.
+- **Paketleme**: alan market paketlerinde ve workspace şablonlarında taşınır
+  (`market.AgentPayload`, `market.WorkspaceTemplateAgent`) — bkz. `_Docs/21-MARKET.md`.
+  Reçetenin aksine çözülecek bir referansı olmadığı için kurulumda **birebir**
+  yazılır.
+
+### Testler (ajana özel koordinatör promptu)
+
+`coordinator_prompt_agent_test.go`: mod AÇIK + dolu prompt → metin bağlamda ve el
+kitabının **ardında**; mod KAPALI → hiç yok (el kitabı da yok); boş/yalnız-boşluk
+prompt → çıktı birebir el kitabı (ayırıcı bile eklenmez); store round-trip
+(create/get, alakasız patch'in metni ezmemesi, açık `""` ile temizleme, alansız
+ajanın boş değerle yüklenmesi).
+
+`market_coordinator_prompt_test.go`: publish → paket → install turu — hem agent
+paketi (`market.AgentPayload`) hem workspace şablonu
+(`market.WorkspaceTemplateAgent`) için prompt JSON'dan geçip kurulan ajanda
+birebir korunuyor mu; alansız paket boş değerle çözülüyor mu.
+
+---
+
+## 17. Profil worker'ları sistem ajanı oldu (2026-08-27)
+
+`spawn_worker`'ın yerleşik profil hedefleri (`explore`, `planner`, `coder`,
+`reviewer`, `validator`, `config`) artık kalıcı `worker:<profil>` ajanına
+materyalize **edilmiyor**; her biri kararlı bir sistem ajanına (`SystemKey`:
+`subagent-<profil>`) karşılık geliyor.
+
+- **Kayıt defteri:** `buildSystemAgentDefaults` altı girdiyi profil listesinden
+  üretir — prompt `prompts.Default("subagent-<id>")`, araç listesi
+  `defaultSubagentProfiles[<id>].AllowedTools`. Prompt ekranında bu altı kayıt
+  `ownedBySystemKey` taşır ve salt-okunur aynadır.
+- **Çözümleme:** `subagentProfile()` promptu `ResolveSystemAgent` üzerinden okur;
+  çözümleme hata verirse uyarı loglanır ve prompt registry fallback'i kullanılır.
+  `resolveWorkerTarget` hedefi sistem ajanının id'sine çevirir.
+- **Allowlist sözleşmesi:** ajan kaydı yalnız önbellektir. `resolveWorkerTarget`
+  kaydı koddaki listeye geri yazar; `SpawnSession` ve `SendToWorker` ise o turun
+  ajan kopyasına listeyi yeniden uygular (`applyProfileAllowlist`). UI'da bu
+  ajanların araç bölümü kilitlidir.
+- **Provider/model:** sistem ajanı model pinlemez; worker koordinatörün
+  provider/instance/model/permission değerlerini klonlamaya devam eder.
+- **Göç:** `EnsureSystemAgents` eski `worker:<profil>` ajanını yerinde sistem
+  ajanına dönüştürür (id korunur); sistem ajanı zaten varsa eski kaydı devre dışı
+  bırakır. İdempotenttir.
+
+**Testler:** `TestSpawnWorkerTargetsSystemAgent`,
+`TestResolveWorkerTargetReassertsProfileAllowlist`,
+`TestApplyProfileAllowlistIgnoresNonProfileAgents`,
+`TestSubagentSystemAgentDefaultsCarryProfileAllowlist`,
+`TestEnsureSystemAgentsAdoptsLegacyWorkerAgent`,
+`TestEnsureSystemAgentsDisablesRedundantLegacyWorker`.
+
+## Worker'a giden mesajda byte sınırı + makbuz (TSK340, 2026-08-28)
+
+`send_to_worker` artık teslimden önce **alıcı tarafı kapısından** geçer
+(`gateInbound`, `internal/agent/inbound.go`). Tam tasarım
+[[28-PEER-MESAJLASMA-PLANI]] §9'da; koordinatör tarafına yansıyan kısmı:
+
+- **Makbuz:** her `send_to_worker` bir `db.AgentMessage` bırakır. Kuyruk dolu ya da
+  slot yoksa makbuz `dropped`'a düşürülür (`dropDelivery`), yani "gönderdim ama
+  kayboldu" durumu artık kalıcı kayıtta görünür.
+- **Byte sınırı:** `agentMessageMaxKB` (varsayılan 64 KB). Aşan `send_to_worker`
+  çağrısı `message_too_large` ile **reddedilir**; kuyruk slotu bile alınmaz.
+- **Worker → koordinatör bildirimi tersidir:** `NotifyCoordinator` bildirimi
+  reddetmez, `capNotification` ile **kırpar** ve kırpmayı `message_too_large`
+  işaretiyle belirtir. Gerekçe: turu bitmiş worker'a hata döndürecek kimse yoktur;
+  bildirimi düşürmek koordinatörü sonsuza dek bekletirdi.
+- Alıcı politikası (`accept|hold|refuse`) 2026-09-06'da kaldırıldı (bkz. 28 §9).
+
+**Testler:** `TestSendToWorkerEnforcesSize`, `TestDropDeliveryRecordsFailure`,
+`TestCapNotification` (`internal/agent/inbound_test.go`).
+
+## 18. codex-cli native alt-ajanları (`spawn_agent`) nasıl kapatılır (2026-08-31)
+
+Koordinatör ağacının tamamı TionHarness'in `spawn_worker` yolundan geçmelidir;
+sağlayıcının kendi alt-ajan (collab) mekanizması paralel bir ağaç açar ve o ağaç
+roster'a, worker notlarına, stall guard'ına ve bütçelere **görünmez**. codex-cli
+tarafında bu mekanizma modelin gördüğü `spawn_agent` aracıdır.
+
+Aşağıdaki tablo codex-cli **0.148.0** üzerinde, izole bir `CODEX_HOME` ile A/B
+ölçülmüştür (varsayım değil): her anahtar için `codex debug prompt-input` çıktısı
+(modelin gerçekten gördüğü prompt) id/timestamp normalize edilerek baseline ile
+karşılaştırıldı, ardından gerçek bir tur koşturulup `SubAgentActivity` ve alt-thread
+rollout dosyasının diske yazılıp yazılmadığına bakıldı.
+
+| Anahtar                                               | Sonuç                                                                                                                                                            |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[features] multi_agent = false`                      | **Etkisiz.** `codex features list` boolu değişir, davranış değişmez: prompt baseline ile byte-özdeş, `spawn_agent` talimatı yerinde, gerçek turda spawn ÇALIŞTI. |
+| `[features] multi_agent_v2 = false`                   | **Etkisiz** (aynı kanıt).                                                                                                                                        |
+| `features.collaboration_modes = false`                | **Etkisiz** — prompt baseline ile byte-özdeş.                                                                                                                    |
+| `features.multi_agent_mode`, `features.enable_fanout` | **Etkisiz** — prompt baseline ile byte-özdeş.                                                                                                                    |
+| `[tools]` altında bir collab anahtarı                 | **Yok.** Binary'deki `ToolsToml` yalnız üç alan taşır: `web_search`, `experimental_request_user_input`, `update_plan`.                                           |
+| `agents.max_depth = 0`                                | **Etkisiz** — `spawn_agent` prompt'ta kalır.                                                                                                                     |
+| `agents.max_concurrent_threads_per_session = 0`       | **Turu komple düşürür:** `Error: agents.max_concurrent_threads_per_session must be at least 1`.                                                                  |
+| `[agents] enabled = false`                            | ✅ **Çalışan tek anahtar.**                                                                                                                                      |
+
+Çalışan yapılandırma:
+
+```toml
+[agents]
+enabled = false
+```
+
+Eşdeğeri: `-c agents.enabled=false`. Gerçek turda hiç `function_call` üretilmez,
+`SubAgentActivity` yoktur, alt-thread dosyası yazılmaz ve model `spawn_agent`
+görmediğini bildirir. `--strict-config` altında kabul edilir. Yan fayda: collab
+talimat bloğu prompt'tan tamamen düştüğü için input token **44369 → 13298**
+(~31k tasarruf). Shell aracı regresyona uğramaz.
+
+> **`--ephemeral` tuzağı (en önemli uyarı).** `--ephemeral` altında araçlar açık
+> kalır ama spawn başarısız olur (`collab spawn failed: no thread with id`) ve
+> model sonucu **uydurur** — ölçümde spawn hiç gerçekleşmediği hâlde model
+> "The sub-agent answered: 4" dedi. Yani aracı açık bırakıp spawn'ı kırmak,
+> aracı kapatmaktan **daha kötüdür**: sessiz halüsinasyon üretir. Alt-ajan yolu
+> ya tamamen kapatılmalı (`agents.enabled=false`) ya da gerçekten çalışmalıdır;
+> arada bir durum kabul edilebilir değildir.
+
+**Nasıl bulundu (tekrarlanabilir yöntem).** `codex debug models` çıktısı model
+kataloğunda bir `multi_agent_version` alanı gösterdi; `codex.exe` string'leri
+içinde 16 alanlı `MultiAgentV2ConfigToml` yapısı bulundu; bölüm adı
+`--strict-config` ile brute-force edildi — `multi_agent`, `collaboration` ve
+`orchestrator` reddedildi, `agents` kabul edildi. Aynı yöntem sürüm yükseltmesinde
+tekrarlanabilir: önce `debug models` + binary string'leri, sonra `--strict-config`
+ile bölüm adı doğrulaması, en sonunda `debug prompt-input` A/B'si + gerçek turda
+`SubAgentActivity` kontrolü. **Kabul kanıtı `codex features list` çıktısı değil,
+prompt farkı + gerçek turdur** — bayrağın "set edilmiş" görünmesi davranışın
+değiştiği anlamına gelmez.
+
+## Oturum başlangıç paneli (2026-09-01)
+
+Koordinatör modu ve recipe seçimi artık **ilk mesajdan önce** de görünür: boş bir
+sohbette composer'ın üstünde `SessionStartPanel` kartı çıkar, mesaj gönderildiği
+anda kaybolur. Ayrı bir mekanizma değildir — aynı `PUT /api/sessions/{id}/role`
+ve `PUT /api/sessions/{id}/workflow` uçlarını çağırır, `CoordinatorSection` ile
+aynı `CoordinatorWorkflowPicker`'ı kullanır. Gerekçe ve görünürlük kuralı:
+`_Docs\07-CHAT-UX.md` § "Oturum başlangıç paneli".
+
+## 19. Uzun koordinatör oturumu — SES2570 bulguları ve alınan önlemler (2026-09-01)
+
+Tek bir koordinatör oturumu (`SES2570`, codex-cli `gpt-5.6-sol`) 20.7 saat sürdü,
+81 sağlayıcı çağrısı yaptı, 5 kez fold aldı ve tek satır kod commit etmeden
+kapanmadı. Ölçüm (oturum ağacı = 27 oturum): **8.95M in+out token, 74.7M
+cache-read**, `messages.jsonl` **12.33 MB**. Aşağıdaki altı önlem doğrudan bu
+oturumun ölçülen kayıplarından türetildi.
+
+### 19.1 Oturum-kapsamlı `use_skill` dedupe
+
+`use_skill` 174 kez çağrılmıştı; **167'si aynı oturumda daha önce yüklenmiş bir
+slug**'dı (`tionharness-project` 74×, `orchestrator-doctrine` 47×,
+`tionharness-coordinator` 37×). 2.25 MB ≈ ~560K token saf tekrar — fold'lar
+arasındaki context büyümesinin neredeyse tamamı.
+
+`internal/tools/skillledger.go` oturum başına bir **defter** tutar
+(`SkillLedger`). Aynı slug ikinci kez istendiğinde gövde yerine
+`SkillReloadPointer` döner: "bu oturumda yüklendi (#N), gövde tekrar
+gönderilmedi, gerçekten gerekiyorsa `force: true`".
+
+- **Epoch = `Session.CompactionCount`.** Fold, eski gövdeyi pencereden düşürür;
+  fold sonrası ilk yükleme **gerçek metni** döndürmek zorundadır. Defter kaydı
+  epoch ile eşleşmiyorsa yok sayılır.
+- `force: true` gövdeyi yeniden gönderir **ve** kaydı güncel epoch'a taşır.
+- Gövde okuması başarısız olursa kayıt silinir — geçici bir okuma hatası, o
+  slug'ın sonraki tüm yüklemelerini bastırmamalı.
+- Defter iki sağlayıcı yolunda da aynıdır: native araç ctx'ten
+  (`tools.WithSkillLedger`), CLI köprüsü `chatRun`'dan okur
+  (`internal/api/skillledgers.go`).
+- Bellek-içi: yeniden başlatmada her gövde bir kez daha servis edilir — CLI
+  thread'i de zaten sıfırlandığı için doğru davranış budur.
+
+### 19.2 Spawn-zamanı yetenek kontrolü
+
+18:10–19:21 arası **tek bir markdown dosyası** 5 ardışık denemede üretilemedi.
+Sebep: `Worker: Planner` (`allowedTools: ["Read","LS","Glob","Grep","WebFetch"]`)
+**salt-okunur**; koordinatör ona "dosyayı yaz, satır sayısı + SHA-256 kanıtı ver"
+brief'i verdi. Worker `Write` çağırdı, registry `unknown tool "Write"; use
+tool_search…` döndürdü — yani model bunu **isimlendirme sorunu** sandı.
+
+İki katmanlı düzeltme:
+
+1. **`Registry.unknownToolMessage`** artık `tools.IsKnownBuiltin` ile ayrım
+   yapıyor: ad TionHarness'te var ama bu ajanın setinde yoksa mesaj "izin sınırı,
+   yeniden denemek işe yaramaz, sonucunda bunu belirt" diyor.
+2. **`Runtime.checkWorkerCapability`** (`internal/agent/spawncapability.go`)
+   spawn'ı baştan reddediyor: brief açıkça yazma gerektiriyorsa
+   (`taskNeedsMutation` — dar, iki dilli desenler) ve hedef ajanın allowlist'inde
+   hiç mutasyon aracı yoksa hata döner ve **yolu söyler**. Kontrol hedef
+   çözümlendikten sonra, worker slot rezervasyonundan **önce** koşar.
+
+`agentMutationTools` bozuk bir `allowed_tools` belgesini **hata** sayar: aynı
+belge gerçek filtrede her aracı reddediyor, "yazabilir" demek yalan olurdu.
+
+### 19.3 Worker adım izi bildirimden ayrıldı
+
+`notifyCoordinator`, biten worker'ın **tüm** turn trace'ini koordinatörün
+enjekte edilen user mesajına yazıyordu: 12.33 MB'ın **8.2 MB'ı** buydu (tek
+bildirimde 545 KB shell çıktısı, tek adımda 67 KB `git diff`).
+
+Bu veri **hiç render edilmiyordu**: UI adımları yalnız `notificationChanges()`'e
+veriyor, o da sadece diff/edit adımlarını tutuyor
+(`frontend/src/features/chat/parseTaskNotification.ts`).
+
+`digestWorkerSteps` (`internal/agent/workernotesteps.go`) artık yalnız kartın
+gerçekten okuduğunu saklıyor: dosya değişiklikleri (gerekiyorsa diff sentezi için
+`input` ile) ve todo adımları. Alt-adımlara iniyor ve gürültülü ebeveynin altındaki
+gerçek düzenlemeleri yukarı taşıyor. Tam iz worker'ın kendi oturumunda duruyor;
+bildirim zaten o oturum id'sini taşıyor.
+
+> Not: bu bir **depolama/boot-RAM** düzeltmesidir, token düzeltmesi değil — user
+> rolündeki adımlar hiçbir sağlayıcı yoluna gönderilmiyordu
+> (`EstimatePersistedStepTokens` yalnız assistant mesajlarını sayar). Store açılışta
+> tamamen belleğe yüklendiği için yine de gerçek bir maliyetti.
+
+### 19.4 Durum sorguları push'landı
+
+SES2570, 81 turda **62 `list_workers` + 63 `list_agents` + 69 `get_view`** çağırdı
+— tur başına ~2.4 durum sorgusu, çoğu değişmemiş durumu tekrar okuyor.
+
+Kök neden: fleet bloğu yalnız **headless** yolda (`autonomousDynamicSuffix`)
+enjekte ediliyordu. SES2570 bir **chat** oturumuydu (`composeTurnRequest`), yani
+o bloğu **hiç almadı**.
+
+`coordinatorSituationBlock` (`internal/agent/coordination_situation.go`) üç
+bölümü birleştirir ve **her iki yola** da bağlanır:
+
+| Bölüm | Yerini aldığı çağrı |
+|-------|---------------------|
+| fleet durumu (`ProjectWorkers`) | `list_workers` |
+| `<available-agents>` — her ajan `read+write` / `READ-ONLY` etiketli | `list_agents` |
+| pano (`ProjectBoard`, LevelCard) | `get_view board` |
+| `<review-gate-exhausted>` (bkz. 19.5) | — |
+| `<situation-freshness>` | — |
+
+`<situation-freshness>` notu olmadan model yine sorgular: canlı bir projeksiyonu
+bayat bir kopyadan ayırt edemez. Not, blokların **her tur yeniden üretildiğini**
+söyler ve üç aracın hâlâ ne için geçerli olduğunu (tek kartın detayı, tek ajanın
+konfigürasyonu, worker transcript'i) belirtir.
+
+Ajan roster'ındaki yetenek etiketi 19.2'nin **önleyici** yarısıdır: "READ-ONLY"
+yazısını gören koordinatör o ajana dosya yazma brief'i vermez.
+
+### 19.5 Doğrulama kapısı — turlar sayılıyor
+
+13:04–19:57 arası (~7 saat) tek bir kalıp döndü: kodla → "TAZE, bağımsız
+adversarial reviewer" → FAIL → düzelt → **yeni** taze reviewer → yeni gerekçeyle
+FAIL. Her reviewer sıfırdan başlıyor (150–300K token), önceki turlarda karara
+bağlanmış bulguların kaydı yok, dolayısıyla her seferinde yeni itiraz üretiyor.
+Durma kriteri hiç yoktu.
+
+`Task.ReviewBounces` (`internal/db/models_task.go`) artık kartın `review` →
+çalışma sütununa **kaç kez** düştüğünü sayıyor; `MoveTask` bunu
+`isWorkingBoardState` ile ayırt ediyor (`review → done` bir PASS'tir, tur değil).
+`ReviewRoundBudget` (3) aşıldığında koordinatörün turuna `<review-gate-exhausted>`
+bloğu enjekte edilir: **yeni reviewer spawn etme**, ya kartı daralt ya kullanıcıya
+sor.
+
+Sayaç **her iki yazma yolunda da** artar: `move_task` aracı `MoveTask`'ı,
+kart sürükleme ve kart formu ise `PUT /api/tasks/{id}` → `UpdateTask`'ı çağırır.
+Kural tek bir yardımcıda (`db.countReviewBounce`) ve ikisi de onu çağırır — ilk
+sürümde yalnız `MoveTask` sayıyordu, yani rozet tam olarak insanın kullandığı yola
+görünmezdi (canlı testte yakalandı). `ReviewBounces` **sunucu-sahipli**dir:
+`UpdateTask` istemcinin gönderdiği değeri yok sayar, sayaç yalnız geçişten türer.
+
+Koordinatörün pano ve kapı blokları `ListActiveTasks` okur, `ListTasks` değil —
+arşivlenmiş kart kullanıcının panodan zaten kaldırdığı bitmiş iştir. İlk sürümde
+`ListTasks` kullanılıyordu ve blok 117 kartlık panoyu 270 kart olarak bildiriyordu
+(bu da canlı testte yakalandı).
+
+Sayaç kullanıcıya da görünür: kartta `↻ N/3` rozeti (bütçe dolunca kırmızı),
+kart detayında ne yapılacağını söyleyen bant, panoda `Doğrulama` facet'i, ajan
+tarafındaki `get_view board` projeksiyonunda ise ayrı bir sinyal satırı. Ayrıntı:
+`_Docs\67-BOARD-GORUNUMLERI.md` § "Doğrulama turu rozeti". Bütçe sabiti
+`db.ReviewRoundBudget`'tedir (runtime + view onu okur); frontend'deki
+`REVIEW_ROUND_BUDGET` onun elle senkronlanan aynasıdır.
+
+Bunun tamamlayıcısı olan iki disiplin kuralı — **karar defteri**
+(`<scratchpad>/<KART-ID>-findings.md`) ve **ağaç sabitleme** —
+`orchestrator-doctrine` skill'i §10'da ve `coordinator.md` promptunda.
+
+**Ağaç sabitleme kartın kapsamına daraltıldı (TSK772, 2026-09-22).** İlk sürümde
+validator brief'i tüm ağacı (`git HEAD` + kirli dosya listesi) sabitliyordu.
+Paylaşılan çalışma ağacında paralel oturumlar sürekli ilgisiz dosyaları
+değiştirdiği için bu sabitleme neredeyse her koşuda `STALE` veriyordu (TSK692:
+hedef dosyalar ve commit'ler sabitken tüm-ağaç STALE). Yeni kural:
+
+- Sabitleme **yalnız kartın dosyalarını** kapsar: HEAD + kapsam dosya listesi +
+  yalnız o dosyaların içerik parmak izi. `STALE` yalnız **kapsam içi** bir dosya
+  değiştiğinde verilir; kapsam dışı churn ve kapsamı etkilemeyen commit'ler
+  `notes`'ta raporlanır, verdict'i geçersiz kılmaz. Validated içeriğin aynen
+  commit'lenmesi de değişiklik sayılmaz (diskteki ağaç hâlâ doğrulanan ağaçtır).
+- Mekanik yardımcı: `internal/treepin` + `cmd/treepin`. Bu depoda:
+  `go run ./cmd/treepin capture <kart dosyaları/dizinleri>` tek satırlık
+  `treepin1 head=… files=… digest=… scope=…` jetonu basar; validator
+  `go run ./cmd/treepin verify '<jeton>'` ile `FRESH` / `STALE` alır (derlenmiş
+  binary'de STALE çıkış kodu 3; `go run` bunu 1'e çevirir, karar satırın
+  kendisidir). Özet: kapsam pathspec'lerinin eşleştiği her dosya (takipli +
+  takipsiz, `.gitignore` hariç) için yol + boyut + içerik sha256; diskten silinen
+  takipli dosya bir silme işaretiyle özete girer. Kapsamsız sabitleme reddedilir.
+- `subagent-validator` sözleşmesine üçüncü verdict eklendi: `VERDICT: STALE`
+  (kod hakkında hiçbir yargı yok). Worker durum bloğu (`internal/view/workers.go`)
+  bunu `⏸ STALE` rozeti ve özet satırında "re-pin and re-validate" notuyla
+  gösterir; PASS/FAIL sayımına karışmaz.
+- Promptlar genel kalır: `treepin` olmayan depolarda aynı kural
+  `git hash-object -- <dosyalar>` ile uygulanır.
+
+### 19.6 Kapsam sözleşmesi
+
+Kart "ağ ekranındaki node konumları kaydedilsin" olarak açıldı; 19:50'de
+"backend-authoritative incarnation kaynağı + Windows atomik dosya sözleşmesi +
+per-node CAS + durable outbox" tartışılıyordu. Bir UI persistence görevi dağıtık
+sistem tasarım incelemesine dönüşmüştü ve kimse durdurmadı.
+
+Kural (doktrin + `coordinator.md`): her kart `description` içinde bir **kapsam
+sözleşmesi** taşır ("bu kart şunu yapar / şunu YAPMAZ"); reviewer doğrulamayı ona
+göre yapar; **kapsam dışı bulgu kartı bloklayamaz** — `create_task` ile yeni kart
+açılır. Kapsamı yalnız kullanıcı genişletir.
+
+> Bu madde bilinçli olarak **prompt düzeyinde** bir kuraldır, zorlanan bir mekanizma
+> değil: kapsam kartın serbest metnindedir, runtime onu doğrulamaz.
+
+## 16. Reçete frontmatter şeması ve sürüm (2026-09-02, `_Docs/77` R6)
+
+Bir `kind: coordinator-workflow` skill'i düzyazı gövdesinin yanında artık
+**yapısal bir plan** taşıyabilir; Rota (yörünge) bu bloktan tohumlanır, düzyazı
+koordinatör prompt'una girmeye devam eder:
+
+```yaml
+version: 1
+phases:
+  - id: plan
+    profile: planner
+    gate: { kind: artifact, value: plan }
+  - id: code
+    profile: coder
+    watchers: [summarize-board]
+  - id: review
+    profile: validator
+    gate: { kind: verdict, value: "VERDICT: PASS" }
+    max_rounds: 2
+  - id: ship
+    optional: true
+watchers: [update-docs]
+optimizer: recipe-optimizer
+```
+
+- **Şema** (`internal/skills/recipe.go`): `RecipeSpec{Version, Phases, Watchers,
+  Optimizer}`, `PhaseSpec{ID, Label, Profile, Gate, Watchers, MaxRounds, Optional}`,
+  `GateSpec{Kind: artifact|verdict|human|schema, Value}`. Faz id'leri küçük harf
+  slug, benzersiz. Değer biçimleri: skaler, satır-içi dizi `[a, b]`, satır-içi map
+  `{ k: v }` (frontmatter ayrıştırıcısı bağımlılıksız kalır; iç içe blok
+  `frontmatter.blocks` ile ham yakalanıp `parsePhaseBlock` ile çözülür).
+- **Yükleme davranışı:** blok yoksa `Skill.Recipe == nil` (yalnız-düzyazı reçete,
+  hata değil). Blok varsa ve **geçersizse** skill yine yüklenir ve düzyazı olarak
+  çalışır, `Skill.RecipeError` nedeni taşır, seçici bunu "⚠ Faz bloğu geçersiz"
+  olarak gösterir; ondan Rota tohumlanmaz. Gönderilen reçetelerin bloğu
+  `TestShippedRecipesParse` ile CI'da doğrulanır.
+- **Sürümlü referans:** `skills.RecipeRef(slug, version)` → `slug@1`.
+  `Session.CoordinatorWorkflow` worker spawn'ında (`SpawnWorker`) ve flow
+  koordinatör düğümünde sürümlü damgalanır; ajan varsayılanından gelen değer ve
+  eski oturumlar çıplak slug taşır, tüm okuyucular (`ResolveRecipe`,
+  `coordinatorRecipeBlock`) `ParseRecipeRef` ile ikisini de kabul eder. Sürüm
+  **bilgilendiricidir**: çözümlenen her zaman güncel dosyadır; Rota tohumlandığı
+  sürümü `TemplateRef`'te kaydeder.
+- **Prompt:** reçete bloğuna "Declared phases (in order)" satırı eklenir, böylece
+  koordinatör ile ondan tohumlanan Rota aynı faz adlarını kullanır.
+- Gönderilen `plan-dev-test` (plan → code → review → ship?) ve `fanout`
+  (dispatch → synthesize) reçetelerine `version: 1` + `phases` eklendi; diğerleri
+  düzyazı olarak kaldı.
+
+## 20. M1 fan-out'a seçici stratejiler (TSK835, 2026-09-06)
+
+§11'de "prompt-seviyesi, aynı araçlarla" diye listelenen iki desen —
+**Generate-And-Filter** (fan-out + koordinatör rubric) ve **Tournament**
+(ardışık judge) — artık M1'de **birinci-sınıf strateji** olarak var. Tek
+`run_subagent` çağrısı N alternatif rotayı koşup **kazananı kendisi** döndürüyor;
+koordinatörün N cevabı kendi bağlamına alıp elemesi gerekmiyor.
+
+| `strategy` | Ne yapar | Ne zaman |
+|------------|----------|----------|
+| `majority` | Aynı soru N rotada koşulur, en çok bacağın verdiği cevap döner (self-consistency) | Cevap **kısa ve kısıtlı** olduğunda: sınıflandırma, evet/hayır, tek dosya adı |
+| `reviewer-selects` | Tüm adaylar koşulur, yerleşik salt-okunur `reviewer` profili birini seçer | Cevap **serbest metin** olduğunda: taslak, analiz, yama önerisi |
+
+Koordinatör açısından iki pratik sonuç:
+
+- **Bağlam tasarrufu asıl kazanç.** İkisi de yalnız kazananın yanıtını tam basar;
+  kaybedenler tek satır + artifact id olarak görünür. `all` ile koşup elemek,
+  delege etmenin kaçınmak için var olduğu yığını koordinatörün bağlamına geri
+  koyardı.
+- **`majority` `output_format` olmadan çalışmaz** ve reddedilir: yanıtlar
+  normalize metin olarak karşılaştırılır, kısıtlanmamış serbest metin bacaklar
+  pratikte hiç anlaşamaz. Serbest metinde `reviewer-selects` kullan.
+- Hakem **tur bütçesine yazılır** (gerçek bir alt-ajan koşusudur) ve düşerse
+  çağrı düşer — `all` gibi hepsini döndürmez. Gerekçe ve tüm tasarım kararları:
+  `_Docs/25-SUBAGENT-ISOLATION.md` "Seçici stratejiler: açık tasarım kararları".
+
+## 21. `run_adhoc_flow` — çok turlu M1, motor üzerinde (TSK912, 2026-09-21)
+
+M1 (`run_subagent` + `tasks[]`) tek turdur; M4 (kayıtlı flow) önceden çizilmiş bir
+graf ister. İkisinin arasındaki boşluk — "paralel tara, sonuca göre dallan,
+gerekirse paralel düzelt" planını **o anda** kurup **tek çağrıda** koşmak —
+`run_adhoc_flow` ile kapandı.
+
+- Plan `steps[]` (`parallel` / `branch` / `end`) + `max_rounds` olarak gelir;
+  bacak şeması `run_subagent`'ın `tasks` elemanıyla aynıdır, model yeni kelime
+  öğrenmez.
+- Plan bir orchestration grafına derlenir ve **gizli (ephemeral) bir Flow
+  satırı** üzerinde normal bir `FlowRun` olarak koşar: `run_id` gerçek koşu
+  id'sidir, `get_view kind=flowrun` ile incelenir. Satır flow kataloğunda görünmez.
+- Her parallel adım motorda **tek** fan-out `agent` node'udur (`Node.Legs`) ve
+  mevcut `runAgentFanOut` yolundan geçer; tüm M1 guard'ları (derinlik, döngü,
+  `legSpec`, paylaşılan tur bütçesi) aynen geçerlidir. Bütçe turlar arasında
+  sıfırlanmaz; tavan `DelegationMaxCalls × max_rounds`, en fazla 24.
+- Sonuç **node granülerliğindedir**: bir parallel adım `steps[]`'te tek giriştir,
+  `output` bacakları özetler. `flowrun` görünümü fan-out node'unu opak tek node
+  olarak çizer.
+- M2 ile farkı: koordinatör async ve kalıcıdır, worker'lar tur sonrasında da
+  yaşar; `run_adhoc_flow` bloklayan, tur içinde biten, tamamen deterministik
+  rotalı bir plandır. Uzun/açık uçlu iş hâlâ M2'nin işidir.
+
+Tüm tasarım kararları ve kapsam dışı maddeler: `_Docs/25-SUBAGENT-ISOLATION.md`
+"Çok turlu ad-hoc plan: `run_adhoc_flow`".

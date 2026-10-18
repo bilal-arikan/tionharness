@@ -52,8 +52,7 @@ func (ExpandTool) Def() providers.ToolDef {
 			"'skills'/'insights') — the members.\n" +
 			"  4. get_view the one session / run / card / artifact / automation / skill / finding that matters.\n\n" +
 			"Also: expand{kind:'board',id:'board'} → columns; expand{kind:'category',id:'col:in_progress'} " +
-			"→ that column's cards; expand{kind:'agent',id:AG} → the agent's sessions; " +
-			"expand{kind:'session',id:SES} → a coordinator's worker sessions.\n\n" +
+			"→ that column's cards; expand{kind:'agent',id:AG} → the agent's sessions.\n\n" +
 			"Leaves (budget, tools, logs, a single card, a flow run, a schedule, one " +
 			"artifact/automation/skill/finding) have no " +
 			"children and return an empty list.",

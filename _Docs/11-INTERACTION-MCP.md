@@ -640,7 +640,7 @@ seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge d
   - **Tam gölgeleme seti (genişletildi):** TionHarness'e-özel köprülü bir aracı
     **farklı isimle** taklit eden CLI-native araçlar bastırılır:
     `Skill` (↔`use_skill`), `TodoWrite`+`Task`/`TaskCreate`/`TaskUpdate`/`TaskList`/`TaskGet` (↔`todo_write`),
-    `Task`/`Agent` (↔`run_subagent`/`spawn_*`), **`SendMessage` (↔`send_message`,
+    `Task`/`Agent` (↔`run_subagent`/`spawn_*`), **`SendMessage` (↔`send_message`; araç 2026-10-18'de kaldırıldı, gölgeleme yine de sürer,
     2026-07-06 — native olan CLI'nin kendi subagent'larıyla konuşur, TionHarness
     ajanını geçerli ID'de bile "bulunamadı" der; model `ToolSearch` ile keşfedip
     seçince her teslim başarısız oluyordu)**, `AskUserQuestion` (↔`ask_user`),
@@ -649,7 +649,7 @@ seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge d
     fs/web araçları (Read/Write/Edit/Glob/Grep/WebSearch/WebFetch) **bilerek**
     native kullanılır — gölgeleme değil. Olmayan aracı disallow etmek no-op olduğu
     için sürümler arası güvenli. Canlı doğrulama: haiku ajan bile isimle
-    `send_message` gönderiyor (SES109/112), native `SendMessage` katalogda yok.
+    `send_message` gönderiyordu (SES109/112; tarihsel), native `SendMessage` katalogda yok.
 
 **Kapsam sınırı (Faz 1):** Bu köprü yalnız **sohbet** turunda devrede; otonom
 koşular için bkz. aşağıdaki Faz 2.

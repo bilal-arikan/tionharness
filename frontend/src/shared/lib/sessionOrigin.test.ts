@@ -15,17 +15,6 @@ describe('originLabel', () => {
     expect(l?.title).toContain('SES9')
   })
 
-  it('points a worker at its coordinator', () => {
-    const l = originLabel({
-      kind: 'coordinator',
-      triggerSessionId: 'SES1',
-      rootSessionId: 'SES1',
-      at: 1,
-    })
-    expect(l?.text).toBe('Koordinatör SES1 açtı')
-    expect(l?.sessionId).toBe('SES1')
-  })
-
   it('handles a schedule without a trigger session', () => {
     const l = originLabel({ kind: 'schedule', entityId: 'SCH2', at: 1 })
     expect(l?.text).toBe('Zamanlayıcı SCH2 başlattı')

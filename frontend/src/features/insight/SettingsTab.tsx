@@ -138,7 +138,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
           Workspace ▸ Agents (one ws-settings map). */}
       <div className="rounded-md border border-[var(--color-border)] p-3">
         <SystemRoleAssignments
-          roles={['lesson-extractor', 'recipe-optimizer']}
+          roles={['lesson-extractor']}
           title={t('settings.agentsTitle')}
           hint={t('settings.agentsHint')}
         />

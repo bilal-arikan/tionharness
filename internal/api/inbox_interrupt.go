@@ -10,7 +10,7 @@ import (
 // Why it is one endpoint instead of two calls: the client used to send
 // sessionControl(stop) and then sendMessage(). Between those two round trips the
 // session's turn slot is FREE, and it is not only the user who competes for it —
-// another queued message, a coordinator auto-turn, a worker <task-notification> or
+// another queued message or
 // a scheduler wake can claim it (see claimRuntimeTurn in the queue worker). The
 // interrupt message then ran AFTER the very turn the user interrupted to skip,
 // which is the opposite of what the gesture promises.

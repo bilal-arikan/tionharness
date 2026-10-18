@@ -1,5 +1,7 @@
 # 68 — Özet Haritası (Workspace Explorer / semantic-zoom drill-down)
 
+> **Not (2026-10-18):** koordinatör/worker düğümleri, `awaiting-workers` parıltısı, `worker` canlı sinyali ve Rota düğümleri/zamanı haritadan kaldırıldı.
+
 > **Durum:** Faz 1-3 tamamlandı ✅ (2026-08-06) + **TSK66 genişletmesi** ✅ (2026-08-06:
 > single-expand accordion + Artifacts/Otomasyonlar/Skill'ler/İçgörüler/Günlükler kovacıkları) +
 > **TSK487 odak grafiği tasarımı** ✅ + **TSK492 klavye, responsive ve erişilebilirlik** ✅
@@ -19,7 +21,7 @@ Workspace'in durumunu **kök düğümden başlayıp tıkladıkça bir katman der
 bir düğüm haritası olarak gezmek. Root'a tıklayınca en temel workspace özeti; oradan
 kategori düğümlerine (Oturumlar, Akışlar, Pano, Pano-sütunu, Ajanlar, Bütçe, Araçlar)
 dallanır; bir kategoriye tıklayınca üyeleri açılır; bir üyeye tıklayınca onun alt
-düğümleri (ör. oturum → koordinatör/worker'lar). Aynı sistemi **bir ajan da** workspace
+düğümleri (ör. oturum → subagent/spawn alt oturumları). Aynı sistemi **bir ajan da** workspace
 özetlerini gezmek için kullanabilmeli.
 
 Literatürdeki karşılığı: **progressive disclosure (kademeli açılım) + semantic zoom +
@@ -55,7 +57,7 @@ kullanılabilir ama veri modeli ve etkileşim farklı → ayrı feature klasör�
 ```
 workspace (root)
 ├── Oturumlar (category)      → category:skind:<tür> (oturum türü grubu, 2026-09-05)
-│                              → session:SES*  → (coordinator/worker alt düğümleri)
+│                              → session:SES*  → (subagent/spawn alt düğümleri)
 ├── Akışlar (category)        → flowrun:RUN*  → (node alt düğümleri, Sub)
 ├── Pano (board)              → board#<sütun> → kart (task) düğümleri
 ├── Ajanlar (category)        → agent:AGT*    → o ajanın oturumları
@@ -79,8 +81,7 @@ TSK66 notları:
 Logs})`; `internal/insight` view'i import ettiği için findings view-local `InsightFinding`
   tipine api-adapter'ıyla bağlanır (cycle yok).
 
-**Dikkat: bu bir AĞAÇ değil GRAF.** `agent → session`, `session(coordinator) →
-session(worker)` kenarları döngü üretebilir → lazy-expand'de **visited-set** ve
+**Dikkat: bu bir AĞAÇ değil GRAF.** `agent → session`, `session → alt oturum` (subagent/spawn/handoff) kenarları döngü üretebilir → lazy-expand'de **visited-set** ve
 derinlik/çocuk cap'i şart (§8.1).
 
 ## 5. Backend değişiklikleri (`internal/view`, `internal/api`)
@@ -139,7 +140,7 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   BFS ile ulaşılabilen **tüm** düğümleri ve parent→child kenarları tek seferde döndürür;
   cap yok, ziyaret kümesi döngü/self-loop'u keser, çıktı `Ref.String` sırasıyla
   deterministiktir. Skill/insight kaynağı yoksa o kovacık boş kalır, harita düşmez.
-  `session → rota` ve `rota → bağlı varlık` kenarları da dahildir.
+  (`session → rota` ve `rota → bağlı varlık` kenarları Rota grafiği ile birlikte 2026-10-18'de kaldırıldı.)
 - **Yerleşim:** kök düğüm fizik için sabittir (`fixed`; sürüklenebilir) — sabit çapa
   olmayınca tüm alan sürekli kayıp dönüyordu. Harita `VisNetworkGraph`'ı `settle`
   prop'uyla açar: Ağ ekranının kalıcı hareketi (`minVelocity: 0`) yerine vis'in dinlenme
@@ -150,7 +151,7 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   (`VisNetworkGraph` `layoutId` prop'u — Ağ ekranının kayıtları ile çakışmaz).
 - **Görsel dil (`explorerVis.ts`):** derinlik 0 büyük accent daire (kütle 12), derinlik 1
   gruplar renkli orta daire (kütle 4), üyeler Ağ'daki şekillerle (session=box,
-  flowrun/rota=diamond, skill=star, automation=triangle, artifact=square,
+  flowrun=diamond (rota düğümleri 2026-10-18'de kaldırıldı), skill=star, automation=triangle, artifact=square,
   insight=hexagon). Kenar uzunluğu hub'a yakınlıkla artar; döngü/self-loop kesik +
   warning rengi. Etiketten `kind:ID` öneki soyulur, ref tooltip'te kalır.
 - **Fizik modu `tree` (2026-09-05):** `VisNetworkGraph` `mode="tree"` = vis
@@ -169,12 +170,12 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   (`focusNodeId`/`focusTick`: aynı düğüme ikinci tık da odaklar; veri yenilenmesi
   kamerayı geri çekmez; zoom asla düşürülmez). **Çift tık** oturum düğümünde sohbeti
   açar. Boş tuvale tık seçimi bozmaz. Yoğunluk kaydırıcısı fizik sıkışıklığını ayarlar.
-- **Canlı katman (2026-09-05):** `GET /api/views/graph` `live[]` (çalışan oturumlar +
-  worker bekleyen koordinatörler, sürücü ajanın ad/emoji/renk'i; kaynak `Sources.Live`
+- **Canlı katman (2026-09-05):** `GET /api/views/graph` `live[]` (çalışan oturumlar,
+  sürücü ajanın ad/emoji/renk'i; kaynak `Sources.Live`
   = runtime liveness `RunningSet`) ve `meta{}` (oturum kind/agentId/tags/archived) taşır.
   `explorerLive.augmentLive` her canlı oturum için `agent:<AGT>#live:<SES>` avatar
   düğümü (circularImage, ajan rengi) + oturum→avatar kısa bağ üretir; oturum düğümü
-  ajan renginde gölge ile **parlar** (`running` tam, `awaiting-workers` warning tonu).
+  ajan renginde gölge ile **parlar** (`running` tam; `awaiting-workers` warning tonu 2026-10-18'de kaldırıldı).
   Oturum durunca bir sonraki yenilemede kayıt gider, avatar ve parlama silinir.
   Avatar tıklanınca panel ajan kartını gösterir (`panelRefFor`).
 - **Filtre çubuğu (2026-09-05, Ağ'dan taşındı):** `ExplorerFilters` + `explorerFilter.ts`:
@@ -218,14 +219,14 @@ bu bilginin kaynağı, harita canlı yüzeyi. İlk dilim üç parça:
 - **Olay → delta, yeniden çekme değil.** `eventToRefreshSignals` iki sinyal üretir:
   `explorer` (düğüm/kenar eklenip silinmiş olabilir: `session create/delete/tags…`,
   `board`, `notes`, `spawned`, `agent`, `flow`, `schedule`) tüm haritayı çeker;
-  `explorer-live` (`chat`, `worker`, `task`, `awareness_digest`, meta-veri oturum
+  `explorer-live` (`chat`, `task`, `awareness_digest`, meta-veri oturum
   op'ları) yalnız `GET /api/views/graph/live` ile parıltı, halka ve durum şeridini
   çeker. Düğüm kümesi yerinde kalır, fizik yeniden yerleşmez. `explorerAttention.ts`
   `mergeLive` ile katmanı mevcut haritanın üstüne bindirir.
 - **Dikkat halkaları.** `GET /api/views/graph` ve `/graph/live` yanıtına
   `attention` (ref → `{level, reasons, at}`) ve `status` eklendi. Backend
   (`api/views_attention.go`) `awareness.CollectOpenLoops` ile aynı taramayı yapar:
-  bekleyen soru ve engellenmiş koordinatör **warn**, takılmış oturum ve başarısız
+  bekleyen soru **warn**, takılmış oturum ve başarısız
   kart **danger**, son özette araç hatası **notice**. `explorerVis.ts` düzeye göre
   halka çizer (danger: kalın kenarlık + geniş gölge, warn: aynısı uyarı renginde,
   notice: kesik kenarlık); araç ipucu nedenleri listeler. Halka canlı parıltısını
@@ -267,7 +268,7 @@ yönlendirir, toast üretmez (kartı oturum akışı zaten gösterir).
 - **Damgalar.** `GET /api/views/graph` ve `/graph/live` yanıtında `times`
   (ref → `{created, updated, read, readBy}`, unix saniye). `view.GraphTimes`
   oturum, ajan, kart, artifact, otomasyon, zamanlama, skill (`ModifiedAt`), içgörü
-  (`LastSeen`), not ve Rota (`ListTrajectories`, opsiyonel arayüz) için üretir;
+  (`LastSeen`) ve not için üretir (Rota/`ListTrajectories` 2026-10-18'de kaldırıldı);
   yapısal önbelleğe girmez (her istekte).
 - **Ajan okuma defteri.** `db.RecordViewRead` / `ViewReads`
   (`internal/db/store_view_reads.go`, workspace store'da `view-reads.json`, kendi
@@ -335,12 +336,12 @@ artifact) ve yan panelde akış sekmesi; ardından tazelik ısısı ve "değişt
 
 ## 10. Kabul kriterleri
 
-- Root'tan başlayıp Oturumlar → bir oturum → koordinatör/worker'a **tıklayarak** inilebiliyor.
+- Root'tan başlayıp Oturumlar → bir oturum → alt oturuma (subagent/spawn) **tıklayarak** inilebiliyor.
 - 11 kök düğümü + `agent/budget/tools` özetleri deterministik (LLM yok), sayılar
   dashboard/billing ile tutarlı.
 - Bir node açılınca aynı parent'ın diğer açık node'ları kapanır (accordion); farklı
   dallar açık kalır; collapse diğerlerine dokunmaz.
-- Döngülü workspace'te (koordinatör↔worker) açılım sonsuza gitmiyor; elision doğru.
+- Döngülü workspace'te (oturum↔alt oturum) açılım sonsuza gitmiyor; elision doğru.
 - Ajan `get_view`/`expand` ile aynı ağacı gezebiliyor (aynı backend).
 - Yeni ağır bağımlılık yok (React Flow mevcut; elkjs eklendiyse gerekçeli).
 

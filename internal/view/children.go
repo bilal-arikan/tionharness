@@ -53,23 +53,6 @@ func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 			return nil, err
 		}
 		return capHandles(sessions, categoryTopN), nil
-	case KindSession:
-		workers, err := p.sessionWorkerChildren(ctx, ref.ID)
-		if err != nil {
-			return nil, err
-		}
-		// A root session's trajectory is its first structural child: the plan
-		// hangs off the session the way its workers do (_Docs/77 R9).
-		if h := p.trajectoryHandleFor(ctx, ref.ID); h != nil {
-			workers = append([]Handle{*h}, workers...)
-		}
-		return capHandles(workers, categoryTopN), nil
-	case KindTrajectory:
-		nodes, err := p.trajectoryChildren(ctx, ref.ID)
-		if err != nil {
-			return nil, err
-		}
-		return capHandles(nodes, categoryTopN), nil
 	case KindTools:
 		if ref.Sub != "" {
 			return nil, nil // one group / one MCP server is a leaf
@@ -94,7 +77,7 @@ func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 			return nil, err
 		}
 		return capHandles(hs, categoryTopN), nil
-	case KindSchedule,
+	case KindSession, KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		// Leaves in the map: their breakdown is rendered inline by Project, so
 		// there is nothing structural to expand into.
@@ -216,7 +199,7 @@ func uniqueSortedHandles(handles []Handle) []Handle {
 // / flowrun / schedule render their breakdown inline and have no children.
 func IsExpandable(ref Ref) bool {
 	switch ref.Kind {
-	case KindSpace, KindCategory, KindAgent, KindSession, KindTrajectory:
+	case KindSpace, KindCategory, KindAgent:
 		return true
 	case KindBoard, KindTools, KindBudget:
 		// The whole board / tool surface / day's budget drill into columns,
@@ -265,13 +248,6 @@ func (p *Projector) boardColumnChildren(ctx context.Context) ([]Handle, error) {
 // it.
 func (p *Projector) agentSessionChildren(ctx context.Context, agentID string) ([]Handle, error) {
 	return p.newStructuralCache().agentSessionChildren(ctx, agentID)
-}
-
-// sessionWorkerChildren is a session's structural children: the worker sessions
-// that report up to it (a coordinator drills into its fleet). A plain session
-// simply has none.
-func (p *Projector) sessionWorkerChildren(ctx context.Context, sessionID string) ([]Handle, error) {
-	return p.newStructuralCache().sessionWorkerChildren(ctx, sessionID)
 }
 
 // sessionHandleList orders sessions most-recently-active first and renders each

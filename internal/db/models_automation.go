@@ -126,15 +126,6 @@ type Automation struct {
 	// board (kanban) card changes. The board fields apply only when
 	// TriggerKind == TriggerBoard.
 	TriggerKind string `json:"triggerKind,omitempty"`
-	// Trajectory (Rota) trigger fields, F2. TrajPhase narrows a phase rule to
-	// one declared phase id ("" = every phase); TrajRecipe narrows phase and
-	// trajectory_end rules to trajectories seeded from that recipe slug ("" =
-	// any); TrajEvent picks the phase transition (exit default | enter);
-	// TrajStatus narrows a trajectory_end rule to one terminal status ("" = any).
-	TrajPhase  string `json:"trajPhase,omitempty"`
-	TrajRecipe string `json:"trajRecipe,omitempty"`
-	TrajEvent  string `json:"trajEvent,omitempty"`
-	TrajStatus string `json:"trajStatus,omitempty"`
 	// Flow trigger fields (TriggerFlow, _Docs/93): FlowAgentID narrows the rule
 	// to runs of one agent's flow ("" = every agent); FlowStatus to one
 	// outcome ("" = any, FlowSuccess, FlowFailure); FlowMaxGrade (1..5) fires

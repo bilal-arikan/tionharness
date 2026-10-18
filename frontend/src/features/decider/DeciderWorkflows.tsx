@@ -17,11 +17,10 @@ interface Props {
   onChange: (next: DeciderConfig) => void
 }
 
-const WORKFLOW_GROUPS = ['session', 'context', 'collaboration']
+const WORKFLOW_GROUPS = ['session', 'context']
 const GROUP_LABELS: Record<string, string> = {
   session: 'Session start',
   context: 'Context',
-  collaboration: 'Worker collaboration',
 }
 const MODE_TONE = { off: 'muted', shadow: 'warning', on: 'success' } as const satisfies Record<
   DeciderMode,

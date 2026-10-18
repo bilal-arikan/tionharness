@@ -46,16 +46,10 @@ func runIsolated(m *testing.M) int {
 // that is still open, failing RemoveAll — POSIX allows it, which is why this only
 // ever broke on Windows).
 //
-// spawnActive alone is NOT a sufficient barrier. A worker's last act is to notify
-// its coordinator, and NotifyCoordinator starts drainCoordinator in its OWN
-// goroutine, which is not counted by spawnActive: the worker goroutine then exits,
-// spawnActive drops to 0, the test returns, and the still-running coordinator turn
-// keeps writing to <tmp>/store/sessions/<coord>/ while RemoveAll walks it. Measured
-// directly: at the moment spawnActive hit 0, drainCoordinator was live and the
-// coordinator's turn slot was busy in 6 of 6 runs.
-//
-// So this also waits for every coordinator drain loop to stop driving and for the
-// per-session turn slots to clear.
+// spawnActive alone is NOT a sufficient barrier: a detached turn (spawn, wake,
+// automation) holds its session's admission slot a moment longer than the counter
+// that launched it, and keeps writing to <tmp>/store/sessions/<id>/ while
+// RemoveAll walks it. So this also waits for every per-session turn slot to clear.
 func drainSpawns(t *testing.T, rt *Runtime) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -75,42 +69,22 @@ func drainSpawns(t *testing.T, rt *Runtime) {
 }
 
 // backgroundWorkPending reports whether any fire-and-forget goroutine that writes to
-// the store is still in flight: a spawn/worker turn, a queued spawn, or a coordinator
-// drain loop (which outlives the worker that armed it).
+// the store is still in flight: a spawn turn, a queued spawn, or any turn still
+// holding a session's admission slot.
 func (r *Runtime) backgroundWorkPending() bool {
 	// Linearize the queued -> active hand-off with takeQueuedSpawn. Reading
 	// spawnActive before spawnQueueLen can observe active=0 from before dispatch
-	// and queued=0 from after dispatch, even though one worker is live. The queue
+	// and queued=0 from after dispatch, even though one spawn is live. The queue
 	// mutex covers both the slot reservation and queue removal in takeQueuedSpawn,
 	// so sampling both values under it closes that impossible mixed snapshot.
 	r.spawnQueue.mu.Lock()
-	queued := len(r.spawnQueue.shallow) + len(r.spawnQueue.deep)
+	queued := len(r.spawnQueue.items)
 	active := r.spawnActive.Load()
 	r.spawnQueue.mu.Unlock()
-	if active > 0 || queued > 0 || r.trajectoryWorkPending() {
+	if active > 0 || queued > 0 {
 		return true
 	}
-	pending := false
-	r.coordSlots.Range(func(key, value any) bool {
-		slot, ok := value.(*coordSlot)
-		if !ok {
-			return true
-		}
-		slot.mu.Lock()
-		busy := slot.driving || slot.pending || slot.workerPending
-		slot.mu.Unlock()
-		if !busy {
-			if id, ok := key.(string); ok && r.sessionTurnBusy(id) {
-				busy = true
-			}
-		}
-		if busy {
-			pending = true
-			return false
-		}
-		return true
-	})
-	return pending
+	return r.HasBusyTurns()
 }
 
 // TestSpawnSession_OpensIndependentSession verifies the synchronous part of a

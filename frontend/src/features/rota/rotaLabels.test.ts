@@ -19,8 +19,7 @@ describe('rota labels', () => {
       updatedAt: 1,
     }
     expect(laneOriginGlyph(base)).toBe('●')
-    expect(laneOriginGlyph({ ...base, coordinator: true })).toBe('◎')
-    expect(laneOriginGlyph({ ...base, origin: { kind: 'coordinator', at: 1 } })).toBe('↳')
+    expect(laneOriginGlyph({ ...base, origin: { kind: 'subagent', at: 1 } })).toBe('↳')
     expect(laneOriginGlyph({ ...base, origin: { kind: 'automation', at: 1 } })).toBe('⚡')
   })
 })

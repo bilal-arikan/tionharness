@@ -15,7 +15,7 @@ export interface ExplorerFilter {
   // Ref strings of the root's children (e.g. 'category:sessions') to hide.
   hiddenBuckets: string[]
   liveOnly: boolean
-  kinds: string[] // session kinds: chat | task | worker | …
+  kinds: string[] // session kinds: chat | task | spawned | …
   agentIds: string[]
   tags: string[]
   // Attention facets from the status strip (explorerAttention.ATTENTION_FACETS):
@@ -45,8 +45,6 @@ const SESSION_KIND_KEYS: Record<string, string> = {
   task: 'task',
   schedule: 'schedule',
   spawned: 'spawned',
-  worker: 'worker',
-  inbox: 'inbox',
 }
 
 export function sessionKindLabel(kind: string): string {

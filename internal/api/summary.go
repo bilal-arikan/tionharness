@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -89,7 +88,7 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 
 	// This command runs a direct provider.Complete outside runInboxWorker, so it
 	// takes the session's admission slot like any other turn: it waits behind
-	// whatever is running (a chat turn, a coordinator auto-turn — no two subprocesses
+	// whatever is running (a chat turn, a wake turn — no two subprocesses
 	// resuming the same claude-cli transcript at once), and a message sent meanwhile
 	// stays WAITING in the tray behind it. A client disconnect while waiting bails
 	// cleanly, before any side effect.
@@ -329,7 +328,7 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 
 	// Takes the session's admission slot like /compact: /handoff spawns a fresh
 	// session outside runInboxWorker, so it waits for any in-flight turn (chat,
-	// coordinator auto-turn, wake) and holds the slot while it runs — a message sent
+	// wake) and holds the slot while it runs — a message sent
 	// during the handoff stays WAITING in the tray (and re-dispatches on the OLD
 	// session after release, though the UI usually follows the switch to the new
 	// one). A client disconnect while waiting bails before any side effect.
@@ -361,39 +360,6 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 		Reason: agent.HandoffReasonManual,
 	})
 	if herr != nil {
-		// The running-workers guard is a user-actionable precondition, not a server
-		// fault: record the reason in-thread (so the chat shows why nothing happened,
-		// right under the "/handoff" the user just ran) and return 409 instead of a
-		// generic 500 toast.
-		if rwErr, ok := errors.AsType[*agent.RunningWorkersError](herr); ok {
-			notice, aerr := wsp.DB.AddMessage(ctx, db.Message{
-				SessionID: session.ID,
-				Role:      providers.RoleAssistant,
-				AgentID:   session.AgentID,
-				Text:      "⚠️ **Handoff yapılmadı** — " + rwErr.Error(),
-				Steps:     "[]",
-			})
-			if writeDBError(w, aerr, "session not found") {
-				return
-			}
-			// The session stays put (no fresh window) — swap the live ghost for the
-			// persisted notice on the hub so every window renders it and stops showing
-			// "working".
-			s.publishHub(wsp.ID, session.ID, sessionhub.KindReply, notice, false)
-			s.hub.Publish(wsp.ID, session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
-			s.hub.Commit(wsp.ID, session.ID)
-			emitSessionChange(wsp, session.ID, "message_added")
-			// 200 (not 409) with a blocked flag: the frontend's fetch wrapper throws
-			// on any non-2xx and would surface a generic "HTTP 409" toast, burying the
-			// friendly in-thread notice we just wrote. A blocked command is a normal,
-			// expected outcome here — the reply message IS the user-facing result.
-			writeJSON(w, http.StatusOK, map[string]any{
-				"userMessage":  userMsg,
-				"replyMessage": notice,
-				"blocked":      true,
-			})
-			return
-		}
 		// Hard failure: clear the live "working" bubble in every window; the persisted
 		// "/handoff" user message stays as an honest record it was attempted.
 		s.publishHub(wsp.ID, session.ID, sessionhub.KindTurnError, map[string]any{"error": herr.Error(), "reason": "handoff_failed"}, false)

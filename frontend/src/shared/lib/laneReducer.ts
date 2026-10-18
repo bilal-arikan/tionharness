@@ -5,29 +5,21 @@
 //
 // Stale rejection: the stream is ordered per workspace, but a REST seed can
 // land after events that are newer than it, and a reconnect can replay. So a
-// session event older than what we hold (by updatedAt) is dropped,
-// and a trajectory event with a revision not above ours is dropped. Deletes
+// session event older than what we hold (by updatedAt) is dropped. Deletes
 // always apply.
 import type { Session } from '@/types/session'
 import type { LivenessSnapshot } from '@/types/liveness'
-import type { TrajectoryIndexEntry } from '@/types/trajectory'
 import {
   WorkspaceStreamKind,
   dataOf,
   type AutomationFireData,
-  type CoordinationData,
   type LivenessData,
-  type ReportData,
   type ScheduleArmedData,
   type SessionLifecycleData,
-  type SpawnData,
-  type TrajectoryData,
   type WorkspaceHubEvent,
 } from '@/api/workspaceEvents'
 import {
-  LANE_ACTIVITY_CAP,
   LANE_FIRE_CAP,
-  type LaneActivity,
   type LaneFire,
   type LaneLive,
   type LaneSession,
@@ -65,40 +57,12 @@ function laneSessionFromHeader(s: Session, live?: LaneLive): LaneSession {
     title: s.title,
     state: s.state,
     runState: s.runState,
-    rootSessionId: s.origin?.rootSessionId ?? s.rootCoordinatorSessionId ?? '',
+    rootSessionId: s.origin?.rootSessionId ?? '',
     origin: s.origin,
-    coordinator: s.coordinatorMode,
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
     live,
   }
-}
-
-// seedTrajectories folds REST index rows in, keeping whichever revision is
-// higher per trajectory (a stream event may already be ahead of the listing).
-export function seedTrajectories(
-  state: LaneState,
-  rows: readonly TrajectoryIndexEntry[],
-): LaneState {
-  const next = new Map(state.trajectories)
-  let changed = false
-  for (const r of rows) {
-    const prev = next.get(r.id)
-    if (prev && prev.revision >= r.revision) continue
-    next.set(r.id, {
-      trajectoryId: r.id,
-      rootSessionId: r.rootSessionId,
-      op: 'update',
-      templateRef: r.templateRef,
-      status: r.status,
-      revision: r.revision,
-      nodeCount: r.nodeCount,
-      updatedAt: r.updatedAt,
-    })
-    changed = true
-  }
-  if (!changed) return state
-  return bump(state, { trajectories: next })
 }
 
 // seedSessions replaces the session table from a REST listing, keeping the
@@ -158,22 +122,11 @@ function applyLifecycle(state: LaneState, d: SessionLifecycleData): LaneState {
     runState: d.runState ?? prev?.runState,
     rootSessionId: d.rootSessionId ?? prev?.rootSessionId ?? '',
     origin: d.origin ?? prev?.origin,
-    coordinator: d.coordinator ?? prev?.coordinator,
     createdAt: d.createdAt || prev?.createdAt || d.origin?.at || d.updatedAt,
     updatedAt: d.updatedAt,
     live: prev?.live,
   }
   return bump(state, { sessions: withEntry(state.sessions, d.sessionId, next) })
-}
-
-function applyTrajectory(state: LaneState, d: TrajectoryData): LaneState {
-  const prev = state.trajectories.get(d.trajectoryId)
-  if (d.op === 'delete') {
-    if (!prev) return state
-    return bump(state, { trajectories: withoutEntry(state.trajectories, d.trajectoryId) })
-  }
-  if (prev && prev.revision >= d.revision) return state
-  return bump(state, { trajectories: withEntry(state.trajectories, d.trajectoryId, d) })
 }
 
 function applyArmed(state: LaneState, d: ScheduleArmedData): LaneState {
@@ -195,10 +148,6 @@ function applyFire(state: LaneState, ev: WorkspaceHubEvent, d: AutomationFireDat
   return bump(state, { fires: pushRing(state.fires, fire, LANE_FIRE_CAP) })
 }
 
-function applyActivity(state: LaneState, a: LaneActivity): LaneState {
-  return bump(state, { activity: pushRing(state.activity, a, LANE_ACTIVITY_CAP) })
-}
-
 // applyLaneEvent folds one workspace-stream event into the state. Unknown
 // kinds and stale events return the same state object.
 export function applyLaneEvent(state: LaneState, ev: WorkspaceHubEvent): LaneState {
@@ -207,11 +156,6 @@ export function applyLaneEvent(state: LaneState, ev: WorkspaceHubEvent): LaneSta
     case WorkspaceStreamKind.SessionLifecycle: {
       const d = dataOf<SessionLifecycleData>(ev, ev.kind)
       if (d) next = applyLifecycle(state, d)
-      break
-    }
-    case WorkspaceStreamKind.Trajectory: {
-      const d = dataOf<TrajectoryData>(ev, ev.kind)
-      if (d) next = applyTrajectory(state, d)
       break
     }
     case WorkspaceStreamKind.ScheduleArmed: {
@@ -227,48 +171,6 @@ export function applyLaneEvent(state: LaneState, ev: WorkspaceHubEvent): LaneSta
     case WorkspaceStreamKind.Liveness: {
       const d = dataOf<LivenessData>(ev, ev.kind)
       if (d) next = applyLiveness(state, d)
-      break
-    }
-    case WorkspaceStreamKind.Spawn: {
-      const d = dataOf<SpawnData>(ev, ev.kind)
-      if (d) {
-        next = applyActivity(state, {
-          seq: ev.seq,
-          kind: ev.kind,
-          at: d.at || ev.time,
-          coordinatorId: d.coordinatorId,
-          workerId: d.workerId,
-          status: d.queued ? 'queued' : undefined,
-        })
-      }
-      break
-    }
-    case WorkspaceStreamKind.Report: {
-      const d = dataOf<ReportData>(ev, ev.kind)
-      if (d) {
-        next = applyActivity(state, {
-          seq: ev.seq,
-          kind: ev.kind,
-          at: d.at || ev.time,
-          coordinatorId: d.coordinatorId,
-          workerId: d.workerId,
-          status: d.status,
-        })
-      }
-      break
-    }
-    case WorkspaceStreamKind.Coordination: {
-      const d = dataOf<CoordinationData>(ev, ev.kind)
-      if (d) {
-        next = applyActivity(state, {
-          seq: ev.seq,
-          kind: ev.kind,
-          at: d.at || ev.time,
-          coordinatorId: d.coordinatorId,
-          phase: d.phase ?? ev.payload?.target?.phase,
-          reason: d.reason,
-        })
-      }
       break
     }
     default:

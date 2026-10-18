@@ -58,24 +58,23 @@ func (s *countingStore) ListActiveTasks(_ context.Context) ([]db.Task, error) {
 
 func neighborhoodFixture(sessionCount int) *countingStore {
 	sessions := []db.Session{
-		{ID: "A", AgentID: "AG1", UpdatedAt: 100, CoordinatorSessionID: "B"},
-		{ID: "B", AgentID: "AG1", UpdatedAt: 100, CoordinatorSessionID: "A"},
+		{ID: "A", AgentID: "AG1", UpdatedAt: 100},
+		{ID: "B", AgentID: "AG1", UpdatedAt: 100},
 	}
 	for i := range sessionCount {
 		sessions = append(sessions, db.Session{
-			ID:                   fmt.Sprintf("S%d", i),
-			AgentID:              fmt.Sprintf("AG%d", i%4),
-			UpdatedAt:            int64(100 - i),
-			CoordinatorSessionID: "A",
+			ID:        fmt.Sprintf("S%d", i),
+			AgentID:   fmt.Sprintf("AG%d", i%4),
+			UpdatedAt: int64(100 - i),
 		})
 	}
 	// AG2 carries the ordering edge cases the equivalence test needs: two sessions
 	// sharing an UpdatedAt (so the ID tie-break actually runs) and a pinned session
 	// with the oldest timestamp (so the pin has to float it past everything else).
 	sessions = append(sessions,
-		db.Session{ID: "T1", AgentID: "AG2", UpdatedAt: 50, CoordinatorSessionID: "A"},
-		db.Session{ID: "T2", AgentID: "AG2", UpdatedAt: 50, CoordinatorSessionID: "A"},
-		db.Session{ID: "P1", AgentID: "AG2", UpdatedAt: 1, Pinned: true, CoordinatorSessionID: "A"},
+		db.Session{ID: "T1", AgentID: "AG2", UpdatedAt: 50},
+		db.Session{ID: "T2", AgentID: "AG2", UpdatedAt: 50},
+		db.Session{ID: "P1", AgentID: "AG2", UpdatedAt: 1, Pinned: true},
 	)
 	return &countingStore{fakeStore: &fakeStore{
 		agents: []db.Agent{

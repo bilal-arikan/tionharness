@@ -95,9 +95,6 @@ vi.mock('@/features/chat/useChatStream', () => ({
     markPending: sessionStartTest.noop,
   }),
 }))
-vi.mock('@/features/chat/useRunningWorkers', () => ({
-  useRunningWorkers: () => sessionStartTest.empty,
-}))
 vi.mock('@/app/NavRail', () => ({ NavRail: () => null }))
 vi.mock('@/app/MobileNavBar', () => ({ MobileNavBar: () => null }))
 vi.mock('@/app/AppHeader', () => ({ AppHeader: () => null }))
@@ -135,7 +132,6 @@ vi.mock('@/app/lazyPanels', () => ({}))
 vi.mock('@/app/lazyChatPanels', async () => ({
   ChatView: (await import('@/features/chat/ChatView')).ChatView,
   SessionDetailPanel: () => null,
-  CoordinatorPanel: () => null,
   SessionContextModal: () => null,
   SessionDebugModal: () => null,
   ArtifactPreviewModal: () => null,

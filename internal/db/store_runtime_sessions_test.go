@@ -22,7 +22,7 @@ func TestRuntimeSessionsReuseAndInvalidateProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	chat, err := d.CreateSession(ctx, Session{Kind: "chat"})
+	_, err = d.CreateSession(ctx, Session{Kind: "chat"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,18 +46,6 @@ func TestRuntimeSessionsReuseAndInvalidateProjection(t *testing.T) {
 	}
 	if d.RuntimeSessions()[0].LastStatus == "caller mutation" {
 		t.Fatal("caller mutated shared cache")
-	}
-	if err := d.SetSessionCoordinatorLineage(ctx, chat.ID, "SES-parent", "SES-root", 1); err != nil {
-		t.Fatal(err)
-	}
-	rows = d.RuntimeSessions()
-	if len(rows) != 2 || d.runtimeSessions.Load() == snapshot {
-		t.Fatalf("lineage mutation not reflected: %+v", rows)
-	}
-	for _, row := range rows {
-		if row.SessionID == chat.ID && row.RootCoordinatorSessionID != "SES-root" {
-			t.Fatalf("lost lineage: %+v", row)
-		}
 	}
 	setTaskLastRunForTest(d, task.ID, "success")
 	for _, row := range d.RuntimeSessions() {
@@ -99,7 +87,6 @@ func BenchmarkRuntimeSessionsWarm(b *testing.B) {
 				id := fmt.Sprint(i)
 				d.sessions[id] = Session{ID: id, Kind: "chat"}
 			}
-			d.sessions["worker"] = Session{ID: "worker", CoordinatorSessionID: "parent"}
 			_ = d.RuntimeSessions()
 			b.ReportAllocs()
 			b.ResetTimer()

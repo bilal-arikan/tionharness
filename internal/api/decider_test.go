@@ -40,7 +40,7 @@ func TestDeciderSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("GET: %d %s", rec.Code, rec.Body.String())
 	}
 	view := decodeInto[deciderView](t, rec)
-	if view.Config.Enabled || len(view.Authorities) != 17 || len(view.Backends) != 3 || len(view.Groups) == 0 {
+	if view.Config.Enabled || len(view.Authorities) != 14 || len(view.Backends) != 3 || len(view.Groups) == 0 {
 		t.Errorf("initial view = %+v", view)
 	}
 	// The first run seeds one model: Jev through OpenRouter, own credentials.
@@ -132,13 +132,13 @@ func TestDeciderModelsCRUD(t *testing.T) {
 	// Bind an authority to the model, then delete it: the reference is reported
 	// and cleared.
 	cfg := s.tun.Decider().Config()
-	cfg.Authorities["stall-judge"] = decider.AuthorityConfig{Mode: decider.ModeShadow, Threshold: 0.7, Challenger: "DM2"}
+	cfg.Authorities["tool-risk"] = decider.AuthorityConfig{Mode: decider.ModeShadow, Threshold: 0.7, Challenger: "DM2"}
 	if _, err := s.tun.Decider().Update(cfg); err != nil {
 		t.Fatal(err)
 	}
 	rec = deciderRequest(t, s, http.MethodGet, "/api/decider", "")
 	for _, m := range decodeInto[deciderView](t, rec).Models {
-		if m.ID == "DM2" && (len(m.UsedBy) != 1 || m.UsedBy[0] != "stall-judge") {
+		if m.ID == "DM2" && (len(m.UsedBy) != 1 || m.UsedBy[0] != "tool-risk") {
 			t.Errorf("usedBy = %v", m.UsedBy)
 		}
 	}
@@ -147,7 +147,7 @@ func TestDeciderModelsCRUD(t *testing.T) {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
 	}
 	del := decodeInto[deciderModelDeleted](t, rec)
-	if !del.Deleted || len(del.UsedBy) != 1 || del.View.Config.Authorities["stall-judge"].Challenger != "" || len(del.View.Models) != 2 {
+	if !del.Deleted || len(del.UsedBy) != 1 || del.View.Config.Authorities["tool-risk"].Challenger != "" || len(del.View.Models) != 2 {
 		t.Errorf("delete = %+v", del)
 	}
 

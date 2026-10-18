@@ -10,7 +10,7 @@ import (
 
 // listpage.go — the shared pagination / sorting contract behind EVERY list tool
 // (TSK68). list_agents, list_tasks, list_flows, list_automations,
-// list_schedules, list_workers and list_workspaces all accept the same
+// list_schedules and list_workspaces all accept the same
 // limit/offset/sort arguments and reply with the same envelope, so an agent
 // that learns one can page through all of them.
 //

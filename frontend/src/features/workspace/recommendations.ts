@@ -14,7 +14,9 @@ import {
   Bot,
   Brain,
   FolderCog,
+  Lightbulb,
   Plug,
+  Scale,
   Scissors,
   Search,
   Wrench,
@@ -22,6 +24,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/api'
+import { deciderApi } from '@/api/decider'
+import { insightApi } from '@/api/insights'
 import { systemApi } from '@/api/system'
 import { i18next } from '@/i18n'
 import type { HookInput } from '@/api/hooks'
@@ -33,6 +37,8 @@ import type {
   MCPServer,
   WorkspaceSettings,
 } from '@/types'
+import type { DeciderStatus } from '@/types/decider'
+import type { InsightSettings } from '@/types/insight'
 import {
   ZVEC_GREP_SERVER_ARGS,
   ZVEC_GREP_SERVER_NAME,
@@ -82,6 +88,10 @@ export interface RecContext {
    * — rules that read it must treat empty as "no opinion", never as "all current".
    */
   updates: ExternalToolUpdate[]
+  /** Decision-model health; undefined/null when the probe failed (no opinion). */
+  decider?: DeciderStatus | null
+  /** Workspace insight settings; undefined/null when the probe failed. */
+  insight?: InsightSettings | null
   nav: RecNav
 }
 
@@ -293,6 +303,37 @@ export const RULES: Rule[] = [
     },
   },
   {
+    // Health: the decider is switched on but cannot answer, so every authority
+    // silently falls back to its default — the user sees no error, only worse
+    // decisions.
+    meta: ruleMeta('decider-not-ready', Scale),
+    detect: (ctx) => {
+      const d = ctx.decider
+      if (!d || !d.enabled || d.ready) return null
+      return {
+        desc: recText('recommendations.rules.decider-not-ready.desc', {
+          problem: d.problem || recText('recommendations.rules.decider-not-ready.unknown'),
+        }),
+        actionLabel: recText('recommendations.rules.decider-not-ready.action'),
+        variant: 'warning',
+        act: () => ctx.nav.settings('decider'),
+      }
+    },
+  },
+  {
+    // Health: with no auto-scan schedule the retrospective insight scan only
+    // runs when someone remembers to press the button.
+    meta: ruleMeta('insight-scan-off', Lightbulb),
+    detect: (ctx) => {
+      if (!ctx.insight || (ctx.insight.autoScanCron ?? '').trim() !== '') return null
+      return {
+        desc: recText('recommendations.rules.insight-scan-off.desc'),
+        actionLabel: recText('recommendations.rules.insight-scan-off.action'),
+        act: () => ctx.nav.view('insights'),
+      }
+    },
+  },
+  {
     meta: ruleMeta('backup-off', Archive),
     detect: (ctx) => {
       if (ctx.settings.backupEnabled) return null
@@ -360,7 +401,26 @@ export async function fetchRecommendationData(): Promise<Omit<RecContext, 'nav'>
     // not be answered. Empty means "no opinion", and the rule then returns null.
     systemApi.checkExternalToolUpdates().catch(() => [] as ExternalToolUpdate[]),
   ])
-  return { tools, servers, hooks, ws, settings, agentsCount: agents.length, updates }
+  // Health probes are best-effort for the same reason: a failure means "no
+  // opinion", never a false alarm.
+  const [decider, insight] = await Promise.all([
+    deciderApi
+      .getDecider()
+      .then((v) => v.status)
+      .catch(() => null),
+    insightApi.getInsightSettings().catch(() => null),
+  ])
+  return {
+    tools,
+    servers,
+    hooks,
+    ws,
+    settings,
+    agentsCount: agents.length,
+    updates,
+    decider,
+    insight,
+  }
 }
 
 // runRules evaluates every rule against ctx and returns the applicable cards.

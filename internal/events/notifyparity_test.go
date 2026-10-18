@@ -17,10 +17,9 @@ import (
 // tests are what actually enforces it.
 //
 // These established UI notifications live outside the core NotifyKinds list:
-// prompt comes from session interactions, rota from workspace-stream projections,
-// and agent-model-changed is published directly by api/change_notifier.go. The
+// prompt comes from session interactions, and agent-model-changed is published directly by api/change_notifier.go. The
 // old object-literal regex accidentally skipped commented and hyphenated entries.
-var additionalFrontendKinds = []string{"prompt", "rota", "agent-model-changed"}
+var additionalFrontendKinds = []string{"prompt", "agent-model-changed"}
 
 // notifyTypesPath locates the frontend registry relative to this package.
 func notifyTypesPath(t *testing.T) string {

@@ -40,13 +40,6 @@
   "clipboard": {
     "copyPrompt": "Kopyalayın ({{mod}}+C, Enter):"
   },
-  "coordination": {
-    "subCoordinator": "Alt-koordinatör",
-    "subCoordinatorLevel": "Alt-koordinatör · seviye {{depth}}",
-    "coordinator": "Koordinatör",
-    "worker": "Worker",
-    "workerLevel": "Worker · seviye {{depth}}"
-  },
   "emoji": {
     "smileys": "Yüzler",
     "people": "İnsan",
@@ -77,18 +70,6 @@
     "spawned": {
       "label": "Spawn",
       "hint": "Alt-oturum (spawn) çalışması tamamlandı / başarısız oldu."
-    },
-    "worker": {
-      "label": "Worker",
-      "hint": "Koordinatör worker durumu değişti."
-    },
-    "coordination": {
-      "label": "Koordinasyon",
-      "hint": "Koordinatör tur limiti gibi koordinasyon uyarıları."
-    },
-    "rota": {
-      "label": "Rota",
-      "hint": "Bir rota başladı, bitti, başarısız oldu veya insan yanıtı bekliyor."
     },
     "automation": {
       "label": "Otomasyonlar",
@@ -137,11 +118,6 @@
       "node": "düğüm {{id}}",
       "text": "Akış {{id}}{{details}}",
       "title": "Bu oturum bir akış koşusuna ait{{entity}}{{details}}{{via}}"
-    },
-    "coordinator": {
-      "text": "Koordinatör {{id}} açtı",
-      "title": "Bu oturum bir koordinatörün worker'ı olarak açıldı{{root}}",
-      "root": " · kök {{id}}"
     },
     "subagent": {
       "text": "Alt-ajan · {{source}}",

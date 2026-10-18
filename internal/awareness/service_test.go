@@ -280,7 +280,7 @@ func TestDigestCountsFactsPersistsOnceAndIndexes(t *testing.T) {
 	store := newFakeStore(t)
 	store.sessions = []db.Session{
 		{ID: "SES1", AgentID: "AGT1", Kind: "chat", Title: "Fix build", MessageCount: 5, ToolCallCount: 3, CreatedAt: 100, UpdatedAt: 400},
-		{ID: "SES7", CoordinatorSessionID: "SES1", Tags: []string{"error"}},
+		{ID: "SES7", ParentSessionID: "SES1", Tags: []string{"error"}},
 	}
 	store.messages["SES1"] = []db.Message{
 		{ID: "m1", Steps: toolStep("Bash", true)},

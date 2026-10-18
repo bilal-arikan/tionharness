@@ -2,7 +2,7 @@
 // (GET /api/workspace/stream, _Docs/77 R3). One ordered, replayable log of
 // structured lifecycle facts for the active workspace: sessions created /
 // changed state / deleted, flow runs started / waiting / finished, schedules
-// armed for a future fire, automation fires, trajectory revisions. A live
+// armed for a future fire, automation fires, liveness changes. A live
 // workspace view keeps an incremental picture from it and gap-fills after a
 // reconnect instead of re-fetching everything.
 //

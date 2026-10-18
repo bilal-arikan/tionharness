@@ -17,13 +17,6 @@ type GraphTimes struct {
 	ReadBy  string `json:"readBy,omitempty"` // agent id of the last reader
 }
 
-// trajectoryLister is the optional store capability that lists Rota index rows.
-// Optional so projection-only fakes need not grow it: without it Rota nodes
-// simply carry no times.
-type trajectoryLister interface {
-	ListTrajectories(ctx context.Context, f db.TrajectoryFilter) []db.TrajectoryIndexEntry
-}
-
 // GraphTimes computes created/updated stamps for every timed entity the map
 // draws, keyed by Ref.String, and lays the agent read ledger over them. Like
 // GraphLive it is per-request (stamps move on every edit), never cached with
@@ -87,11 +80,6 @@ func (p *Projector) GraphTimes(ctx context.Context, reads map[string]db.ViewRead
 	if list, err := cache.allNotes(); err == nil {
 		for _, n := range list {
 			put(Ref{Kind: KindNote, ID: n.ID}, n.Created, n.Updated)
-		}
-	}
-	if lister, ok := p.store.(trajectoryLister); ok {
-		for _, t := range lister.ListTrajectories(ctx, db.TrajectoryFilter{}) {
-			put(Ref{Kind: KindTrajectory, ID: t.ID}, t.CreatedAt, t.UpdatedAt)
 		}
 	}
 

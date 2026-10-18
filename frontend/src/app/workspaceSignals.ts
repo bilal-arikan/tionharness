@@ -5,13 +5,6 @@ import { i18next } from '@/i18n'
 import type { LaneState } from '@/shared/lib/laneModel'
 import { SKIP_REASON_LABEL } from '@/features/schedules/fireMeta'
 
-const TRAJ_STATUS_TEXT: Record<string, string> = {
-  done: 'shell.trajectoryDone',
-  failed: 'shell.trajectoryFailed',
-  abandoned: 'shell.trajectoryAbandoned',
-  waiting: 'shell.trajectoryWaiting',
-}
-
 // SignalLevel maps 1:1 onto a toast tone (see useWorkspaceSignals).
 export type SignalLevel = 'info' | 'success' | 'warning' | 'error'
 
@@ -45,42 +38,6 @@ export function diffSignals(
             reason: SKIP_REASON_LABEL[f.reason] ?? f.reason,
           }),
         })
-      }
-    }
-  }
-  if (enabled('coordination')) {
-    const lastSeq = prev.activity.length ? prev.activity[prev.activity.length - 1].seq : 0
-    for (const a of next.activity) {
-      if (a.seq <= lastSeq) continue
-      if (a.phase === 'stall_halt') {
-        out.push({
-          level: 'error',
-          text: i18next.t('shell.coordinatorHalted', {
-            id: a.coordinatorId,
-            reason: a.reason || i18next.t('shell.phantomSpawn'),
-          }),
-        })
-      }
-    }
-  }
-  if (enabled('rota')) {
-    for (const [id, t] of next.trajectories) {
-      const before = prev.trajectories.get(id)
-      if (!before && t.op === 'create') {
-        out.push({
-          level: 'info',
-          text: i18next.t('shell.trajectoryStarted', {
-            id,
-            template: t.templateRef ? ' · ' + t.templateRef : '',
-          }),
-        })
-        continue
-      }
-      if (before && before.status !== t.status && t.status && TRAJ_STATUS_TEXT[t.status]) {
-        // abandoned/waiting are not failures but need the user's attention.
-        const level: SignalLevel =
-          t.status === 'done' ? 'success' : t.status === 'failed' ? 'error' : 'warning'
-        out.push({ level, text: i18next.t(TRAJ_STATUS_TEXT[t.status], { id }) })
       }
     }
   }

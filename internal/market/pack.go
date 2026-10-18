@@ -154,17 +154,6 @@ type AgentPayload struct {
 	// search setup it was authored with. Pointer with the same three-state
 	// meaning: absent = enabled, explicit false = the author turned it off.
 	NativeWebSearch *bool `json:"nativeWebSearch,omitempty"`
-	// Coordinator defaults for the sessions this agent opens (see
-	// db.Agent.CoordinatorMode). Kept in sync with WorkspaceTemplateAgent so a
-	// coordinator survives being shared either as a standalone agent pack or as
-	// part of a workspace template.
-	CoordinatorMode     bool   `json:"coordinatorMode,omitempty"`
-	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
-	// CoordinatorPrompt is the agent's coordinator-only prompt block (see
-	// db.Agent.CoordinatorPrompt). Carried alongside the two above: without it a
-	// published coordinator installs with its delegation direction stripped and
-	// only the generic manual left.
-	CoordinatorPrompt string `json:"coordinatorPrompt,omitempty"`
 }
 
 // ProviderPayload is a custom provider config WITHOUT its API key. The key is
@@ -221,17 +210,6 @@ type WorkspaceTemplateAgent struct {
 	// NativeWebSearch mirrors AgentPayload.NativeWebSearch — kept in sync so the
 	// setting survives either sharing route (absent = enabled).
 	NativeWebSearch *bool `json:"nativeWebSearch,omitempty"`
-	// CoordinatorMode seeds the agent as a coordinator BY DEFAULT, so every session
-	// it opens arrives with the coordination tools — this is what lets a template
-	// ship a team that orchestrates out of the box (a PM/CTO pair) instead of one
-	// the user must toggle per thread. CoordinatorWorkflow optionally pins a
-	// coordinator recipe slug (a bundled kind=coordinator-workflow skill).
-	// CoordinatorPrompt carries the agent's coordinator-only prompt block (see
-	// db.Agent.CoordinatorPrompt) so a templated team keeps its per-agent
-	// delegation direction, not just the shared manual.
-	CoordinatorMode     bool   `json:"coordinatorMode,omitempty"`
-	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
-	CoordinatorPrompt   string `json:"coordinatorPrompt,omitempty"`
 }
 
 // WorkspaceTemplateSkill is a skill bundled with a template: its portable

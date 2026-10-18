@@ -29,15 +29,15 @@ const authority = (id: string, group: string): DeciderAuthority => ({
 })
 const authorities = [
   authority('tool-risk', 'safety'),
-  authority('worker-review', 'collaboration'),
   authority('compact-retention', 'context'),
+  authority('context-reminder', 'context'),
   authority('session-setup', 'session'),
   authority('model-router', 'session'),
 ]
 const draft: DeciderConfig = { enabled: true, defaultModel: 'DM1', authorities: {} }
 const view: DeciderView = {
   authorities,
-  groups: ['safety', 'session', 'context', 'collaboration'],
+  groups: ['safety', 'session', 'context'],
   config: draft,
   status: { enabled: true, ready: true },
   models: ['DM1', 'DM2'].map((id) => ({ id, label: id, enabled: true }) as DeciderModelInstance),
@@ -75,7 +75,7 @@ it('lists every registered workflow in group order without synthetic entries', (
     'decider-workflow-select-session-setup',
     'decider-workflow-select-model-router',
     'decider-workflow-select-compact-retention',
-    'decider-workflow-select-worker-review',
+    'decider-workflow-select-context-reminder',
     'decider-workflow-select-tool-risk',
   ])
   expect(select('session-setup').getAttribute('aria-pressed')).toBe('true')
@@ -129,10 +129,12 @@ it('shows the global pause and disables the threshold without losing configured 
 it('falls back to the first current registry entry when the selection is removed', () => {
   render()
   act(() => select('model-router').click())
-  render({ ...view, authorities: [authority('worker-review', 'collaboration')] })
+  render({ ...view, authorities: [authority('context-reminder', 'context')] })
   expect(container.querySelectorAll('nav button')).toHaveLength(1)
-  expect(select('worker-review').getAttribute('aria-pressed')).toBe('true')
-  expect(container.querySelector('[data-testid="decider-authority-worker-review"]')).not.toBeNull()
+  expect(select('context-reminder').getAttribute('aria-pressed')).toBe('true')
+  expect(
+    container.querySelector('[data-testid="decider-authority-context-reminder"]'),
+  ).not.toBeNull()
   expect(onChange).not.toHaveBeenCalled()
 })
 

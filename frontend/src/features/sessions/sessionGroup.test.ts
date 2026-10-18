@@ -19,18 +19,7 @@ describe('sessionGroupOf', () => {
       },
       'main',
     ],
-    [
-      'agent message inbox',
-      { sourceId: 'agent-messages:AGT1', origin: { kind: 'user', at: 1 } },
-      'other',
-    ],
     ['handoff continuation', { kind: 'spawned', origin: { kind: 'handoff', at: 1 } }, 'main'],
-    [
-      'coordinator worker',
-      { kind: 'worker', category: 'worker', coordinatorSessionId: 'S1' },
-      'other',
-    ],
-    ['worker shaped as chat', { coordinatorSessionId: 'S1' }, 'other'],
     ['subagent', { kind: 'subagent', category: 'subagent', visibility: 'internal' }, 'other'],
     ['task stamped chat category', { kind: 'task', category: 'chat' }, 'other'],
     ['insight scan', { kind: 'insight', origin: { kind: 'insight', at: 1 } }, 'other'],

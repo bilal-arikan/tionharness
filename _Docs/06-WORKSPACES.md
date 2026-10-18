@@ -1,6 +1,6 @@
 # TionHarness — Workspace İzolasyonu
 
-> **Özet (2026-09-06):** Workspace'lerin fiziksel izolasyonunu (her workspace kendi `store/` dizini + kendi Runtime + kendi Scheduler'ı) ve buna bağlı özellikleri anlatır: yeni workspace başlangıç ekibi (CEO+PM otomasyonu), workspace-özel tema/görünüm, şablon olarak dışa/içe aktarım, çoklu pencere + deep-link, "okunmadı" rozet senkronu, workspace ayarları (`ws-settings.json`: instructions enjeksiyonu, terse/caveman mod) ve kayıt defteri yazma sırası (degraded kayıtlar + canlı silmede "önce defter, sonra dosyalar" — tek kilit tutuşu, gözlemlenemez rollback). Durum: **uygulandı, canlı**. En önemli kararlar: tek depo+filtre yerine fiziksel ayrı dizin (sızıntı riskini sıfırlar), fs/shell araçlarının artık workspace köküne kilitli OLMAMASI (güvenlik yalnız izin moduna dayanır), URL hash'inin tek doğru navigasyon kaynağı olması, `persist()`'in anlık görüntüyü argüman olarak alması (silme + yazma + rollback'in tek tutuşta olmasını mümkün kılan şey). Dayandığı dosyalar: `internal/workspace/manager.go`, `internal/workspace/settings.go`.
+> **Özet (2026-10-18):** Workspace'lerin fiziksel izolasyonunu (her workspace kendi `store/` dizini + kendi Runtime + kendi Scheduler'ı) ve buna bağlı özellikleri anlatır: yeni workspace başlangıç ekibi (CEO+PM otomasyonu), workspace-özel tema/görünüm, şablon olarak dışa/içe aktarım, çoklu pencere + deep-link, "okunmadı" rozet senkronu, workspace ayarları (`ws-settings.json`: instructions enjeksiyonu, terse/caveman mod) ve kayıt defteri yazma sırası (degraded kayıtlar + canlı silmede "önce defter, sonra dosyalar" — tek kilit tutuşu, gözlemlenemez rollback). Durum: **uygulandı, canlı**. En önemli kararlar: tek depo+filtre yerine fiziksel ayrı dizin (sızıntı riskini sıfırlar), fs/shell araçlarının artık workspace köküne kilitli OLMAMASI (güvenlik yalnız izin moduna dayanır), URL hash'inin tek doğru navigasyon kaynağı olması, `persist()`'in anlık görüntüyü argüman olarak alması (silme + yazma + rollback'in tek tutuşta olmasını mümkün kılan şey). Dayandığı dosyalar: `internal/workspace/manager.go`, `internal/workspace/settings.go`. 2026-10-18: koordinatör modu ve ona bağlı ajan alanları (`coordinator*`) kaldırıldı; başlangıç ekibi CEO+PM'dir ('Ürün Ekibi' şablonu yok).
 
 > Her workspace **tamamen bağımsızdır**: kendi dosya-tabanlı `store/` dizini + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
 > Depolama biçimi (JSON/JSONL) için: **`_Docs/08-DEPOLAMA.md`**.
@@ -23,9 +23,9 @@ hazır bir **CEO + PM** kontrol döngüsüyle açılır. CEO salt-okuma, mesajla
 delegasyon araçlarıyla board'u gözler; etkin 20 dakikalık cron schedule kalıcı
 `kind="schedule"` oturumunu uyandırır. CEO iş yapmaz, duran/başarısız/ilerlemeyen
 işte PM'i harekete geçirir. CEO bunu **her zaman `spawn_session{agent:"PM"}`** ile
-yapar — PM kendi bağımsız oturumunda çalışır, CEO'nun worker'ı olarak değil. Bu
-yüzden CEO'nun koordinatör modu kapalıdır ve `spawn_worker` / `send_to_worker` /
-`run_subagent` araçları engellidir; PM'in sonucu CEO oturumuna dönmez, PM'in kendi
+yapar — PM kendi bağımsız oturumunda çalışır, CEO'nun alt-ajanı olarak değil. Bu
+yüzden CEO'nun `run_subagent` aracı engellidir (koordinatör modu ve worker araçları
+2026-10-18'de tümüyle kaldırıldı); PM'in sonucu CEO oturumuna dönmez, PM'in kendi
 oturumuna düşer. CEO ayrıca açık kartları **bağımsız kümelere** ayırır ve her küme
 için ayrı bir PM oturumu açar (aynı turda paralel `spawn_session` çağrıları); birbirine
 bağımlı kartlar aynı kümede kalır, aynı kart iki oturuma verilmez. Tur başına spawn
@@ -87,10 +87,9 @@ detaylandırıldı. Panel: `frontend/src/features/workspace/WorkspaceExportPanel
   panel bunu bağımlılık uyarısı ve canlı önizleme sayacıyla gösterir. Gömülü pano
   varsayılanları (`Seed != ""`) dışa aktarılmaz: her workspace açılışta kendi kopyasını
   üretir, taşımak çift kural veya kullanıcının sildiği kuralın dirilmesi demek olurdu.
-- **Koordinatörlük (2026-08-11):** ajanın
-  `coordinatorMode`/`coordinatorWorkflow`/`coordinatorPrompt` varsayılanı da taşınır —
-  yayınlanan bir ekip orkestrasyon şeklini de, ajana özel delegasyon yönergesini de
-  kaybetmez.
+- ~~**Koordinatörlük (2026-08-11)**~~ — `coordinatorMode`/`coordinatorWorkflow`/`coordinatorPrompt`
+  alanları 2026-10-18'de koordinatör modu ile birlikte **kaldırıldı**; dışa aktarımda taşınmaz
+  (eski paketlerdeki bu alanlar yok sayılır).
 - **Promptlar & README (2026-07-01):** NavRail'deki **Promptlar** ekranındaki runtime promptları
   (summary/reflect/title/…) ve README de dışa aktarılabilir — **yalnız varsayılandan farklı
   olanlar**. Panel `getWorkspaceConfig`'ten non-default prompt + README sayısını gösterir.

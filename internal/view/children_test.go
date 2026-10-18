@@ -14,15 +14,14 @@ import (
 // Children walk without a real db. Only the reads Children uses carry data; the
 // rest satisfy the interface with zero values.
 type fakeStore struct {
-	agents       []db.Agent
-	sessions     []db.Session
-	runs         []db.FlowRun
-	tasks        []db.Task
-	mcp          []db.MCPServer
-	artifacts    []db.Artifact
-	automations  []db.Automation
-	trajectories []db.Trajectory
-	usage        []db.Usage
+	agents      []db.Agent
+	sessions    []db.Session
+	runs        []db.FlowRun
+	tasks       []db.Task
+	mcp         []db.MCPServer
+	artifacts   []db.Artifact
+	automations []db.Automation
+	usage       []db.Usage
 }
 
 func (s *fakeStore) ListSessions(_ context.Context, agentID string) ([]db.Session, error) {
@@ -95,9 +94,9 @@ func childrenFixture() *Projector {
 	return NewProjector(&fakeStore{
 		agents: []db.Agent{{ID: "AG1", Name: "builder"}, {ID: "AG2", Name: "researcher"}},
 		sessions: []db.Session{
-			{ID: "COORD", AgentID: "AG1", UpdatedAt: now, CoordinatorMode: true},
-			{ID: "W1", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "COORD"},
-			{ID: "W2", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "COORD", StuckTurns: 3},
+			{ID: "S0", AgentID: "AG1", UpdatedAt: now},
+			{ID: "S1", AgentID: "AG1", UpdatedAt: now},
+			{ID: "S2", AgentID: "AG1", UpdatedAt: now, StuckTurns: 3},
 			{ID: "S3", AgentID: "AG2", UpdatedAt: now},
 			{ID: "ARCH", AgentID: "AG2", UpdatedAt: now, State: "archived"},
 		},
@@ -208,27 +207,9 @@ func TestChildrenAgentDrillsIntoItsSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("agent children: %v", err)
 	}
-	// AG1 owns COORD, W1, W2 (all non-archived).
+	// AG1 owns S0, S1, S2 (all non-archived).
 	if len(hs) != 3 || kindsOf(hs)[KindSession] != 3 {
 		t.Errorf("agent sessions wrong: %+v", hs)
-	}
-}
-
-func TestChildrenSessionDrillsIntoWorkers(t *testing.T) {
-	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSession, ID: "COORD"})
-	if err != nil {
-		t.Fatalf("session children: %v", err)
-	}
-	if len(hs) != 2 {
-		t.Fatalf("coordinator should have 2 workers: %+v", hs)
-	}
-	// A plain (non-coordinator) session has no workers.
-	none, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSession, ID: "S3"})
-	if err != nil {
-		t.Fatalf("plain session children: %v", err)
-	}
-	if len(none) != 0 {
-		t.Errorf("a plain session must have no worker children: %+v", none)
 	}
 }
 
@@ -279,13 +260,9 @@ func TestChildrenCapsAtTopN(t *testing.T) {
 	}
 }
 
-func TestNeighborhoodRootLeafMultiParentCycleSelfLoopAndNoCap(t *testing.T) {
+func TestNeighborhoodRootLeafMultiParentAndNoCap(t *testing.T) {
 	now := time.Now().Unix()
-	sessions := []db.Session{
-		{ID: "A", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "B"},
-		{ID: "B", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "A"},
-		{ID: "SELF", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "SELF"},
-	}
+	var sessions []db.Session
 	for i := range categoryTopN + 15 {
 		sessions = append(sessions, db.Session{ID: fmt.Sprintf("S%d", i), AgentID: "AG1", UpdatedAt: now})
 	}
@@ -314,33 +291,16 @@ func TestNeighborhoodRootLeafMultiParentCycleSelfLoopAndNoCap(t *testing.T) {
 		t.Fatalf("unexpected hidden counts: %+v", category)
 	}
 
-	cycle, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "A"})
-	if err != nil {
-		t.Fatalf("cycle neighborhood: %v", err)
-	}
-	if !hasHandleRef(cycle.Children, Ref{Kind: KindSession, ID: "B"}) {
-		t.Errorf("cycle child B missing: %+v", cycle.Children)
-	}
-	// Category + agent + peer coordinator are three distinct direct parents.
-	if len(cycle.Parents) != 3 {
-		t.Errorf("multi-parent count=%d, want 3: %+v", len(cycle.Parents), cycle.Parents)
-	}
-
-	self, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "SELF"})
-	if err != nil {
-		t.Fatalf("self-loop neighborhood: %v", err)
-	}
-	selfRef := Ref{Kind: KindSession, ID: "SELF"}
-	if !hasHandleRef(self.Parents, selfRef) || !hasHandleRef(self.Children, selfRef) {
-		t.Errorf("self-loop missing from parents or children: %+v", self)
-	}
-
 	leaf, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "S0"})
 	if err != nil {
 		t.Fatalf("leaf neighborhood: %v", err)
 	}
 	if len(leaf.Children) != 0 {
 		t.Errorf("leaf children=%+v", leaf.Children)
+	}
+	// Kind group + agent are two distinct direct parents.
+	if len(leaf.Parents) != 2 {
+		t.Errorf("multi-parent count=%d, want 2: %+v", len(leaf.Parents), leaf.Parents)
 	}
 	if _, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "UNKNOWN"}); err == nil {
 		t.Error("unknown ref must return an error")
@@ -471,21 +431,4 @@ func TestChildrenNewKindsAreLeaves(t *testing.T) {
 			t.Errorf("%s must be a leaf, got %+v", ref.Kind, hs)
 		}
 	}
-}
-
-func (s *fakeStore) GetTrajectory(_ context.Context, id string) (db.Trajectory, error) {
-	for _, t := range s.trajectories {
-		if t.ID == id {
-			return t, nil
-		}
-	}
-	return db.Trajectory{}, db.ErrNotFound
-}
-func (s *fakeStore) GetTrajectoryByRoot(_ context.Context, root string) (db.Trajectory, error) {
-	for _, t := range s.trajectories {
-		if t.RootSessionID == root {
-			return t, nil
-		}
-	}
-	return db.Trajectory{}, db.ErrNotFound
 }

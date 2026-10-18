@@ -12,7 +12,7 @@ const (
 )
 
 // ReviewRoundBudget is how many FAILED verification rounds a card may take
-// before the coordinator must stop spawning reviewers and escalate to the user
+// before the agent in charge must stop spawning reviewers and escalate to the user
 // (see Task.ReviewBounces).
 //
 // Three is not arbitrary: rounds one and two are ordinary (a real defect found,
@@ -97,9 +97,9 @@ type Task struct {
 	// column to a working column — i.e. how many verification rounds it has FAILED.
 	// Maintained by MoveTask; it is the only durable record that a card is on a
 	// verification treadmill, because each round is otherwise indistinguishable from
-	// the first. A coordinator run (SES2570) spent seven hours cycling one card
+	// the first. A long run (SES2570) spent seven hours cycling one card
 	// through fresh reviewers, each finding new objections, with nothing counting
-	// the rounds. Surfaced to coordinators as a hard escalation once it exceeds the
+	// the rounds. Surfaced on the board as a hard escalation once it exceeds the
 	// round budget (agent.ReviewRoundBudget).
 	ReviewBounces int `json:"reviewBounces,omitempty"`
 	// ArtifactIDs references workspace artifacts attached to this card (files

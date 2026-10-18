@@ -65,7 +65,7 @@ graph LR
   dosya değişiklikleri geri **gelmez** — Claude Code ile aynı sınır.
 - Yerel-only (persist edilmemiş) anchor'da sunucu çağrısı atlanır (yalnız görünüm dilimlenir).
 - **Salt-okunur oturumlarda rewind yok.** Yazılabilir olmayan her kind (`task`, `flow`,
-  `automation`, `flow-coordinator`, `worker`, `insight`) orkestratörün yazdığı
+  `automation`, `flow-coordinator`, `insight`; `worker` türü 2026-10-18'de kaldırıldı) orkestratörün yazdığı
   bir çalışma günlüğüdür: composer gizli olduğu için checkpoint'ten devam etmenin yolu yok,
   dolayısıyla rewind yalnızca kaydı bozar. API `POST /api/sessions/{id}/rewind`'i
   `rejectReadOnlySession` ile **403** döndürür (`internal/api/session_readonly.go`),

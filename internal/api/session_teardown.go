@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -24,7 +23,7 @@ const sessionTeardownPoll = 10 * time.Millisecond
 
 // autonomousRuns is the slice of the agent runtime session teardown needs: the
 // registry of AUTONOMOUS turns (scheduler wake, automation delivery, autocontinue,
-// flow step, spawn, coordinator drain). It is a separate registry from the server's
+// flow step, spawn). It is a separate registry from the server's
 // chatRuns, so it is stated as an interface to keep it injectable in tests.
 type autonomousRuns interface {
 	// CancelSession cancels every autonomous turn registered for a session.
@@ -81,12 +80,12 @@ func (l *sessionTeardownLocks) lock(key string) func() {
 
 // teardownSessionRuntime stops everything runtime-side tied to a session BEFORE it is
 // deleted: the in-flight turn (and its claude-cli subprocess), warm pooled claude-cli
-// processes, the serial inbox worker, and any autonomous worker turn. It is FAIL
-// CLOSED — if a live process/turn cannot be stopped it returns an error and leaves the
-// session intact (queue restored, worker resumed), so the caller aborts the delete
+// processes and the serial inbox dispatcher. It is FAIL CLOSED — if a live
+// process/turn cannot be stopped it returns an error and leaves the session intact
+// (queue restored, dispatcher resumed), so the caller aborts the delete
 // instead of orphaning a process that outlives its session.
 //
-// Ordering matters: the inbox is frozen first (so its worker cannot dispatch a NEW
+// Ordering matters: the inbox is frozen first (so it cannot dispatch a NEW
 // turn mid-teardown) but its queued messages are KEPT, then the live turn is stopped,
 // then warm processes are killed. Only once every live process is confirmed down do we
 // discard the in-memory queue. The DB row/folder (and the on-disk inbox sidecar inside
@@ -113,20 +112,17 @@ func (s *Server) teardownSessionRuntimeWithGrace(wsp *workspace.Workspace, sessi
 }
 
 type preparedSessionRuntime struct {
-	worker      bool
 	closingRuns []*chatRun
 }
 
 // prepareSessionRuntimeLocked requires ownership of the session-scoped teardown
-// lock. Its worker stop remains reversible until the delete caller commits it
-// after DB.DeleteSession; false is returned when no real runtime was prepared.
+// lock. Its preparation remains reversible until the delete caller commits it
+// after DB.DeleteSession.
 func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID string, grace time.Duration) (*preparedSessionRuntime, error) {
 	wsID := wsp.ID
 	deadline := time.Now().Add(grace)
-	deadlineCtx, cancelDeadline := context.WithDeadline(context.Background(), deadline)
-	defer cancelDeadline()
 
-	// Phase 1: freeze the inbox worker (stop popping new turns; keep the queue).
+	// Phase 1: freeze the inbox dispatcher (stop popping new turns; keep the queue).
 	s.inbox.lock()
 	if ib := s.inbox.at(wsID, sessionID); ib != nil {
 		ib.closing = true
@@ -146,7 +142,7 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 	// subprocess). If it will not stop in time, abort: unfreeze + resume, keep the session.
 	//
 	// The wait gets what is LEFT of the shared deadline, not a fresh grace window, and a
-	// slow turn here can spend all of it — leaving phases 4 and 6 to fail immediately.
+	// slow turn here can spend all of it — leaving phase 4 to fail immediately.
 	// That is deliberate: grace bounds the TOTAL teardown, because this runs inside a
 	// synchronous DELETE handler holding the session lock. A per-phase budget would let
 	// one delete hang for a multiple of grace, and the outcome would be the same anyway —
@@ -201,31 +197,12 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 		}
 	}
 
-	// Phase 6: stop an autonomous worker turn if this session is one — and, when it is
-	// a sub-coordinator, its whole subtree with it, so deleting a branch does not leave
-	// grandchildren running against a session that no longer exists. "Not running" is
-	// the common case (most sessions are not workers). Empty coordinator id skips the
-	// ownership check; teardown is authoritative. This phase shares the teardown
-	// deadline because worker cleanup may otherwise write after DB deletion.
-	if s.stopWorker != nil {
-		if err := s.stopWorker(deadlineCtx, wsp, sessionID); err != nil {
-			s.noteTeardownGrace(wsp, sessionID, "worker", deadline, grace)
-			return nil, abort(fmt.Errorf("worker teardown: %w", err))
-		}
-	} else if wsp.Runtime != nil {
-		if err := wsp.Runtime.StopWorkerForTeardown(deadlineCtx, sessionID); err != nil {
-			wsp.Runtime.FinishWorkerTeardown(sessionID, false)
-			s.noteTeardownGrace(wsp, sessionID, "worker", deadline, grace)
-			return nil, abort(fmt.Errorf("worker teardown: %w", err))
-		}
-	}
-
-	// Phase 7: close this session's SCOPED MCP connections. A scoped stdio server
+	// Phase 6: close this session's SCOPED MCP connections. A scoped stdio server
 	// runs as a subprocess whose cwd is the session's scratchpad
 	// (agent.applyMCPScratchpadRoot), and Windows refuses to remove a directory
 	// that is a live process's cwd — so a still-running server makes the directory
-	// removal fail. Runs LAST of the runtime phases: the worker turns above may
-	// still be calling MCP tools until they stop.
+	// removal fail. Runs LAST of the runtime phases: the turns above may still be
+	// calling MCP tools until they stop.
 	//
 	// Not reversible and deliberately not fatal: the connection is re-dialled on
 	// demand, so an abort after this point costs a re-dial, and a server that
@@ -235,15 +212,12 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 		wsp.Runtime.CloseSessionMCP(sessionID)
 		// Release the in-memory per-session runtime state (monitors + their poll
 		// goroutine, the background-shell manager, the read tracker). Same phase and
-		// same rationale as the MCP close: it runs after the worker turns stopped, and
+		// same rationale as the MCP close: it runs after the turns stopped, and
 		// a live monitor must not outlive the session it would wake.
 		wsp.Runtime.ReleaseSessionRuntimeState(sessionID)
 	}
 
-	return &preparedSessionRuntime{
-		worker:      wsp.Runtime != nil && s.stopWorker == nil,
-		closingRuns: closingRuns,
-	}, nil
+	return &preparedSessionRuntime{closingRuns: closingRuns}, nil
 }
 
 // finishSessionRuntime commits or rolls back reversible runtime preparation only
@@ -251,9 +225,6 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 func (s *Server) finishSessionRuntime(wsp *workspace.Workspace, sessionID string, prepared *preparedSessionRuntime, commit bool) {
 	if prepared == nil {
 		return
-	}
-	if prepared.worker && wsp.Runtime != nil {
-		wsp.Runtime.FinishWorkerTeardown(sessionID, commit)
 	}
 	if !commit {
 		s.runs.reopenSessionCalls(prepared.closingRuns)
@@ -331,7 +302,7 @@ func (s *Server) stopInflightTurn(wsID, sessionID string, auto autonomousRuns, g
 	}
 }
 
-// resumeInboxAfterAbortedTeardown unfreezes a session's inbox and re-kicks its worker
+// resumeInboxAfterAbortedTeardown unfreezes a session's inbox and re-kicks its dispatcher
 // after a delete was aborted (a process would not die), so messages queued behind the
 // freeze drain now that the session lives on.
 func (s *Server) resumeInboxAfterAbortedTeardown(wsID, sessionID string) {

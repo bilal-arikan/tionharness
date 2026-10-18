@@ -89,10 +89,6 @@ export function signalsForEvent(e: AppEvent): string[] {
       return [SIGNAL_ACTIVITY, SIGNAL_WORKSPACE_ACTIVITY]
     case 'spawned':
       return [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER, SIGNAL_ACTIVITY]
-    case 'worker':
-      // A worker's turn: its session node already exists (spawn created it);
-      // only the glow and the coordinator's awaiting-workers state move.
-      return [SIGNAL_EXECUTIONS, SIGNAL_SCHEDULES, SIGNAL_EXPLORER_LIVE, SIGNAL_ACTIVITY]
     case 'task':
       // Task run lifecycle (different from board CRUD). The map cares too: a
       // task run starting or finishing adds/removes the live avatar node,
@@ -152,7 +148,7 @@ export function bumpSignalsForEvent(e: AppEvent): void {
 // Run-lifecycle event types: those whose start/end flips a workspace's live-run
 // state (a turn / task / flow beginning or finishing). Used to instantly refresh
 // the cross-workspace switcher pulse.
-const RUN_LIFECYCLE_TYPES = new Set(['chat', 'flow', 'schedule', 'spawned', 'worker', 'task'])
+const RUN_LIFECYCLE_TYPES = new Set(['chat', 'flow', 'schedule', 'spawned', 'task'])
 
 // bumpWorkspaceActivityForEvent nudges the cross-workspace live-run signal
 // (useWorkspaceActivity) when a run started or ended — for ANY workspace,

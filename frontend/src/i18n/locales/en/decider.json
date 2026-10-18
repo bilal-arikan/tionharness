@@ -6,8 +6,7 @@
     "detailHint": "Configure when this workflow acts and how decisions are checked.",
     "groups": {
       "session": "Session start",
-      "context": "Context",
-      "collaboration": "Worker collaboration"
+      "context": "Context"
     },
     "limits": "Workflow limits",
     "candidateLimit": "Maximum candidates",
@@ -18,7 +17,7 @@
   },
   "title": "Decision authorities",
   "intro": "Decision authorities are the places in the app that hand a decision to a decision provider: a model that answers typed questions (yes/no, pick one, rate) in a fraction of a second. Each authority can stay off, run in shadow (asked in the background and measured next to the existing logic, changing nothing) or be switched on, and each can use its own provider with a fallback and a challenger.",
-  "privacy": "What is judged (a shell command, a coordinator message, a flow output, a transcript excerpt) is sent to the decision model after obvious secrets are masked. A model on your own machine keeps it local.",
+  "privacy": "What is judged (a shell command, a flow output, a transcript excerpt) is sent to the decision model after obvious secrets are masked. A model on your own machine keeps it local.",
   "enabled": "Use the decision layer",
   "enabledHint": "Master switch. While off nothing is sent anywhere and every authority behaves as before.",
   "defaultModel": "Default decision provider",
@@ -194,8 +193,7 @@
   },
   "group": {
     "safety": "Safety",
-    "coordination": "Coordination",
-    "flows": "Flows and Rota",
+    "flows": "Flows",
     "routing": "Routing",
     "context": "Context",
     "housekeeping": "Housekeeping"
@@ -233,16 +231,6 @@
       "description": "After the configured compact interval, selects saved fragments to restore for the current task. Includes successful managed and CLI compactions.",
       "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
     },
-    "worker-review": {
-      "label": "Worker result review",
-      "description": "Selects verification, alternatives, assumptions, conflicts and follow-up perspectives for coordinator synthesis. Worker delivery continues if the judge fails.",
-      "threshold": "Minimum confidence before the current workflow changes. Lower confidence preserves existing behavior."
-    },
-    "stall-judge": {
-      "label": "Coordinator stall judge",
-      "description": "Does the coordinator's last message claim it opened workers it never opened? Replaces a Haiku call per idle coordinator turn.",
-      "threshold": "Minimum probability of \"stalled\" before the coordinator is nudged."
-    },
     "tool-risk": {
       "label": "Shell command risk check",
       "description": "A second look at shell commands that would run without asking (auto mode or an \"always allow\" rule such as git *). When on, a risky command becomes an approval prompt; an unattended run is never blocked.",
@@ -252,11 +240,6 @@
       "label": "Flow judge nodes",
       "description": "Branch and loop nodes in the \"judge\" match mode let the model pick the arm or decide the loop's exit condition instead of matching text.",
       "threshold": "Minimum probability for an arm to be taken (otherwise the default arm) or for the exit condition to count as met."
-    },
-    "phase-gate": {
-      "label": "Rota judge gates",
-      "description": "Phase gates of kind \"judge\" ask whether the phase's exit condition holds, judged against the root session's recent transcript. If no model can answer, the gate stays shut.",
-      "threshold": "Minimum probability that the exit condition holds before the gate opens."
     },
     "flow-criteria": {
       "label": "Flow criteria gates",

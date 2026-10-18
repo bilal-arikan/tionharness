@@ -14,7 +14,6 @@
     "archive": "Archive",
     "workspace": "workspace",
     "session": "session",
-    "phase": "phase",
     "input": "Input",
     "prompt": "Prompt",
     "runNow": "Run now",
@@ -46,15 +45,11 @@
   "triggerKinds": {
     "tag": "Tag",
     "board": "Board",
-    "phase": "Trajectory phase",
-    "trajectory_end": "Trajectory end",
     "flow": "Flow run"
   },
   "automationKinds": {
     "tag": "tag automation",
     "board": "board automation",
-    "phase": "phase automation",
-    "trajectory_end": "trajectory-end automation",
     "flow": "flow-run automation"
   },
   "fires": {
@@ -73,8 +68,7 @@
     "autonomyPaused": "autonomy paused",
     "targetMissing": "target missing",
     "agentArchived": "target agent archived",
-    "emptyPrompt": "empty prompt",
-    "notFound": "automation not found"
+    "emptyPrompt": "empty prompt"
   },
   "board": {
     "runFailed": "Run failed: {{error}}",
@@ -115,18 +109,6 @@
       "add": "New board automation",
       "empty": "No board automations yet."
     },
-    "phase": {
-      "title": "Trajectory phase automations",
-      "description": "Runs when a declared trajectory phase ends or starts; recipe watchers can also bind it.",
-      "add": "New phase automation",
-      "empty": "No phase automations yet."
-    },
-    "trajectoryEnd": {
-      "title": "Trajectory-end automations",
-      "description": "Runs when a trajectory finishes (done, failed, or abandoned) for summaries, lessons, and docs.",
-      "add": "New trajectory-end automation",
-      "empty": "No trajectory-end automations yet."
-    },
     "flow": {
       "title": "Flow-run automations",
       "description": "Runs when an agent's flow run finishes (success, failure or a low grade) with the reply and run context; trigger nodes inside flows can also fire automations of any kind.",
@@ -138,9 +120,6 @@
     "event": "Event",
     "source": "Source",
     "target": "Target",
-    "phase": "Phase",
-    "endStatus": "End",
-    "recipe": "Recipe",
     "session": "Session",
     "trigger": "Trigger",
     "promptTemplate": "Prompt template",
@@ -155,12 +134,6 @@
       "priorityHint": "Fire order among automations watching the same card change. Lower numbers run first.",
       "exclusive": "Exclusive",
       "exclusiveHint": "This automation exclusively owns a matching card change and suppresses every other matching board automation."
-    },
-    "trajectory": {
-      "phaseHint": "Phase id from the recipe (plan, code, review…). Empty matches every phase.",
-      "anyPhase": "any phase",
-      "recipeHint": "Only trajectories seeded from this recipe slug, without a version. Empty matches every trajectory.",
-      "anyRecipe": "any recipe"
     },
     "flow": {
       "agent": "Agent",
@@ -230,13 +203,6 @@
     "archivesCard": "Archives the card without an LLM call",
     "movesCard": "Moves the card to the target column without an LLM call",
     "boardTransition": "({{from}} → {{to}})",
-    "phaseSummary": "phase {{phase}} · {{event}}",
-    "trajectoryEndSummary": "trajectory end · {{status}}",
-    "phaseTriggered": "Trajectory phase automation — runs when a declared phase starts or ends",
-    "onEnter": "on start",
-    "onExit": "on end",
-    "trajectoryEndTriggered": "Trajectory-end automation — runs when a trajectory reaches a terminal state",
-    "trajectoryEnd": "trajectory end",
     "pinnedTitle": "Pinned: exempt from the curator's automatic passes",
     "pinned": "pinned",
     "exclusiveTitle": "Exclusive: only this automation runs for a matching card change; other matches are suppressed.",
@@ -311,14 +277,11 @@
       "exhausted": "iteration limit",
       "expired": "expired",
       "oneShotDone": "one-time run completed",
-      "neverFired": "never fired",
-      "unfiredWatcher": "watcher never fired",
-      "ghostPhase": "phase never started"
+      "neverFired": "never fired"
     },
     "entities": {
       "automation": "automation",
-      "schedule": "schedule",
-      "recipe": "recipe"
+      "schedule": "schedule"
     }
   },
   "cron": {
@@ -352,16 +315,6 @@
     }
   },
   "meta": {
-    "trajectoryEvents": {
-      "exit": "when the phase ends (done/skipped/failed)",
-      "enter": "when the phase starts (active)"
-    },
-    "trajectoryStatuses": {
-      "any": "any ending",
-      "done": "done",
-      "failed": "failed",
-      "abandoned": "abandoned"
-    },
     "defaultColumns": {
       "todo": "To do",
       "inProgress": "In progress",
@@ -383,23 +336,6 @@
       "move": "Move card to a column (no LLM)"
     },
     "promptVars": {
-      "trajectory": {
-        "trajectoryId": "Trajectory id (RTA…)",
-        "rootSessionId": "Trajectory's root coordinator session",
-        "sessionId": "Root session (same value)",
-        "recipe": "Recipe slug; empty for an unplanned trajectory",
-        "phase": "Phase that transitioned",
-        "phaseState": "New phase state (done/skipped/failed/active)",
-        "event": "exit or enter",
-        "status": "Terminal trajectory status (done/failed/abandoned)",
-        "phases": "Phase line with each phase's state",
-        "iteration": "One-based fire number",
-        "maxIterations": "Upper limit; zero means unlimited on legacy records",
-        "automation": "Automation name",
-        "date": "Current date",
-        "time": "Current time",
-        "datetime": "Current date and time"
-      },
       "tag": {
         "result": "Final response from the completed session",
         "title": "Completed session title",

@@ -236,8 +236,8 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // longer shadows todo_write.
 func codexAdvisorySuppressions() []string {
 	// experimental_request_user_input shadows ask_user. The collaboration tools
-	// bypass TionHarness's worker lifecycle and shadow spawn_worker,
-	// send_to_worker, and list_workers. All are also switched off structurally in
+	// bypass TionHarness's session lifecycle and shadow run_subagent
+	// and spawn_session. All are also switched off structurally in
 	// the rendered config.toml.
 	return []string{
 		"experimental_request_user_input",

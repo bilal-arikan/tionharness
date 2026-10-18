@@ -43,8 +43,8 @@ type Record struct {
 	LatencyMs   int64   `json:"latencyMs,omitempty"`
 	InputTokens int     `json:"inputTokens,omitempty"`
 	CostUSD     float64 `json:"costUsd,omitempty"`
-	// Outcome is the verdict in the authority's own vocabulary ("stalled",
-	// "ask", "arm2", "pass"); empty when the call failed.
+	// Outcome is the verdict in the authority's own vocabulary ("ask",
+	// "arm2", "pass"); empty when the call failed.
 	Outcome string `json:"outcome,omitempty"`
 	// Strength is the probability or confidence behind Outcome.
 	Strength float64 `json:"strength,omitempty"`
@@ -56,7 +56,7 @@ type Record struct {
 	Applied bool `json:"applied,omitempty"`
 	// Error is a short error class ("timeout", "http_401"), never raw text.
 	Error string `json:"error,omitempty"`
-	// Ref correlates the record with a session, flow run or trajectory id.
+	// Ref correlates the record with a session or flow run id.
 	Ref string `json:"ref,omitempty"`
 }
 

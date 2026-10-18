@@ -94,18 +94,6 @@
         "label": "Spawn",
         "hint": "A spawned session finished or failed."
       },
-      "worker": {
-        "label": "Worker",
-        "hint": "A coordinator worker changed state."
-      },
-      "coordination": {
-        "label": "Coordination",
-        "hint": "Coordination warnings such as a coordinator turn limit."
-      },
-      "rota": {
-        "label": "Rota",
-        "hint": "A route started, finished, failed, or is waiting for a human response."
-      },
       "automation": {
         "label": "Automations",
         "hint": "A label or board automation was triggered."

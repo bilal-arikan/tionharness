@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { i18next } from '@/i18n'
 import { ExecutionNotice } from './ExecutionNotice'
-import { TaskNotificationNote } from './TaskNotificationNote'
-import { notificationExecutionSteps } from './executionEvidence'
-import { notificationChanges } from './parseTaskNotification'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const roots: Root[] = []
@@ -42,46 +39,6 @@ it('keeps interruption visible before details are opened', () => {
   expect(container.textContent).toContain('Partial work was saved')
 })
 
-it('shows delivery evidence while the worker result is collapsed and opens present files only', () => {
-  const onOpenFile = vi.fn()
-  const container = render(
-    <TaskNotificationNote
-      onOpenFile={onOpenFile}
-      message={{
-        id: 'MSG1',
-        sessionId: 'SES1',
-        role: 'user',
-        origin: 'worker-note',
-        createdAt: 1,
-        text: '<task-notification><task-id>SES2</task-id><status>incomplete</status><result>Still writing files</result></task-notification>',
-        steps: JSON.stringify([
-          {
-            kind: 'text',
-            operation: 'delivery_check',
-            status: 'missing',
-            output: JSON.stringify([
-              { path: 'C:/result.md', status: 'present' },
-              { path: 'C:/missing.md', status: 'unavailable' },
-            ]),
-          },
-        ]),
-      }}
-    />,
-  )
-  expect(container.querySelector('summary')?.textContent).toContain('Delivery incomplete')
-  expect(container.textContent).not.toContain('Still writing files')
-  const file = [...container.querySelectorAll('button')].find(
-    (button) => button.textContent === 'C:/result.md',
-  )!
-  act(() => file.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-  expect(onOpenFile).toHaveBeenCalledWith('C:/result.md')
-  expect(
-    [...container.querySelectorAll('button')].some(
-      (button) => button.textContent === 'C:/missing.md',
-    ),
-  ).toBe(false)
-})
-
 it('explains safe context fallback and preserves recovered connection diagnostics', () => {
   const cold = render(
     <ExecutionNotice
@@ -107,24 +64,4 @@ it('explains safe context fallback and preserves recovered connection diagnostic
   )
   expect(recovered.querySelector('summary')?.textContent).toContain('Tool connection recovered')
   expect(recovered.querySelector('pre')?.textContent).toContain('[redacted]')
-})
-
-it('handles malformed legacy notification traces without crashing', () => {
-  expect(notificationExecutionSteps('{')).toEqual([])
-  expect(notificationExecutionSteps('{}')).toEqual([])
-  expect(() => notificationChanges('{')).toThrow()
-  const container = render(
-    <TaskNotificationNote
-      message={{
-        id: 'legacy',
-        sessionId: 'SES1',
-        role: 'user',
-        createdAt: 1,
-        origin: 'worker-note',
-        text: 'Legacy worker report',
-        steps: '{',
-      }}
-    />,
-  )
-  expect(container.textContent).toContain('saved activity details could not be read')
 })

@@ -1,10 +1,9 @@
 // Package liveness defines the ONE server-side answer to "what is this
-// workspace doing right now?": which sessions are running, queued, waiting on a
-// human or on flow input, or idle-but-waiting for their workers — and how much
-// spawn capacity is left. The runtime composes it (agent.Runtime.Liveness) from
+// workspace doing right now?": which sessions are running or waiting on a
+// human or on flow input — and how much spawn capacity is left. The runtime composes it (agent.Runtime.Liveness) from
 // the registries that already exist (turn admission slots, tracked autonomous
 // invokes, the api's chat-run probe, the spawn queue, durable asks, waiting
-// flow runs, coordinator slots); every consumer — the sidebar chips, the
+// flow runs); every consumer — the sidebar chips, the
 // network graph, the executions feed, the activity poll, the workspace live
 // view — reads this snapshot instead of merging registries by hand
 // (_Docs/77 R2).
@@ -26,18 +25,12 @@ const (
 	// Running: a turn holds the session's admission slot or a tracked
 	// autonomous invoke is executing in it.
 	Running State = "running"
-	// Queued: work is admitted but not yet running — a coordinator drain owed a
-	// turn by a pending worker note.
-	Queued State = "queued"
 	// WaitingAsk: the turn is parked on a durable ask (a question / permission
 	// prompt awaiting a human).
 	WaitingAsk State = "waiting_ask"
 	// WaitingInput: the session's flow run is durably suspended at an
 	// await-input node.
 	WaitingInput State = "waiting_input"
-	// AwaitingWorkers: a coordinator that is idle itself while at least one of
-	// its workers runs (the sidebar's "awaiting-workers" chip).
-	AwaitingWorkers State = "awaiting_workers"
 )
 
 // Entry is one live session.
@@ -45,8 +38,8 @@ type Entry struct {
 	SessionID string `json:"sessionId"`
 	State     State  `json:"state"`
 	// Reason names the source in a compact, greppable form:
-	// "turn:user", "turn:worker", "run", "turn:chat" (api probe),
-	// "ask:SAK3", "flow:RUN88", "workers:2", "coord:drain-pending".
+	// "turn:user", "turn:spawn", "run", "turn:chat" (api probe),
+	// "ask:SAK3", "flow:RUN88".
 	Reason string `json:"reason,omitempty"`
 	// Since is when the entry entered its state (unix seconds); 0 when the
 	// source does not track it.
@@ -89,14 +82,12 @@ func (s Snapshot) Is(sessionID string, st State) bool {
 	return ok && e.State == st
 }
 
-// RunningSet is the legacy "which sessions are working right now" set: every
-// session that is Running or AwaitingWorkers. It is what the previous
-// runningSessionIDs merge produced (a coordinator waiting on its workers was
-// promoted into the live scope), so existing consumers keep their semantics.
+// RunningSet is the "which sessions are working right now" set: every session
+// that is Running.
 func (s Snapshot) RunningSet() map[string]bool {
 	out := make(map[string]bool, len(s.Entries))
 	for _, e := range s.Entries {
-		if e.State == Running || e.State == AwaitingWorkers {
+		if e.State == Running {
 			out[e.SessionID] = true
 		}
 	}
@@ -133,8 +124,7 @@ func (s Snapshot) Count(st State) int {
 
 // Builder accumulates entries by session, keeping the MOST ACTIVE state when a
 // session is reported by several sources (a running turn beats an ask parked
-// from an earlier turn; a coordinator busy with its own turn is Running, not
-// AwaitingWorkers).
+// from an earlier turn).
 type Builder struct {
 	entries map[string]Entry
 }
@@ -144,16 +134,12 @@ func rank(st State) int {
 	switch st {
 	case Running:
 		return 0
-	case Queued:
-		return 1
 	case WaitingAsk:
-		return 2
+		return 1
 	case WaitingInput:
-		return 3
-	case AwaitingWorkers:
-		return 4
+		return 2
 	}
-	return 5
+	return 3
 }
 
 // Add records an entry; a less active state never overrides a more active one

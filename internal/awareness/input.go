@@ -52,7 +52,7 @@ type Settings struct {
 // DefaultSettings are the shipped values. The brief ceiling is set so that a
 // brief plus the rest of a typical static prefix stays well inside what a
 // hook-style delivery would cap at; the turn ceiling is generous because the
-// coordinator situation block is legitimately large.
+// situation block is legitimately large.
 func DefaultSettings() Settings {
 	return Settings{
 		Enabled:           true,
@@ -114,9 +114,8 @@ type Input struct {
 	ProgressResume bool
 
 	// Fresh marks a session's first turn (the brief is being composed for the
-	// first time). IsCoordinator selects the coordinator-only sections.
-	Fresh         bool
-	IsCoordinator bool
+	// first time).
+	Fresh bool
 
 	// Running lists the sessions executing right now (runtime liveness); nil =
 	// unknown.

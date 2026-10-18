@@ -21,17 +21,17 @@ function header(partial: Partial<Session> & { id: string }): Session {
   } as Session
 }
 
-// ROOT (chat) with a completed worker W1 and a subagent worker W2; SOLO is an
+// ROOT (chat) with a spawned member W1 and a subagent member W2; SOLO is an
 // unrelated archived chat; AUTO is an automation root.
 function fixture() {
   return seedSessions(emptyLanes(), [
-    header({ id: 'ROOT', coordinatorMode: true }),
+    header({ id: 'ROOT' }),
     header({
       id: 'W1',
-      kind: 'worker',
+      kind: 'spawned',
       runState: 'completed',
       origin: {
-        kind: 'coordinator',
+        kind: 'spawn',
         triggerSessionId: 'ROOT',
         rootSessionId: 'ROOT',
         at: NOW - 500,
@@ -39,7 +39,6 @@ function fixture() {
     }),
     header({
       id: 'W2',
-      kind: 'worker',
       origin: { kind: 'subagent', triggerSessionId: 'ROOT', rootSessionId: 'ROOT', at: NOW - 400 },
     }),
     header({ id: 'SOLO', state: 'archived' }),
@@ -54,28 +53,26 @@ describe('laneMatchesChips', () => {
   it('keeps everything when every chip is on', () => {
     const l = fixture()
     for (const id of ['ROOT', 'W1', 'W2', 'SOLO', 'AUTO']) {
-      expect(laneMatchesChips(l, l.sessions.get(id)!, all)).toBe(true)
+      expect(laneMatchesChips(l.sessions.get(id)!, all)).toBe(true)
     }
   })
 
-  it('a worker needs its Worker chip as well as its kind chip', () => {
+  it('a member lane is filtered by its own kind chip', () => {
     const l = fixture()
-    expect(laneMatchesChips(l, l.sessions.get('W1')!, only('worker', 'archived'))).toBe(true)
-    expect(laneMatchesChips(l, l.sessions.get('W1')!, only('chat', 'archived'))).toBe(false)
+    expect(laneMatchesChips(l.sessions.get('W1')!, only('spawned'))).toBe(true)
+    expect(laneMatchesChips(l.sessions.get('W1')!, only('chat', 'archived'))).toBe(false)
   })
 
-  it('classifies a subagent worker by its origin kind', () => {
+  it('classifies a subagent lane by its origin kind', () => {
     const l = fixture()
-    expect(laneMatchesChips(l, l.sessions.get('W2')!, only('subagent', 'worker', 'archived'))).toBe(
-      true,
-    )
-    expect(laneMatchesChips(l, l.sessions.get('W2')!, only('worker', 'archived'))).toBe(false)
+    expect(laneMatchesChips(l.sessions.get('W2')!, only('subagent'))).toBe(true)
+    expect(laneMatchesChips(l.sessions.get('W2')!, only('chat', 'archived'))).toBe(false)
   })
 
   it('an archived lane needs the Arşiv chip', () => {
     const l = fixture()
-    expect(laneMatchesChips(l, l.sessions.get('SOLO')!, only('chat'))).toBe(false)
-    expect(laneMatchesChips(l, l.sessions.get('SOLO')!, only('chat', 'archived'))).toBe(true)
+    expect(laneMatchesChips(l.sessions.get('SOLO')!, only('chat'))).toBe(false)
+    expect(laneMatchesChips(l.sessions.get('SOLO')!, only('chat', 'archived'))).toBe(true)
   })
 
   it('a running lane needs the Çalışan chip', () => {
@@ -84,24 +81,23 @@ describe('laneMatchesChips', () => {
       capacity: {},
       at: NOW,
     } as never)
-    expect(laneMatchesChips(l, l.sessions.get('ROOT')!, only('chat', 'archived'))).toBe(false)
-    expect(laneMatchesChips(l, l.sessions.get('ROOT')!, only('chat', 'archived', 'running'))).toBe(
+    expect(laneMatchesChips(l.sessions.get('ROOT')!, only('chat', 'archived'))).toBe(false)
+    expect(laneMatchesChips(l.sessions.get('ROOT')!, only('chat', 'archived', 'running'))).toBe(
       true,
     )
   })
 })
 
 describe('laneChipFilter', () => {
-  it('keeps a root whose member matches, so no worker is orphaned', () => {
+  it('keeps a root whose member matches, so no member is orphaned', () => {
     const l = fixture()
-    // Only the Subagent slice is asked for. `worker` has to stay on because it
-    // is the scope chip every worker lane needs; W1's KIND is also 'worker', so
-    // it survives too — the same double duty the sidebar's chip has. What this
-    // asserts is the tree rule: ROOT is a chat and matches nothing here, yet it
-    // stays so its members' spawn edges still point at a rendered lane.
-    const keep = laneChipFilter(l, only('subagent', 'worker', 'archived'))
+    // Only the Subagent slice is asked for. ROOT is a chat and matches nothing
+    // here, yet it stays so its members' spawn edges still point at a rendered
+    // lane.
+    const keep = laneChipFilter(l, only('subagent', 'archived'))
     expect(keep(l.sessions.get('W2')!)).toBe(true)
     expect(keep(l.sessions.get('ROOT')!)).toBe(true)
+    expect(keep(l.sessions.get('W1')!)).toBe(false)
     // An unrelated root with no matching member drops out.
     expect(keep(l.sessions.get('AUTO')!)).toBe(false)
     expect(keep(l.sessions.get('SOLO')!)).toBe(false)
@@ -120,22 +116,21 @@ describe('laneChipFilter', () => {
       layoutRota(l, { now: NOW, laneFilter: laneChipFilter(l, chips) }).rows.map((r) => r.id)
     expect(rows(all)).toEqual(['ROOT', 'W1', 'W2', 'SOLO', 'AUTO'])
     expect(rows(only('automation', 'archived'))).toEqual(['AUTO'])
-    expect(rows(only('subagent', 'worker', 'archived'))).toEqual(['ROOT', 'W1', 'W2'])
-    // Drop the Worker scope and every worker lane goes, root kept on its own.
-    expect(rows(only('chat', 'subagent'))).toEqual(['ROOT'])
+    expect(rows(only('subagent', 'archived'))).toEqual(['ROOT', 'W2'])
+    // Only the Sohbet chip: ROOT and the chat-kind W2 stay; SOLO is archived.
+    expect(rows(only('chat'))).toEqual(['ROOT'])
   })
 })
 
 describe('laneChipCounts', () => {
   it('counts a lane once per axis it belongs to', () => {
     const c = laneChipCounts(fixture())
-    // ROOT + SOLO are chats; AUTO is an automation. W1's kind chip is 'worker'
-    // and W2's is 'subagent' (from its origin); on top of that BOTH answer the
-    // Worker scope, so 'worker' totals 3 — kind once, scope twice.
+    // ROOT + SOLO are chats; AUTO is an automation; W1 is spawned and W2 is a
+    // subagent (from its origin).
     expect(c.get('chat')).toBe(2)
+    expect(c.get('spawned')).toBe(1)
     expect(c.get('subagent')).toBe(1)
     expect(c.get('automation')).toBe(1)
-    expect(c.get('worker')).toBe(3)
     // SOLO is the only archived lane.
     expect(c.get('archived')).toBe(1)
   })

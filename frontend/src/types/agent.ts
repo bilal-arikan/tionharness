@@ -58,18 +58,6 @@ export interface Agent {
   // List of skill slugs enabled for this agent (picked from the shared skill
   // library; agents never own skills).
   skills?: string[]
-  // Coordinator DEFAULT for the sessions this agent opens: every new session
-  // starts in coordinator mode (spawn_worker & co. available) instead of needing
-  // a per-thread toggle. Existing sessions are unaffected by a change here —
-  // the session's own flag stays the live value.
-  coordinatorMode?: boolean
-  // Optional coordinator recipe slug pinned on those sessions (a skill with
-  // kind=coordinator-workflow). Only meaningful with coordinatorMode.
-  coordinatorWorkflow?: string
-  // Free-text orchestration guidance injected into the system context ONLY while
-  // the session is in coordinator mode, right after the shared coordinator
-  // manual. Empty injects nothing at all, so it is free when not coordinating.
-  coordinatorPrompt?: string
   // Inheritance (see internal/db/agent_inherit.go). parentId names the agent
   // this one inherits from; every inheritable field whose key is NOT in
   // `overrides` is served RESOLVED from the parent (the server folds the chain
@@ -101,9 +89,6 @@ export type AgentOverrideKey =
   | 'tools'
   | 'allowedTools'
   | 'skills'
-  | 'coordinatorMode'
-  | 'coordinatorWorkflow'
-  | 'coordinatorPrompt'
 
 // Editable agent profile fields (PUT /api/agents/{id}). Partial — omitted keys
 // are left unchanged on the backend. On a derived agent every key present in
@@ -125,9 +110,6 @@ export interface AgentPatch {
   color?: string
   skills?: string[]
   disabled?: boolean
-  coordinatorMode?: boolean
-  coordinatorWorkflow?: string
-  coordinatorPrompt?: string
 }
 
 import type { ModelStat, KindStat } from './usage'

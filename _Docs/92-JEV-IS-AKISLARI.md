@@ -1,8 +1,9 @@
 # JEV iş akışları
 
+> **Not (2026-10-18):** `worker-review` mercisi kaldırıldı; beş merci kalır (session-setup, model-router, clarification, compact-retention, context-reminder).
+
 **Özet — Uygulandı, 2026-10-02.** Mevcut karar Hub'ına altı merci ve oturum karar
-kayıtları bağlandı. JEV tipli seçim yapar; metin üretimi, özetleme ve worker
-sonuçlarının sentezi çalıştırma modelinin işidir.
+kayıtları bağlandı (altıncı merci `worker-review` 2026-10-18'de kaldırıldı). JEV tipli seçim yapar; metin üretimi ve özetleme çalıştırma modelinin işidir.
 İlgili oturum bağlamı karar girdilerine eklenir; Bütçe ekranındaki ayrı bölüm
 JEV/OpenRouter karar tüketimini kalıcı günlük toplamlarla gösterir.
 
@@ -32,7 +33,7 @@ Yeni workspace alanı olmayan eski debug kayıtları yalnız genel görünümde 
 | clarification | ask_user / ask_user_async | Açıkça isteğe bağlı belirtilmiş ve cevabı konuşmada bulunan soruda devam önerilir. Zorunlu bilgi ve eylem onayları kullanıcıya gider. |
 | compact-retention | Yönetilen rolling, manual veya reactive compact | Eski parçalar koru/özetle/çıkar olarak sınıflanır. Çıkar seçimi yalnız özetleme girdisinden çıkarır; kanonik transkript silinmez. Korunan parçalar özete eklenir, pinler sonraki turlara taşınır. |
 | context-reminder | Kayıtlı parçanın tutulması veya son hatırlatılması üzerinden N başarılı compact sonrası | Mevcut göreve gerekli parçalar seçilip yeni tur bağlamına eklenir. Başarılı CLI compact işlemleri de sayılır. |
-| worker-review | Terminal worker sonucunun koordinatöre teslimi | Doğrulama, alternatif karşılaştırma, varsayım sorgulama, çelişki çözme ve sonraki adımlar içinden en fazla üç bakış koordinatör notuna eklenir. Sonuç teslimi karar modelinin başarısına bağlı değildir. |
+| ~~worker-review~~ | (kaldırıldı 2026-10-18) | Worker'lar ve koordinatör kaldırıldığından bu merci silindi. |
 
 ## Modlar ve sınırlar
 
@@ -45,7 +46,7 @@ Yeni workspace alanı olmayan eski debug kayıtları yalnız genel görünümde 
   uygulanır. Karar çağrısı en fazla altı saniye bekletir; sağlayıcı hatasında
   mevcut davranış devam eder.
 - Aday sınırı 4–48, seçim sınırı 1–16, hatırlatma aralığı 1–20 compact ve bağlam
-  bütçesi 1–32 KiB arasında ayarlanır. Worker incelemesi en fazla üç bakış yükler.
+  bütçesi 1–32 KiB arasında ayarlanır.
 - Hatırlatma sayacı yalnız gerçekten yeni tur bağlamına eklenen parçalar için
   ilerler. Kaynağı bulunmayan veya bütçeye sığmayan seçim uygulama sayılmaz.
 - Skill yükleme yeni araç izni vermez. Araç/skill izinleri her tur yeniden kontrol
@@ -64,8 +65,8 @@ Yeni workspace alanı olmayan eski debug kayıtları yalnız genel görünümde 
 
 ### Karar girdisindeki ilgili bağlam
 
-2026-10-02: skill/araç seçimi, model yönlendirme, soru inceleme, hatırlatma ve
-worker inceleme kararlarına oturum amacı, mevcut özet, son kullanıcı/assistant
+2026-10-02: skill/araç seçimi, model yönlendirme, soru inceleme, hatırlatma
+kararlarına oturum amacı, mevcut özet, son kullanıcı/assistant
 konuşması ve sabitlenen bağlam eklenir. İlk kullanıcı isteği 2 KiB, özet 4 KiB,
 son 16 mesajdan konuşma metni toplam 6 KiB ve sabitlenen kaynak metinleri toplam
 2 KiB ile sınırlıdır. Son konuşma kronolojik verilir; yeni kullanıcı düzeltmeleri
@@ -138,7 +139,7 @@ yalnız davranış uyumundan otomatik “aktif moda geç” önerisi üretilmez.
 
 Sahte sağlayıcılarla gerçek başlangıç şeması yükleme, shadow izolasyonu,
 model/pin/resume, managed compact girdisi/çıktısı, reminder aralığı, clarification
-ve worker teslimi test edilir. API pin/feedback ve workspace kapsamı; UI eski
+test edilir. API pin/feedback ve workspace kapsamı; UI eski
 session yanıtları, çift tıklama, yeniden yükleme ve gözlem/uygulama ayrımı
 regresyon testleriyle doğrulanır. Teslim kapısı scripts/test.sh full'dur.
 

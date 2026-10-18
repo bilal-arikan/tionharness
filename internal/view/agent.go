@@ -93,7 +93,6 @@ func ProjectAgent(in AgentInput, level Level) (View, error) {
 type agentStats struct {
 	Total        int
 	Active       int
-	Coordinators int
 	Stuck        []db.Session
 	LastActivity int64
 }
@@ -112,9 +111,6 @@ func computeAgentStats(in AgentInput, now time.Time) agentStats {
 		if s.StuckTurns > 0 {
 			st.Stuck = append(st.Stuck, s)
 		}
-		if s.IsCoordinator() {
-			st.Coordinators++
-		}
 		if s.UpdatedAt > st.LastActivity {
 			st.LastActivity = s.UpdatedAt
 		}
@@ -131,9 +127,6 @@ func agentSignals(st agentStats) []string {
 	if n := len(st.Stuck); n > 0 {
 		out = append(out, fmt.Sprintf("⚠ %d oturum takılmış (StuckTurns>0): %s",
 			n, sessionNames(st.Stuck, wsSignalNames)))
-	}
-	if st.Coordinators > 0 {
-		out = append(out, fmt.Sprintf("⇵ %d koordinatör oturumu", st.Coordinators))
 	}
 	return out
 }
@@ -170,9 +163,6 @@ func agentConfigLines(in AgentInput, level Level) []string {
 	// card (its "0 aktif oturum" is a consequence, not a coincidence).
 	if a.Disabled {
 		flags = append(flags, "devre dışı")
-	}
-	if a.CoordinatorMode {
-		flags = append(flags, "koordinatör")
 	}
 	if in.IsDefault {
 		flags = append(flags, "varsayılan")

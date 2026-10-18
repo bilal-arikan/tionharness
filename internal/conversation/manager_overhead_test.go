@@ -53,7 +53,7 @@ func TestPrepareDropsFoldedStepsFromReportedOverhead(t *testing.T) {
 	d, agentRow, sess, history := overheadFixture(t, 6, trace)
 
 	const keepRecent = 4
-	const systemFillers = 1500 // the non-message, non-trace part of the overhead
+	const systemFillers = 3000 // the non-message, non-trace part of the overhead
 
 	allSteps, err := EstimatePersistedStepTokens(history)
 	if err != nil {
@@ -62,9 +62,10 @@ func TestPrepareDropsFoldedStepsFromReportedOverhead(t *testing.T) {
 	overhead := systemFillers + allSteps
 
 	m := NewManager()
-	// Budget below the true footprint so the fold fires, above the visible text so
-	// only the overhead term can trip it.
-	configured := EstimateTokens("", history) + allSteps/2
+	// Budget below messages + system fillers so the fold fires. The warm thread's
+	// own trace is not part of the gate (warmCLIStepTerm): the CLI compacts that
+	// natively, so only what the fold can shrink may trip it.
+	configured := EstimateTokens("", history) + systemFillers/2
 	m.SetLimits(configured, keepRecent)
 	fraction, ceil := m.budgetShape()
 	budget := EffectiveBudget(agentRow.Provider, agentRow.Model, configured, fraction, ceil)
@@ -197,5 +198,29 @@ func TestPrepareSurfacesMalformedFoldedTrace(t *testing.T) {
 	turnCtx := WithContextOverheadStepBase(WithContextOverhead(ctx, 5000), 0)
 	if _, err := m.Prepare(turnCtx, d, stubProvider{summary: "ROLLED UP"}, sess, agentRow, history); err == nil {
 		t.Fatal("malformed persisted trace in the folded range must be observable")
+	}
+}
+
+// TestWarmCLITraceAloneDoesNotFold: when only a warm CLI thread's own tool trace
+// pushes the footprint over budget, Prepare does not fold — the CLI compacts that
+// window itself, and folding a message or two would only re-baseline the thread
+// and cold-start the next turn.
+func TestWarmCLITraceAloneDoesNotFold(t *testing.T) {
+	ctx := context.Background()
+	trace := `[{"kind":"tool","tool":"Bash","input":{"cmd":"ls"},"output":"` + strings.Repeat("payload ", 300) + `"}]`
+	d, agentRow, sess, history := overheadFixture(t, 6, trace)
+	allSteps, err := EstimatePersistedStepTokens(history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager()
+	m.SetLimits(EstimateTokens("", history)+allSteps/2, 4)
+	turnCtx := WithContextOverheadStepBase(WithContextOverhead(ctx, 100+allSteps), 0)
+	prep, err := m.Prepare(turnCtx, d, stubProvider{summary: "ROLLED UP"}, sess, agentRow, history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prep.Compacted {
+		t.Fatal("a warm thread's own trace alone must not trigger a rolling fold")
 	}
 }

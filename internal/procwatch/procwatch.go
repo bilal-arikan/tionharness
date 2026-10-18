@@ -74,8 +74,8 @@ type Owner struct {
 	SessionID   string `json:"sessionId,omitempty"`
 	AgentID     string `json:"agentId,omitempty"`
 	AgentName   string `json:"agentName,omitempty"`
-	// ParentSessionID is the coordinator/spawning session when this one is a
-	// worker or sub-session, so the panel can group a fan-out under its root.
+	// ParentSessionID is the delegating/spawning session when this one is a
+	// subagent or sub-session, so the panel can group a fan-out under its root.
 	ParentSessionID string `json:"parentSessionId,omitempty"`
 }
 

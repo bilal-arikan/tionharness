@@ -42,8 +42,8 @@ func sessionTags(t *testing.T, rt *Runtime, sessionID string) (string, []string)
 }
 
 // TestArchivedSessionReactivatedByIncomingTurn: sending a real command or message
-// to an archived session lifts it back into the active list — a user message, a
-// peer send_message, a send_to_worker task and a spawn's opening turn all count —
+// to an archived session lifts it back into the active list — a user message and
+// a spawn's opening turn both count —
 // and the mirrored "archived" tag goes with the state while other tags stay.
 func TestArchivedSessionReactivatedByIncomingTurn(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
@@ -53,12 +53,6 @@ func TestArchivedSessionReactivatedByIncomingTurn(t *testing.T) {
 		claim func(string) func()
 	}{
 		{"user message", func(id string) func() { return rt.BeginSessionUserTurn(id) }},
-		{"peer message", func(id string) func() {
-			return rt.claimSessionTurnSlot(id, turnqueue.KindPeer, "ajan mesajı")
-		}},
-		{"worker task", func(id string) func() {
-			return rt.claimSessionTurnSlot(id, turnqueue.KindWorker, "worker görevi")
-		}},
 		{"spawn opening turn", func(id string) func() {
 			return rt.claimSessionTurnSlot(id, turnqueue.KindSpawn, "spawn turu")
 		}},
@@ -106,10 +100,10 @@ func TestArchivedSessionSurvivesReadOnlyAccess(t *testing.T) {
 }
 
 // TestArchivedSessionSurvivesMaintenanceAndAutomaticTurns: archiving is the hard
-// stop on automatic work. A maintenance slash command, a coordinator drain, a
-// scheduler wake and an automation trigger all claim the same turn slot, and none
-// of them may bring the session back — otherwise archiving a runaway coordinator
-// would no longer break its loop and a scheduled session could never stay archived.
+// stop on automatic work. A maintenance slash command, a scheduler wake and an
+// automation trigger all claim the same turn slot, and none of them may bring the
+// session back — otherwise archiving a runaway loop would no longer break it and a
+// scheduled session could never stay archived.
 func TestArchivedSessionSurvivesMaintenanceAndAutomaticTurns(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 
@@ -123,9 +117,6 @@ func TestArchivedSessionSurvivesMaintenanceAndAutomaticTurns(t *testing.T) {
 				t.Fatalf("claim command turn: %v", err)
 			}
 			return release
-		}},
-		{"coordinator drain", func(id string) func() {
-			return rt.claimSessionTurnSlot(id, turnqueue.KindCoordinator, "worker bildirimi")
 		}},
 		{"scheduler wake", func(id string) func() {
 			return rt.claimSessionTurnSlot(id, turnqueue.KindWake, "uyandırma")

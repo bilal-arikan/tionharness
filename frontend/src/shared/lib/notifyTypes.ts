@@ -54,11 +54,6 @@ export const NOTIFY_TYPES: NotifyType[] = [
   notifyType('schedule', 'schedules', null),
   notifyType('flow', 'flows', null),
   notifyType('spawned', 'chat', null),
-  notifyType('worker', 'chat', null),
-  notifyType('coordination', null, null),
-  // Frontend-only (workspace stream, useWorkspaceSignals): trajectory start/end
-  // and the other Rota-screen facts surfaced as toasts.
-  notifyType('rota', 'rota', null),
   notifyType('automation', null, null),
   notifyType('artifact', 'artifacts', null),
   notifyType('board', 'board', null),

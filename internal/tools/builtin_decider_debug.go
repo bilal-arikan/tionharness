@@ -30,7 +30,7 @@ func (ReadDeciderDebugTool) Def() providers.ToolDef {
 		Name:        "read_decider_debug",
 		Description: "Read decision-authority diagnostics without making a model call. Defaults to the current session. Returns a retained-window summary, operational warnings and optionally the event timeline: primary/fallback/challenger attempts, HTTP retries, thresholds, probabilities, applied outcomes, costs and session/turn correlation. No conversation, commands, question text or credentials are stored. Agreement is not accuracy; confidence is not a correctness guarantee. Pass all_sessions=true for app-wide diagnostics or ref for an exact session, flow run or turn. Old ledger entries cannot be reconstructed.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"summary":{"type":"boolean","description":"Summary only (default true). Set false for the bounded event timeline."},"all_sessions":{"type":"boolean","description":"Inspect the retained app-wide history (default false)."},"ref":{"type":"string","maxLength":128},"authority":{"type":"string","maxLength":128},"instance":{"type":"string","maxLength":128},"trace_id":{"type":"string","maxLength":128},"days":{"type":"integer","minimum":1,"maximum":90},"limit":{"type":"integer","minimum":1,"maximum":1000}},"additionalProperties":false}`),
-		Examples:    []json.RawMessage{json.RawMessage(`{"summary":true}`), json.RawMessage(`{"summary":false,"authority":"stall-judge","limit":100}`)},
+		Examples:    []json.RawMessage{json.RawMessage(`{"summary":true}`), json.RawMessage(`{"summary":false,"authority":"tool-risk","limit":100}`)},
 	}
 }
 

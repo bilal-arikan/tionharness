@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// SessionParentID returns the session a session hangs off — the coordinator that
-// spawned a worker, the session a subagent was delegated from, the one a handoff
+// SessionParentID returns the session a session hangs off — the session a
+// subagent was delegated from, the one a handoff
 // continues — or "" for a top-level session that has no parent.
 //
 // It is the single source of truth for the process ledger's
@@ -24,7 +24,7 @@ func (r *Runtime) SessionParentID(sessionID string) string {
 	s, err := r.db.GetSession(context.Background(), sessionID)
 	if err != nil {
 		if r.logger != nil {
-			r.logger.Warn("process ledger: parent session lookup failed; the entry is not grouped under its coordinator",
+			r.logger.Warn("process ledger: parent session lookup failed; the entry is not grouped under its parent",
 				"session", sessionID, "error", err)
 		}
 		return ""

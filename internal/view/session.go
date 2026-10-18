@@ -111,17 +111,6 @@ func sessionHeader(in SessionInput, now time.Time) string {
 		s.ID, clip(title, 60), sessionKindLabel(s.Kind), s.MessageCount,
 		age(tsSec(s.CreatedAt), now)+" önce açıldı", orDash(s.AgentID))
 
-	// Coordination lineage changes how a reader should interpret everything else
-	// (a worker's "stuck" is its coordinator's problem too), so it belongs in the
-	// header rather than buried among the signals.
-	switch {
-	case s.IsCoordinator() && s.IsWorker():
-		head += fmt.Sprintf("\n  ⇅ mid-level coordinator (depth %d, root:%s)", s.CoordinatorDepth, s.RootCoordinator())
-	case s.IsCoordinator():
-		head += "\n  ⇵ coordinator"
-	case s.IsWorker():
-		head += "\n  ↑ worker of session:" + s.CoordinatorSessionID
-	}
 	return head
 }
 

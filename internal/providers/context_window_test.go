@@ -70,10 +70,10 @@ func TestAdaptiveBudgetFraction(t *testing.T) {
 		{"MiniMax-M3", 0.35},
 		{"deepseek/deepseek-v4-flash", 0.35},
 		{"google/gemini-3.5-flash", 0.35},
-		{"", 0},                  // claude-cli default → unknown → 0 (caller falls back)
-		{"openai/gpt-5.5", 0.35}, // gpt/codex family → long-context share
-		{"gpt-6-astra", 0.35},
-		{"gpt-5.6-sol", 0.35},
+		{"", 0},                 // claude-cli default → unknown → 0 (caller falls back)
+		{"openai/gpt-5.5", 0.6}, // gpt/codex family → 272K window, larger share
+		{"gpt-6-astra", 0.6},
+		{"gpt-5.6-sol", 0.6},
 		{"gpt-4o-mini", 0}, // no longer in the gpt gate → unknown
 		{"glm-5.2", 0.35},
 		{"glm-4.7", 0.35},

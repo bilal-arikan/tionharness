@@ -101,7 +101,6 @@ var goldenTiersAuto = map[string]string{
 	"run_subagent":          "full",
 	"schedule_wake":         "full",
 	"search_index":          "hidden",
-	"send_message":          "name-only",
 	"skill_search":          "full",
 	"skill_validate":        "name-only",
 	"todo_write":            "full",
@@ -206,7 +205,6 @@ var goldenTiersReadOnly = map[string]string{
 	"run_subagent":          "full",
 	"schedule_wake":         "full",
 	"search_index":          "hidden",
-	"send_message":          "name-only",
 	"skill_search":          "full",
 	"skill_validate":        "name-only",
 	"todo_write":            "full",
@@ -235,7 +233,7 @@ var goldenTiersReadOnly = map[string]string{
 // claude-cli bridge (BridgeableDefsFiltered keeps advertising a self-management
 // tool after a tier promotion clears its lazy flag), so a refactor that only
 // preserves tiers would still be a regression if this set shrank. Notably
-// send_message / handoff_session appear here AND carry the name-only tier.
+// handoff_session appears here AND carries the name-only tier.
 var goldenSelfManaged = []string{
 	"create_agent",
 	"create_automation",
@@ -271,7 +269,6 @@ var goldenSelfManaged = []string{
 	"read_logs",
 	"run_schedule",
 	"search_index",
-	"send_message", // stamped self-managed AND promoted to the name-only tier
 	"toggle_mcp_server",
 	"update_agent",
 	"update_automation",

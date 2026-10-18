@@ -55,7 +55,7 @@ export function DeciderAuthorityRow({
   const advice = adviceFor(ac.mode, stats)
   const challengerRate = challengerAgreement(stats)
   const cAdvice = challengerAdvice(ac.challenger, stats)
-  const workflow = ['session', 'context', 'collaboration'].includes(authority.group)
+  const workflow = ['session', 'context'].includes(authority.group)
   const label = t(`authority.${authority.id}.label`, { defaultValue: authority.label })
   const description = t(`authority.${authority.id}.description`, {
     defaultValue: authority.description,
@@ -160,9 +160,7 @@ export function DeciderAuthorityRow({
                   value: ac.selectionLimit ?? 8,
                   min: 1,
                   max: 16,
-                  show: ['session-setup', 'context-reminder', 'worker-review'].includes(
-                    authority.id,
-                  ),
+                  show: ['session-setup', 'context-reminder'].includes(authority.id),
                 },
                 {
                   key: 'remindEvery',

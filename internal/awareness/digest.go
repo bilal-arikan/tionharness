@@ -178,7 +178,7 @@ func BuildDigest(ctx context.Context, in Input) (Digest, error) {
 	}
 	if sessions, err := in.Store.ListSessions(ctx, ""); err == nil {
 		for _, c := range sessions {
-			if c.CoordinatorSessionID == s.ID || c.ParentSessionID == s.ID {
+			if c.ParentSessionID == s.ID {
 				d.Children++
 				if hasTag(c.Tags, "error") || c.StuckTurns > 0 {
 					d.ChildrenFailed++

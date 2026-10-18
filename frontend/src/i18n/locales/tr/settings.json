@@ -94,18 +94,6 @@
         "label": "Spawn",
         "hint": "Alt oturum çalışması tamamlandı ya da başarısız oldu."
       },
-      "worker": {
-        "label": "Worker",
-        "hint": "Koordinatör worker durumu değişti."
-      },
-      "coordination": {
-        "label": "Koordinasyon",
-        "hint": "Koordinatör tur limiti gibi koordinasyon uyarıları."
-      },
-      "rota": {
-        "label": "Rota",
-        "hint": "Bir rota başladı, bitti, başarısız oldu ya da insan yanıtı bekliyor."
-      },
       "automation": {
         "label": "Otomasyonlar",
         "hint": "Etiket ya da pano otomasyonu tetiklendi."

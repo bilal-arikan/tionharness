@@ -15,7 +15,7 @@ const (
 	HookUserPromptSubmit = "UserPromptSubmit" // before a turn, on each user prompt (may inject context / block)
 	HookSessionStart     = "SessionStart"     // first turn of a session (source: startup|resume|clear)
 	HookStop             = "Stop"             // main agent finished its turn (may block → force continuation)
-	HookSubagentStop     = "SubagentStop"     // a run_subagent / worker finished
+	HookSubagentStop     = "SubagentStop"     // a run_subagent finished
 	HookPreCompact       = "PreCompact"       // before the rolling summary compaction runs (matcher: manual|auto)
 	HookNotification     = "Notification"     // agent raised a notification (permission needed / idle)
 	HookSessionEnd       = "SessionEnd"       // session archived / deleted (cleanup, fire-and-forget)

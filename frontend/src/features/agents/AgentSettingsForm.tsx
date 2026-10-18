@@ -13,7 +13,6 @@ import { AgentContextModal } from './AgentContextModal'
 import { Button, PromptEditor } from '@/shared/components'
 import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
 import { OptionPills } from '@/shared/components/OptionPills'
-import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import { useCatalog, thinkingOptionsForModel } from '@/shared/lib/catalog'
 import { hasOverride } from '@/shared/lib/agentLineage'
 import {
@@ -100,9 +99,6 @@ const FORM_OVERRIDE_KEYS: AgentOverrideKey[] = [
   'avatar',
   'color',
   'skills',
-  'coordinatorMode',
-  'coordinatorWorkflow',
-  'coordinatorPrompt',
 ]
 
 // AgentSettingsForm is the editable agent profile (visual identity + core
@@ -177,9 +173,6 @@ export function AgentSettingsForm({
   const [nativeShell, setNativeShell] = useState(agent.nativeShell ?? false)
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
-  const [coordinatorMode, setCoordinatorMode] = useState(agent.coordinatorMode ?? false)
-  const [coordinatorWorkflow, setCoordinatorWorkflow] = useState(agent.coordinatorWorkflow ?? '')
-  const [coordinatorPrompt, setCoordinatorPrompt] = useState(agent.coordinatorPrompt ?? '')
   // Which inheritable fields this agent PINS. Seeded from the server; editing a
   // field adds its key, the per-field reset removes it. Meaningless on a root.
   const [overrides, setOverrides] = useState<Set<AgentOverrideKey>>(
@@ -259,15 +252,6 @@ export function AgentSettingsForm({
       case 'skills':
         setSkills(parent.skills ?? [])
         break
-      case 'coordinatorMode':
-        setCoordinatorMode(parent.coordinatorMode ?? false)
-        break
-      case 'coordinatorWorkflow':
-        setCoordinatorWorkflow(parent.coordinatorWorkflow ?? '')
-        break
-      case 'coordinatorPrompt':
-        setCoordinatorPrompt(parent.coordinatorPrompt ?? '')
-        break
       default:
         break
     }
@@ -296,9 +280,6 @@ export function AgentSettingsForm({
       nativeWebSearch !== (agent.nativeWebSearch ?? true) ||
       nativeShell !== (agent.nativeShell ?? false) ||
       permissionMode !== (agent.permissionMode || 'auto') ||
-      coordinatorMode !== (agent.coordinatorMode ?? false) ||
-      coordinatorWorkflow !== (agent.coordinatorWorkflow ?? '') ||
-      coordinatorPrompt !== (agent.coordinatorPrompt ?? '') ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills ?? []) ||
       overridesDirty,
     [
@@ -313,9 +294,6 @@ export function AgentSettingsForm({
       nativeWebSearch,
       nativeShell,
       permissionMode,
-      coordinatorMode,
-      coordinatorWorkflow,
-      coordinatorPrompt,
       skills,
       overridesDirty,
       agent,
@@ -347,13 +325,6 @@ export function AgentSettingsForm({
     nativeShell,
     permissionMode,
     skills,
-    coordinatorMode,
-    // A recipe without coordinator mode has nothing to apply to; clear it
-    // rather than persisting a setting that silently does nothing.
-    coordinatorWorkflow: coordinatorMode ? coordinatorWorkflow : '',
-    // Same reasoning as the recipe above: this prompt is only ever injected
-    // while coordinating, so without coordinator mode it is dead text.
-    coordinatorPrompt: coordinatorMode ? coordinatorPrompt : '',
   })
 
   // On a derived agent only the PINNED fields travel: a field not in the patch
@@ -376,9 +347,6 @@ export function AgentSettingsForm({
     pin('avatar', 'avatar')
     pin('color', 'color')
     pin('skills', 'skills')
-    pin('coordinatorMode', 'coordinatorMode')
-    pin('coordinatorWorkflow', 'coordinatorWorkflow')
-    pin('coordinatorPrompt', 'coordinatorPrompt')
     const released = (agent.overrides ?? []).filter(
       (k) => FORM_OVERRIDE_KEYS.includes(k) && !overrides.has(k),
     )
@@ -859,55 +827,6 @@ export function AgentSettingsForm({
               testid="agent-native-shell"
             />
           </OptionField>
-
-          <OptionField
-            label={t('settings.fields.coordinator')}
-            info={t('settings.coordinatorHelp')}
-            trailing={badge('coordinatorMode')}
-          >
-            <OptionPills
-              value={coordinatorMode ? 'on' : 'off'}
-              onChange={(value) => {
-                setCoordinatorMode(booleanFromOption(value))
-                mark('coordinatorMode')
-              }}
-              options={BOOLEAN_OPTIONS}
-              ariaLabel={t('settings.fields.coordinator')}
-              testid="agent-coordinator-mode"
-            />
-          </OptionField>
-          {coordinatorMode && (
-            <Field label={t('settings.fields.workflow')} trailing={badge('coordinatorWorkflow')}>
-              <CoordinatorWorkflowPicker
-                value={coordinatorWorkflow}
-                onChange={(v) => {
-                  setCoordinatorWorkflow(v)
-                  mark('coordinatorWorkflow')
-                }}
-                disabled={saving || locked}
-                groupName={`agent-recipe-${agent.id}`}
-              />
-            </Field>
-          )}
-          {coordinatorMode && (
-            <>
-              <Field
-                label={t('settings.fields.coordinatorPrompt')}
-                info={t('settings.coordinatorPromptHelp')}
-                trailing={badge('coordinatorPrompt')}
-              >
-                <PromptEditor
-                  data-testid="agent-coordinator-prompt-textarea"
-                  value={coordinatorPrompt}
-                  onChange={(v) => {
-                    setCoordinatorPrompt(v)
-                    mark('coordinatorPrompt')
-                  }}
-                  rows={3}
-                />
-              </Field>
-            </>
-          )}
 
           <Field
             label={t('settings.fields.soul')}

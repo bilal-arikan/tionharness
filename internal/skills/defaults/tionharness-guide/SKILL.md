@@ -141,14 +141,14 @@ tools (`ask_user`/`request_confirmation`) are withdrawn, while `notify`/
 - **Track work** → create a task on the board.
 - **Make your own turns multi-stage** (plan, draft, critique, retry) → evolve your
   flow with `edit_flow`. Load the `tionharness-flows` skill first.
-- **Automate multi-agent work** → coordinator mode + workers, or an Automation.
+- **Automate multi-agent work** → `spawn_session` / `run_subagent`, or an Automation.
 - **Repeat on a schedule** → create a schedule (routine).
 
 - **Tune the app** → read or change application-wide settings live with the
   `get_settings` / `update_settings` tools. Load the `tionharness-settings` skill for
   the full field reference.
 - **Manage TionHarness itself** → create/edit agents, schedules, tasks, hooks,
-  MCP servers and skills, spawn parallel workers, store secrets, or manage
+  MCP servers and skills, spawn parallel sessions, store secrets, or manage
   artifacts/logs with the self-management tools. They are loaded on demand
   — `activate_tools` pulls the one you need. Load the `tionharness-self-management`
   skill for the catalog and the activation workflow.

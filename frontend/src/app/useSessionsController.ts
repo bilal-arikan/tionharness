@@ -832,10 +832,9 @@ export function useSessionsController({
       soul: string,
       provider: string,
       model?: string,
-      coordinator?: { mode: boolean; workflow: string; prompt: string },
       // When set, the agent is created as a child of this agent: provider /
-      // model / thinking / coordinator settings are inherited, so the values
-      // above are ignored by the server for a derived create.
+      // model / thinking settings are inherited, so the values above are
+      // ignored by the server for a derived create.
       parentId?: string,
     ) => {
       try {
@@ -849,9 +848,6 @@ export function useSessionsController({
           // path it maps to the same effortLevel the blank value did. The user
           // raises it from the agent settings form.
           thinkingLevel: 'off',
-          coordinatorMode: coordinator?.mode,
-          coordinatorWorkflow: coordinator?.workflow,
-          coordinatorPrompt: coordinator?.prompt,
           parentId: parentId || undefined,
         })
         setAllAgents((prev) => [agent, ...prev])

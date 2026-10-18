@@ -149,7 +149,7 @@
     },
     "idle": {
       "label": "Arka plan boşta kalma penceresi (dakika)",
-      "hint": "Anlamlı ilerleme olmadan bu süreyi aşan arka plan, worker veya zamanlanmış çalışmayı iptal et."
+      "hint": "Anlamlı ilerleme olmadan bu süreyi aşan arka plan veya zamanlanmış çalışmayı iptal et."
     },
     "chatIdle": {
       "label": "Sohbet boşta kalma penceresi (dakika)",
@@ -259,39 +259,6 @@
       "hint": "Tur içinde geçici sağlayıcı hatalarını yeniden dene (0–5). Kalıcı kimlik veya kota hataları yeniden denenmez."
     }
   },
-  "coordinatorLimits": {
-    "description": "Çok ajanlı koordinasyon için worker kapasitesi ve iç içe geçme sınırları. Otomatik turlar ve toplam alt ağaç oturumları sınırsız kalır.",
-    "workers": {
-      "label": "Koordinatör başına worker",
-      "hint": "Her koordinatör için en fazla aktif worker (1–64)."
-    },
-    "depth": {
-      "label": "Koordinatör derinliği",
-      "hint": "Kök derinliği 0'dır. Sınırsız iç içe geçme için -1 kullan."
-    },
-    "grace": {
-      "label": "Rapor bekleme süresi (saniye)",
-      "hint": "Bir dal boşta kaldıktan sonra eksik tamamlama raporu göndermeden önce bu kadar bekle."
-    }
-  },
-  "coordinatorRecovery": {
-    "detect": {
-      "label": "Takılan koordinatörleri algıla",
-      "hint": "Worker başlattığını söyleyip gerçekten başlatmayan koordinatörleri hakem ve düzenli kontrollerle kurtar."
-    },
-    "window": {
-      "label": "Takılma kontrol penceresi (dakika)",
-      "hint": "0 varsayılan pencereyi kullanır; -1 tur sonu korumasını tutup düzenli kontrolleri kapatır."
-    },
-    "nudges": {
-      "label": "Ardışık kurtarma dürtmeleri",
-      "hint": "Görünür hata bildirmeden önce en fazla düzeltici dürtme. 0 varsayılanı kullanır."
-    },
-    "notes": {
-      "label": "Kurtarma notlarını sohbette göster",
-      "hint": "Yalnızca görünürlüğü kontrol eder. Kurtarma notları her zaman kaydedilir ve koordinatöre aktarılır."
-    }
-  },
   "delegation": {
     "description": "Eşzamanlı ajan delegasyonu sınırları. Tek tek araç erişimi Araçlar ekranından yönetilir.",
     "depth": {
@@ -317,8 +284,6 @@
     "delegation": "Delegasyon",
     "background": "Arka plan çalışmaları ve boşta kalma sınırları",
     "toolLimits": "Araç yürütme sınırları",
-    "coordinatorLimits": "Koordinatör sınırları",
-    "coordinatorRecovery": "Koordinatör kurtarma",
     "autonomous": "Otonom çalışma"
   },
   "general": {

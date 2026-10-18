@@ -20,7 +20,7 @@ type debugCall struct {
 type debugCallKey struct{}
 
 // WithLocation correlates a decision with session debug independently of its
-// flow/trajectory Ref. A background challenger inherits the same location.
+// flow Ref. A background challenger inherits the same location.
 func WithLocation(sessionID, turnID string) CallOption {
 	return func(o *callOptions) { o.sessionID, o.turnID = sessionID, turnID }
 }

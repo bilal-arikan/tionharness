@@ -15,9 +15,9 @@ import (
 // The claude-cli provider salvages the assistant text it captured before the
 // subprocess was killed, and the native tool loop appends a StepRecovery and
 // returns nil when it hits the iteration cap or a guardrail halt. Both look
-// exactly like success to the caller, so a worker that ran out of wall clock
-// mid-sentence was reported to its coordinator as <status>completed</status> —
-// and the coordinator moved on believing the work was done (SES17).
+// exactly like success to the caller, so a subagent that ran out of wall clock
+// mid-sentence was reported to its caller as completed —
+// and the caller moved on believing the work was done (SES17).
 //
 // Every truncation the runtime can detect leaves one of two fingerprints:
 //
@@ -40,7 +40,7 @@ const (
 
 // turnOutcome is the verdict on a finished turn. Note is empty exactly when
 // Status is completed; otherwise it is prepended to the reported result so the
-// reader (a coordinator model, or a human in the transcript) cannot miss that
+// reader (a parent agent's model, or a human in the transcript) cannot miss that
 // the text below it is a fragment.
 type turnOutcome struct {
 	Status string
@@ -166,7 +166,7 @@ func applyTurnOutcome(result string, o turnOutcome) string {
 
 // reconcileTurnOutcome folds a truncation verdict into a background turn's
 // (output, steps, err) BEFORE it is recorded, so a cut-short turn can never be
-// reported as a clean one. It packages the handling that runSpawn/runWorker do
+// reported as a clean one. It packages the handling that runSpawn does
 // inline for the simpler notify paths (wake / schedule / inbox) that only record a
 // reply:
 //
@@ -210,7 +210,7 @@ func (r *Runtime) reconcileTurnOutcome(ctx context.Context, output string, steps
 //   - Bounded + single-shot by default. Once the budget is spent, the final idle cut
 //     is terminal and flows straight through to the "timeout"/unfinished reporting the
 //     caller already does (Faz E) — no unbounded loop, and no double recovery with the
-//     coordinator's higher-level re-task, which stays the SECOND line of defence after
+//     caller's higher-level re-task, which stays the SECOND line of defence after
 //     this in-place first attempt.
 
 // turnHitIdleTimeout reports whether ctx was cancelled specifically by the idle
@@ -238,7 +238,7 @@ func turnHitIdleTimeout(ctx context.Context) bool {
 // turn that also idles still reports "timeout"/unfinished exactly as an un-resumed one
 // would. Intermediate attempts' timers are released before the next window opens.
 // invoke also receives the attempt's cancel func so a caller that lets an OUTSIDE
-// goroutine abort the turn (the worker path, whose coordinator can stop_worker) can
+// goroutine abort the turn (e.g. a stop request) can
 // re-point its controller at the attempt currently in flight — otherwise a resume
 // would leave the stop wired to the previous, already-cancelled attempt.
 func (r *Runtime) runTurnWithIdleResume(
@@ -274,7 +274,7 @@ func (r *Runtime) runTurnWithIdleResume(
 // original prompt (which would redo the finished part), lead the model with what it
 // had already produced and tell it to continue. A blank fragment (the turn stalled
 // before emitting any text) falls back to the original task unchanged. A blank
-// original (a history-driven turn such as the coordinator drain, whose prompt is "")
+// original (a history-driven turn whose prompt is "")
 // drops the "Original task" tail so the model just continues from the fragment +
 // whatever the history-aware runner already composed.
 func resumeContinuationPrompt(original, fragment string) string {

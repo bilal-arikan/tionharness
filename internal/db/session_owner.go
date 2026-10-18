@@ -4,7 +4,7 @@ import "strings"
 
 // Session identity for display.
 //
-// A chat, spawn or worker session names its owner in AgentID. A DELEGATED run
+// A chat or spawn session names its owner in AgentID. A DELEGATED run
 // (run_subagent) does not: it is created against a target, so its identity lives
 // in TargetAgentID (an existing agent) or TargetProfile (a built-in profile, run
 // through an ephemeral clone of the caller that is never persisted and so has no

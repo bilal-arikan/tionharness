@@ -5,14 +5,13 @@
 // maps seconds to pixels, so this module stays testable without a DOM.
 //
 // Metaphor: git graph. Time runs left to right, the root session is the top
-// lane of its group, every spawn opens a lane underneath, a worker that
+// lane of its group, every spawn opens a lane underneath, a subagent that
 // reported back draws a return edge to the root lane. Lanes are assigned once
 // (row order is by creation time) so a live update never shuffles rows.
 import type { LaneFire, LaneSession, LaneState } from '@/shared/lib/laneModel'
-import { laneMembers, rootLanes, trajectoryForRoot } from '@/shared/lib/laneModel'
-import type { ScheduleArmedData, TrajectoryData } from '@/api/workspaceEvents'
+import { laneMembers, rootLanes } from '@/shared/lib/laneModel'
+import type { ScheduleArmedData } from '@/api/workspaceEvents'
 import type { ActivitySpan } from '@/types'
-import { clipWaits, waitSpans, type RotaWait } from './rotaWaits'
 import { barSegments } from './rotaSegments'
 
 export interface RotaRow {
@@ -20,7 +19,6 @@ export interface RotaRow {
   y: number // row index (0-based)
   depth: 0 | 1
   session: LaneSession
-  trajectory?: TrajectoryData
 }
 
 export interface RotaBar {
@@ -32,9 +30,6 @@ export interface RotaBar {
   live: boolean
   state: string
   label: string
-  // Stretches of a coordinator's bar spent waiting on its spawned workers
-  // (rotaWaits.ts). Only ever set on a root's session bar.
-  waits?: RotaWait[]
   // The blocks this bar is drawn in when the session worked in separate
   // sittings (rotaSegments.ts). Absent = draw the bar whole. Never one entry:
   // a single stretch IS the whole bar.
@@ -53,7 +48,7 @@ export interface RotaMark {
   id: string
   rowId: string
   at: number
-  kind: 'fired' | 'skipped' | 'stall'
+  kind: 'fired' | 'skipped'
   label: string
   fire?: LaneFire
 }
@@ -88,7 +83,7 @@ export interface RotaLayoutOptions {
   idleCutoffSec?: number
   // Extra lane predicate on top of the idle window (the chip filter). A root
   // that fails it still renders when one of its members passes, so a kept
-  // worker never loses the coordinator its spawn edge points at — building
+  // member never loses the root its spawn edge points at — building
   // that rule is the caller's job (see rotaChips.laneChipFilter).
   laneFilter?: (s: LaneSession) => boolean
   // Per-session activity bouts (GET /api/sessions/activity). A session that is
@@ -148,14 +143,12 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
   const marks: RotaMark[] = []
   const rowById = new Map<string, RotaRow>()
 
-  const pushRow = (s: LaneSession, depth: 0 | 1, trajectory?: TrajectoryData) => {
-    const row: RotaRow = { id: s.id, y: rows.length, depth, session: s, trajectory }
+  const pushRow = (s: LaneSession, depth: 0 | 1) => {
+    const row: RotaRow = { id: s.id, y: rows.length, depth, session: s }
     rows.push(row)
     rowById.set(s.id, row)
     const start = s.createdAt || s.updatedAt
     const end = barEnd(s, now, opts.activity)
-    // Only a root can be waiting on workers; a member lane has none of its own.
-    const waits = depth === 0 ? clipWaits(waitSpans(state, s.id, now, keep), start, end) : undefined
     const segments = barSegments(opts.activity?.get(s.id), start, end, isLive(s))
     bars.push({
       id: 'bar:' + s.id,
@@ -166,7 +159,6 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
       live: isLive(s),
       state: s.live?.state ?? s.runState ?? s.state,
       label: sessionLabel(s),
-      waits: waits && waits.length > 0 ? waits : undefined,
       segments: segments.length > 0 ? segments : undefined,
     })
   }
@@ -174,15 +166,14 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
   for (const root of rootLanes(state)) {
     const members = laneMembers(state, root.id).filter(keep)
     if (!keep(root) && members.length === 0) continue
-    pushRow(root, 0, trajectoryForRoot(state, root.id))
+    pushRow(root, 0)
     for (const m of members) {
       pushRow(m, 1)
       const kind = m.origin?.kind
       const trigger = m.origin?.triggerSessionId || root.id
       const fromRow = rowById.get(trigger) ?? rowById.get(root.id)
       if (!fromRow) continue
-      const edgeKind: RotaEdge['kind'] =
-        kind === 'coordinator' || kind === 'subagent' ? 'spawned' : 'forked_from'
+      const edgeKind: RotaEdge['kind'] = kind === 'subagent' ? 'spawned' : 'forked_from'
       edges.push({
         id: `edge:${fromRow.id}>${m.id}`,
         from: fromRow.id,
@@ -190,7 +181,7 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
         at: m.createdAt || m.updatedAt,
         kind: edgeKind,
       })
-      // A finished worker reported back to its coordinator: return edge.
+      // A finished subagent reported back to its parent: return edge.
       if (edgeKind === 'spawned' && !isLive(m) && m.runState === 'completed') {
         edges.push({
           id: `edge:${m.id}>${fromRow.id}`,
@@ -214,17 +205,6 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
       kind: f.outcome === 'fired' ? 'fired' : 'skipped',
       label: (f.name || f.automationId) + (f.reason ? ` · ${f.reason}` : ''),
       fire: f,
-    })
-  }
-  for (const a of state.activity) {
-    if (a.phase !== 'stall_halt') continue
-    if (!rowById.has(a.coordinatorId)) continue
-    marks.push({
-      id: 'stall:' + a.seq,
-      rowId: a.coordinatorId,
-      at: a.at,
-      kind: 'stall',
-      label: a.reason ? `stall · ${a.reason}` : 'stall',
     })
   }
 

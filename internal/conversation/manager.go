@@ -131,7 +131,7 @@ func firePreCompact(ctx context.Context, trigger string) {
 // eager tool schemas and the artifact block. Prepare folds only the message
 // history, but the model actually receives messages PLUS this fixed overhead, so
 // the fold decision must budget for both: a big static prefix (a claude-cli
-// coordinator with many MCP tool schemas) can hold the message-only estimate
+// agent with many MCP tool schemas) can hold the message-only estimate
 // under the budget forever while the real footprint sits far above it, so no fold
 // ever fires. Threading the overhead in makes the fold trigger against the true
 // footprint — the same basis the session_info context meter reports, so the meter
@@ -180,6 +180,27 @@ func WithContextOverheadStepBase(ctx context.Context, base int) context.Context 
 func contextOverheadStepBaseFrom(ctx context.Context) (base int, ok bool) {
 	v, ok := ctx.Value(contextOverheadStepBaseCtxKey{}).(int)
 	return v, ok
+}
+
+// warmCLIStepTerm is the part of overhead that is a warm CLI thread's own tool
+// trace (history[base:]). It is left out of the fold gate: the CLI compacts its
+// own window natively (Claude Code and Codex both do, near their limit), and a
+// rolling fold cannot shrink that trace anyway — it folds a message or two,
+// re-baselines the thread and starts the next turn cold. With the trace
+// counted, tool-heavy Codex workers folded and cold-started on every turn (122
+// times in one day; ~15k tokens of messages against ~550k of estimated trace).
+// The meter and the pressure ratio still report the full footprint, and the
+// reactive fold remains the backstop for a real overflow.
+func warmCLIStepTerm(ctx context.Context, history []db.Message, overhead int) int {
+	base, ok := contextOverheadStepBaseFrom(ctx)
+	if !ok || base < 0 {
+		return 0
+	}
+	steps, err := EstimatePersistedStepTokens(history[clampStart(base, len(history)):])
+	if err != nil {
+		return 0
+	}
+	return min(steps, overhead)
 }
 
 // foldedStepOverhead reports how much of the overhead's persisted-Steps term
@@ -388,7 +409,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	foldFailed := false
 	foldError := ""
 	var foldStat Compaction
-	if before := EstimateTokens(summary, pending); before+overhead > maxTokens {
+	if before := EstimateTokens(summary, pending); before+overhead-warmCLIStepTerm(ctx, history, overhead) > maxTokens {
 		// Native-first strategies: ask the CLI provider to compact its own window
 		// before folding anything ourselves. Only nil means it happened; any error
 		// (unsupported provider, no resumable thread, a failed call) falls through to
@@ -667,7 +688,7 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 // debug journal (debug.jsonl) so every fold — routine budgeted (trigger "auto")
 // or manual /compact ("manual") — is observable in the Debug modal, the
 // read_session_debug tool and the debug summary, not only in the in-app Logs.
-// This is the fix for the "compaction ran on a spawned/coordinator turn but I
+// This is the fix for the "compaction ran on a spawned turn but I
 // can't see where it ran" gap: the fold happens in this layer regardless of the
 // turn kind, so journaling it here covers every path in one choke point.
 //

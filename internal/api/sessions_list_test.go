@@ -15,7 +15,7 @@ func TestListSessionsFiltersExecutionClassification(t *testing.T) {
 	for _, session := range []db.Session{
 		{Title: "chat"},
 		{Kind: "subagent", Title: "child", Category: db.CategorySubagent, ExecutionType: db.ExecutionSubagent},
-		{Kind: "worker", Title: "worker", Category: db.CategoryWorker, ExecutionType: db.ExecutionWorker},
+		{Kind: "task", Title: "task"},
 	} {
 		if _, err := wsp.DB.CreateSession(ctx, session); err != nil {
 			t.Fatalf("create session: %v", err)

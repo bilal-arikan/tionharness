@@ -1,5 +1,7 @@
 # Faz / Özellik 22 — Spawn Session (Fire-and-Forget Paralel İşçi)
 
+> **Not (2026-10-18):** `spawn_worker`/koordinatör modu kaldırıldı; spawn_session detached araçtır; `SpawnMaxConcurrent` 16→4, `SpawnQueueMax` 16→8, `SpawnIdleTimeoutMin` 5→10.
+
 > `spawn_session` deseni: bir prompt'tan **yeni,
 > bağımsız bir oturum** başlatıp **beklemeden** bırakmak. Çıktı, Faz U "Birleşik
 > Yürütme/Aktivite" feed'inde canlı görünür.
@@ -8,8 +10,8 @@
 > Yerine geçen: `run_subagent` (tek generic agent-to-agent primitifi — **daima
 > senkron**). `SpawnSession` runtime metodu ve `POST /api/sessions/spawn` HTTP uç
 > noktası **korunuyor** — (a) UI "Başlat" butonu, (b) claude-cli ajanlarının
-> Interaction MCP köprüsü, (c) koordinatör modundaki `spawn_worker` ile
-> flow/otomasyon oturumlarının iç motoru olarak aktif. Bu doküman orijinal
+> Interaction MCP köprüsü, (c) flow/otomasyon oturumlarının iç motoru olarak aktif.
+> (Koordinatör modundaki `spawn_worker` 2026-10-18'de kaldırıldı.) Bu doküman orijinal
 > tasarımı ve CLI köprü wiring'ini tarihsel kayıt olarak tutar.
 
 > **2026-09-22 (TSK1005) — `spawn_session` çocuğu artık "Sohbet":** Bir ajanın
@@ -20,12 +22,12 @@
 > Seçenekler tek yerde üretilir: `agent.SpawnToolOptions` (`internal/agent/spawn_tool_options.go`).
 > Kind tek başına kullanıcı sohbeti gibi okunacağından köken **açıkça** damgalanır:
 > `origin{kind:"spawn", triggerSessionId: <çağıran oturum>}` — oturum müfettişindeki
-> "Oturum SESx başlattı" çipi, Rota grafı ve trajectory binder (`bindForkedSession`)
+> "Oturum SESx başlattı" çipi, Rota zaman çizelgesi (`forked_from` kenarı) ve (kaldırılmış trajectory binder'ın yerine) köken damgası
 > spawn'ı başlatan oturuma bağlamaya devam eder. Boot kurtarma (`RecoverOrphanedTurns`)
 > spawn testini `kind == "spawned"` yanında `Lineage().Kind == "spawn"` ile de yapar;
 > yarıda kalan bir spawn sohbeti yine kapatılır. Gerçek delegasyonlar değişmedi:
-> `run_subagent` çocukları `subagent` kategorisinde, `spawn_worker` çocukları
-> `worker` olarak kalır. UI "Başlat" / `POST /api/sessions/spawn` ve otomasyon/handoff
+> `run_subagent` çocukları `subagent` kategorisinde kalır
+> (`spawn_worker` çocukları `worker` kategorisi 2026-10-18'de kaldırıldı). UI "Başlat" / `POST /api/sessions/spawn` ve otomasyon/handoff
 > yolları kendi kind'larını korur.
 
 ## Amaç ve Konum (tarihsel tasarım bağlamı)
@@ -40,7 +42,8 @@ Tasarım sırasında elimizde üç tetikleme yolu vardı:
 
 > **Sonraki durum:** `call_agent` ve `send_agent_message` kaldırıldı. Senkron
 > delegasyon `run_subagent` altında birleşti; "bekleme" ihtiyacı olmayan arka plan
-> işi koordinatör modundaki `spawn_worker`'a taşındı.
+> işi önce koordinatör modundaki `spawn_worker`'a taşındı; o da 2026-10-18'de kaldırıldı
+> ve `spawn_session` detached fire-and-forget araç olarak kaldı (sonuç kendi oturumunda).
 
 **Spawn bunlardan farklıydı:** elle (kullanıcı/ajan) **yeni bağımsız bir oturum**
 açar, ajan turunu **arka planda** koşar ve `sessionID`'yi hemen döndürür —
@@ -83,17 +86,15 @@ Akış:
 2. `opts.ModelOverride` doluysa `agent.Model` üzerine bin (ajan-başına provider
    korunur — sadece model değişir).
 3. **Eşzamanlılık guard'ı:** `acquireSpawnSlot()` — atomik sayaç, üst sınır
-   `Tunables.SpawnMaxConcurrent` (vars. 16). Doluysa iş, shallow/deep önceliğini
+   `Tunables.SpawnMaxConcurrent` (vars. 4; 2026-10-18'de 16'dan düşürüldü). Doluysa iş, shallow/deep önceliğini
    koruyan in-memory kuyruğa girer ve `Queued=true`, `SessionID=""` döner. Kuyruk
-   `SpawnQueueMax` (vars. 16) sınırına da ulaşırsa hata döner. Slot bırakıldığında
+   `SpawnQueueMax` (vars. 8; 2026-10-18'de 16'dan düşürüldü) sınırına da ulaşırsa hata döner. Slot bırakıldığında
    tek tüketici kuyruğu otomatik ilerletir. Workspace shutdown sırasında bekleyen
-   işler başlatılmaz; düşürülür ve koordinatör işi ise başarısızlık bildirimi yazılır.
+   işler başlatılmaz; düşürülür.
 4. **Bağımsız oturum:** `db.CreateSession{Kind:"spawned", SourceID:uuid, …}`
    (`opts.Kind` boşsa; `spawn_session` aracı `"chat"` geçer — yukarıdaki TSK1005 notu) —
    her spawn taze bir `sourceID` ile **ayrı** bir session (GetOrCreate **değil**;
    dedup istemiyoruz). Başlık `✨ <kısa prompt>`
-   — koordinatör fan-out'uyla açılan worker oturumları (`Role == worker`) aynı
-   yerde `🤖 <kısa prompt>` alır, böylece oturum listesinde düz spawn'dan ayrılır.
    (Kalıcı alt-ajan oturumları bu yoldan geçmez: başlıkları `subagentTitle`
    ile `🧩 <ajan> — <kısa görev> ⤴ <ebeveyn>` biçiminde kurulur —
    `_Docs/25-SUBAGENT-ISOLATION.md`.)
@@ -101,7 +102,7 @@ Akış:
    **TSK507:** spawn'ı bir **ajan** başlattıysa (`SpawnOptions.CreatedBy` gerçek
    bir ajana çözülüyorsa) bu açılış mesajı o ajana atfedilir
    (`AuthorKind=agent`/`AuthorID=CreatedBy`/`RecipientID=<hedef ajan>`,
-   `recordAgentAuthoredNote`) ve arayüzde `PeerTurn` balonu olarak çizilir —
+   `recordAgentAuthoredNote`) ve arayüzde `PeerTurn` (ajan-damgalı) balonu olarak çizilir —
    insanın kendi turu gibi değil. İnsan/API spawn'ı (`CreatedBy` boş) ve ajan
    olmayan köken (`"automation:<id>"`) düz balon kalır.
 6. **Fire-and-forget:** `go r.runSpawn(agent, sessionID, prompt)` ve hemen
@@ -131,8 +132,8 @@ Akış:
 - `spawn_session` built-in tool'u **native ajan yüzeyinden kaldırıldı** (2026-06-19).
 - Senkron delegasyon için yerine geçen: `run_subagent` — daima kurulu (görünürlük
   araç-bazlı), profil/agent target destekler, ama **beklemeden** koşamaz.
-- Arka planda koşan gerçek bir oturum için yerine geçen: koordinatör modundaki
-  `spawn_worker` (aynı `SpawnSession` altyapısı).
+- Arka planda koşan gerçek bir oturum için: `spawn_session` (aynı `SpawnSession` altyapısı;
+  koordinatör modundaki `spawn_worker` 2026-10-18'de kaldırıldı).
 - claude-cli ajanları arka plan çalışması için Interaction MCP köprüsündeki
   `spawn_session`'ı kullanmayı sürdürür.
 
@@ -145,8 +146,8 @@ Akış:
 
 | Guard | Değer | Nerede |
 |-------|-------|--------|
-| Eşzamanlı spawned-session üst sınırı | `SpawnMaxConcurrent` (16) | `SpawnSession` atomik slot |
-| Bekleyen spawn üst sınırı | `SpawnQueueMax` (16) | `spawnQueue` shallow/deep kuyrukları |
+| Eşzamanlı spawned-session üst sınırı | `SpawnMaxConcurrent` (4) | `SpawnSession` atomik slot |
+| Bekleyen spawn üst sınırı | `SpawnQueueMax` (8) | `spawnQueue` shallow/deep kuyrukları |
 | Tur başına spawn sayısı | `SpawnMaxPerTurn` (4) | `spawn_session` tool örneği |
 | Workspace içinde kal | — | `resolveAgent` zaten workspace-scoped; çapraz-ws yok |
 | Otonomi freni | global otonomi-pause (ajan başına günlük limit 2026-07-01'de kaldırıldı) | `invokeTraced(autonomous=true)` → `guardedComplete` |

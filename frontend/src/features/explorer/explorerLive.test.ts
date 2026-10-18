@@ -22,7 +22,7 @@ const graph: ViewGraphResult = {
   ],
   live: [
     { session: s1, state: 'running', agent },
-    { session: s2, state: 'awaiting-workers', agent },
+    { session: s2, state: 'running', agent },
     { session: { kind: 'session', id: 'GONE' }, state: 'running', agent },
   ],
 }
@@ -35,7 +35,7 @@ describe('explorerLive', () => {
     const k1 = 'agent:AG1#live:SES1'
     const k2 = 'agent:AG1#live:SES2'
     expect(liveAgents.get(k1)?.state).toBe('running')
-    expect(liveAgents.get(k2)?.state).toBe('awaiting-workers')
+    expect(liveAgents.get(k2)?.state).toBe('running')
     expect(liveState.get('session:SES1')).toBe('running')
     expect(liveState.has('session:GONE')).toBe(false)
     expect(out.edges.at(-2)).toEqual({ source: s1, target: liveAgentRef(graph.live![0]) })

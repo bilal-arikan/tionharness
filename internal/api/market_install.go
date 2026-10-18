@@ -289,14 +289,6 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 		MCPEnabled:      mcpEnabled,
 		AllowedTools:    ap.AllowedTools,
 		Skills:          known,
-		// A published coordinator installs as a coordinator. The recipe slug is only
-		// kept when it resolves here — an agent pack carries no skills of its own, so
-		// a recipe it references may simply not exist in this workspace.
-		CoordinatorMode:     ap.CoordinatorMode,
-		CoordinatorWorkflow: resolvableRecipe(skillStore, ap.CoordinatorWorkflow),
-		// Unlike the recipe slug this needs no resolution against the workspace: it
-		// is free text the pack carries whole, so it installs verbatim.
-		CoordinatorPrompt: ap.CoordinatorPrompt,
 	})
 	if err != nil {
 		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}

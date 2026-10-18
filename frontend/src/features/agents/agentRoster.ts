@@ -2,7 +2,7 @@ import type { Agent } from '@/types'
 
 /** Worker profiles are seeded with a `subagent-<profile>` system key (see
  * internal/agent/systemagents.go). The prefix is what separates the profiles
- * spawn_worker/run_subagent picks from, from the service agents the app runs
+ * run_subagent picks from, from the service agents the app runs
  * for itself (titler, compaction, insight, …). */
 const WORKER_KEY_PREFIX = 'subagent-'
 

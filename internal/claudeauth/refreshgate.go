@@ -9,7 +9,7 @@ import (
 // refreshgate.go serializes claude-cli launches that are about to REFRESH the
 // OAuth token in a shared claude-home.
 //
-// The problem it solves is specific and was observed live (a 3-level coordinator
+// The problem it solves is specific and was observed live (a 3-level nested session
 // tree, _Docs/47): TionHarness runs many `claude` subprocesses concurrently against
 // ONE per-workspace claude-home. OAuth refresh tokens are single-use, so when
 // several processes find the access token expired at the same moment they all
@@ -21,7 +21,7 @@ import (
 //
 // The fix is deliberately narrow: serialize ONLY the window in which a refresh is
 // actually due. While the access token is comfortably valid — the overwhelmingly
-// common case, and the whole point of a coordinator tree — launches stay fully
+// common case, and the whole point of parallel fan-out — launches stay fully
 // parallel and this costs one small file read.
 
 // refreshMargin is how long before expiry a token counts as "about to refresh".

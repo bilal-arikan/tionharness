@@ -31,7 +31,7 @@ export function useSessionState<T>(key: string, initial: T): [T, Dispatch<SetSta
 
 // setSessionState seeds a selection from OUTSIDE the component that owns it, so
 // one screen can deep-link into another's selected item before navigating there
-// (e.g. the session inspector opening a coordinator workflow's skill). The target
+// (e.g. one screen opening another on a specific item). The target
 // screen is mounted on view switch and reads the seeded value in its initialiser,
 // so this must be called BEFORE the navigation that mounts it.
 export function setSessionState<T>(key: string, value: T): void {

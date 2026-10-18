@@ -11,8 +11,8 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
-// TestLivenessComposesSources: the snapshot folds the turn slots, the api probe,
-// durable asks and coordinator slots, and reports capacity.
+// TestLivenessComposesSources: the snapshot folds the turn slots, the api probe
+// and durable asks, and reports capacity.
 func TestLivenessComposesSources(t *testing.T) {
 	rt, tun := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
@@ -23,7 +23,7 @@ func TestLivenessComposesSources(t *testing.T) {
 	chat, _ := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Title: "chat"})
 
 	// A turn holding the admission slot.
-	release := rt.claimSessionTurnSlot(busy.ID, turnqueue.KindWorker, "task")
+	release := rt.claimSessionTurnSlot(busy.ID, turnqueue.KindSpawn, "task")
 	defer release()
 	// The api's streamed chat run, seen through the probe.
 	rt.SetExternalActiveSessions(func() []string { return []string{chat.ID} })
@@ -31,26 +31,11 @@ func TestLivenessComposesSources(t *testing.T) {
 	if _, err := rt.db.CreateSessionAsk(ctx, db.SessionAsk{SessionID: asked.ID, AgentID: a.ID, Status: db.SessionAskWaiting, Kind: "ask", CallID: "c1", Payload: `{"question":"ok?"}`}); err != nil {
 		t.Fatalf("create ask: %v", err)
 	}
-	// A coordinator with one live worker and an owed drain turn.
-	coord := newTestCoordinator(t, rt, 0)
-	slot := rt.coordSlotFor(coord)
-	slot.workers.Add(1)
-	slot.mu.Lock()
-	slot.workerPending = true
-	slot.mu.Unlock()
-	t.Cleanup(func() {
-		slot.workers.Add(-1)
-		slot.mu.Lock()
-		slot.workerPending = false
-		slot.mu.Unlock()
-	})
-
 	snap := rt.Liveness(ctx)
 	want := map[string]liveness.State{
 		busy.ID:  liveness.Running,
 		chat.ID:  liveness.Running,
 		asked.ID: liveness.WaitingAsk,
-		coord:    liveness.Queued, // an owed drain beats "awaiting workers"
 	}
 	for sid, st := range want {
 		if !snap.Is(sid, st) {
@@ -61,33 +46,20 @@ func TestLivenessComposesSources(t *testing.T) {
 	if _, ok := snap.Get(idle.ID); ok {
 		t.Errorf("idle session must not appear: %+v", snap.Entries)
 	}
-	if e, _ := snap.Get(busy.ID); e.Reason != "turn:worker" || e.Since == 0 {
-		t.Errorf("busy entry = %+v, want reason turn:worker with a start time", e)
+	if e, _ := snap.Get(busy.ID); e.Reason != "turn:spawn" || e.Since == 0 {
+		t.Errorf("busy entry = %+v, want reason turn:spawn with a start time", e)
 	}
 	if e, _ := snap.Get(chat.ID); e.Reason != "turn:chat" {
 		t.Errorf("chat entry = %+v, want reason turn:chat", e)
 	}
 	set := snap.RunningSet()
-	if !set[busy.ID] || !set[chat.ID] || set[asked.ID] || set[coord] {
+	if !set[busy.ID] || !set[chat.ID] || set[asked.ID] {
 		t.Errorf("RunningSet = %v", set)
 	}
 	if snap.Capacity.SpawnMax != tun.SpawnMaxConcurrent() || snap.Capacity.QueueMax != tun.SpawnQueueMax() || snap.Capacity.BusyTurns != 1 {
 		t.Errorf("capacity = %+v", snap.Capacity)
 	}
 
-	// Once the drain is no longer owed, the live worker makes it AwaitingWorkers;
-	// a coordinator running its own turn is Running instead.
-	slot.mu.Lock()
-	slot.workerPending = false
-	slot.mu.Unlock()
-	if snap := rt.Liveness(ctx); !snap.Is(coord, liveness.AwaitingWorkers) || !snap.RunningSet()[coord] {
-		t.Errorf("coordinator with live worker: %+v", snap.Entries)
-	}
-	rel := rt.claimSessionTurnSlot(coord, turnqueue.KindCoordinator, "drain")
-	if snap := rt.Liveness(ctx); !snap.Is(coord, liveness.Running) {
-		t.Errorf("coordinator running its own turn: %+v", snap.Entries)
-	}
-	rel()
 	rt.SetPaused(true)
 	if snap := rt.Liveness(ctx); !snap.Capacity.AutonomyPaused {
 		t.Error("capacity must report the autonomy brake")

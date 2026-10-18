@@ -22,8 +22,7 @@ const (
 
 // GetSessionInfoTool returns the metadata of the session the agent is running
 // in (or, with an explicit id, another session in this workspace): title, state,
-// kind, bound agent, tags, working directory, lineage (parent/handoff) and
-// the coordinator/worker role. It is the read counterpart of the session-edit
+// kind, bound agent, tags, working directory and lineage (parent/handoff). It is the read counterpart of the session-edit
 // tools (set_session_title / set_session_tags / ...), so the
 // agent can inspect before it mutates — and self-orient in a fresh autonomous
 // turn without asking the user.
@@ -38,7 +37,7 @@ func (GetSessionInfoTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "get_session_info",
 		Description: "Read this session's metadata: id, title, state, kind, bound agent, tags, " +
-			"working directory, coordinator/worker role and lineage (parent / handoff). " +
+			"working directory and lineage (parent / handoff). " +
 			"Use it to orient yourself before editing the session (set_session_title / " +
 			"set_session_tags) or to check what a tag-triggered automation " +
 			"will see. Pass session_id to inspect ANOTHER session in this workspace: that " +
@@ -96,8 +95,6 @@ func (t GetSessionInfoTool) Call(ctx context.Context, input json.RawMessage) (st
 		line("tags", strings.Join(s.Tags, ", "))
 	}
 	line("working_dir", s.WorkingDir)
-	line("role", s.Role)
-	line("coordinator_session", s.CoordinatorSessionID)
 	line("parent_session", s.ParentSessionID)
 	t.writeActivity(ctx, &b, sid, sid == CurrentSessionID(ctx))
 	return strings.TrimRight(b.String(), "\n"), nil
@@ -105,7 +102,7 @@ func (t GetSessionInfoTool) Call(ctx context.Context, input json.RawMessage) (st
 
 // writeActivity appends what the session is doing right now (or did last): the
 // tools its newest turn ran and a bounded excerpt of the reply. This is the
-// answer to "is that worker stuck, and on what" — without it the caller has to
+// answer to "is that session stuck, and on what" — without it the caller has to
 // follow up with a transcript read.
 //
 // For the agent's OWN session it writes a pointer instead: the runtime already

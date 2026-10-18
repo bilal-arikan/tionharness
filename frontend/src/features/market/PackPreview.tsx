@@ -171,14 +171,6 @@ function WorkspacePackPreview({
                   {a.permissionMode && <MiniChip>{a.permissionMode}</MiniChip>}
                   {a.thinkingLevel && <MiniChip>🧠 {a.thinkingLevel}</MiniChip>}
                   {a.mcpEnabled && <MiniChip>MCP</MiniChip>}
-                  {/* The headline property of an orchestrating template: which agents
-                      arrive able to drive workers. Invisible otherwise until install. */}
-                  {a.coordinatorMode && (
-                    <MiniChip title={t('preview.workspace.coordinatorTitle')}>
-                      🕸 {t('preview.workspace.coordinator')}
-                    </MiniChip>
-                  )}
-                  {a.coordinatorWorkflow && <MiniChip>📐 {a.coordinatorWorkflow}</MiniChip>}
                 </div>
                 {(a.provider || a.model) && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">

@@ -361,18 +361,24 @@ func TestTeardown_SerializesSameSession(t *testing.T) {
 	secondEntered := make(chan struct{})
 	var calls int
 	var callsMu sync.Mutex
-	s.stopWorker = func(context.Context, *workspace.Workspace, string) error {
+	// The in-flight turn is the blocking seam: the first teardown cancels it and
+	// waits for it to unwind; a concurrent second teardown would cancel it again.
+	run := s.runs.register("R1", "SES", "WS1", nil)
+	run.cancel = func() {
 		callsMu.Lock()
 		calls++
 		call := calls
 		callsMu.Unlock()
-		if call == 1 {
+		switch call {
+		case 1:
 			close(firstEntered)
-			<-releaseFirst
-			return errors.New("first teardown failed")
+			go func() {
+				<-releaseFirst
+				s.runs.unregister("R1")
+			}()
+		case 2:
+			close(secondEntered)
 		}
-		close(secondEntered)
-		return nil
 	}
 
 	firstDone := make(chan error, 1)
@@ -383,11 +389,13 @@ func TestTeardown_SerializesSameSession(t *testing.T) {
 	select {
 	case <-secondEntered:
 		t.Fatal("second teardown entered before first released session lock")
+	case <-secondDone:
+		t.Fatal("second teardown finished before first released session lock")
 	case <-time.After(30 * time.Millisecond):
 	}
 	close(releaseFirst)
-	if err := <-firstDone; err == nil {
-		t.Fatal("first teardown must fail")
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first teardown: %v", err)
 	}
 	if err := <-secondDone; err != nil {
 		t.Fatalf("second teardown: %v", err)
@@ -435,10 +443,10 @@ func TestDeleteSession_SerializesThroughDurableDelete(t *testing.T) {
 	if first.Code != http.StatusOK {
 		t.Fatalf("first delete status %d: %s", first.Code, first.Body.String())
 	}
-	// The second request enters only after durable deletion. Runtime teardown then
-	// fails closed because the worker-owned session no longer exists; importantly it
-	// never overlapped or reopened the first request's lifecycle state.
-	if second.Code != http.StatusConflict {
+	// The second request enters only after durable deletion, so it finds the
+	// session already gone; importantly it never overlapped or reopened the first
+	// request's lifecycle state.
+	if second.Code != http.StatusNotFound {
 		t.Fatalf("second delete status %d: %s", second.Code, second.Body.String())
 	}
 }
@@ -490,68 +498,6 @@ func TestDeleteSession_DBErrorRollsBackEntireRuntimePreparation(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("hub state was not preserved after failed DB delete")
-	}
-}
-
-func TestTeardown_StopWorkerTimeoutFailsClosed(t *testing.T) {
-	s := &Server{inbox: newInboxStore(), runs: newChatRuns()}
-	s.inbox.sessions[scopeKey("WS1", "SES")] = &sessionInbox{seen: map[string]bool{}}
-	s.stopWorker = func(ctx context.Context, _ *workspace.Workspace, _ string) error {
-		<-ctx.Done()
-		return ctx.Err()
-	}
-
-	if err := s.teardownSessionRuntimeWithGrace(testWS("WS1"), "SES", 30*time.Millisecond); err == nil {
-		t.Fatal("worker timeout must fail closed")
-	}
-	s.inbox.lock()
-	ib := s.inbox.at("WS1", "SES")
-	s.inbox.unlock()
-	if ib == nil || ib.closing {
-		t.Fatal("worker timeout must preserve and reopen inbox")
-	}
-}
-
-func TestTeardown_StopWorkerErrorFailsClosed(t *testing.T) {
-	s := &Server{inbox: newInboxStore(), runs: newChatRuns()}
-	s.inbox.sessions[scopeKey("WS1", "SES")] = &sessionInbox{seen: map[string]bool{}}
-	s.stopWorker = func(context.Context, *workspace.Workspace, string) error {
-		return errors.New("stop failed")
-	}
-
-	err := s.teardownSessionRuntimeWithGrace(testWS("WS1"), "SES", time.Second)
-	if err == nil || !strings.Contains(err.Error(), "stop failed") {
-		t.Fatalf("want worker stop error, got %v", err)
-	}
-	s.inbox.lock()
-	ib := s.inbox.at("WS1", "SES")
-	s.inbox.unlock()
-	if ib == nil || ib.closing {
-		t.Fatal("worker error must preserve and reopen inbox")
-	}
-}
-
-func TestTeardown_WaitsForWorkerLateWrite(t *testing.T) {
-	dir := t.TempDir()
-	latePath := filepath.Join(dir, "session.json")
-	s := &Server{inbox: newInboxStore(), runs: newChatRuns()}
-	s.stopWorker = func(context.Context, *workspace.Workspace, string) error {
-		time.Sleep(20 * time.Millisecond)
-		return os.WriteFile(latePath, []byte("late"), 0o600)
-	}
-
-	if err := s.teardownSessionRuntimeWithGrace(testWS("WS1"), "SES", time.Second); err != nil {
-		t.Fatalf("teardown: %v", err)
-	}
-	if _, err := os.Stat(latePath); err != nil {
-		t.Fatalf("worker write must finish before teardown: %v", err)
-	}
-	if err := os.RemoveAll(dir); err != nil {
-		t.Fatalf("remove session dir: %v", err)
-	}
-	time.Sleep(30 * time.Millisecond)
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Fatalf("session directory reappeared after worker teardown: %v", err)
 	}
 }
 

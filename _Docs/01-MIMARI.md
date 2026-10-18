@@ -1,6 +1,6 @@
 # TionHarness — Mimari
 
-> **Özet (2026-09-03):** Sistemin katmanlı mimarisini anlatır — frontend (React+Vite, go:embed ile binary'ye gömülü), API katmanı (stdlib `net/http` ServeMux + SSE), Agent Runtime (`internal/agent`, ajan-başına goroutine + tool loop + compaction), Orchestration (flow motoru), Providers (yalnız üç CLI köprüsü: claude-cli/codex-cli/opencode-cli; native Anthropic ve OpenAI-uyumlu HTTP istemcileri 2026-10-13'te kaldırıldı, bkz. 95) ve dosya-tabanlı DB (`internal/db`). Durum: **uygulandı**, Faz 0–8 tamam; memory katmanı 2026-07-05'te tamamen kaldırıldı. En önemli kararlar: SSE (WebSocket değil) canlı akış için, arayüz-odaklı Provider soyutlaması, restart-safe run state, kod İngilizce/doküman Türkçe kuralı. Dayandığı paketler: `internal/api`, `internal/agent`, `internal/orchestration`, `internal/providers`, `internal/db`, `internal/mcp`, `internal/tools`.
+> **Özet (2026-10-18):** Sistemin katmanlı mimarisini anlatır — frontend (React+Vite, go:embed ile binary'ye gömülü), API katmanı (stdlib `net/http` ServeMux + SSE), Agent Runtime (`internal/agent`, ajan-başına goroutine + tool loop + compaction), Orchestration (flow motoru), Providers (yalnız üç CLI köprüsü: claude-cli/codex-cli/opencode-cli; native Anthropic ve OpenAI-uyumlu HTTP istemcileri 2026-10-13'te kaldırıldı, bkz. 95) ve dosya-tabanlı DB (`internal/db`). Durum: **uygulandı**, Faz 0–8 tamam; memory katmanı 2026-07-05'te tamamen kaldırıldı. En önemli kararlar: SSE (WebSocket değil) canlı akış için, arayüz-odaklı Provider soyutlaması, restart-safe run state, kod İngilizce/doküman Türkçe kuralı. Dayandığı paketler: `internal/api`, `internal/agent`, `internal/orchestration`, `internal/providers`, `internal/db`, `internal/mcp`, `internal/tools`. 2026-10-18: koordinatör/worker, peer mesajlaşma ve Rota grafiği kaldırıldı; `internal/trajectory` yalnız oturuş katlamayı (`Bouts`) taşır.
 
 ## Yüksek Seviye Mimari
 
@@ -90,7 +90,7 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
 - **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; **stdio + Streamable HTTP** taşıma. Kalıcı bağlantı havuzu (`pool.go`) turlar arası paylaşılır; hibrit kapsam (`scope: shared|scoped`) ile per-`(session,agent)` izole bağlantı mümkün (bkz. `52-MCP-GATEWAY.md`).
 - **`internal/agent`'tan ayrılan saf paketler (2026-09-03, `_Docs/81`):** `internal/climcp`
   (claude-cli `--mcp-config`/`--tools`/`--settings` üretimi, `Host` arayüzü),
-  `internal/trajectory` (Rota graf mantığı, özet, geçiş differ'ı, reçete istatistikleri),
+  `internal/trajectory` (yalnız oturuş katlama `Bouts`, Rota zaman çizelgesi; graf/özet/reçete istatistikleri 2026-10-18'de kaldırıldı),
   `internal/mcp/repair` (MCP çağrı koruması: argüman ön-kontrolü, not-indexed onarımı,
   başarısızlık serisi/breaker, sunucu-yok notu), `internal/flows` (state-delta yazıcısı,
   varsayılan flow tohumlama). Hiçbiri `internal/agent`'ı import etmez (`scripts/depcheck.sh`).
@@ -115,7 +115,7 @@ TionHarness/
 │   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (task/run/schedule/usage/mcp/flow/artifact/hook/automation/lessons/search)
 │   ├── providers/               # provider arayüzü (+Streamer), kind_*.go (her kind bir dosya), catalog, transport, registry
 │   ├── web/                     # embed.go — go:embed all:dist → frontend SPA'yi binary'ye gömer, http.Handler sunar
-│   ├── agent/                   # runtime, worker, executor, scheduler (cron), budget, titler, toolloop, toolsetup, trace (aktivite izi/StepKind), tunables, flow
+│   ├── agent/                   # runtime, executor, scheduler (cron), budget, titler, toolloop, toolsetup, trace (aktivite izi/StepKind), tunables, flow
 │   ├── climcp/                  # claude-cli --mcp-config/--tools/--settings üretimi (climcp.go, allowlist.go, matcher.go, hookcmd.go, settings.go)
 │   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go, reactive.go, repair.go)
 │   ├── turnqueue/               # per-session tur kabul kuyruğu (tek FIFO, _Docs/58)

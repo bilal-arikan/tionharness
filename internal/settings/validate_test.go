@@ -79,8 +79,8 @@ func TestApplyClampsNumerics(t *testing.T) {
 
 func TestChatTurnIdleTimeoutDefaultsAndDisable(t *testing.T) {
 	d := Default()
-	if d.ChatTurnIdleTimeoutMin != 3 {
-		t.Fatalf("chat idle timeout default = %d, want 3", d.ChatTurnIdleTimeoutMin)
+	if d.ChatTurnIdleTimeoutMin != 10 {
+		t.Fatalf("chat idle timeout default = %d, want 10", d.ChatTurnIdleTimeoutMin)
 	}
 	d.ChatTurnIdleTimeoutMin = 0
 	d = normalize(d)

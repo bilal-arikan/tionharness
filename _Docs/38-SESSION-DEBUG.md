@@ -1,6 +1,6 @@
 # TionHarness — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
 
-> **Özet (2026-09-03):** Uygulanmış ve aktif bir sistemdir — her oturumun `debug.jsonl`
+> **Özet (2026-10-18):** Uygulanmış ve aktif bir sistemdir — her oturumun `debug.jsonl`
 > dosyasına append-only, yapılandırılmış debug olayları (turn/llm_call/tool/hook/error/
 > compaction/recovery/cache_break/pressure/lifecycle vb., 16+ tip) yazılır; amaç token/
 > gecikme optimizasyonu ve ajanın kendi metriklerini okuyup kendini iyileştirebilmesidir.
@@ -8,7 +8,7 @@
 > araçları `read_session_debug` (ajan) + `GET /api/sessions/{id}/debug` (API) + UI Debug
 > modalı, ve anomali tespiti (`GetDebugSummary`) sonuçları otomatik bildirime dönüşür.
 > Dayandığı dosyalar: `internal/db/debug_journal.go`, `internal/agent/debugjournal.go`,
-> `internal/tools/builtin_debug.go`, `frontend/src/features/sessions/SessionDebugCard.tsx`.
+> `internal/tools/builtin_debug.go`, `frontend/src/features/sessions/SessionDebugCard.tsx`. Rota sidecar'ı (`trajectory.json`) kaldırıldı; `sidecar_corrupt` örneği tarihseldir.
 
 > Son güncelleme: **2026-09-03**
 > Her oturum için `session.jsonl`'in **yanına** yapılandırılmış, append-only bir
@@ -182,7 +182,7 @@ karşılanmasından** doğar. Hepsi `Err=true`'dur ve `Error` alanında altta ya
 | `tool_permission_config_malformed` | `toolsetup.go` — `toolFilter` | Ajanın araç izin belgesi çözülemedi | Filtre **her aracı reddediyor**. Ajan araçsız kalır; düzeltme yeri ajanın izin konfigürasyonudur. Detay: `19-LAZY-TOOL-LOADING.md` |
 | `inbox_corrupt` | `api/inbox_durability.go` — `quarantineInbox` | `inbox.json` okunamadı/çözülemedi | Sidecar `inbox.json.corrupt-<unix>` olarak karantinaya alındı; **kuyruktaki mesajlar dağıtılmadı ve kaybedildi**. Bekleyen bir mesajın hiç işlenmemiş görünmesinin sebebi budur; karantina dosyası incelenebilir. Detay: `58-QUEUE-SENKRON.md` |
 | `orphan_recovery_failed` | `coordination.go` — `RecoverOrphanedTurns` | Açılışta `ListSessions` hata verdi | Öksüz (yarım kalmış) turların kurtarma taraması **hiç çalışmadı**. Çöküş sonrası yeniden dispatch edilmesi beklenen turlar `running` takılı kalmış olabilir |
-| `sidecar_corrupt` | `db/sidecar.go` — `Sidecar[T].Load` | Oturuma ait tipli bir sidecar (ör. `trajectory.json`) çözülemedi | Dosya `<ad>.corrupt-<unix>` olarak karantinaya alındı, sonraki okuma "yok" döner; çağıran işlem ilk seferde `SidecarCorruptError` alır. Rota için: indeks satırı düşer, kök oturum sıfırdan rota açabilir. Detay: `77-ROTA-ALTYAPI-PLANI.md` R4 |
+| `sidecar_corrupt` | `db/sidecar.go` — `Sidecar[T].Load` | Oturuma ait tipli bir sidecar (ör. eski `trajectory.json`; Rota grafiği 2026-10-18'de kaldırıldı) çözülemedi | Dosya `<ad>.corrupt-<unix>` olarak karantinaya alındı, sonraki okuma "yok" döner; çağıran işlem ilk seferde `SidecarCorruptError` alır. Detay: `arsiv/77-ROTA-ALTYAPI-PLANI.md` R4 (tarihsel) |
 
 ### Adlandırılmış yaşam döngüsü / sıkışma olayları (2026-09-01)
 
@@ -472,17 +472,17 @@ sayıyı bekleme, hangisinin neyi ölçtüğüne bak.
 ## `autoCompactMode` — otomatik sıkıştırma modu (2026-08-31)
 
 Otomatik sıkıştırma tetiklendiğinde **ne** yapılacağını seçen ayar:
-`autoCompactMode`, değerler `rolling` | `native` | `auto`, varsayılan `rolling`
-(`internal/settings/settings.go`; `store.go` bilinmeyen değeri `rolling`'e
+`autoCompactMode`, değerler `rolling` | `native` | `auto`, varsayılan **`auto`** (2026-10-18'e kadar `rolling`)
+(`internal/settings/settings.go`; `store.go` bilinmeyen/boş değeri `rolling`'e
 normalize eder, `validate.go` açık geçersiz değeri 400 ile reddeder). Yayılım:
 `(*Server).applySettings` → `Manager.SetAutoCompactMode`
 (`internal/conversation/autocompact.go`).
 
 | Mod | Davranış | Bedeli |
 |---|---|---|
-| `rolling` (varsayılan) | TionHarness kendi rolling özetini üretir — bugünkü davranış | Yok; transkript küçülür |
+| `rolling` | TionHarness kendi rolling özetini üretir — 2026-10-18'e kadar varsayılan davranış | Yok; transkript küçülür |
 | `native` | Sağlayıcının kendi CLI compaction'ı tetiklenir (`runNativeCompact(..., nativeCompactAuto)`, `internal/api/summary.go`) | Warm CLI oturumu düşer, sonraki tur cold start (tam history yeniden gider) |
-| `auto` | Yetenek varsa native, yoksa rolling | Native'in bedeli + fallback |
+| `auto` (varsayılan) | Yetenek varsa native, yoksa rolling | Native'in bedeli + fallback |
 
 Native yolun önkoşulları sağlanmazsa (sağlayıcı desteklemiyor, CLI sürümü
 compaction lifecycle olaylarını bilmiyor, resume edilebilir bir oturum yok, çağrı

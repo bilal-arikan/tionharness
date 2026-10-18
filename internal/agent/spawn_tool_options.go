@@ -18,12 +18,11 @@ const SessionKindChat = "chat"
 // a plain "chat" rather than the generic "spawned" kind, and lands under the
 // sidebar's "Sohbet" label next to every other conversation. Real delegations
 // keep their own classification — run_subagent children are created by
-// RunSubagent with the subagent category, spawn_worker children by SpawnWorker
-// with the worker kind — and never pass through here.
+// RunSubagent with the subagent category — and never pass through here.
 //
 // Because Kind alone would now read as a user-started chat, the lineage is
 // stamped explicitly: origin "spawn", triggered by the caller's session (when
-// known), so the session inspector, the Rota graph and the trajectory binder
+// known), so the session inspector and the Rota timeline
 // still attribute it to the session that spawned it.
 func SpawnToolOptions(callerAgentID, callerSessionID, modelOverride, workingDir string) SpawnOptions {
 	return SpawnOptions{

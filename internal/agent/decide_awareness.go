@@ -205,7 +205,7 @@ func pulseUrgencyRequest(pulse string) decider.Request {
 		Questions: map[string]decider.Question{
 			urgencyKey: decider.Noul(
 				"Does this change need the agent's attention BEFORE it continues the user's current request?",
-				"A human is waiting for an answer, a session is stuck or blocked, a run failed, or a worker died.",
+				"A human is waiting for an answer, a session is stuck or blocked, a run failed, or a background session died.",
 				"Only routine activity: sessions running, counts moving, nothing waiting or broken.",
 			),
 		},

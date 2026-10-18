@@ -1,32 +1,44 @@
 # 78 — Rota: Sistem ve Ekran
 
-> **Durum:** Brifin §11 yol haritası **tamamlandı** (F0–F5, 2026-09-02/03).
-> Altyapı planı ve gerçekleşen notları `77-ROTA-ALTYAPI-PLANI.md` (R1–R10).
-> Tasarım brifi: oturum artefaktı "Rota Tasarım Brifi" (§8 ekran, §11 fazlar).
-> Bu doküman faz faz büyüdü: §1–§4 F0'ın kanvasını anlatır, §5–§10 her fazın
-> **ne eklediğini** ve **neyi bilinçli bıraktığını**. Bugünkü davranışı okumak
-> için önce aşağıdaki haritaya, sonra ilgili faz bölümüne git.
+> **Özet (2026-10-18):** Rota ekranı artık yalnız **oturum şerit ZAMAN ÇİZELGESİ**dir
+> (kim ne zaman çalıştı): workspace'teki oturumlar zaman ekseninde şerit olarak, kenarlar
+> (subagent `spawned`/`reported`, handoff/spawn/otomasyon `forked_from`), otomasyon
+> işaretleri, gelecek şeridi (kurulu zamanlayıcılar), süre-log ekseni, boşluk kırpma,
+> yakınlaştırma, çip süzgeci ve oturuşlara bölünmüş çubuk. 2026-10-18'de **rota GRAFİĞİ**
+> kaldırıldı: `trajectory` aracı, faz ilanı / faz kapıları / kapı yetkisi, rota-içi faz
+> sütunlu görünüm, `phase` / `trajectory_end` otomasyon tetikleri, reçete istatistikleri,
+> küratör reçete kuralları, `recipe-optimizer`, `/api/trajectories*` ve `/api/recipes*`
+> ile koordinatör/worker şeritleri (bekleme aralıkları dahil). Aşağıdaki §5–§10 ve §13
+> **kaldırılmış** özellikleri anlatır; yalnız tarihsel kayıttır. Kalan canlı parçalar
+> §1 (kaldırılanlar işaretli), §11, §12, §14–§16 ve `internal/trajectory.Bouts`
+> (oturuş katlama, `GET /api/sessions/activity`).
 
-**Rota nedir.** Bir koordinatör ağacının *ilan edilen* planı (reçetenin
-`phases:` bloğu ya da ajanın `trajectory{plan}` çağrısı) ile *gözlenen*
-gerçeklerin (worker'lar, akış koşuları, otomasyon ateşlemeleri, insan
-kapıları) tek grafta buluşması. Rota hiçbir şeyi **çalıştırmaz**; runtime
-gözlemcileri yazar, ekran ve ajan okur. Kök oturum başına bir rota
-(`sessions/<root>/trajectory.json` + `trajectories/index.json`).
+> **Durum:** Rota grafiği (F1a–F5) **kaldırıldı (2026-10-18)**; F0 kanvası ile §11–§16
+> zaman çizelgesi iyileştirmeleri geçerlidir. Altyapı planı (arşiv, kaldırılmış özellik):
+> `arsiv/77-ROTA-ALTYAPI-PLANI.md`. Bu doküman faz faz büyümüştü: §1–§4 F0'ın
+> kanvasını, §5–§10 her fazın ne eklediğini anlatır; **bugünkü davranış için §0
+> haritasındaki "kaldırıldı" işaretlerine bak.**
+
+**Rota nedir (bugün).** Workspace'teki oturumların zaman-eksenli şerit görünümü:
+kök oturumlar ve onlara bağlı subagent / handoff / spawn / otomasyon oturumları,
+akış koşuları, otomasyon ateşlemeleri ve kurulu zamanlayıcılar. Rota hiçbir şeyi
+**çalıştırmaz**; runtime olayları yazar, ekran okur. *(Eski tanım — koordinatör
+ağacının ilan edilen planı ile gözlenenin tek grafta buluşması, kök oturum başına
+`sessions/<root>/trajectory.json` — 2026-10-18'de kaldırıldı.)*
 
 ## 0. Fazlar ve harita
 
 | Faz | Ne getirdi | Bölüm | Kod (başlıca) |
 |-----|------------|-------|---------------|
-| F0 | Workspace kök zaman-eksenli kanvas, `GET /api/trajectories` | §1–§4 | `frontend/src/features/rota/rotaLayout.ts`, `RotaCanvas.tsx`, `RotaPanel.tsx`; `internal/api/trajectories.go` |
-| F1a | Rota varlığının üretilmesi (reçeteden tohum, gözlemci bağlama), `trajectory` aracı, durum bloğu | §5 | `internal/trajectory/graph.go`, `internal/agent/trajectory_binder.go`, `trajectory_queue.go`, `trajectory_funcs.go`; `internal/tools/builtin_trajectory.go` |
-| F1b | Rota-içi faz-sütunlu görünüm, derin bağlantı, sohbet başlığı şeridi, köken çipi, reçete çipleri, ateşleme defteri, `ws:*` → toast | §6 | `features/rota/trajectoryLayout.ts`, `RotaTrajectoryView.tsx`, `RotaStrip.tsx`; `app/useWorkspaceSignals.ts` |
-| F2 | `phase` / `trajectory_end` tetikleri, reçete izleyicilerinin ateşlenmesi, grafta "neden ateşlenmedi" | §7 | `internal/db/automation_trigger_traj.go`, `internal/agent/trajectory_transitions.go`, `automation_trajectory.go` |
-| F3 | Rota bitiş özeti, reçete istatistikleri, LLM'siz küratör, pin | §8 | `internal/agent/trajectory_summary.go`, `trajectory_recipe_stats.go`, `curator.go`; `features/schedules/CuratorPanel.tsx` |
-| F4 | `recipe-optimizer` sistem ajanı, `recipe-opt` içgörü kanalı (yalnız öneri) | §9 | `internal/agent/recipe_optimizer.go`, `internal/prompts/defaults/recipe-optimizer.md` |
-| F5 | Faz kapıları (artifact / verdict / human = Durable Ask), kanvastan müdahale, buradan çatalla, RunView → Rota; F4-v2 `auto_prune` | §10 | `internal/agent/trajectory_gate.go`, `internal/api/trajectory_actions.go`; `features/rota/PhaseActions.tsx`, `ForkModal.tsx`; `internal/skills/recipe_edit.go` |
+| F0 | Workspace kök zaman-eksenli kanvas (`GET /api/trajectories` ucu kaldırıldı 2026-10-18) | §1–§4 | `frontend/src/features/rota/rotaLayout.ts`, `RotaCanvas.tsx`, `RotaPanel.tsx`; `internal/api/trajectories.go` |
+| F1a (kaldırıldı) | Rota varlığının üretilmesi (reçeteden tohum, gözlemci bağlama), `trajectory` aracı, durum bloğu | §5 | `internal/trajectory/graph.go`, `internal/agent/trajectory_binder.go`, `trajectory_queue.go`, `trajectory_funcs.go`; `internal/tools/builtin_trajectory.go` |
+| F1b (kaldırıldı) | Rota-içi faz-sütunlu görünüm, derin bağlantı, sohbet başlığı şeridi, köken çipi, reçete çipleri, ateşleme defteri, `ws:*` → toast | §6 | `features/rota/trajectoryLayout.ts`, `RotaTrajectoryView.tsx`, `RotaStrip.tsx`; `app/useWorkspaceSignals.ts` |
+| F2 (kaldırıldı) | `phase` / `trajectory_end` tetikleri, reçete izleyicilerinin ateşlenmesi, grafta "neden ateşlenmedi" | §7 | `internal/db/automation_trigger_traj.go`, `internal/agent/trajectory_transitions.go`, `automation_trajectory.go` |
+| F3 (kaldırıldı) | Rota bitiş özeti, reçete istatistikleri, LLM'siz küratör, pin | §8 | `internal/agent/trajectory_summary.go`, `trajectory_recipe_stats.go`, `curator.go`; `features/schedules/CuratorPanel.tsx` |
+| F4 (kaldırıldı) | `recipe-optimizer` sistem ajanı, `recipe-opt` içgörü kanalı (yalnız öneri) | §9 | `internal/agent/recipe_optimizer.go`, `internal/prompts/defaults/recipe-optimizer.md` |
+| F5 (kaldırıldı) | Faz kapıları (artifact / verdict / human = Durable Ask), kanvastan müdahale, buradan çatalla, RunView → Rota; F4-v2 `auto_prune` | §10 | `internal/agent/trajectory_gate.go`, `internal/api/trajectory_actions.go`; `features/rota/PhaseActions.tsx`, `ForkModal.tsx`; `internal/skills/recipe_edit.go` |
 
-**Sözlük.** *Faz* — ilan edilmiş adım (`p:<id>`, declared). *Şerit* — çizim
+**Sözlük (2026-10-18'den beri yalnız *Şerit* geçerli; diğerleri kaldırılan grafın terimleri).** *Faz* — ilan edilmiş adım (`p:<id>`, declared). *Şerit* — çizim
 satırı; kök 0, her worker/koşu yeni şerit. *Hayalet* — ilan edilip henüz
 gerçekleşmemiş düğüm (kesik çizgi). *Kapı* — fazın çıkış koşulu. *İzleyici*
 — faz/rota sonunda ateşlenecek otomasyon (`watchers:`). *Küratör* — LLM'siz
@@ -37,28 +49,28 @@ haftalık budama. *Optimizer* — nadir LLM geçişi, yalnız öneri.
 NavRail **Rota** girişi (`#/w/WS/rota`). Kök yakınlaştırma düzeyi **workspace**:
 son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sağa.
 
-- **Kök oturum** grubun üst şeridi; worker / handoff / otomasyon oturumları
+- **Kök oturum** grubun üst şeridi; subagent / handoff / spawn / otomasyon oturumları
   altında içe girintili şeritlerdir (`Session.origin.rootSessionId`).
 - **Çubuk** = oturumun ömrü (`createdAt → updatedAt`; `updatedAt` **son
   aktivitedir** — başlık/etiket yazımı onu ilerletmez, 2026-09-06; canlıysa "şimdi"ye kadar
   uzar ve ucunda yanıp sönen nokta). Renk: canlı = vurgu, `completed` = yeşil,
   `failed/killed/timeout` = kırmızı, arşiv = soluk.
-- **Bekleme aralıkları (2026-09-04):** bir koordinatörün çubuğunda worker'a iş
-  verip beklediği aralıklar soluk/çizgili çizilir; çubuk aynı çubuk kalır,
-  durum renkleri anlamını korur. Yalnız **spawn edilen** worker'lar için —
-  `run_subagent` ayrı oturum yaratmadığından görünmez. Ayrıntı §13.
+- ~~**Bekleme aralıkları (2026-09-04)**~~ — **kaldırıldı (2026-10-18)**: koordinatör/worker
+  yok; çubuk üstünde bekleme örtüsü çizilmez (§13 tarihsel).
 - **Oturuşlara bölünmüş çubuk (2026-09-06):** aralıklı bir sohbet çubuğu
   ömrü boyunca tek blok çizilmez; oturumun gerçekten çalıştığı aralıklar ayrı
   bloklar, aralar ince kesikli "omurga" olur; bloklar arasındaki ölü zaman
   eksen normalizasyonuna da girer (çubuk içi boşluk da kırpılır). İki bloğu
   ayıran boşluk eşiği sabit değil, **zoom'dan türer** (2026-09-21): boşluk
   ancak çizilecek kadar genişse çubuğu böler. Ayrıntı §16.
-- **Kenarlar:** `spawned` (turuncu, koordinatör → worker, worker'ın
-  `createdAt`'inde), `reported` (mor kesik, tamamlanmış worker → koordinatör,
+- **Kenarlar:** `spawned` (turuncu, ebeveyn → subagent, subagent'ın
+  `createdAt`'inde), `reported` (mor kesik, tamamlanmış subagent → ebeveyn,
   `updatedAt`'te), `forked_from` (mor, handoff/spawn/otomasyon → yeni oturum).
+  (Koordinatör → worker kenarları kaldırıldı 2026-10-18.)
 - **Akış koşuları** başlatan oturumun şeridinde ince alt çubuk.
 - **İşaretler:** ⚡ ateşlenen otomasyon (tetikleyen oturumun şeridinde), ↷
-  atlanan (sebep tooltip'te), ✕ koordinatör stall halt.
+  atlanan (sebep tooltip'te). (✕ koordinatör stall halt işareti kaldırıldı
+  2026-10-18.)
 - **Gelecek şeridi:** "şimdi" çizgisinin sağında kurulu zamanlayıcılar (⏰,
   `ws:schedule_armed`), ufuk 30 dk; ötesi kenara kırpılır.
 - **Süre log ekseni (2026-09-04, varsayılan açık):** zaman → piksel eşlemesinde
@@ -83,9 +95,9 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
 - **Çip süzgeci (2026-09-04):** başlığın altında, Sohbet listesindekiyle **aynı
   çipler** (`SESSION_CHIPS`) ve aynı tıklama sözleşmesi — düz tık değiştirir,
   Ctrl yalnız onu seçer, Shift diğerlerini tersler. Ayrıntı §12.
-- **Sağ panel:** seçim yoksa tetik / koordinasyon / kurulu zamanlayıcı listesi;
-  seçim varsa üstte **"Sohbette aç"** (seçili şeridin kendi oturumu) ve worker
-  şeridinde ek olarak **"↰ Asıl oturum"** (bağlı olduğu kök), altında
+- **Sağ panel:** seçim yoksa tetik / kurulu zamanlayıcı listesi (koordinasyon listesi
+  kaldırıldı 2026-10-18);
+  seçim varsa üstte **"Sohbette aç"** (seçili şeridin kendi oturumu) ve bağlı (subagent/spawn) şeritte ek olarak **"↰ Asıl oturum"** (bağlı olduğu kök), altında
   `ViewPanel` (get_view card: `session` veya `flowrun`).
 
 Etkileşim: tık = seç, çift tık = oturumu Sohbet'te / akış koşusunu Akışlar'da
@@ -98,7 +110,7 @@ kılar (§12).
 ```
 GET /api/sessions (son 200, updated_desc)      ┐
 GET /api/workspace/liveness                     ├─ seed ─► laneStore (LaneState)
-GET /api/trajectories (indeks satırları)        ┘              ▲
+GET /api/trajectories (indeks satırları) — KALDIRILDI 2026-10-18 ┘ ▲
 GET /api/workspace/stream (ws:*)  ─── applyLaneEvent ──────────┘
                                                                │
                               layoutRota(state, {now, cutoff}) ▼
@@ -107,7 +119,7 @@ GET /api/workspace/stream (ws:*)  ─── applyLaneEvent ───────
 
 - `shared/lib/laneModel.ts` — `LaneState` (Map'ler + halkalar, `revision`,
   `head`, `connected`, `stale`), `rootLanes`, `laneMembers` (oluşturma sırası),
-  `trajectoryForRoot`.
+  `trajectoryForRoot` (rota grafı kaldırıldığından ikisi de artık yok, 2026-10-18).
 - `shared/lib/laneReducer.ts` — saf ve immutable. `seedSessions` /
   `seedLiveness` / `seedTrajectories`; `applyLaneEvent` stale reddi
   (`updatedAt`, rota `revision`), reddedilen olay aynı nesneyi döndürür.
@@ -122,7 +134,10 @@ GET /api/workspace/stream (ws:*)  ─── applyLaneEvent ───────
 - `features/rota/RotaPanel.tsx` — akış → seed → layout → kanvas; `useServerNow`
   5 sn'de bir "şimdi"yi ilerletir (sunucu saati).
 
-Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
+> **Kaldırıldı (2026-10-18):** `/api/trajectories*` uçları, `seedTrajectories` ve
+> `view.KindTrajectory` yoktur; aşağıdaki paragraf tarihseldir.
+
+Backend (F0'da eklenen, kaldırıldı): `GET /api/trajectories` (indeks; `root`, `template`,
 `status`, `terminal`, `limit`) ve `GET /api/trajectories/{id}` (tam graf, 404)
 — `internal/api/trajectories.go`. `ws:session_lifecycle` payload'ına
 `createdAt` eklendi (akıştan ilk duyulan oturum REST turu olmadan yerleşir).
@@ -133,16 +148,20 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
 
 | F0'da bırakılan | Kapandı mı | Nerede |
 |-----------------|------------|--------|
-| Rota varlığı üretilmiyor | ✅ F1a | §5 |
-| Faz sütunu yok, yalnız zaman | ✅ F1b (◈ → rota-içi görünüm) | §6 |
-| Mini rota (sohbet başlığı), RunView gömme | ✅ F1b / F5 | §6, §10 |
-| Maliyet / süre | ✅ F3 (özet çipleri; ayrı alt şerit yok) | §8 |
+| Rota varlığı üretilmiyor | ✅ F1a (sonra kaldırıldı 2026-10-18) | §5 |
+| Faz sütunu yok, yalnız zaman | ✅ F1b (sonra kaldırıldı 2026-10-18; ekran yine yalnız zaman) | §6 |
+| Mini rota (sohbet başlığı), RunView gömme | ✅ F1b / F5 (kaldırıldı 2026-10-18) | §6, §10 |
+| Maliyet / süre | ✅ F3 (kaldırıldı 2026-10-18) | §8 |
 | Şerit patlaması için demet katlama (`+N`) | ❌ açık | pencere süzgeci + çip süzgeci + son-200 seed |
 | Boş zaman aralıkları ekseni yutuyor | ✅ 2026-09-04 | §11 |
-| Worker alt-ağacı katlama | ❌ açık | — |
+| Worker alt-ağacı katlama | geçersiz (worker kaldırıldı 2026-10-18) | — |
 | Mobilde sağ panel gizli (`md:` altı), kanvas yatay kaydırır | tasarım kararı | — |
 
 ## 4. Testler (F0 + F1a)
+
+> **2026-10-18:** `rotaWaits.test.ts`, `internal/api/trajectories_test.go` ve F1a test
+> dosyaları (`graph_test.go`, `trajectory_binder_test.go`, `builtin_trajectory_test.go`)
+> kaldırılan özelliklerle birlikte silindi; liste tarihseldir.
 
 - `frontend/src/features/rota/rotaZoom.test.ts` — aralık sınırlama ve bozuk
   girdi, adımların iki yönde yürümesi ve uçlarda durması, tekerlekten gelen ara
@@ -178,6 +197,8 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
   akış koşusu, otomasyon çatalı), `internal/tools/builtin_trajectory_test.go`.
 
 ## 5. F1a — Rota varlığı + ilan (backend, 2026-09-02)
+
+> **Kaldırıldı (2026-10-18):** Rota grafiği (varlık, `trajectory` aracı, faz ilanı) kaldırıldı; bölüm yalnız tarihsel kayıttır.
 
 F0 salt projeksiyondu; F1a **`Trajectory` varlığını üreten ve dolduran** tarafı
 ekler. Frontend'e dokunulmadı (yalnız `TrajectoryNode.optional` tipi); F0
@@ -259,6 +280,8 @@ yansıması; UI'dan düzenleme için `PUT /api/trajectories/{id}` (CAS) yok.
 
 ## 6. F1b — Görünürlük dalgası (2026-09-02)
 
+> **Kaldırıldı (2026-10-18):** Rota-içi faz sütunlu görünüm, sohbet başlığı şeridi ve reçete çipleri kaldırıldı; bölüm tarihseldir.
+
 Amaç: F0–F1a'ya kadar backend'e giren her yeniliğin ekranda bir karşılığı
 olsun; kullanıcı uygulamada olan biteni hangi ekranda olursa olsun görsün.
 Dal `rota/f1b-visibility`. Keşif özeti (öncesi): rota grafı hiç çekilmiyordu
@@ -294,6 +317,8 @@ başlangıç + terminal geçişler + susturma, stall/akış hatası). Doğrulama
 hata önceden vardı (main ile aynı sayı, dokunulan dosyalarda değil).
 
 ## 7. F2 — Otomasyonlar grafikte (2026-09-02)
+
+> **Kaldırıldı (2026-10-18):** `phase` / `trajectory_end` otomasyon tetikleri kaldırıldı (otomasyonlar yalnız tag/board/flow); bölüm tarihseldir.
 
 Dal `rota/f2-automations-on-graph`. F1a'da reçetenin `watchers:` listesi
 grafa **hayalet** `a:<izleyici>[@faz]` düğümleri olarak düşüyordu ama hiçbir
@@ -361,6 +386,8 @@ düğüme tıklayınca kural kartı (ViewPanel `automation` projeksiyonu zaten
 açılıyor, ama `not_found` için bir "otomasyon oluştur" kısayolu yok).
 
 ## 8. F3 — Deterministik metrik + küratör (2026-09-02)
+
+> **Kaldırıldı (2026-10-18):** Rota bitiş özeti, reçete istatistikleri ve küratör reçete kuralları kaldırıldı; bölüm tarihseldir.
 
 Dal `rota/f3-metrics-curator`. Brif §7.1, §7.4–7.5: her koşunun LLM'siz
 özeti, reçete başına istatistik ve "ekleme değil budama" yapan haftalık
@@ -431,6 +458,8 @@ doğrulanması.
 
 ## 9. F4 — LLM reçete optimizer, yalnız öneri (2026-09-03)
 
+> **Kaldırıldı (2026-10-18):** `recipe-optimizer` sistem ajanı ve `recipe-opt` içgörü kanalı kaldırıldı; bölüm tarihseldir.
+
 Dal `rota/f4-optimizer` (F3'ün üstüne). Brif §7.2–7.4. Rota işinin tek LLM
 geçişi ve nadir olanı: reçete başına, **≥3 yeni özetlenmiş terminal koşu**
 biriktiğinde, bir koşu **failed** bittiğinde ya da kullanıcı istediğinde.
@@ -500,6 +529,8 @@ kanvastan müdahale.
 
 ## 10a. E2E sonrası düzeltmeler (2026-09-03)
 
+> **Kaldırıldı (2026-10-18):** F5 ile ilgili düzeltmeler; özellik kaldırıldığından tarihseldir.
+
 Gerçek LLM e2e'sinin (claude-cli, ardından codex-cli) ortaya çıkardığı üç
 davranış ve kapanışları — hepsi bu belgenin kurallarını değiştirir:
 
@@ -511,6 +542,8 @@ davranış ve kapanışları — hepsi bu belgenin kurallarını değiştirir:
 | Otomasyonun açtığı oturum reçeteli koordinatör ajandaysa listede ayrı bir "planlandı" rota olarak da beliriyordu | Başka bir rotanın üyesinin başlattığı kök oturum önce o rotaya **düğüm** olarak bağlanır; bağlandıysa create'te tohumlanmaz. Gerçekten worker açarsa `bindSpawn` → `EnsureTrajectory` o anda kendi rotasını kurar | `trajectory_binder.go` `onSessionChangeForTrajectory` / `bindForkedSession` (bool döner) |
 
 ## 10. F5 — Kapılar ve kanvastan müdahale + F4-v2 oto-budama (2026-09-03)
+
+> **Kaldırıldı (2026-10-18):** Faz kapıları, kapı yetkisi, kanvastan müdahale ve "buradan çatalla" kaldırıldı; bölüm tarihseldir.
 
 Dal `rota/f5-gates-canvas` (F4'ün üstüne).
 
@@ -615,6 +648,14 @@ faz sütunlarına göre yerleşir, zaman ekseni yoktur; orada kırpılacak bir �
 
 ## 12. Çip süzgeci ve oturuma gitme düğmeleri (2026-09-04)
 
+> **2026-10-18:** `worker` / `awaiting-workers` / `inbox` çipleri ve "↰ Asıl oturum" düğmesinin
+> worker bağlamı kaldırıldı; çip süzgeci kalan Sohbet çipleriyle aynı sözleşmeyi izler.
+> Aşağıdaki worker anlatımı tarihseldir.
+
+> **2026-10-18:** `worker` / `awaiting-workers` / `inbox` çipleri ve "↰ Asıl oturum" düğmesinin
+> worker bağlamı kaldırıldı; çip süzgeci kalan Sohbet çipleriyle aynı sözleşmeyi izler.
+> Aşağıdaki worker anlatımı tarihseldir.
+
 **Çip süzgeci.** F0 kanvasının tek süzgeci boşta-şerit penceresiydi; 80 şeritli
 bir depoda "yalnız otomasyonlar" ya da "yalnız worker'lar" demenin yolu yoktu.
 Başlığın altına Sohbet listesindekinin **aynısı** bir çip şeridi geldi:
@@ -650,6 +691,8 @@ thread'i koşunun bir parçası, asıl konuşma kökte.
 çip şeridi gizlenir, orada süzülecek şerit yok.
 
 ## 13. Bekleme aralıklarını çubukta göstermek (2026-09-04)
+
+> **Kaldırıldı (2026-10-18):** Koordinatör/worker kaldırıldığından bekleme örtüsü (`rotaWaits.ts`) silindi; bölüm tarihseldir.
 
 **Sorun.** Bir koordinatörün çubuğu kesintisiz tek parça çiziliyordu, oysa uzun
 bir koordinatör oturumunun büyük kısmı worker'lardan cevap beklemekle geçer.

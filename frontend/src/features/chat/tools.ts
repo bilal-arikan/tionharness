@@ -107,12 +107,9 @@ function directed(actor: unknown, payload: unknown): string | null {
 
 // Per-tool summary templates, tried before the generic extraction. Each maps a
 // call's input to a richer one-liner that names both sides of the action —
-// e.g. "@Ali → merhaba" for a message, "Fix login [in_progress]" for a task —
+// e.g. "Ali → fix login" for a spawn, "Fix login [in_progress]" for a task —
 // so the collapsed card reads like a sentence, not a lone value.
 const RICH_TEMPLATES: Record<string, (o: Record<string, unknown>) => string | null> = {
-  send_message: (o) => directed(o.to, o.message ?? o.summary),
-  send_to_worker: (o) => directed(o.worker, o.message),
-  spawn_worker: (o) => directed(o.agent, o.task),
   spawn_session: (o) => directed(o.agent, o.prompt),
   create_task: (o) => taskLine(o),
   update_task: (o) => taskLine(o),
@@ -171,9 +168,9 @@ function identityLine(o: Record<string, unknown>): string | null {
 // card says ("limit=20" tells the reader nothing about the call).
 const PAGINATION_KEYS = new Set(['limit', 'offset', 'sort', 'order', 'cursor', 'page'])
 
-/** Last resort for filter-only inputs (list_agents, list_workers) and boolean
- *  switches (set_coordinator_mode): render up to two scalar fields as
- *  "key=value" — e.g. "scope=subtree, state=running", "enabled=true". */
+/** Last resort for filter-only inputs (list_agents) and boolean switches:
+ *  render up to two scalar fields as "key=value" — e.g. "scope=subtree,
+ *  state=running", "enabled=true". */
 function scalarFallback(o: Record<string, unknown>): string {
   const parts: string[] = []
   for (const [k, v] of Object.entries(o)) {
@@ -221,7 +218,6 @@ function summarize(base: string, input: unknown): string {
     o.objective ??
     o.symbol ??
     o.template ??
-    o.worker ??
     o.reason ??
     o.to ??
     o.recipient ??

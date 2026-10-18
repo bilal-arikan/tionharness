@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, LayoutGrid, Trash2, X } from 'lucide-react'
 import type { AppliedEntity, InsightFinding } from '@/types'
-import { InfoPopover, ModalOverlay, PaneHeader } from '@/shared/components'
+import { ModalOverlay, PaneHeader } from '@/shared/components'
 import { ChannelBadge, SeverityBadge, RegressedBadge, StatusBadge } from './insightBadges'
 
 interface Props {
@@ -101,48 +101,6 @@ export function FindingModal({
                 {t('finding.proposedFix')}
               </div>
               <p className="leading-snug">{f.proposedFix}</p>
-            </div>
-          )}
-          {f.proposal && (
-            <div data-testid="finding-proposal">
-              <div className="mb-0.5 flex items-center gap-1 text-xs font-semibold text-[var(--color-text-dim)]">
-                {t('finding.recipeProposal')}
-                <InfoPopover
-                  text={
-                    <>
-                      {t('finding.recipeHintBefore')} <code>applied</code>{' '}
-                      {t('finding.recipeHintAfter', { slug: f.proposal.slug })}
-                    </>
-                  }
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
-                  {f.proposal.action}
-                </code>
-                {f.proposal.target && (
-                  <span>
-                    {t('finding.target')} <code>{f.proposal.target}</code>
-                  </span>
-                )}
-                {f.proposal.value && (
-                  <span>
-                    {t('finding.value')} <code>{f.proposal.value}</code>
-                  </span>
-                )}
-                {f.proposal.removes && (
-                  <span className="text-[var(--color-warning)]">
-                    {t('finding.removes')} <code>{f.proposal.removes}</code>
-                  </span>
-                )}
-                <span className="text-[var(--color-text-dim)]">
-                  {t('finding.recipe')} {f.proposal.slug}
-                  {f.proposal.version ? `@${f.proposal.version}` : ''}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                {t('finding.evidence')}: {f.proposal.evidence}
-              </p>
             </div>
           )}
           {f.filePointer && (

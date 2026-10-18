@@ -39,24 +39,17 @@ const KIND_META: Record<string, { labelKey: string; icon: LucideIcon }> = {
 }
 
 // Session filter chips (multi-select, display order). The kind chips cover EVERY
-// Session.Kind the backend can produce — including the ones the old filter tabs
-// left out (inbox) plus an "Diğer" catch-all for a kind this
-// build does not know — so nothing can be invisible in the list. The four
-// trailing scope chips widen the list instead of narrowing it by kind: sessions
-// with a live turn of their own, sessions idle but waiting on live workers below
-// them, worker sessions (coordinator-spawned) and archived ones. Every chip is
-// selected by default. The chat list presents archived sessions through its
-// separate archive view, while Rota still exposes the archived scope as a chip.
-export const WORKER_CHIP = 'worker'
+// Session.Kind the backend can produce plus an "Diğer" catch-all for a kind this
+// build does not know — so nothing can be invisible in the list. The trailing
+// scope chips widen the list instead of narrowing it by kind: sessions with a
+// live turn of their own and archived ones. Every chip is selected by default.
+// The chat list presents archived sessions through its separate archive view,
+// while Rota still exposes the archived scope as a chip.
 export const SUBAGENT_CHIP = 'subagent'
 export const ARCHIVED_CHIP = 'archived'
 const OTHER_CHIP = 'other'
-// The two live-state scope chips. `running` is the session's OWN turn streaming;
-// `awaiting-workers` is the coordinator shape: its own turn is idle but at least
-// one worker below it is live. They are mutually exclusive by construction (see
-// sessionLiveScope) so a row never needs both chips on to stay visible.
+// The live-state scope chip: the session's OWN turn is streaming.
 export const RUNNING_CHIP = 'running'
-export const AWAITING_WORKERS_CHIP = 'awaiting-workers'
 
 function chip(key: string, labelKey: string): { key: string; readonly label: string } {
   return {
@@ -77,15 +70,8 @@ export const SESSION_CHIPS: { key: string; readonly label: string }[] = [
   // naming). The per-row icon still distinguishes them (Clock vs Zap).
   chip('automation', 'chip.automation'),
   chip('insight', 'chip.insight'),
-  // Legacy: peer messages now land in the recipient's ordinary chat thread
-  // (TSK507), so nothing creates an 'inbox' session any more. The chip stays so
-  // sessions created before that change remain filterable rather than falling
-  // into "Diğer".
-  chip('inbox', 'chip.inbox'),
   chip(OTHER_CHIP, 'chip.other'),
   chip(RUNNING_CHIP, 'chip.running'),
-  chip(AWAITING_WORKERS_CHIP, 'chip.awaitingWorkers'),
-  chip(WORKER_CHIP, 'chip.worker'),
   chip(ARCHIVED_CHIP, 'chip.archived'),
 ]
 
@@ -168,43 +154,30 @@ export function sessionChipKey(s: {
 }
 
 // sessionLiveScope classifies a session on the live-activity axis, which is
-// independent of its kind. `running` wins over `awaiting-workers`: a coordinator
-// that is itself streaming is reported as running, so the two scopes never
-// overlap and a row is filtered by exactly one of them.
-export type SessionLiveScope = typeof RUNNING_CHIP | typeof AWAITING_WORKERS_CHIP | null
+// independent of its kind.
+export type SessionLiveScope = typeof RUNNING_CHIP | null
 
-export function sessionLiveScope(s: {
-  isRunning: boolean
-  liveWorkerCount: number
-}): SessionLiveScope {
-  if (s.isRunning) return RUNNING_CHIP
-  if (s.liveWorkerCount > 0) return AWAITING_WORKERS_CHIP
-  return null
+export function sessionLiveScope(s: { isRunning: boolean }): SessionLiveScope {
+  return s.isRunning ? RUNNING_CHIP : null
 }
 
 // sessionMatchesChips reports whether a session survives the sidebar's chip
-// selection: its kind chip must be on, and a worker/archived/live session also
-// needs its scope chip on. The live fields are optional so callers that have no
-// runtime snapshot (tests, the bulk overview table) keep the previous behaviour
-// of ignoring the live axis entirely.
+// selection: its kind chip must be on, and an archived/live session also needs
+// its scope chip on. The live field is optional so callers that have no runtime
+// snapshot (tests, the bulk overview table) keep the previous behaviour of
+// ignoring the live axis entirely.
 export function sessionMatchesChips(
   s: {
     kind: string
     category?: string
     executionType?: string
-    isWorker: boolean
     isArchived: boolean
     isRunning?: boolean
-    liveWorkerCount?: number
   },
   selected: ReadonlySet<string>,
 ): boolean {
   if (s.isArchived && !selected.has(ARCHIVED_CHIP)) return false
-  if (s.isWorker && !selected.has(WORKER_CHIP)) return false
-  const live = sessionLiveScope({
-    isRunning: s.isRunning ?? false,
-    liveWorkerCount: s.liveWorkerCount ?? 0,
-  })
+  const live = sessionLiveScope({ isRunning: s.isRunning ?? false })
   if (live && !selected.has(live)) return false
   return selected.has(sessionChipKey(s))
 }

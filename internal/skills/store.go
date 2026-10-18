@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -165,10 +164,6 @@ func scanDir(t tier) []scannedSkill {
 			SourceURL:       fm.scalar("source_url", "sourceurl", "repo", "homepage"),
 			License:         fm.scalar("license"),
 			Kind:            fm.scalar("kind"),
-			Pattern:         fm.scalar("pattern"),
-			WorkerTargets:   fm.list("worker_targets", "workertargets", "targets"),
-			StopCondition:   fm.scalar("stop_condition", "stopcondition"),
-			MaxTurns:        parseIntFrontmatter(fm.scalar("max_turns", "maxturns")),
 			UserInvocable:   isUserInvocable(fm),
 			Shared:          isShared(fm),
 			AutoSummary:     isAutoSummary(fm),
@@ -177,13 +172,6 @@ func scanDir(t tier) []scannedSkill {
 			Archived:        isArchived(fm),
 			Source:          t.source,
 			Path:            path,
-		}
-		if sk.IsCoordinatorWorkflow() {
-			if spec, rerr := parseRecipeSpec(fm, sk.Version); rerr != nil {
-				sk.RecipeError = rerr.Error()
-			} else {
-				sk.Recipe = spec
-			}
 		}
 		// Stamp the SKILL.md last-modified time (Unix seconds) so the UI can show
 		// a "last edited" date and sort by recency. Best-effort: 0 if stat fails.
@@ -223,23 +211,6 @@ func skillVisibility(sk Skill) string {
 		return VisibilitySummary
 	}
 	return VisibilityFull
-}
-
-// parseIntFrontmatter parses an optional integer frontmatter scalar. An empty
-// value yields 0 (meaning "unset → use the default"); a present-but-malformed
-// value also yields 0 rather than failing the whole scan, since these fields are
-// optional overrides. Hard validation of required fields (e.g. pattern) happens
-// at apply time, not during the lazy catalog scan.
-func parseIntFrontmatter(s string) int {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 0 {
-		return 0
-	}
-	return n
 }
 
 // isShared reports whether a skill's frontmatter marks it as on-demand/shared

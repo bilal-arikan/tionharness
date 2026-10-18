@@ -11,17 +11,12 @@ import (
 //
 //	chat     — user-initiated conversation (also the zero-value default)
 //	spawned  — detached spawn (spawn tool / board automation)
-//	worker   — coordinator-spawned worker (spawn with a coordinator session)
 //	task     — kanban task run transcript
 //	schedule — cron/scheduler delivery transcript
-//
-// There is no dedicated peer-message kind: an agent's standing thread of messages
-// from other agents is an ordinary "chat" session (TSK507, see
-// internal/agent/agentmsg.go), so it archives and lists as a chat.
+
 const (
 	sessionKindChat     = "chat"
 	sessionKindSpawned  = "spawned"
-	sessionKindWorker   = "worker"
 	sessionKindTask     = "task"
 	sessionKindSchedule = "schedule"
 )
@@ -32,7 +27,6 @@ const (
 var archivableSessionKinds = []string{
 	sessionKindChat,
 	sessionKindSpawned,
-	sessionKindWorker,
 	sessionKindTask,
 	sessionKindSchedule,
 }

@@ -1,5 +1,7 @@
 # 35 — Context Reset + Handoff Artifact
 
+> **Not (2026-10-18):** koordinatör running-worker guard'ı kaldırıldı.
+
 > Uzun otonom görevlerde, bağlam sınırına yaklaşan bir oturumu **yerinde
 > özetlemek yerine** tamamen temiz bir pencerede sürdürmek: bir **handoff
 > artifact** yaz, **taze bir oturum** başlat, işi oradan devral.
@@ -40,17 +42,9 @@ graph LR
 
 ### Çekirdek akış — `Runtime.HandoffSession`
 
-0. **Koordinatör guard'ı:** oturum koordinatörse (`IsCoordinator`) ve altında hâlâ
-   **çalışan/delegating** worker varsa handoff **reddedilir** (`ListWorkers` →
-   `Running || Delegating`). Neden: handoff yalnız BU oturumun transcript'ini taze
-   pencereye taşır; spawn ettiği worker'ları ne devreder ne durdurur → reset onları
-   sahipsiz bırakır, ayrıca `BuildHandoff` senkron provider çağrısı olduğu için asılı
-   bir worker reset'i de kilitleyebilir. Çağıran önce fleet'i toparlamalı
-   (`stop_worker` ya da bitmesini bekle). `HandoffOptions.AllowRunningWorkers` bilinçli
-   bypass için. Guard tipli hata döner (`*agent.RunningWorkersError`); `/handoff`
-   endpoint'i bunu **200 + `blocked:true`** olarak sarar ve gerekçeyi **thread içi**
-   asistan uyarısı ("⚠️ Handoff yapılmadı — …") olarak yazar (500 toast'ı yok);
-   frontend oturumu değiştirmez, uyarıyı transcript'te gösterir.
+0. ~~**Koordinatör guard'ı**~~ — kaldırıldı (2026-10-18): koordinatör modu ve worker'lar yok;
+   `HandoffOptions.AllowRunningWorkers`, `*agent.RunningWorkersError` ve `/handoff` `blocked:true`
+   dalı silindi, handoff koşulsuz ilerler.
 1. Oturum geçmişini (`ListMessages`) al ve **yalnız son compaction sınırından
    sonrasını** render et: `conversation.PendingAfterSummary(history,
    session.SummaryMsgCount)` → `conversation.RenderTranscript`. Sınırın öncesi
@@ -80,7 +74,7 @@ graph LR
    (veya legacy `""`) → `chat` continuation, böylece devam oturumu sidebar'ın
    **"Sohbet"** kind-filtresinde ebeveyninin yanında görünür (varsayılan `spawned`
    o sekmede gizli kalırdı → handoff sonrası "yeni oturum görünmüyor" hatası). Diğer
-   tüm ebeveyn türleri (task/flow/schedule/worker/flow-coordinator) yazılabilir
+   tüm ebeveyn türleri (task/flow/schedule/…) yazılabilir
    `spawned`'a düşer — non-writable/tree kind insan-devamlı continuation'a sızmaz.
 6. **Zincir + kapanış:** yeni oturum `ParentSessionID = eski`; eski oturuma
    **tombstone** asistan mesajı ("↪ Context reset — devam: SES…").
@@ -191,7 +185,7 @@ oturum cold başlar. Uyumlu — özel bir iş gerektirmez.
 ## Testler
 
 - `conversation/handoff_test.go` — `BuildHandoff` env+transcript enjeksiyonu, boş-transcript guard, env render.
-- `agent/handoff_test.go` — chain-depth sayımı, `maybeAutoHandoff` no-op yolları (auto off / overflow yok / chain cap), continuation prompt içeriği, title temizleme, **koordinatör running-worker guard'ı** (`TestHandoffBlocksOnRunningWorkers`, `TestFormatBusyWorkers`).
+- `agent/handoff_test.go` — chain-depth sayımı, `maybeAutoHandoff` no-op yolları (auto off / overflow yok / chain cap), continuation prompt içeriği, title temizleme (running-worker guard testleri 2026-10-18'de guard ile birlikte silindi).
 
 ## Ayrıca bakınız
 

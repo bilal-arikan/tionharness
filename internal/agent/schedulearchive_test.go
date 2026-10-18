@@ -144,9 +144,9 @@ func TestArchivedSessionRefusesAScheduledTurn(t *testing.T) {
 	// Other kinds on the archived session still pass (and a user turn reactivates
 	// it, per sessionreactivate.go) — the gate is scoped to KindWake alone.
 	archived := archivedFixture(t, rt)
-	coordRelease, err := rt.claimSessionTurnSlotCtx(ctx, archived, turnqueue.KindCoordinator, "worker bildirimi")
+	autoRelease, err := rt.claimSessionTurnSlotCtx(ctx, archived, turnqueue.KindAutomation, "otomasyon tetiği")
 	if err != nil {
-		t.Fatalf("coordinator claim on an archived session = %v, want it to proceed", err)
+		t.Fatalf("automation claim on an archived session = %v, want it to proceed", err)
 	}
-	coordRelease()
+	autoRelease()
 }

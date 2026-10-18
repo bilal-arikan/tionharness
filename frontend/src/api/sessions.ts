@@ -5,9 +5,6 @@ import type {
   Message,
   MessagePage,
   SessionInfo,
-  WorkerInfo,
-  CoordinatorTree,
-  CoordinatorAncestor,
   SessionContextPreview,
   SearchHit,
   WorkdirInfo,
@@ -199,52 +196,6 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ agentId }),
     }),
-  // Turn the session's COORDINATOR MODE on ('coordinator') or off (''). The field
-  // is still named `role` on the wire, but it no longer touches the session's
-  // lineage: a worker toggled on here becomes a mid-level node of its tree rather
-  // than being cut loose from its parent. Rejected (400) while the session still
-  // has running workers.
-  setSessionRole: (sessionId: string, role: string) =>
-    req<{ id: string; role: string }>(`/api/sessions/${sessionId}/role`, {
-      method: 'PUT',
-      body: JSON.stringify({ role }),
-    }),
-  // Select (or clear) the coordinator recipe/workflow (M5) for a session. Pass a
-  // coordinator-workflow skill slug to apply it, or '' to clear. Rejects an
-  // invalid slug (not a coordinator-workflow, or unknown pattern).
-  setSessionWorkflow: (sessionId: string, workflow: string) =>
-    req<{ id: string; workflow: string; maxTurns: number }>(`/api/sessions/${sessionId}/workflow`, {
-      method: 'PUT',
-      body: JSON.stringify({ workflow }),
-    }),
-  // Resume a coordinator hard-halted by the phantom-spawn stall guard: clears the
-  // halt + nudge streak and kicks one fresh coordinator turn. The "Devam ettir" CTA.
-  resumeCoordinator: (sessionId: string) =>
-    req<{ id: string; resumed: boolean }>(`/api/sessions/${sessionId}/coordinator/resume`, {
-      method: 'POST',
-    }),
-  // List the workers spawned under a coordinator session (for the coordination panel).
-  listWorkers: (sessionId: string) =>
-    req<{ workers: WorkerInfo[] }>(`/api/sessions/${sessionId}/workers`),
-  // "Buradan çatalla" (Rota F5): spawn a worker under a coordinator session
-  // from the canvas, as spawn_worker would from inside its turn.
-  spawnWorker: (
-    sessionId: string,
-    body: { agent: string; task: string; coordinator?: boolean; workflow?: string; cwd?: string },
-  ) =>
-    req<{ sessionId: string; agentName: string; queued: boolean; queuePosition: number }>(
-      `/api/sessions/${sessionId}/workers`,
-      { method: 'POST', body: JSON.stringify(body) },
-    ),
-  // The whole coordinator TREE a session belongs to, breadth-first from its root.
-  // Callable with ANY member's id (root, mid-level node, or leaf) — the server
-  // normalizes to the root — so the panel can pass whatever session is open.
-  getCoordinatorTree: (sessionId: string) =>
-    req<CoordinatorTree>(`/api/sessions/${sessionId}/coordinator-tree`),
-  // The upward breadcrumb from a worker: its tree root first, its direct
-  // coordinator last. Empty for a root or an ordinary session.
-  getCoordinatorAncestors: (sessionId: string) =>
-    req<{ ancestors: CoordinatorAncestor[] }>(`/api/sessions/${sessionId}/coordinator-ancestors`),
   // On-demand summary/listing posted as an assistant message in the session.
   // kind: 'board' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>
@@ -255,8 +206,8 @@ export const sessionApi = {
   // Context reset (/handoff): write a handoff artifact for this session and spawn
   // a FRESH session to continue the work in a clean window. Returns the new
   // session id (the UI switches to it) and the user "/handoff" bubble. When the
-  // session is a coordinator with running workers the reset is refused: no
-  // newSessionId, blocked=true, and replyMessage carries the in-thread notice.
+  // reset is refused: no newSessionId, blocked=true, and replyMessage carries the
+  // in-thread notice.
   handoffSession: (sessionId: string) =>
     req<{
       userMessage: Message

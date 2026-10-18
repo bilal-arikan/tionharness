@@ -7,7 +7,7 @@ import (
 )
 
 // An Authority ("karar mercii") is one place in the app that hands a decision to
-// a decision model: the stall judge, the shell-command risk check, a flow's
+// a decision model: the shell-command risk check, a flow's
 // judge node, and whatever comes next — a model router, a session janitor, a
 // context picker. Authorities self-register from the package that implements
 // them (RegisterAuthority in an init()), so this package knows none of them by
@@ -33,10 +33,10 @@ type Authority struct {
 	// ThresholdHint says what the threshold means for this authority.
 	ThresholdHint string `json:"thresholdHint"`
 	// Explicit authorities act only where the user asked for a judgement (a
-	// flow node's "judge" match mode, a "judge" phase gate).
+	// flow node's "judge" match mode).
 	Explicit bool `json:"explicit"`
-	// FailClosed authorities refuse when no model can answer (a phase gate
-	// stays shut) instead of falling back to earlier logic.
+	// FailClosed authorities refuse when no model can answer
+	// instead of falling back to earlier logic.
 	FailClosed bool `json:"failClosed,omitempty"`
 	// Order sorts authorities within their group.
 	Order int `json:"order,omitempty"`
@@ -60,19 +60,17 @@ const (
 
 // Settings groups, in display order.
 const (
-	GroupSafety        = "safety"
-	GroupSession       = "session"
-	GroupCollaboration = "collaboration"
-	GroupCoordination  = "coordination"
-	GroupFlows         = "flows"
-	GroupRouting       = "routing"
-	GroupContext       = "context"
-	GroupHousekeeping  = "housekeeping"
+	GroupSafety       = "safety"
+	GroupSession      = "session"
+	GroupFlows        = "flows"
+	GroupRouting      = "routing"
+	GroupContext      = "context"
+	GroupHousekeeping = "housekeeping"
 )
 
 // Groups lists the settings groups in display order.
 func Groups() []string {
-	return []string{GroupSession, GroupContext, GroupCollaboration, GroupSafety, GroupCoordination, GroupFlows, GroupRouting, GroupHousekeeping}
+	return []string{GroupSession, GroupContext, GroupSafety, GroupFlows, GroupRouting, GroupHousekeeping}
 }
 
 var (

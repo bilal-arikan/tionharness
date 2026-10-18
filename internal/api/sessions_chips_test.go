@@ -50,17 +50,17 @@ func listSessionsPage(t *testing.T, server *Server, wsp *db.DB, query string) ch
 }
 
 // The sidebar pages the list, so the chip selection must narrow it BEFORE the
-// page window: with 20 workers ahead of 5 chats, a chat-only selection paged at
+// page window: with 20 subagents ahead of 5 chats, a chat-only selection paged at
 // 3 has to report 5 chats and hasMore, not "3 of 25 mixed rows".
 func TestListSessionsChipFilterPagesFilteredSet(t *testing.T) {
 	server, wsp := newWorkspaceServer(t)
 	ctx := context.Background()
 	for i := range 20 {
 		if _, err := wsp.DB.CreateSession(ctx, db.Session{
-			Kind: "worker", Title: fmt.Sprintf("worker-%d", i),
-			Category: db.CategoryWorker, CoordinatorSessionID: "SES1",
+			Kind: "subagent", Title: fmt.Sprintf("subagent-%d", i),
+			Category: db.CategorySubagent, ExecutionType: db.ExecutionSubagent,
 		}); err != nil {
-			t.Fatalf("create worker: %v", err)
+			t.Fatalf("create subagent: %v", err)
 		}
 	}
 	for i := range 5 {
@@ -89,22 +89,21 @@ func TestListSessionsChipFilterPagesFilteredSet(t *testing.T) {
 
 	// Counts are reported over the whole set, so an unticked chip still shows
 	// how many rows it is hiding.
-	if got := page.ChipCounts["worker"]; got != 20 {
-		t.Fatalf("chipCounts[worker] = %d, want 20", got)
+	if got := page.ChipCounts[chipSubagent]; got != 20 {
+		t.Fatalf("chipCounts[subagent] = %d, want 20", got)
 	}
 	if got := page.ChipCounts["chat"]; got != 5 {
 		t.Fatalf("chipCounts[chat] = %d, want 5", got)
 	}
 }
 
-// A worker (or archived) session needs its scope chip on top of its kind chip,
-// exactly like the sidebar predicate.
+// An archived session needs its scope chip on top of its kind chip, exactly
+// like the sidebar predicate.
 func TestListSessionsChipScopeChips(t *testing.T) {
 	server, wsp := newWorkspaceServer(t)
 	ctx := context.Background()
 	for _, s := range []db.Session{
 		{Title: "plain chat"},
-		{Title: "worker chat", CoordinatorSessionID: "SES1"},
 		{Title: "archived chat", State: "archived"},
 	} {
 		if _, err := wsp.DB.CreateSession(ctx, s); err != nil {
@@ -117,9 +116,9 @@ func TestListSessionsChipScopeChips(t *testing.T) {
 		t.Fatalf("chips=chat returned %d rows (%+v), want only the plain chat", only.Total, only.Items)
 	}
 
-	withScopes := listSessionsPage(t, server, wsp.DB, "chips=chat,worker,archived&limit=50")
-	if withScopes.Total != 3 {
-		t.Fatalf("chips=chat,worker,archived total = %d, want 3", withScopes.Total)
+	withScopes := listSessionsPage(t, server, wsp.DB, "chips=chat,archived&limit=50")
+	if withScopes.Total != 2 {
+		t.Fatalf("chips=chat,archived total = %d, want 2", withScopes.Total)
 	}
 }
 
@@ -197,7 +196,7 @@ func TestSessionChipKeyClassification(t *testing.T) {
 		want string
 	}{
 		{name: "empty kind is chat", sess: db.Session{}, want: "chat"},
-		{name: "category wins", sess: db.Session{Kind: "worker", Category: db.CategorySubagent}, want: chipSubagent},
+		{name: "category wins", sess: db.Session{Kind: "chat", Category: db.CategorySubagent}, want: chipSubagent},
 		{name: "schedule rolls into automation", sess: db.Session{Kind: "schedule-run"}, want: "automation"},
 		{name: "unknown kind falls to other", sess: db.Session{Kind: "quantum"}, want: chipOther},
 		{name: "insight keeps its own chip", sess: db.Session{Kind: db.SessionKindInsight}, want: "insight"},

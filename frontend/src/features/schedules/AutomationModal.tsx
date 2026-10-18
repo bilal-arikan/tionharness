@@ -11,8 +11,6 @@ import type {
   BoardOp,
   FlowRuleStatus,
   SessionMode,
-  TrajEndStatus,
-  TrajEvent,
 } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { toast } from '@/shared/components'
@@ -23,12 +21,7 @@ import {
   MAX_ITERATIONS_HARD_CAP,
   STUCK_TEMPLATE,
 } from './automationMeta'
-import {
-  BoardTriggerFields,
-  FlowTriggerFields,
-  TrajectoryTriggerFields,
-  PromptVarsField,
-} from './AutomationFields'
+import { BoardTriggerFields, FlowTriggerFields, PromptVarsField } from './AutomationFields'
 import { FieldError } from './FieldError'
 import { useFieldErrors } from './useFieldErrors'
 import { FormModal } from './FormModal'
@@ -63,7 +56,6 @@ export function AutomationModal({
 }: Props) {
   const { t } = useTranslation('schedules')
   const isBoardKind = kind === 'board'
-  const isTrajKind = kind === 'phase' || kind === 'trajectory_end'
   const isFlowKind = kind === 'flow'
 
   const [name, setName] = useState(editing?.name ?? '')
@@ -75,10 +67,6 @@ export function AutomationModal({
   const [boardExclusive, setBoardExclusive] = useState(editing?.boardExclusive ?? false)
   const [boardAction, setBoardAction] = useState<BoardAction>(editing?.boardAction ?? 'spawn')
   const [boardMoveToState, setBoardMoveToState] = useState(editing?.boardMoveToState ?? '')
-  const [trajPhase, setTrajPhase] = useState(editing?.trajPhase ?? '')
-  const [trajRecipe, setTrajRecipe] = useState(editing?.trajRecipe ?? '')
-  const [trajEvent, setTrajEvent] = useState<TrajEvent>(editing?.trajEvent ?? 'exit')
-  const [trajStatus, setTrajStatus] = useState<TrajEndStatus>(editing?.trajStatus ?? '')
   const [flowAgentId, setFlowAgentId] = useState(editing?.flowAgentId ?? '')
   const [flowStatus, setFlowStatus] = useState<FlowRuleStatus>(editing?.flowStatus ?? '')
   const [flowMaxGrade, setFlowMaxGrade] = useState(editing?.flowMaxGrade ?? 0)
@@ -149,10 +137,6 @@ export function AutomationModal({
       boardExclusive,
       boardAction,
       boardMoveToState,
-      trajPhase,
-      trajRecipe,
-      trajEvent,
-      trajStatus,
       flowAgentId,
       flowStatus,
       flowMaxGrade,
@@ -265,20 +249,6 @@ export function AutomationModal({
               if (p.agentId !== undefined) setFlowAgentId(p.agentId)
               if (p.status !== undefined) setFlowStatus(p.status)
               if (p.maxGrade !== undefined) setFlowMaxGrade(p.maxGrade)
-            }}
-          />
-        ) : isTrajKind ? (
-          <TrajectoryTriggerFields
-            kind={kind}
-            phase={trajPhase}
-            recipe={trajRecipe}
-            event={trajEvent}
-            status={trajStatus}
-            onChange={(p) => {
-              if (p.phase !== undefined) setTrajPhase(p.phase)
-              if (p.recipe !== undefined) setTrajRecipe(p.recipe)
-              if (p.event !== undefined) setTrajEvent(p.event)
-              if (p.status !== undefined) setTrajStatus(p.status)
             }}
           />
         ) : (

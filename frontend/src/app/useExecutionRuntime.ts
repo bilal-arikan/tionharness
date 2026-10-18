@@ -6,16 +6,13 @@ import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_EXECUTIONS } from './eventToRefreshSignals'
 
 const POLL_MS = 20000
-// Run-lifecycle events arrive in bursts (a coordinator fanning out workers
-// fires one per spawn); the signal-driven refetch waits for the burst to
-// settle instead of issuing one request per event.
+// Run-lifecycle events arrive in bursts; the signal-driven refetch waits for
+// the burst to settle instead of issuing one request per event.
 const SIGNAL_SETTLE_MS = 400
 
 export interface ExecutionRuntime {
   running: boolean
   lastStatus: string
-  coordinatorSessionId?: string
-  rootCoordinatorSessionId?: string
 }
 
 export interface ExecutionRuntimeState {
@@ -24,7 +21,7 @@ export interface ExecutionRuntimeState {
 }
 
 // Polls the compact runtime feed (GET /api/executions/runtime) rather than the
-// full executions list: the sidebar only needs running/lastStatus/lineage per
+// full executions list: the sidebar only needs running/lastStatus per
 // session, and the full feed carried every session in the workspace with its
 // title and agent name on every poll and every run-lifecycle event.
 export function useExecutionRuntime(activeWorkspaceId: string | null): ExecutionRuntimeState {
@@ -52,8 +49,6 @@ export function useExecutionRuntime(activeWorkspaceId: string | null): Execution
       m.set(e.sessionId, {
         running: e.running,
         lastStatus: e.lastStatus ?? '',
-        coordinatorSessionId: e.coordinatorSessionId,
-        rootCoordinatorSessionId: e.rootCoordinatorSessionId,
       })
     }
     return m

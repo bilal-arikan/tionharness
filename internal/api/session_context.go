@@ -457,9 +457,8 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// llm_call from the debug journal (steady-state), rather than a cold+warm
 	// lifetime average that under/over-states what the next turn will actually cost.
 	// Match the turn KIND the estimate models: handleSessionContextPreview composes
-	// a CHAT turn (composeTurnRequest), but a coordinator's newest llm_call is often
-	// a heavier headless turn (kind=spawned/task/flow — it carries the live
-	// worker-state block and runs single-call, so in+cacheRead+cacheWrite is much
+	// a CHAT turn (composeTurnRequest), but a session's newest llm_call is often
+	// a heavier headless turn (kind=spawned/task/flow — it runs single-call, so in+cacheRead+cacheWrite is much
 	// larger). Measuring THAT against a chat estimate reports a phantom overhead, so
 	// scan back once and independently select the newest chat and non-chat calls.
 	// Stop as soon as both are found; older events cannot replace either selection.

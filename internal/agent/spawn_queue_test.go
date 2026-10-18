@@ -2,35 +2,13 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
-	"github.com/bilal-arikan/tionharness/internal/providers"
 )
-
-type queuedResultProvider struct{}
-
-func (queuedResultProvider) Name() string { return "queued-result-test" }
-
-func (queuedResultProvider) Complete(context.Context, providers.Request) (*providers.Response, error) {
-	return &providers.Response{Text: "queued worker result surfaced"}, nil
-}
-
-var registerQueuedResultProvider sync.Once
-
-func configureQueuedResultProvider(rt *Runtime) {
-	registerQueuedResultProvider.Do(func() {
-		providers.RegisterKind(providers.NewBuiltinKind(
-			providers.Manifest{Kind: "queued-result-test", Transport: providers.TransportAPI},
-			func(providers.ResolvedConfig) bool { return true },
-			func(providers.ResolvedConfig) (providers.Provider, error) { return queuedResultProvider{}, nil },
-		))
-	})
-	rt.providers.SetInstances([]providers.Instance{{ID: "queued-result-test", KindID: "queued-result-test"}})
-}
 
 func queueTestAgent(t *testing.T, rt *Runtime) db.Agent {
 	t.Helper()
@@ -44,7 +22,7 @@ func queueTestAgent(t *testing.T, rt *Runtime) db.Agent {
 func fillSpawnSlots(t *testing.T, rt *Runtime, n int) {
 	t.Helper()
 	for i := range n {
-		if !rt.acquireSpawnSlotAtDepth(0) {
+		if !rt.acquireSpawnSlot() {
 			t.Fatalf("acquire slot %d", i)
 		}
 	}
@@ -76,62 +54,6 @@ func TestSpawnSessionQueuesAtCapacityAndStartsOnRelease(t *testing.T) {
 	rt.CloseMCP()
 }
 
-func TestSpawnSessionQueuedWorkerResultSurfacesToCoordinator(t *testing.T) {
-	rt, _ := newTestRuntime(t, t.TempDir())
-	configureQueuedResultProvider(rt)
-	ctx := context.Background()
-	agent, err := rt.db.CreateAgent(ctx, db.Agent{
-		Name: "Queue Worker", Provider: "queued-result-test", ProviderInstanceID: "queued-result-test", Model: "test",
-	})
-	if err != nil {
-		t.Fatalf("create agent: %v", err)
-	}
-	coord, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Kind: "chat", SourceID: "queue-result", Title: "Coordinator"})
-	if err != nil {
-		t.Fatalf("create coordinator: %v", err)
-	}
-	otherCoord, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Kind: "chat", SourceID: "queue-result-other", Title: "Other Coordinator"})
-	if err != nil {
-		t.Fatalf("create other coordinator: %v", err)
-	}
-	rt.tun.SetSpawnLimits(1, 16, 0)
-	fillSpawnSlots(t, rt, 1)
-
-	res, err := rt.SpawnSession(ctx, agent.ID, "queued work", SpawnOptions{CoordinatorSessionID: coord.ID})
-	if err != nil {
-		t.Fatalf("queue worker: %v", err)
-	}
-	if !res.Queued || res.SessionID != "" {
-		t.Fatalf("unexpected queued result: %+v", res)
-	}
-	rt.releaseSpawnSlot()
-	drainSpawns(t, rt)
-
-	messages, err := rt.db.ListMessages(ctx, coord.ID)
-	if err != nil {
-		t.Fatalf("list coordinator messages: %v", err)
-	}
-	matches := 0
-	for _, message := range messages {
-		if strings.Contains(message.Text, "queued worker result surfaced") &&
-			strings.Contains(message.Text, "<status>completed</status>") && message.Origin == "worker-note" {
-			matches++
-		}
-	}
-	if matches != 1 {
-		t.Fatalf("queued worker result count = %d, want exactly 1: %+v", matches, messages)
-	}
-	otherMessages, err := rt.db.ListMessages(ctx, otherCoord.ID)
-	if err != nil {
-		t.Fatalf("list other coordinator messages: %v", err)
-	}
-	for _, message := range otherMessages {
-		if strings.Contains(message.Text, "queued worker result surfaced") {
-			t.Fatalf("queued worker result reached wrong coordinator: %+v", otherMessages)
-		}
-	}
-}
-
 func TestSpawnSessionRejectsWhenQueueFull(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	agent := queueTestAgent(t, rt)
@@ -150,24 +72,17 @@ func TestSpawnSessionRejectsWhenQueueFull(t *testing.T) {
 	drainSpawns(t, rt)
 }
 
-func TestSpawnQueueShutdownDropsAndNotifiesCoordinator(t *testing.T) {
+// TestSpawnQueueShutdownDropsQueuedWork: closing the runtime must not hang on a
+// non-empty queue — the queued spawn is dropped — and the closed queue refuses
+// new work instead of parking it forever.
+func TestSpawnQueueShutdownDropsQueuedWork(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	agent := queueTestAgent(t, rt)
-	coord, err := rt.db.CreateSession(context.Background(), db.Session{AgentID: agent.ID, Kind: "chat", SourceID: "queue-test", Title: "Coordinator"})
-	if err != nil {
-		t.Fatalf("create coordinator: %v", err)
-	}
-	dropped := make(chan struct{}, 1)
-	_, err = rt.enqueueSpawn(spawnQueueItem{
-		agent:  agent,
-		prompt: "will be dropped",
-		opts: SpawnOptions{CoordinatorSessionID: coord.ID, onDrop: func(error) bool {
-			dropped <- struct{}{}
-			return false
-		}},
+	if _, err := rt.enqueueSpawn(spawnQueueItem{
+		agent:      agent,
+		prompt:     "will be dropped",
 		enqueuedAt: time.Now(),
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 
@@ -181,87 +96,32 @@ func TestSpawnQueueShutdownDropsAndNotifiesCoordinator(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("shutdown hung while queue contained work")
 	}
-	select {
-	case <-dropped:
-	default:
-		t.Fatal("queued spawn was not dropped")
+	if n := rt.spawnQueueLen(); n != 0 {
+		t.Fatalf("queued spawn was not dropped, %d still queued", n)
 	}
-	// The drop notifies the coordinator, which wakes a drain goroutine that keeps
-	// writing under t.TempDir() after the test body returns.
+	if _, err := rt.enqueueSpawn(spawnQueueItem{agent: agent, prompt: "late", enqueuedAt: time.Now()}); !errors.Is(err, errSpawnQueueShutdown) {
+		t.Fatalf("enqueue after shutdown = %v, want errSpawnQueueShutdown", err)
+	}
 	drainSpawns(t, rt)
-	messages, err := rt.db.ListMessages(context.Background(), coord.ID)
-	if err != nil {
-		t.Fatalf("list coordinator messages: %v", err)
-	}
-	found := false
-	for _, message := range messages {
-		if strings.Contains(message.Text, "Queued spawn") && strings.Contains(message.Text, "status=\"failed\"") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("coordinator did not receive dropped-spawn notification")
-	}
 }
 
-// TestSpawnQueueDropCarriesIdleStatusWhenLastWorker pins the drop half of the
-// "only the observer of the zero-crossing reports all-idle" contract. The drain
-// loop runs no standalone reconcile turn, so a queued worker discarded at shutdown
-// must fold the <coordination-status> note into its own failure notification —
-// otherwise the coordinator never learns its fleet is empty.
-func TestSpawnQueueDropCarriesIdleStatusWhenLastWorker(t *testing.T) {
-	rt, _ := newTestRuntime(t, t.TempDir())
-	agent := queueTestAgent(t, rt)
-	coord, err := rt.db.CreateSession(context.Background(), db.Session{AgentID: agent.ID, Kind: "chat", SourceID: "queue-idle", Title: "Coordinator"})
-	if err != nil {
-		t.Fatalf("create coordinator: %v", err)
-	}
-	// Mirror SpawnWorker's reservation: the worker is counted before it launches, and
-	// the drop is what releases it.
-	slot := rt.coordSlotFor(coord.ID)
-	slot.workers.Add(1)
-	slot.markHadWorkers()
-	release := releaseOnce(slot)
-
-	if _, err := rt.enqueueSpawn(spawnQueueItem{
-		agent:      agent,
-		prompt:     "will be dropped",
-		opts:       SpawnOptions{CoordinatorSessionID: coord.ID, onDrop: func(error) bool { return release() }},
-		enqueuedAt: time.Now(),
-	}); err != nil {
-		t.Fatalf("enqueue: %v", err)
-	}
-	rt.CloseMCP()
-	// The drop notifies the coordinator, which wakes a drain goroutine that keeps
-	// writing under t.TempDir() after the test body returns.
-	drainSpawns(t, rt)
-
-	messages, err := rt.db.ListMessages(context.Background(), coord.ID)
-	if err != nil {
-		t.Fatalf("list coordinator messages: %v", err)
-	}
-	for _, message := range messages {
-		if strings.Contains(message.Text, "was dropped") && strings.Contains(message.Text, "<coordination-status>") {
-			return
-		}
-	}
-	t.Fatalf("dropped last worker did not carry the all-idle status: %+v", messages)
-}
-
-func TestSpawnQueuePrefersShallowWork(t *testing.T) {
+// TestSpawnQueueIsFIFO: the spawn queue is a single first-in-first-out line —
+// whoever queued first gets the next free slot.
+func TestSpawnQueueIsFIFO(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	rt.tun.SetSpawnLimits(8, 16, 0)
-	fillSpawnSlots(t, rt, 7)
-	deep := spawnQueueItem{prompt: "deep", opts: SpawnOptions{CoordinatorDepth: deepSpawnDepth}}
-	shallow := spawnQueueItem{prompt: "shallow"}
-	rt.spawnQueue.deep = []spawnQueueItem{deep}
-	rt.spawnQueue.shallow = []spawnQueueItem{shallow}
+	fillSpawnSlots(t, rt, 6)
+	rt.spawnQueue.items = []spawnQueueItem{{prompt: "first"}, {prompt: "second"}}
 
-	got, ok := rt.takeQueuedSpawn()
-	if !ok || got.prompt != "shallow" {
-		t.Fatalf("expected shallow item first, got %+v, ok=%v", got, ok)
+	for _, want := range []string{"first", "second"} {
+		got, ok := rt.takeQueuedSpawn()
+		if !ok || got.prompt != want {
+			t.Fatalf("expected %q next, got %+v, ok=%v", want, got, ok)
+		}
 	}
-	rt.spawnQueue.deep = nil
+	if _, ok := rt.takeQueuedSpawn(); ok {
+		t.Fatal("an empty queue must yield nothing")
+	}
 	rt.spawnActive.Store(0)
 	rt.CloseMCP()
 }

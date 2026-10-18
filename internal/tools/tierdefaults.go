@@ -122,13 +122,12 @@ var defaultToolTiers = map[string]string{
 	// description line names the capability; the schema is pulled on demand.
 	"run_adhoc_flow": VisibilityNameOnly,
 	// Promoted out of the hidden self-management group: common enough to advertise
-	// by name (handoff at context limit, DM a peer agent) rather than fold into the
+	// by name (handoff at context limit) rather than fold into the
 	// self-management skill pointer. This table carries ONE authoritative entry per
 	// name, so the promotion no longer depends on a "last mark wins" ordering — but
 	// their MarkSelfManaged stamp is a separate, stable membership mark and MUST
 	// still be applied, or the claude-cli bridge drops them entirely.
 	"handoff_session": VisibilityNameOnly,
-	"send_message":    VisibilityNameOnly,
 
 	// Admin-rare tools fold into the HIDDEN tier (not enumerated per turn —
 	// surfaced via the tionharness-self-management skill / tool_search). These are

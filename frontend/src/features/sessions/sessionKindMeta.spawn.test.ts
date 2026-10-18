@@ -1,21 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import {
-  kindMeta,
-  sessionChipKey,
-  sessionMatchesChips,
-  SUBAGENT_CHIP,
-  WORKER_CHIP,
-} from './sessionKindMeta'
+import { kindMeta, sessionChipKey, sessionMatchesChips, SUBAGENT_CHIP } from './sessionKindMeta'
 import { originLabel } from '@/shared/lib/sessionOrigin'
 
 // TSK1005: a session an agent opens with spawn_session is an ordinary chat; only
-// real delegations (run_subagent, spawn_worker) carry a delegation label.
+// real delegations (run_subagent) carry a delegation label.
 describe('spawn_session child labelling', () => {
   const spawnChild = {
     kind: 'chat',
     category: 'chat',
     executionType: 'interactive',
-    isWorker: false,
     isArchived: false,
   }
 
@@ -25,13 +18,10 @@ describe('spawn_session child labelling', () => {
     expect(sessionMatchesChips(spawnChild, new Set(['chat']))).toBe(true)
   })
 
-  it('keeps run_subagent and spawn_worker children on their own chips', () => {
+  it('keeps run_subagent children on their own chip', () => {
     expect(
       sessionChipKey({ kind: 'subagent', category: 'subagent', executionType: 'subagent' }),
     ).toBe(SUBAGENT_CHIP)
-    expect(sessionChipKey({ kind: 'worker', category: 'worker', executionType: 'worker' })).toBe(
-      WORKER_CHIP,
-    )
   })
 
   it('still attributes the spawn to the session that started it', () => {

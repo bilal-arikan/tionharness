@@ -1,5 +1,7 @@
 # 60 — Retrospektif Geçmiş Tarama (Insight Scan)
 
+> **Not (2026-10-18):** `send_message` / koordinatör→worker süreç-içi üreticileri kaldırıldı (guard kapsamı notu güncellendi).
+
 > **Durum:** Faz 1–6.4 uygulandı (§10). Tek açık madde: workspace-seviyesi tarama için
 > in-app rapor artifact'i (§10 başı). İlerleme kaydı `05-ILERLEME.md`'de.
 >
@@ -479,8 +481,7 @@ Her tarama, bittiğinde **iki** kayıt bırakır:
   task/flow oturumunda bunlar meşrudur, kilitlenirse gerçek orkestrasyon akışı kırılır. `insight`
   oturumu hiç tur koşturmadığı için zaten her iki guard'a da takılır.
 
-  **Kapsam:** guard'lar yalnız HTTP giriş noktalarındadır. Süreç-içi üreticiler (`send_message`
-  aracı — `internal/agent/agentmsg.go`, otomasyon teslimi, koordinatör→worker mesajı) doğrudan
+  **Kapsam:** guard'lar yalnız HTTP giriş noktalarındadır. Süreç-içi üreticiler (otomasyon teslimi; eski `send_message` ve koordinatör→worker mesajı 2026-10-18'de kaldırıldı) doğrudan
   store/runtime üzerinden yazar ve bilerek guard dışındadır: orada sistem kendi oturumunu sürer.
 
   Frontend `isWritableSessionKind` (`frontend/src/shared/lib/sessionKind.ts`) 1. sınıfın **aynasıdır**;

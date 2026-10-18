@@ -1,6 +1,6 @@
 # Faz — Zengin Sohbet Arayüzü (Chat UX)
 
-> **Özet (2026-10-17):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), DeepSeek V4.x ve GLM-5.3 için kaba-effort (`effort`) düşünme sınıfı — `low/high/max`, Anthropic-uyumlu uçta `output_config.effort`, GLM-5.3'te kapatılamayan düşünme (2026-09-22), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Oturumlar kenar çubuğu 2026-10-17'den beri iki sekmelidir: **Konuşmalar** (kişinin başlattığı + spawn/handoff sohbetleri) ve **Arka plan** (worker, subagent, görev, otomasyon, insight, ajan mesaj kutuları, sistem ajanı); sekme `group=main|other` ile sunucuda sayfalamadan önce uygulanır. Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/features/chat/`.
+> **Özet (2026-10-18):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/wake-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), DeepSeek V4.x ve GLM-5.3 için kaba-effort (`effort`) düşünme sınıfı — `low/high/max`, Anthropic-uyumlu uçta `output_config.effort`, GLM-5.3'te kapatılamayan düşünme (2026-09-22), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Oturumlar kenar çubuğu 2026-10-17'den beri iki sekmelidir: **Konuşmalar** (kişinin başlattığı + spawn/handoff sohbetleri) ve **Arka plan** (subagent, görev, otomasyon, insight, sistem ajanı); sekme `group=main|other` ile sunucuda sayfalamadan önce uygulanır. Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/features/chat/`. 2026-10-18: koordinatör/worker arayüzü (worker bekleme banner'ı, worker zinciri, `Bekleyen`/`Worker` çipleri, başlangıç paneli, `<task-notification>` kartı) ve peer/inbox mesajlaşma kaldırıldı; `PeerTurn` yalnız ajan-damgalı enjekte turlar için kalır.
 
 > Sohbet ekranı, [external-agent-oss](https://github.com/external-agent-project/external-agent-oss)
 > referans alınarak External Agent benzeri zengin bir render katmanına kavuşturuldu:
@@ -111,7 +111,7 @@ warm transcriptin üstüne eklenmez.
 | Yol                            | Tetikleyici | Kaynak                                                                |
 | ------------------------------ | ----------- | --------------------------------------------------------------------- |
 | İnteraktif tur                 | `auto`      | `api.compactionLeadStep(prep.Fold)` — `chat_stream.go`                |
-| Otonom tur (wake/spawn/worker) | `auto`      | aynı yardımcı — `wake_turn.go`                                        |
+| Otonom tur (wake/spawn)        | `auto`      | aynı yardımcı — `wake_turn.go`                                        |
 | `/compact` komutu              | `manual`    | Claude slash-control veya Codex `thread/compact/start`                |
 | `/compact-custom` komutu       | `manual`    | `Manager.ForceCompact` dönüşü                                         |
 | Tur içi taşma kurtarması       | `reactive`  | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
@@ -147,11 +147,11 @@ Araçlar ve düşünme akışı tek generic canlı kart mekanizmasını kullanı
 Genel araç kartları nötr yüzeyini korur. Ajan yaşam döngüsü ve iletişim adımları,
 chat izinde daha hızlı ayırt edilebilmesi için düşük yoğunluklu semantik ton kullanır:
 
-- oluşturma/başlatma (`create_agent`, `run_subagent`, `spawn_agent`, `spawn_session`,
-  `spawn_worker`) yeşil vurgu;
-- durdurma/kapatma (`close_agent`, `delete_agent`, `interrupt_session`, `stop_worker`)
+- oluşturma/başlatma (`create_agent`, `run_subagent`, `spawn_agent`, `spawn_session`)
+  yeşil vurgu;
+- durdurma/kapatma (`close_agent`, `delete_agent`, `interrupt_session`)
   amber vurgu;
-- mesaj/girdi gönderme (`send_input`, `send_message`, `send_to_worker`) mavi vurgu.
+- mesaj/girdi gönderme (`send_input`) mavi vurgu (`send_message` / `send_to_worker` 2026-10-18'de kaldırıldı).
 
 Ton; ince kenarlık, hafif yüzey rengi ve ikon renginde uygulanır. Etiket ve ikon
 değişmediği için anlam yalnız renge bağlı değildir. Codex native işbirliği olaylarında
@@ -215,12 +215,8 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
   (ask/todo/pending/wake banner + `Composer`) `absolute inset-x-0 bottom-0 z-20`
   ile transkriptin **üstüne yüzer** (`pointer-events-none` + `[&>*]:pointer-events-auto`
   → şeffaf boşluklar scroll'a geçer). Mesaj balonları alttan composer'ın arkasına kayar.
-- **Worker parent zinciri:** yazılabilir worker oturumlarında `CoordinatorBreadcrumb`,
-  composer'ın hemen üstünde kompakt yüzen kart olarak kökten doğrudan parent'a kadar
-  koordinatör zincirini gösterir; çipler ilgili parent oturumunu açar. Sıradan sohbetler
-  ve root koordinatörler etkilenmez. Salt-okunur worker görünümü aynı kartı paylaşır.
-  Cache sıcaklık rozeti kartın üstünde kalır; kart çalışan-worker paneliyle aynı
-  `worker` tonunu (`--color-accent-soft`) kullanır.
+- ~~**Worker parent zinciri**~~ — `CoordinatorBreadcrumb` ve worker oturumları
+  **kaldırıldı (2026-10-18)** (koordinatör modu yok).
 - **Gradient + opak input:** composer sarmalayıcısı tema-uyumlu
   `bg-gradient-to-t from-[var(--color-bg)]
 via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent`; iç input
@@ -428,14 +424,13 @@ kırpıldı:
   (başlıkta), açınca girdi/çıktı. Edit/Write çıktısı diff olarak. Hata kırmızı.
   **Başlık özeti içerik-odaklı (2026-07-09):** `features/chat/tools.ts summarize` artık
   ham anahtar-listesi fallback'ini KALDIRDI — yan bilgi ya gerçek içeriği
-  (komut/yol/mesaj/başlık/`question`/`reason`/`worker`/`template`) ya da birincil
+  (komut/yol/mesaj/başlık/`question`/`reason`/`template`) ya da birincil
   dizi alanının değerlerini gösterir (`activate_tools.names`, `todo_write.todos`
   → öğe etiketleri veya "N öğe"; ikincil/filtre dizileri
   `options`/`tags`/`exclude`/`args`/… atlanır); `move_task` → `→ <sütun>`;
   anlamlı bir şey çıkmazsa **boş** kalır (eskiden "names"/"questions" gibi
   anahtar adları yazıyordu). **Tool-özel şablonlar** (`RICH_TEMPLATES`, generic
-  mantıktan önce, saf frontend — LLM/token yok): `send_message`/`send_to_worker`/
-  `spawn_worker`/`spawn_session` → `aktör → yük`; `create_task`/`update_task` →
+  mantıktan önce, saf frontend — LLM/token yok): `spawn_session` → `aktör → yük`; `create_task`/`update_task` →
   `başlık [sütun]`; `create_schedule`/`update_schedule` → `prompt · cron`;
   `create_hook` → `event → komut`; `create_mcp_server` → `ad → komut`. **`use_skill`
   (2026-07-02):** başlık özeti slug **değerini** gösterir (`slug`/`skill`
@@ -518,23 +513,11 @@ kırpıldı:
 - `shared/lib/paths.ts` → `isExternalUrl` tek kaynaktır; `Markdown.tsx` ve `Gallery.tsx`
   kendi kopya `isExternal` yardımcılarını kullanmaz. `mediaUrl` uzak (http/https)
   bir görsel adresini artık `/api/files?path=…` ile sarmalamaz, olduğu gibi geçirir.
-- `WorkerWaitBanner.tsx` (2026-07-27) — koordinatör oturumunda **çalışan worker**
-  varken composer'ın üstünde bekleme banner'ı (`WakeWaitBanner` deseni): "N worker
-  çalışıyor — sonuçları bekleniyor · M/T bitti" + her worker için oturumunu açan çip.
-  Koordinatör turu bitip ilk `<task-notification>` düşene kadar sohbetin bitmiş
-  görünmesini engeller. Her çipte **canlı geçen süre** (`WorkerInfo.startedAt` + 1sn
-  tick; start zamanı bilinmiyorsa süre gizlenir).
-  **Ajan kimliği çipleri (2026-08-29):** çip artık düz metin değil, uygulamanın ortak
-  `AgentIdentity` bileşeni (`size="sm"`, `showId`, `subtitle="model"`, geçen süre
-  `trailing`'de) — avatar + ajan adı + ajan id'si + çözülmüş model etiketi. Veriyi
-  `GET /api/sessions/{id}/workers` taşır (`agentId`, `agentAvatar`, `agentColor`,
-  `agentProvider`, `agentModel`, `agentDeleted`; `WorkerInfo`'nun yeni alanları).
-  Ajan satırı artık yoksa alanlar boş kalır ve çip `title`/`sessionId` fallback'iyle
-  ad gösterir. Çip iki satır olduğu için `max-w-[240px]` ile sınırlanır ve geniş
-  fan-out satırlara sarar. Aynı kimlik çipi sağ paneldeki koordinatör roster'ında da
-  kullanılır (bkz. `_Docs/47`); eşleme `shared/lib/workerAgent.ts` içinde paylaşılır.
-- **Composer üstü yüzen kartlar (2026-08-01):** composer'ın üstündeki **yedi** panel
-  (`TodoPanel`, `PendingTray`, `WorkerWaitBanner`, `WakeWaitBanner`, `AskPrompt`,
+- ~~`WorkerWaitBanner.tsx` (2026-07-27)~~ — çalışan-worker bekleme banner'ı, ajan kimliği
+  çipleri, `GET /api/sessions/{id}/workers`, `useRunningWorkers.ts`, `workerBus.ts` ve `worker` SSE
+  event'i **kaldırıldı (2026-10-18)** (koordinatör/worker yok). Tarihsel: `arsiv/47-KOORDINATOR-COKLU-AJAN.md`.
+- **Composer üstü yüzen kartlar (2026-08-01):** composer'ın üstündeki **altı** panel
+  (`TodoPanel`, `PendingTray`, `WakeWaitBanner`, `AskPrompt`,
   `PermissionPrompt`, `PlanPrompt`) geometriyi **tek sarmalayıcıdan** alır:
   `ComposerCard.tsx` — şeffaf kapsayıcı (`-mb-2 px-3 pt-2 md:px-6`) + `rounded-2xl
 rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde yüzer ve
@@ -547,17 +530,10 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   | --------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------- |
   | `TodoPanel`                                                                       | `plain`      | düz `--color-surface`                                 |
   | `PendingTray`                                                                     | `muted`      | `--color-text-dim` %10                                |
-  | `WorkerWaitBanner`                                                                | `worker`     | `--color-accent-soft`                                 |
   | `AskPrompt`                                                                       | `ask`        | `--color-accent` %8                                   |
   | `WakeWaitBanner`                                                                  | `wake`       | `--color-warning` %12 (ikon/başlık da warning)        |
   | `PermissionPrompt`                                                                | `permission` | `--color-warning` %18 (onay kapısı daha acil okunsun) |
-  | `PlanPrompt`                                                                      | `plan`       | `--color-success` %10                                 | Veri `useRunningWorkers.ts` |
-  | (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**, |
-  | tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`     |
-  | (coordinatorId anahtarlı pub/sub; iç içe ağaçta event ayrıca                      |
-  | `rootCoordinatorId` taşır ve kök anahtarına da fanlanır) → hook. Feed koparsa     |
-  | `api.subscribeReconnect` → `onReconnect` resync eder (kopma sırasındaki event'ler |
-  | kalıcı kayıptır). Detay `_Docs/47`.                                               |
+  | `PlanPrompt`                                                                      | `plan`       | `--color-success` %10                                 |
 
 - **Todo tamamlanma/kapatma (2026-08-29):** `latestTodos` en yeni `todo_write`
   listesini, tamamlandıktan sonra kullanıcı yeni mesaj gönderse de korur. Bitmemiş
@@ -598,7 +574,7 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   kaydıracağı ata yok → `onWheel` deltayı konteynere elle iletir.
   **Gönderimde dibe in (2026-07-28):** `scrollBottomSignal` prop'u — `ChatView`
   composer submit'inde (send **ve** queue) bump eder, `MessageList` anında dibe iner.
-  Gerekli, çünkü gönderim yalnız **kuyruğa alır**: mesaj backend worker onu alınca
+  Gerekli, çünkü gönderim yalnız **kuyruğa alır**: mesaj backend kuyruk işleyicisi onu alınca
   boyanır, o yüzden yukarı kaydırmış kullanıcı aksi halde hiçbir tepki görmez.
   Mevcut "yeni kullanıcı turu gelince yeniden pinle" mantığı korunur.
   **Bekleme göstergesi (2026-07-28):** bağımsız `WorkingDots` balonu artık
@@ -610,7 +586,7 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   sunucuda henüz kayıtlı olmayabilir, budamak göstergeyi söndürürdü).
   Her satırı şu bileşenlere devreder:
   - `UserTurn.tsx` — gerçek kullanıcı mesajı (balon + sağ meta satırı).
-  - `PeerTurn.tsx` — **gelen peer/inbox mesajı** (2026-07-06): başka bir ajanın
+  - `PeerTurn.tsx` — **ajan-yazarlı gelen mesaj** (2026-07-06; peer/inbox mesajlaşma — `send_message` — 2026-10-18'de kaldırıldı, bileşen spawn/handoff gibi ajan-damgalı enjekte turlar için kalır): başka bir ajanın
     yazdığı, `Role:"user"` ama `authorKind:"agent"` (+`authorId`) ile damgalı mesaj.
     Kullanıcının sağ-hizalı balonu yerine **sola-hizalı, gönderen ajanın avatar+adı**
     ile (AgentHeader) çizilir; altında `DirectionBadge` ile "→ alıcı" ve zaman/silme
@@ -658,8 +634,8 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
     **Sınırlar (kısayola değil, altındaki mekanizmaya ait):**
     - **Sunucu tarafında atomik kesme yok.** `interruptTurn` iki ayrı gidiş-dönüştür:
       önce `sessionControl stop`, sonra `sendMessage`. İkisi arasında boşalan tur
-      yuvasını kuyrukta bekleyen başka bir mesaj ya da otomatik bir tur (self-wake,
-      worker `<task-notification>`) kapabilir; bu durumda "hemen gönder" mesajı
+      yuvasını kuyrukta bekleyen başka bir mesaj ya da otomatik bir tur (self-wake)
+      kapabilir; bu durumda "hemen gönder" mesajı
       onun **arkasına** düşer.
     - **claude-cli'da soğuk başlangıç.** `stop` kalıcı süreç havuzundaki sıcak CLI
       sürecini yıkar (`_Docs/17`), dolayısıyla kesilen turun yerine koşan tur
@@ -875,17 +851,13 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   `MessageList` yalnız **çok-katılımcılı** thread'de (2+ ayrı ajan yazar/adres) gösterir —
   1:1 sohbet temiz kalır: asistan balonunda `AgentHeader` yanında, user balonunda meta
   satırında. Asistan yanıtları normal sohbette thread-geneli (RecipientID boş); yönlü
-  atıf şimdilik **inbox/peer** mesajlarında görünür (`agentmsg.go` katılımcı damgası).
-- **Inbox mesajı genericleştirildi (2026-07-06):** `agent/agentmsg.go: deliverOne` inbox
-  mesajına `AuthorKind=agent`/`AuthorID=fromAgentID`/`RecipientID=target.ID` damgalar →
-  gönderen ajan inbox thread'inin katılımcısı olur, `labelMultiAgentHistory` (inbox turu
-  `wake_turn.go` üzerinden bundan geçer) mesajı `[Gönderen → Alıcı (you)]` atfeder.
-  Detay `_Docs/47`.
+  atıf, ajan-damgalı enjekte turlarda görünür (inbox/peer mesajları 2026-10-18'de kaldırıldı).
+- ~~**Inbox mesajı genericleştirildi (2026-07-06)**~~ — `agentmsg.go` / `deliverOne` ve peer inbox
+  teslimi **kaldırıldı (2026-10-18)**; tarihsel: `arsiv/28-PEER-MESAJLASMA-PLANI.md`.
 - **Ajan yazdığı her enjekte tur atfedilir (TSK507):** aynı katılımcı damgası artık
-  yalnız peer teslimlerinde değil, **bir ajanın yazdığı her enjekte user-turunda**
-  uygulanır — spawn açılış promptu (`spawn.go`, yazar = `SpawnOptions.CreatedBy`) ve
-  koordinatörün worker'a follow-up'ı (`coordination.go: dispatchWorkerTurn`, yazar =
-  koordinatör oturumunun ajanı). Ortak yardımcı:
+  **bir ajanın yazdığı her enjekte user-turunda** uygulanır — spawn açılış promptu
+  (`spawn.go`, yazar = `SpawnOptions.CreatedBy`; eskiden ayrıca peer teslimi ve
+  koordinatörün worker follow-up'ı, ikisi de kaldırıldı). Ortak yardımcı:
   `Runtime.recordAgentAuthoredNote`. Böylece bu mesajlar `MessageList`'te
   `isPeer` → **`PeerTurn`** (soldan gelen balon) olarak çizilir; öncesinde insanın
   kendi turu gibi görünüyorlardı.
@@ -894,8 +866,7 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   arayıp isim yazar — çözülemeyen id isimsiz bir peer balonu üretirdi. Çözülemeyen
   yazar düz balona düşer (insan spawn'ı da öyle). Testler:
   `TestSpawnSession_AttributesPromptToSpawningAgent`,
-  `TestSpawnSession_HumanSpawnStaysUnattributed`,
-  `TestSendToWorkerAttributesFollowUpToCoordinator`.
+  `TestSpawnSession_HumanSpawnStaysUnattributed`.
 - **Sıradaki-tur bağlam önizleme (debug, 2026-06-23):** Agent ekranındaki bağlam
   önizlemesinin oturum karşılığı. SessionDetailPanel → **"Bağlam (debug)"** →
   `SessionContextModal`, `GET /api/sessions/{id}/context-preview?message=`. Ajanın bu
@@ -1069,7 +1040,7 @@ UI'a yine `session_change("title")` ile anında yansır.
   saatine göre ölçer. Hub akışı her frame'de (+ `hello` frame'i `now` alanıyla) sunucu unix
   saniyesini taşır → `noteServerTime` skew tahminini günceller (≥2 sn fark olunca adopte edilir,
   ağ jitter'ı sayacı zıplatmaz), `serverNow()` de "şimdi"yi verir. Müşteriler: `LiveTimer`,
-  `WorkerWaitBanner`, `WakeWaitBanner`, prompt-cache sıcaklık geri sayımları
+  `WakeWaitBanner`, prompt-cache sıcaklık geri sayımları
   (`SessionDetailPanel`/`SessionContextModal`/`CacheWarmthStrip`). Tur başlangıcı da sunucudan: **`agent_start`**
   hub olayının `time` alanı kullanılır — durable/ringed olduğu için
   tur ortasında açılan/yenilenen pencere turu gerçek başlangıcından sayar, bağlandığı andan
@@ -1100,7 +1071,7 @@ UI'a yine `session_change("title")` ile anında yansır.
     balonu için — orada `justify-between` meta'yı sütunun en soluna atıp balondan koparırdı.
     `TURN_FOOTER + 'justify-end'` **yapılmaz**: aynı öğede iki `justify-*` sınıfını
     stylesheet sırası çözer, class-string sırası değil.
-  - `AutoPromptNote`, `PeerTurn`, `TaskNotificationNote` de aynı görünür çipi kullanır.
+  - `AutoPromptNote`, `PeerTurn` de aynı görünür çipi kullanır.
 
 ### Loading & iskelet durumları (2026-07-10)
 
@@ -1146,22 +1117,14 @@ sonraki bir sürümde eklenen çip kimsede sessizce gizli başlamaz.
 İki eksen vardır ve bağımsız çalışır:
 
 - **Tür çipleri** — `Session.Kind`'in tamamını kapsar (`chat`, `task`, `flow`, `spawned`,
-  `subagent`, `automation`, `insight`, `flow-coordinator`, `inbox`) + bu sürümün tanımadığı
+  `subagent`, `automation`, `insight`) + bu sürümün tanımadığı
   bir tür için `Diğer` yakalayıcısı. Hiçbir oturum görünmez kalamaz.
-- **Kapsam çipleri** — türden bağımsız dört adet: `Çalışan`, `Bekleyen`, `Worker`,
-  `Arşiv`. Eskiden yalnız son ikisi vardı (aktif/worker/arşiv üçlüsü); canlı eksen TSK513
-  ile eklendi.
+- **Kapsam çipleri** — türden bağımsız kapsam çipleri: `Çalışan`, `Arşiv`. (`Bekleyen` ve `Worker`
+  çipleri 2026-10-18'de koordinatör/worker ile birlikte kaldırıldı.)
 
-Canlı eksen `sessionLiveScope()` ile hesaplanır ve **iki değeri karşılıklı dışlayıcıdır**:
-
-- `Çalışan` — oturumun **kendi** turu akıyor (`streamingSessionIds` ya da runtime `running`).
-- `Bekleyen` — oturum kendisi boşta ama koordinatör ağacında **herhangi bir derinlikte**
-  en az bir descendant worker canlı (`liveWorkerCounts`). `/api/executions` her oturumun
-  `coordinatorSessionId` + `rootCoordinatorSessionId` lineage'ını taşıdığı için worker
-  satırları filtrelenmiş veya henüz sayfalanmamış olsa da kök satır doğru kalır.
-  Feed 20 saniyelik poll ve çalışma olaylarındaki SSE refresh ile güncellenir; yüklü
-  session satırları + `streamingSessionIds` yerel fallback'tir. Kendi turu da akıyorsa
-  `Çalışan` kazanır.
+Canlı eksen `sessionLiveScope()` ile hesaplanır: `Çalışan` — oturumun **kendi** turu akıyor
+(`streamingSessionIds` ya da runtime `running`). (`Bekleyen` — koordinatör ağacında canlı
+descendant worker — 2026-10-18'de kaldırıldı.)
 
 Sidebar'da tek bir `chipShapeOf()` yardımcısı görünür listeyi sınıflandırır.
 `sessionMatchesChips` içinde canlı alanlar **opsiyoneldir** — runtime anlık görüntüsü
@@ -1173,7 +1136,7 @@ isteğinin parçasıdır: `useSessionChips` (sidebar'ın üstünde, `App`'te) se
 `useSessionsController` her `/api/sessions` çağrısına `chips=<seçili,çipler>` ekler ve
 sunucu (`internal/api/sessions_chips.go`) aynı yüklemi **sayfalamadan önce** uygular.
 Neden: sayfalama tüm türler üzerinde yapıldığında 100'lük bir sayfa neredeyse tamamen
-worker/subagent satırı olabiliyor, kullanıcı sohbetlerinin yalnız birkaçını görüyor ve
+subagent satırı olabiliyor, kullanıcı sohbetlerinin yalnız birkaçını görüyor ve
 `total`/`hasMore` göremediği satırları sayıyordu — "Daha fazla yükle" bozuk görünüyordu.
 
 Sonuçlar:
@@ -1192,13 +1155,12 @@ Sonuçlar:
 **İki sekme: Konuşmalar / Arka plan (2026-10-17).** Liste, çiplerin üstünde iki
 sekmeye ayrılır. **Konuşmalar** (`main`) kişinin başlattığı sohbetleri ve onlardan
 açılan `spawn_session` / `/handoff` sohbetlerini tutar; **Arka plan** (`other`) geri
-kalan her şeyi: koordinatör worker'ları (`spawn_worker`), subagent'lar, görev,
-zamanlama, otomasyon, insight, ajanlar arası mesaj kutuları (`💬 … — Mesajlar`,
-`sourceId` `agent-messages:` ile başlar) ve sistem ajanı oturumları. Worker ile spawn ayrı
-kavramlardır: worker koordinatöre bağlıdır (`coordinatorSessionId`), spawn bağımsız
+kalan her şeyi: subagent'lar, görev,
+zamanlama, otomasyon, insight ve sistem ajanı oturumları (koordinatör worker'ları ve
+ajanlar arası mesaj kutuları 2026-10-18'de kaldırıldı). Spawn bağımsız
 bir sohbettir ve Konuşmalar'da kalır. Sınıflandırma `internal/api/sessions_groups.go`
 (`sessionGroup`) ile istemci ikizi `features/sessions/sessionGroup.ts`
-(`sessionGroupOf`) arasında aynıdır: `Kind` ∈ {`chat`, `spawned`, boş}, worker değil,
+(`sessionGroupOf`) arasında aynıdır: `Kind` ∈ {`chat`, `spawned`, boş},
 `visibility` `internal` değil, `category`/`executionType` sohbet/etkileşimli, `system:`
 etiketi ve mesaj kutusu kaynağı yok, köken (`Lineage().Kind`) `user`/`spawn`/`handoff`
 ise `main`. Çip anahtarı
@@ -1267,37 +1229,16 @@ aynen yansıtır.
 
 - **Tek doğruluk kaynağı:** `writableSessionKindList` / `IsWritableSessionKind`
   (`internal/db/models.go`). Liste: `""` (manuel sohbet), `"chat"`, `"spawned"`,
-  `"schedule"`, `"automation-run"`, `"schedule-run"`, `"worker"`. Geri kalan her
-  tür (task, flow, automation, flow-coordinator, insight) orkestratörün yazdığı
+  `"schedule"`, `"automation-run"`, `"schedule-run"` (`"worker"` 2026-10-18'de listeden
+  çıkarıldı). Geri kalan her tür (task, flow, automation, insight) orkestratörün yazdığı
   koşu kaydıdır — tam okunur ama yeni bir kullanıcı turunun bağlanacağı koşu
   yoktur.
-- **`"worker"` yazılabilir (TSK507).** Worker transkripti bitmiş bir koşu kaydı
-  değil, koordinatörün **zaten içine yazdığı** canlı bir konuşmadır
-  (`SendToWorker` user-rolünde tur enjekte eder). Transkripti izleyen insanın da
-  aynısını yapabilmesi gerekir: worker'ın sorduğunu yanıtlamak, rotasını
-  düzeltmek, eksik bağlamı vermek. Çakışma riski `schedule` ile aynı şekilde
-  sınırlıdır — insan turu ile koordinatörün enjekte ettiği tur aynı per-session
-  turn slot'unu talep eder, sıraya girer.
-- **`"inbox"` türü kaldırıldı (TSK507).** Ajanlar arası mesajlar artık alıcının
-  **sıradan `chat` thread'ine** düşer (`agent/agentmsg.go`), o da sohbet olduğu
-  için doğal olarak yazılabilir — yani insan o konuşmaya da katılabilir. Thread
-  `(kind, sourceID)` ile aranır (`GetOrCreateSourceSession`, sourceID =
-  `agent-messages:<agentID>`), **`(agentID, kind)` ile değil**: `"chat"` aynı
-  zamanda insanın açtığı her ad-hoc oturumun türü olduğundan, ikinci arama
-  kullanıcının kendi sohbetini bulup peer mesajlarını oraya teslim ederdi.
-  Regresyon: `TestDeliverAgentMessage_DoesNotHijackExistingChat`.
-- **Göç (migration):** eski build'lerin yazdığı `inbox` oturumları açılışta
-  otomatik `chat`'e çevrilir — `db.migrateLegacyInboxSessions`, `Open` içinde
-  `migrateLegacyInboxSessions` fazı. Her oturuma `PeerThreadSourceID(agentID)`
-  damgalanır; **bu şart**, çünkü sourceId'siz kalan oturum teslim tarafındaki
-  `GetOrCreateSourceSession` aramasına görünmez ve bir sonraki mesaj yanına
-  **ikinci bir thread** açarak ajanın geçmişini ikiye bölerdi. Idempotent (her
-  boot koşar, ikinci geçiş no-op) ve oturum başına best-effort: yazılamayan tek
-  bir header yüzünden boot düşmez, sayılıp loglanır. Dolu bir `sourceId`'ye
-  dokunulmaz. Testler: `internal/db/session_inbox_migrate_test.go` (5 test,
-  `TestOpenRunsLegacyInboxMigration` boot yolunu da kapsar).
-  Sidebar çipi ve `graph.go` etiketi yine de korunur: göç edemeyen bir oturum
-  kalırsa "Diğer"e düşmesin.
+- ~~**`"worker"` yazılabilir (TSK507).**~~ Worker oturumları 2026-10-18'de kaldırıldı; tür
+  listede yoktur.
+- **`"inbox"` türü kaldırıldı (TSK507) ve ajanlar-arası mesajlaşma da kaldırıldı (2026-10-18).**
+  Peer teslimi (`agent/agentmsg.go`, `GetOrCreateSourceSession` `agent-messages:<agentID>`) yoktur;
+  eski `inbox` → `chat` göçü (`migrateLegacyInboxSessions`) tarihseldir. Sidebar çipi ve `graph.go`
+  etiketi, göç edemeyen eski bir oturum "Diğer"e düşmesin diye korunabilir.
 - **`"schedule"` bilinçli istisnadır.** Zamanlayıcı da oraya yazar, ama o bir
   koşu-başına log değil, ajanın uzun ömürlü cron thread'idir; kullanıcı tikler
   arasında konuşmaya devam edebilmelidir (sorulanı yanıtlamak, düzeltmek, bağlam
@@ -1313,15 +1254,15 @@ aynen yansıtır.
   `<Badge tone="muted">Salt okunur</Badge>` çizer — koşul tam olarak
   `info && !isWritableSessionKind(info.kind)`. Yani rozet **yalnız** composer'ın
   gizlendiği oturumlarda görünür; amacı eksik composer'ın hata gibi görünmesini
-  engellemektir. `schedule` ve `worker` oturumlarında rozet **çıkmaz**.
+  engellemektir. `schedule` oturumlarında rozet **çıkmaz**.
 - **API karşılığı:** `rejectNonWritableSession`
   (`internal/api/session_readonly.go`) aynı kapıyı sunucuda uygular ve `403`
   döner. Yanına iki kural daha oturur: `rejectReadOnlySession` (rewind — canlı
   turu yönlendirmez, geçmişi keser, bu yüzden zayıf "yazılamaz" kapısıyla
   korunur) ve `rejectImmutableSession` (stop/steer + `ask_user` yanıtı; yalnız
   `IsImmutableSessionKind` = makine transkriptleri, bugün `insight`). Bu kapılar
-  yalnız HTTP uçlarındadır; süreç-içi üreticiler (`send_message`, otomasyon
-  teslimi, koordinatör→worker) kasıtlı olarak dışarıdadır.
+  yalnız HTTP uçlarındadır; süreç-içi üreticiler (otomasyon
+  teslimi) kasıtlı olarak dışarıdadır.
 
 Test: `frontend/src/shared/lib/sessionKind.test.ts`,
 `internal/db/models_session_kind_test.go`,
@@ -1477,13 +1418,10 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
 - claude-cli tool kullanımı, kullanıcının yerel `~/.claude` izin ayarlarına tabidir
   (print modunda izin verilen araçlar çalışır).
 
-### Worker sonuç kartı oturum bağlantısı (2026-08-31)
+### ~~Worker sonuç kartı oturum bağlantısı (2026-08-31)~~
 
-`worker-note` kaynaklı `<task-notification>` kartında ajan kimliği, bildirimdeki
-`task-id` doluysa ilgili worker oturumunu açar. Kimlik tıklaması sonuç gövdesini
-açıp kapatmaz; bunun için ayrı, erişilebilir chevron kontrolü kullanılır. Eski,
-`task-id` içermeyen bildirimlerde kimlik düz metin kalır. Araç sayısı ve süre,
-sağdaki durum etiketinin hemen altında sağ hizalı gösterilir.
+**Kaldırıldı (2026-10-18):** `<task-notification>` kartı (`TaskNotificationNote`) ve worker oturumları
+koordinatör modu ile birlikte silindi.
 
 ### CLI-native compaction kartı (2026-08-30)
 
@@ -1509,33 +1447,8 @@ sağdaki durum etiketinin hemen altında sağ hizalı gösterilir.
 - Güvenli özet yalnız işlem + alıcılar + durumdan üretilir; delegasyon prompt'u
   kullanıcı sunumuna veya debug günlüğüne yazılmaz.
 
-### Oturum başlangıç paneli (2026-09-01)
+### ~~Oturum başlangıç paneli (2026-09-01)~~ ve ~~Coordinator Başlangıç Paneli~~
 
-Yeni ve **henüz hiç mesaj gönderilmemiş** bir sohbette composer'ın hemen üstünde
-"Başlangıç ayarları" kartı çıkar (`features/chat/SessionStartPanel.tsx`):
-koordinatör modunu aç/kapa + açıkken workflow (recipe) seçimi. İkisi de zaten
-oturum bilgi panelindeki **Koordinasyon** bölümünde vardı; buradaki kart yalnız
-kararın gerçekten verildiği ana taşır — mod, oturum çalışmaya başladığında
-prompt epoch'una donuyor, yani ilk turdan sonra değiştirmek çalışan bir sohbetin
-araç setini yeniden yazmak demek.
-
-- Kart aynı API'leri kullanır: `PUT /api/sessions/{id}/role` ve
-  `PUT /api/sessions/{id}/workflow`. Ayrı bir kalıcılık yolu yoktur.
-- Başlangıç değerleri `GET /api/sessions/{id}/info`'dan okunur — koordinatör
-  olarak ayarlanmış bir ajan (Ajanlar ▸ Koordinatör) oturumu zaten koordinatör
-  modda açar (`db.createSessionLocked`), kart bunu "kapalı" göstermez.
-- Mod kapatılınca seçili recipe de yerel olarak temizlenir; backend zaten
-  koordinatör olmayan oturumda workflow'u reddeder.
-- Görünürlük kuralı `features/chat/sessionStartGate.ts` içinde saf fonksiyon
-  (`shouldShowStartPanel`) olarak durur ve testlidir: read-only koşu logu,
-  worker oturumu, dolu/yüklenmekte olan transkript, akan tur, **kuyruğa alınmış
-  veya gönderilmiş tur** ve kullanıcının kapattığı oturum → kart yok. Gönder'e
-  basıldığı anda `activePending` true olduğu için kart yanıt beklemeden kaybolur.
-- Sağ üstteki ✕ kartı yalnız o oturum için (bellek içi, kalıcı değil) gizler.
-
-### Coordinator Başlangıç Paneli
-
-Panel yalnız yeni/boş normal coordinator oturumunda, ilk mesaj gönderilmeden önce
-görünür. Coordinator modunu açıp kapatma kontrolü ile coordinator workflow seçimi
-sunar. `messageCount > 0`, streaming, pending mesaj veya `queuedCount > 0`
-olduğunda gizlenir; read-only run log ve worker oturumlarında hiç gösterilmez.
+**Kaldırıldı (2026-10-18):** "Başlangıç ayarları" kartı (`SessionStartPanel.tsx`, `sessionStartGate.ts`),
+`PUT /api/sessions/{id}/role` ve `PUT /api/sessions/{id}/workflow` yalnız koordinatör modunu ve
+recipe seçimini yönettiği için koordinatör modu ile birlikte silindi.

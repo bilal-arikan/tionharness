@@ -16,20 +16,18 @@ import (
 // enriched with the agent name, a live-running flag and a last-run status so the
 // feed renders every execution uniformly.
 type executionItem struct {
-	SessionID                string `json:"sessionId"`
-	Kind                     string `json:"kind"`
-	SourceID                 string `json:"sourceId,omitempty"`
-	Title                    string `json:"title"`
-	AgentID                  string `json:"agentId"`
-	AgentName                string `json:"agentName"`
-	MessageCount             int    `json:"messageCount"`
-	Unread                   bool   `json:"unread"`
-	Running                  bool   `json:"running"`
-	LastStatus               string `json:"lastStatus,omitempty"`
-	CoordinatorSessionID     string `json:"coordinatorSessionId,omitempty"`
-	RootCoordinatorSessionID string `json:"rootCoordinatorSessionId,omitempty"`
-	CreatedAt                int64  `json:"createdAt"`
-	UpdatedAt                int64  `json:"updatedAt"`
+	SessionID    string `json:"sessionId"`
+	Kind         string `json:"kind"`
+	SourceID     string `json:"sourceId,omitempty"`
+	Title        string `json:"title"`
+	AgentID      string `json:"agentId"`
+	AgentName    string `json:"agentName"`
+	MessageCount int    `json:"messageCount"`
+	Unread       bool   `json:"unread"`
+	Running      bool   `json:"running"`
+	LastStatus   string `json:"lastStatus,omitempty"`
+	CreatedAt    int64  `json:"createdAt"`
+	UpdatedAt    int64  `json:"updatedAt"`
 }
 
 // handleListExecutions returns the unified executions feed across all agents.
@@ -73,20 +71,18 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		out = append(out, executionItem{
-			SessionID:                sess.ID,
-			Kind:                     sess.Kind,
-			SourceID:                 sess.SourceID,
-			Title:                    sess.Title,
-			AgentID:                  sess.OwnerAgentID(),
-			AgentName:                sessionAgentName(sess, agentName),
-			MessageCount:             sess.MessageCount,
-			Unread:                   sess.Unread,
-			Running:                  running[sess.ID],
-			LastStatus:               s.lastStatusFor(ctx, wsp, sess),
-			CoordinatorSessionID:     sess.CoordinatorSessionID,
-			RootCoordinatorSessionID: sess.RootCoordinator(),
-			CreatedAt:                sess.CreatedAt,
-			UpdatedAt:                sess.UpdatedAt,
+			SessionID:    sess.ID,
+			Kind:         sess.Kind,
+			SourceID:     sess.SourceID,
+			Title:        sess.Title,
+			AgentID:      sess.OwnerAgentID(),
+			AgentName:    sessionAgentName(sess, agentName),
+			MessageCount: sess.MessageCount,
+			Unread:       sess.Unread,
+			Running:      running[sess.ID],
+			LastStatus:   s.lastStatusFor(ctx, wsp, sess),
+			CreatedAt:    sess.CreatedAt,
+			UpdatedAt:    sess.UpdatedAt,
 		})
 	}
 	// Newest-updated first, with a SessionID tie-break so equal-UpdatedAt rows keep

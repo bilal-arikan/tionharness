@@ -73,8 +73,6 @@ export function screenForRef(ref: ViewRef): ExplorerTarget | null {
     case 'logs':
       // Process logs live under Workspace ▸ Logs.
       return target('workspace', 'logs')
-    case 'trajectory':
-      return target('rota', ref.id)
     default:
       return null
   }

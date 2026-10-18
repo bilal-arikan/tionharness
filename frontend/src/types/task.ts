@@ -96,16 +96,12 @@ export interface Schedule {
 // default), each completion re-fires the rule — a self-continuing loop bounded by
 // maxIterations / cooldownSec / enabled. Surfaced in the Schedules screen.
 // Automation trigger kind: 'tag' (a tagged session finishing a turn), 'board'
-// (a kanban card change), or the Rota kinds 'phase' / 'trajectory_end'. '' from
-// older files is treated as 'tag'. (The 'counter' kind was retired 2026-09-05,
-// the 'token' kind 2026-10-04.)
-export type AutomationTriggerKind = 'tag' | 'board' | 'phase' | 'trajectory_end' | 'flow'
+// (a kanban card change) or 'flow' (a finished flow run). '' from older files is
+// treated as 'tag'. (The 'counter' kind was retired 2026-09-05, the 'token' kind
+// 2026-10-04.)
+export type AutomationTriggerKind = 'tag' | 'board' | 'flow'
 // Flow-trigger outcome filter ('' = any finished run).
 export type FlowRuleStatus = '' | 'success' | 'failure'
-// Phase transition a phase automation watches (Rota F2).
-export type TrajEvent = 'exit' | 'enter'
-// Terminal status filter of a trajectory_end automation ('' = any).
-export type TrajEndStatus = '' | 'done' | 'failed' | 'abandoned'
 // Board card operation a board automation reacts to.
 export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
 // Automation session strategy (agent-backed only): 'spawn' runs a fresh session
@@ -154,14 +150,6 @@ export interface Automation {
   boardAction?: BoardAction
   // Explicit destination for a targetless move action.
   boardMoveToState?: string
-  // Trajectory-trigger fields (Rota F2; triggerKind 'phase' | 'trajectory_end').
-  // trajPhase narrows a phase rule to one phase id ('' = every phase);
-  // trajRecipe narrows to trajectories seeded from that recipe slug ('' = any);
-  // trajEvent picks exit (default) or enter; trajStatus narrows an end rule.
-  trajPhase?: string
-  trajRecipe?: string
-  trajEvent?: TrajEvent
-  trajStatus?: TrajEndStatus
   // Flow-trigger fields (triggerKind 'flow'): fires when a flow run finishes.
   // flowAgentId narrows to one agent's flow ('' = any); flowStatus to one
   // outcome; flowMaxGrade (1..5) to runs the decision model graded at or

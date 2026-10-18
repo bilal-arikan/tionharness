@@ -62,14 +62,11 @@ problem.
 - A proposal the validator rejects comes back to you once with the error; fix
   that error or answer `noChange: true`.
 - A gate checks the REPLY, so its retry fixes the reply — never write a retry
-  prompt that forbids the agent's work ("do not open new tests/tasks/workers",
+  prompt that forbids the agent's work ("do not open new tests/tasks/sessions",
   "only re-read the evidence"): an agent told to hold back on every rejected
   draft stops doing its job and learns to describe waiting instead. Do not
   optimise for passing the gate; a criterion the agent can satisfy by saying a
   phrase ("…pending") measures wording, not work.
-- On a COORDINATOR agent (the flow header says so), never loop back into the
-  node that runs its own turn (thread context, tools): that turn launches
-  workers, so re-running it duplicates them. The validator rejects it.
 - Do not propose changes caused by the environment (provider outage, missing
   tool, paused workspace) or by a single unusual run.
 - If the runs justify nothing, answer `noChange: true` with the reason. That is

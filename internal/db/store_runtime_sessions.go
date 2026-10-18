@@ -5,10 +5,8 @@ import "slices"
 // SessionRuntime is the persistent part of a sidebar runtime row. Running
 // state is deliberately absent: live registries change without store writes.
 type SessionRuntime struct {
-	SessionID                string
-	LastStatus               string
-	CoordinatorSessionID     string
-	RootCoordinatorSessionID string
+	SessionID  string
+	LastStatus string
 }
 
 type runtimeSessionsSnapshot struct {
@@ -36,14 +34,14 @@ func (d *DB) RuntimeSessions() []SessionRuntime {
 	ordered := make([]orderedRow, 0)
 	for _, raw := range d.sessions {
 		sess := normalizeSessionMeta(raw)
-		row := SessionRuntime{SessionID: sess.ID, CoordinatorSessionID: sess.CoordinatorSessionID, RootCoordinatorSessionID: sess.RootCoordinator()}
+		row := SessionRuntime{SessionID: sess.ID}
 		if sess.SourceID != "" {
 			switch sess.Kind {
 			case "task":
 				row.LastStatus = d.tasks[sess.SourceID].LastRunStatus
 			}
 		}
-		if row.LastStatus != "" || row.CoordinatorSessionID != "" {
+		if row.LastStatus != "" {
 			ordered = append(ordered, orderedRow{row: row, pinned: sess.Pinned, updated: sess.UpdatedAt})
 		}
 	}

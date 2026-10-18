@@ -34,7 +34,7 @@
     "dismissed": "Yoksayıldı"
   },
   "severity": { "high": "yüksek", "medium": "orta", "low": "düşük" },
-  "channel": { "appFix": "app-fix", "workspaceOpt": "workspace-opt", "recipeOpt": "recipe-opt" },
+  "channel": { "appFix": "app-fix", "workspaceOpt": "workspace-opt" },
   "filters": {
     "searchPlaceholder": "Bulgu ara…",
     "allChannels": "Tüm kanallar",
@@ -48,8 +48,7 @@
   },
   "summary": { "total": "Toplam", "open": "Açık" },
   "badges": {
-    "regression": "REGRESYON",
-    "recipeOptimizerTitle": "Reçete optimizer önerisi (Rota F4) — reçeteyi sen düzenlersin"
+    "regression": "REGRESYON"
   },
   "scan": {
     "completed": "Tarama tamamlandı — bulgular güncellendi.",
@@ -65,14 +64,6 @@
   "finding": {
     "rootCause": "Kök neden",
     "proposedFix": "Önerilen çözüm",
-    "recipeProposal": "Reçete önerisi",
-    "target": "hedef",
-    "value": "değer",
-    "removes": "kaldırır",
-    "recipe": "reçete",
-    "evidence": "Kanıt",
-    "recipeHintBefore": "Öneri uygulanmaz; reçeteyi Beceriler ekranından sen düzenlersin. Uyguladıysan bulguyu",
-    "recipeHintAfter": "olarak kapat (kanıt: skill/{{slug}}).",
     "fileSuggestion": "Dosya (öneri)",
     "evidenceSessions": "Kanıt oturumları",
     "openTranscript": "Oturum transkriptine git",

@@ -70,11 +70,3 @@ func TestSetArchivedHidesSkillFromAgents(t *testing.T) {
 		t.Error("a restored skill must be advertised again")
 	}
 }
-
-func TestResolveRecipeRefusesArchived(t *testing.T) {
-	dir := t.TempDir()
-	writeSkill(t, dir, "wf", "---\nname: WF\nkind: coordinator-workflow\npattern: fanout\narchived: true\n---\nsteps\n")
-	if _, err := ResolveRecipe(New(dir, ""), "wf"); !errors.Is(err, archive.ErrArchived) {
-		t.Fatalf("err = %v, want ErrArchived", err)
-	}
-}

@@ -46,7 +46,7 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// extended tier without the activate_tools meta-tools, so leaving the provider
 		// empty here made every extended call answer "is not activated" with no fix.
 		run.setProvider(ag.Provider)
-		// Process-ledger parentage: an autonomous turn is usually the spawned/worker
+		// Process-ledger parentage: an autonomous turn is usually the spawned/subagent
 		// side of a fan-out, so its CLI subprocess's processes must group under the
 		// session that spawned it (see stampRunSession). Empty for a top-level session.
 		run.setParentSession(rt.SessionParentID(sessionID))
@@ -150,8 +150,8 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 
 		// Self-management bridge (CLI-3): advertise the agent's lazy self-management
 		// tools and dispatch them through the same registry the native loop uses.
-		// Stamp the session id so BridgeTools can detect a coordinator session and
-		// bridge the coordinator tools (M2) for a claude-cli coordinator.
+		// Stamp the session id so BridgeTools can attribute bridged tool calls to the
+		// session.
 		if sessionID != "" {
 			ctx = agent.WithSessionID(ctx, sessionID)
 		}

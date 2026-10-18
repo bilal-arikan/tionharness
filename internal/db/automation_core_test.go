@@ -41,12 +41,6 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 		{"retired counter kind", func(a *Automation) { a.TriggerKind = TriggerCounterLegacy }, "unknown triggerKind"},
 		{"retired token kind", func(a *Automation) { a.TriggerKind = TriggerTokenLegacy }, "unknown triggerKind"},
 		{"unknown kind", func(a *Automation) { a.TriggerKind = "teleport"; a.TriggerTag = "x" }, "unknown triggerKind"},
-		// Rota (F2) kinds: registered like the others, with their own filters.
-		{"phase rule ok", func(a *Automation) { a.TriggerKind, a.TrajPhase = TriggerPhase, "code" }, ""},
-		{"phase rule bad event", func(a *Automation) { a.TriggerKind, a.TrajEvent = TriggerPhase, "during" }, "trajEvent"},
-		{"phase rule multi-word phase", func(a *Automation) { a.TriggerKind, a.TrajPhase = TriggerPhase, "plan code" }, "trajPhase"},
-		{"end rule ok", func(a *Automation) { a.TriggerKind, a.TrajStatus = TriggerTrajectoryEnd, TrajStatusFailed }, ""},
-		{"end rule bad status", func(a *Automation) { a.TriggerKind, a.TrajStatus = TriggerTrajectoryEnd, "running" }, "trajStatus"},
 		{"flow rule ok", func(a *Automation) { a.TriggerKind, a.FlowStatus, a.FlowMaxGrade = TriggerFlow, FlowFailure, 2 }, ""},
 		{"flow rule any outcome ok", func(a *Automation) { a.TriggerKind = TriggerFlow }, ""},
 		{"flow rule bad status", func(a *Automation) { a.TriggerKind, a.FlowStatus = TriggerFlow, "running" }, "flowStatus"},
@@ -69,7 +63,7 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 			}
 		})
 	}
-	if ValidTriggerKind("teleport") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) || !ValidTriggerKind(TriggerPhase) || !ValidTriggerKind(TriggerTrajectoryEnd) || !ValidTriggerKind(TriggerFlow) {
+	if ValidTriggerKind("teleport") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) || !ValidTriggerKind(TriggerFlow) {
 		t.Fatal("ValidTriggerKind mismatch")
 	}
 }

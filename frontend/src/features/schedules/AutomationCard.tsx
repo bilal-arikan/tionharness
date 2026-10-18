@@ -4,8 +4,6 @@ import {
   LayoutGrid,
   Archive,
   MoveRight,
-  Waypoints,
-  Flag,
   Workflow,
   Pin,
   PinOff,
@@ -69,13 +67,7 @@ export function AutomationCard({
       data-automation-id={a.id}
       className="rounded-lg border border-l-4 border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-sm"
       style={{
-        borderLeftColor: isBoardKind
-          ? COLUMN_ACCENT.board
-          : kind === 'phase'
-            ? COLUMN_ACCENT.phase
-            : kind === 'trajectory_end'
-              ? COLUMN_ACCENT.trajectory_end
-              : COLUMN_ACCENT.tag,
+        borderLeftColor: isBoardKind ? COLUMN_ACCENT.board : COLUMN_ACCENT.tag,
       }}
     >
       <div className="flex items-start gap-2">
@@ -145,25 +137,6 @@ export function AutomationCard({
                   </span>
                 )}
               </span>
-            ) : kind === 'phase' ? (
-              <span
-                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title={t('automationCard.phaseTriggered')}
-              >
-                <Waypoints size={11} />
-                {t('automationCard.phaseSummary', {
-                  phase: a.trajPhase || t('common.wildcard'),
-                  event:
-                    a.trajEvent === 'enter'
-                      ? t('automationCard.onEnter')
-                      : t('automationCard.onExit'),
-                })}
-                {a.trajRecipe && (
-                  <span className="opacity-80">
-                    {t('common.dotValue', { value: a.trajRecipe })}
-                  </span>
-                )}
-              </span>
             ) : kind === 'flow' ? (
               <span
                 className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
@@ -181,23 +154,6 @@ export function AutomationCard({
                 {(a.flowMaxGrade ?? 0) > 0 && (
                   <span className="opacity-80">
                     {t('automationCard.flowGrade', { n: a.flowMaxGrade })}
-                  </span>
-                )}
-              </span>
-            ) : kind === 'trajectory_end' ? (
-              <span
-                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title={t('automationCard.trajectoryEndTriggered')}
-              >
-                <Flag size={11} />
-                {t('automationCard.trajectoryEndSummary', {
-                  status: a.trajStatus
-                    ? t(`meta.trajectoryStatuses.${a.trajStatus}`)
-                    : t('meta.trajectoryStatuses.any'),
-                })}
-                {a.trajRecipe && (
-                  <span className="opacity-80">
-                    {t('common.dotValue', { value: a.trajRecipe })}
                   </span>
                 )}
               </span>

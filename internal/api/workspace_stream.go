@@ -15,8 +15,7 @@ import (
 //
 // GET /api/workspace/stream is the per-workspace counterpart of the per-session
 // stream: one ordered, replayable log of structured lifecycle facts (sessions
-// created/finished, flow runs, armed schedules, automation fires, trajectory
-// revisions) for the workspace named by X-Workspace-Id. Same wire contract as
+// created/finished, flow runs, armed schedules, automation fires) for the workspace named by X-Workspace-Id. Same wire contract as
 // handleSessionStream — hello/reset/hub frames, `since` cursor, `epoch` — so the
 // frontend client is the same loop. Differences: a fresh subscriber replays
 // nothing (it loads the current picture over REST), and the ring is larger.
@@ -45,7 +44,7 @@ func (s *Server) bridgeWorkspaceEvent(e events.Event) {
 	}
 	payload := mustJSON(workspaceStreamPayload{Target: e.Target, Data: e.Data, Level: e.Level})
 	s.hub.PublishWorkspace(e.WorkspaceID, events.WorkspaceStreamKind(e.Type), payload)
-	// A durable ask parked outside a turn (a phase gate, Rota F5): open its card
+	// A durable ask parked outside a turn: open its card
 	// on the session hub exactly as a suspended turn's ask would be.
 	if e.Type == events.TypeWSAsk && e.Target["op"] == "open" {
 		if wsp := s.workspaceByID(e.WorkspaceID); wsp != nil && wsp.DB != nil {

@@ -40,13 +40,6 @@
   "clipboard": {
     "copyPrompt": "Copy this text ({{mod}}+C, Enter):"
   },
-  "coordination": {
-    "subCoordinator": "Sub-coordinator",
-    "subCoordinatorLevel": "Sub-coordinator · level {{depth}}",
-    "coordinator": "Coordinator",
-    "worker": "Worker",
-    "workerLevel": "Worker · level {{depth}}"
-  },
   "emoji": {
     "smileys": "Faces",
     "people": "People",
@@ -77,18 +70,6 @@
     "spawned": {
       "label": "Spawn",
       "hint": "A spawned session completed or failed."
-    },
-    "worker": {
-      "label": "Worker",
-      "hint": "A coordinator worker changed state."
-    },
-    "coordination": {
-      "label": "Coordination",
-      "hint": "Coordination warnings such as a coordinator turn limit."
-    },
-    "rota": {
-      "label": "Route",
-      "hint": "A route started, completed, failed, or is waiting for a human response."
     },
     "automation": {
       "label": "Automations",
@@ -137,11 +118,6 @@
       "node": "node {{id}}",
       "text": "Flow {{id}}{{details}}",
       "title": "This session belongs to a flow run{{entity}}{{details}}{{via}}"
-    },
-    "coordinator": {
-      "text": "Coordinator {{id}} opened",
-      "title": "This session was opened as a coordinator worker{{root}}",
-      "root": " · root {{id}}"
     },
     "subagent": {
       "text": "Subagent · {{source}}",

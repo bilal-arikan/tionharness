@@ -141,10 +141,8 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 	t.run.setParentSession(session.ParentSessionID)
 	// Every session runs at most ONE turn at a time: claim the per-session turn slot
 	// (blocking until any in-flight turn finishes) so this turn never overlaps a
-	// concurrent direct /chat/stream call, a queued inbox turn, a scheduler wake, a
-	// peer delivery, or (for a coordinator) an auto turn. Worker notifications
-	// arriving mid-turn coalesce and trigger one auto turn on release. Claiming for
-	// ALL sessions — not just coordinators — is what closes the plain-session
+	// concurrent direct /chat/stream call, a queued inbox turn, or a scheduler wake.
+	// Claiming for every session is what closes the plain-session
 	// concurrent-turn race (_Docs/58).
 	//
 	// The send-queue worker claims the slot BEFORE it pops this message (so it stays
@@ -463,7 +461,7 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	// ships every turn but Prepare only folds messages, so without this a large
 	// static prefix keeps the message-only estimate under budget while the real
 	// footprint runs over — the fold never fires (the 127%-but-never-compacted
-	// coordinator case). systemFillers is the same basis the context meter uses.
+	// case). systemFillers is the same basis the context meter uses.
 	overhead, stepBase, oerr := t.s.contextOverheadTokens(t.ctx, t.wsp, t.session, history, multiAgent)
 	if oerr != nil {
 		t.failTurn(agentRow.ID, "context_overhead_failed", "context overhead: "+oerr.Error())
@@ -1019,12 +1017,6 @@ func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, repl
 	// Auto-tag: derive session tags from this turn (tool-error / error /
 	// archived) so an automation can later scan + repair them.
 	t.wsp.Runtime.AutoTagTurn(t.ctx, t.session.ID, steps, "")
-
-	// Phantom-spawn guard: a coordinator driven by a plain user chat turn never
-	// passes through runCoordinatorTurn, so until now it was the one coordinator
-	// turn kind nothing checked — and it narrated spawns it never made
-	// (WS27/SES90).
-	t.s.guardCoordinatorChatTurn(t.ctx, t.database, t.wsp.Runtime, t.session.ID, agentRow, resp.Text, steps)
 
 	// Tag-triggered automations: signal that this session finished a turn. The
 	// runtime dispatches it detached, so a tagged session completing can spawn a

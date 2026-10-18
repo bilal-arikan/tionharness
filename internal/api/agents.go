@@ -121,14 +121,6 @@ type createAgentReq struct {
 	// default on) apart from an explicit false (opt-out). New agents get tools
 	// by default.
 	MCPEnabled *bool `json:"mcpEnabled"`
-	// CoordinatorMode makes every session this agent opens a coordinator (see
-	// db.Agent.CoordinatorMode); CoordinatorWorkflow optionally pins a recipe slug.
-	// Unlike MCPEnabled these default OFF — coordination is opt-in.
-	CoordinatorMode     bool   `json:"coordinatorMode"`
-	CoordinatorWorkflow string `json:"coordinatorWorkflow"`
-	// CoordinatorPrompt is injected only while a session of this agent is
-	// coordinating (see db.Agent.CoordinatorPrompt).
-	CoordinatorPrompt string `json:"coordinatorPrompt"`
 	// ParentID creates the agent as a CHILD that inherits every field from the
 	// named agent (see db.Agent.ParentID). Only name and a non-empty soul are
 	// applied on top (as overrides); provider/model/thinking come from the
@@ -199,39 +191,22 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		mcpEnabled = *req.MCPEnabled
 	}
 
-	// A pinned recipe is validated here (unlike at seed/install time, where an
-	// unresolvable slug is dropped): this is a direct, interactive edit, so a typo
-	// must come back as an error rather than silently becoming free coordination.
-	if req.CoordinatorWorkflow != "" {
-		if ws(r).Runtime == nil {
-			writeError(w, http.StatusBadRequest, "Select a workspace to validate the coordinator workflow")
-			return
-		}
-		if _, err := ResolveCoordinatorRecipe(ws(r).Runtime.Skills(), req.CoordinatorWorkflow); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-	}
-
 	// req.Provider is accepted as a provider INSTANCE id (_Docs/71 §5): for every
 	// default (migrated) instance the id equals its kind id, so this is
 	// byte-for-byte the historical request shape. SyncProviderFields resolves the
 	// kind and keeps Agent.Provider/ProviderInstanceID in lockstep (K3).
 	newAgent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
-		Name:                req.Name,
-		Soul:                req.Soul,
-		Identity:            req.Identity,
-		Provider:            providerKind,
-		ProviderInstanceID:  providerInstanceID,
-		Model:               req.Model,
-		ThinkingLevel:       req.ThinkingLevel,
-		NativeWebSearch:     req.NativeWebSearch,
-		NativeShell:         req.NativeShell,
-		PermissionMode:      req.PermissionMode,
-		MCPEnabled:          mcpEnabled,
-		CoordinatorMode:     req.CoordinatorMode,
-		CoordinatorWorkflow: req.CoordinatorWorkflow,
-		CoordinatorPrompt:   req.CoordinatorPrompt,
+		Name:               req.Name,
+		Soul:               req.Soul,
+		Identity:           req.Identity,
+		Provider:           providerKind,
+		ProviderInstanceID: providerInstanceID,
+		Model:              req.Model,
+		ThinkingLevel:      req.ThinkingLevel,
+		NativeWebSearch:    req.NativeWebSearch,
+		NativeShell:        req.NativeShell,
+		PermissionMode:     req.PermissionMode,
+		MCPEnabled:         mcpEnabled,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -381,15 +356,6 @@ type updateAgentReq struct {
 	Disabled        *bool     `json:"disabled"`
 	System          *bool     `json:"system"`
 	SystemKey       *string   `json:"systemKey"`
-	// Coordinator defaults for NEW sessions of this agent. Pointers so omitting
-	// them leaves the current setting alone and an explicit false turns it off.
-	// Existing sessions keep whatever mode they are already in — the toggle is a
-	// default, not a broadcast (see db.Agent.CoordinatorMode).
-	CoordinatorMode     *bool   `json:"coordinatorMode"`
-	CoordinatorWorkflow *string `json:"coordinatorWorkflow"`
-	// CoordinatorPrompt is the coordinator-only prompt block. Pointer so omitting
-	// it leaves the stored text alone and an explicit "" clears it.
-	CoordinatorPrompt *string `json:"coordinatorPrompt"`
 	// ParentID re-parents the agent ("" detaches it into a root that keeps its
 	// effective values). See db.Agent.ParentID.
 	ParentID *string `json:"parentId"`
@@ -413,19 +379,6 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	wsp := ws(r)
 	agentID := r.PathValue("id")
-
-	// Same rule as create: an interactive edit naming an unknown recipe is an
-	// error, not a silent downgrade to free coordination. Clearing it ("") is fine.
-	if req.CoordinatorWorkflow != nil && *req.CoordinatorWorkflow != "" {
-		if wsp.Runtime == nil {
-			writeError(w, http.StatusBadRequest, "Select a workspace to validate the coordinator workflow")
-			return
-		}
-		if _, err := ResolveCoordinatorRecipe(wsp.Runtime.Skills(), *req.CoordinatorWorkflow); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-	}
 
 	// Read first so immutable system identity is validated explicitly and model
 	// changes can be reported against the stored value.
@@ -482,23 +435,20 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	patch := db.AgentProfilePatch{
-		Name:                req.Name,
-		Soul:                req.Soul,
-		Identity:            req.Identity,
-		Model:               req.Model,
-		ThinkingLevel:       req.ThinkingLevel,
-		NativeWebSearch:     req.NativeWebSearch,
-		NativeShell:         req.NativeShell,
-		PermissionMode:      req.PermissionMode,
-		Avatar:              req.Avatar,
-		Color:               req.Color,
-		Skills:              req.Skills,
-		Disabled:            req.Disabled,
-		CoordinatorMode:     req.CoordinatorMode,
-		CoordinatorWorkflow: req.CoordinatorWorkflow,
-		CoordinatorPrompt:   req.CoordinatorPrompt,
-		ParentID:            req.ParentID,
-		ResetFields:         req.ResetFields,
+		Name:            req.Name,
+		Soul:            req.Soul,
+		Identity:        req.Identity,
+		Model:           req.Model,
+		ThinkingLevel:   req.ThinkingLevel,
+		NativeWebSearch: req.NativeWebSearch,
+		NativeShell:     req.NativeShell,
+		PermissionMode:  req.PermissionMode,
+		Avatar:          req.Avatar,
+		Color:           req.Color,
+		Skills:          req.Skills,
+		Disabled:        req.Disabled,
+		ParentID:        req.ParentID,
+		ResetFields:     req.ResetFields,
 	}
 	// req.Provider is accepted as a provider INSTANCE id (_Docs/71 §5); only sync
 	// when the request actually touches it (nil = "not in this patch").

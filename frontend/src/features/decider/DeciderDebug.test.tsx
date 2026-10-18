@@ -18,7 +18,7 @@ const report: DeciderDebugReport = {
     {
       at: 12,
       traceId: 'trace',
-      authority: 'stall-judge',
+      authority: 'tool-risk',
       mode: 'shadow',
       stage: 'outcome',
       role: 'primary',
@@ -30,7 +30,7 @@ const report: DeciderDebugReport = {
     {
       at: 11,
       traceId: 'trace',
-      authority: 'stall-judge',
+      authority: 'tool-risk',
       mode: 'shadow',
       stage: 'completed',
       role: 'primary',
@@ -40,13 +40,13 @@ const report: DeciderDebugReport = {
     {
       at: 10,
       traceId: 'trace',
-      authority: 'stall-judge',
+      authority: 'tool-risk',
       mode: 'shadow',
       stage: 'attempt',
       role: 'primary',
       threshold: 0.7,
       sessionId: 'SES7',
-      answers: { stalled: { type: 'noul', probability: 0.18 } },
+      answers: { risky: { type: 'noul', probability: 0.18 } },
       warnings: ['missing_logprobs'],
     },
   ],

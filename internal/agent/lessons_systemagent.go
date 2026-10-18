@@ -40,7 +40,5 @@ func pinsProvider(a db.Agent) bool {
 var analysisPromptKeys = map[string]string{
 	"lesson-extractor": "lesson",
 	"insight":          "insight-analyzer",
-	"recipe-optimizer": "recipe-optimizer",
 	"flow-optimizer":   "flow-optimizer",
-	"stall-judge":      "stall-judge",
 }

@@ -139,7 +139,7 @@ func noteHandleList(ns []notes.Note) []Handle {
 
 // noteChildren are a note's structural edges: the notes it links to and the
 // correction that replaced it, so the map walks the memory graph the same way
-// it walks sessions and workers.
+// it walks sessions.
 func (p *Projector) noteChildren(id string) ([]Handle, error) {
 	if p.sources.Notes == nil {
 		return nil, fmt.Errorf("view: note %s: notes store unavailable", id)

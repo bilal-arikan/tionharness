@@ -211,7 +211,7 @@ func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
 	oldBoard := t.BoardState
 	// A card leaving review for a working column is a FAILED verification round.
 	// Counting it here (rather than inferring it from board events later) is what
-	// lets a coordinator be told "this is round 4" instead of re-running the same
+	// lets the board be told "this is round 4" instead of re-running the same
 	// review-fix loop indefinitely.
 	countReviewBounce(&t, oldBoard, boardState)
 	t.BoardState = boardState

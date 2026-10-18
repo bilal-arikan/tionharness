@@ -415,7 +415,7 @@ func (m *Manager) open(meta Meta) error {
 	// compiled definitions, so the built-ins this workspace seeds and re-imposes
 	// are the edited ones.
 	database.SetGlobalSystemAgentOverrides(m.globalSysAgents)
-	if err := database.RetireSystemAgents(context.Background(), "goal-writer", "workspace-evolver"); err != nil {
+	if err := database.RetireSystemAgents(context.Background(), "goal-writer", "workspace-evolver", "recipe-optimizer", "stall-judge"); err != nil {
 		return fmt.Errorf("retire obsolete system agents: %w", err)
 	}
 	database.PrepareAgentCatalog(meta.ID)
@@ -515,26 +515,22 @@ func (m *Manager) open(meta Meta) error {
 	// hook so a tagged session finishing a turn can spawn a follow-up (the loop).
 	autoEngine := agent.NewAutomationEngine(database, rt, m.logger.With("component", "automation", "workspace", meta.ID))
 	rt.SetTurnHook(autoEngine.OnTurnFinished)
-	// Failed turns dispatch to the automation engine ONLY (not coordination):
+	// Failed turns dispatch to the automation engine too:
 	// repair automations watching error-class tags ("stuck"/"error") must fire
 	// on the failing turn itself — a stuck session gets no more autonomous
 	// successes to fire from.
 	rt.AddFailedTurnHook(autoEngine.OnTurnFinished)
-	// Rota (F2): phase / trajectory_end automations and recipe watchers fire on
-	// trajectory transitions, delivered off-path on the trajectory work queue.
-	rt.SetTrajectoryTransitionHook(autoEngine.OnTrajectoryTransition)
 	// Flows (_Docs/93): flow-kind automations fire when a flow run finished
 	// (and, when grading is on, was graded).
 	rt.AddFlowRunHook(autoEngine.OnFlowRunFinished)
 	// Every message append is session activity regardless of author (user, agent,
-	// worker, or system). Notify open clients so their session list picks up the
+	// or system). Notify open clients so their session list picks up the
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.
-	// Workspace event stream (_Docs/77 R3): session lifecycle and trajectory
-	// changes leave the store through these hooks (fired after the store's locks
+	// Workspace event stream (_Docs/77 R3): session lifecycle changes leave the
+	// store through this hook (fired after the store's locks
 	// are released) and land on the bus as structured ws:* events, which the API
 	// bridges onto the ordered per-workspace stream.
 	database.SetSessionHook(rt.OnSessionChange)
-	database.SetTrajectoryHook(rt.OnTrajectoryChange)
 	if err := database.SetActivityHook(func(sig db.ActivitySignal) error {
 		rt.Emit(events.Event{
 			Type:   events.TypeSession,
@@ -550,10 +546,7 @@ func (m *Manager) open(meta Meta) error {
 	// Durable Ask timeout sweeper: close ask/permission cards nobody answered in
 	// time (no-op until a TimeoutSec is stamped — 0 = unlimited by default).
 	rt.StartWaitingAskSweeper(context.Background())
-	// Coordinator stall sweeper: the long-horizon backstop for a coordinator frozen
-	// after narrating a spawn it never issued (no-op while the guard/window is off).
-	rt.StartCoordinatorStallSweeper(context.Background())
-	// Rota F3: weekly, idle-triggered curator pass (archive-only, pin-aware).
+	// Weekly, idle-triggered curator pass (archive-only, pin-aware).
 	rt.StartCuratorSweeper(context.Background())
 
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}

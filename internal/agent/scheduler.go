@@ -19,7 +19,7 @@ import (
 )
 
 // Scheduled fires have no total-duration deadline. Delivered turns use the same
-// run-scoped semantic inactivity watchdog as spawn/worker execution.
+// run-scoped semantic inactivity watchdog as spawn execution.
 
 // Scheduler runs a workspace's enabled schedules on their cron expressions.
 // Cron expressions use the standard 5-field format (minute hour dom month dow).
@@ -319,8 +319,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 
 	// A wake re-enters a real, human-visible chat session: claim its per-session
 	// turn slot so the wake turn never overlaps a concurrent user turn (inbox
-	// worker / direct chat) or, for a coordinator, an auto turn — worker
-	// notifications arriving meanwhile coalesce and run after release.
+	// worker / direct chat).
 	release, slotErr := s.rt.claimSessionTurnSlotCtx(wakeRunCtx, sc.SessionID, turnqueue.KindWake, "uyandırma")
 	defer release()
 	// Declared AFTER the slot release so it runs BEFORE it: in the gap between a
@@ -363,7 +362,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// asynchronous chat run so interactive-only tools (ask_user/request_confirmation)
 	// guide the model to ask in its reply instead of bailing with "proceed without
 	// asking" — the user can answer in the chat afterwards.
-	// Bound the wake turn with the same hard+idle watchdog as spawn/worker turns: it
+	// Bound the wake turn with the same hard+idle watchdog as spawn turns: it
 	// now holds the per-session turn slot, so a hung wake (a provider that never
 	// returns) would otherwise block every other turn on the session indefinitely —
 	// the slot's Cond wait ignores ctx, so nothing else could release it.
@@ -465,7 +464,7 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 	var fireErr error
 	if sc.SessionID != "" {
 		// Session-targeted routine: each fire continues that conversation, the
-		// same way a one-shot wake does (a coordinator waking itself for a
+		// same way a one-shot wake does (an agent waking its own session for a
 		// window hours ahead, beyond schedule_wake's one-hour reach).
 		sessionID, fireErr = sc.SessionID, s.deliverWake(ctx, sc)
 	} else {
@@ -595,7 +594,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	defer cancelRun()
 	run := s.rt.trackSession(session.ID, cancelRun)
 	// Serialize this scheduled turn with any concurrent turn on the same session
-	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
+	// (user chat / inbox worker / wake)
 	// via the single per-session turn slot.
 	release, slotErr := s.rt.claimSessionTurnSlotCtx(runCtx, session.ID, turnqueue.KindWake, "zamanlanmış tur")
 	defer release()

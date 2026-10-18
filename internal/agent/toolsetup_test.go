@@ -25,9 +25,6 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	}
 	t.Cleanup(func() { _ = database.Close() })
 	tun := NewTunables()
-	// Unit fixtures should not pay the production five-second worker batch window.
-	// Batching tests opt into a small explicit duration.
-	tun.SetCoordinatorWorkerBatchWindow(-1)
 	// Most fixture turns end in an error (no provider key), which in production
 	// fires the hata→ders reflection — a real background turn that launches a
 	// claude-cli subprocess and writes a claude-home under the fixture's TempDir.
@@ -47,7 +44,7 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	registry.SetInstances([]providers.Instance{{ID: "claude-cli", KindID: "claude-cli"}})
 	rt := NewRuntime(database, registry, tun, workDir, filepath.Dir(workDir), nil, nil, "", "", nil, logger)
 	rt.skipLessonDispatch = true
-	// Background turns (spawn / inbox delivery / wake) run detached and keep writing
+	// Background turns (spawn / wake / automation) run detached and keep writing
 	// to the store after the test body returns. Wait for them to drain before
 	// t.TempDir()'s RemoveAll, or cleanup races a live write ("directory not empty")
 	// — a flake the -race build amplifies. Registered after the db-close cleanup so
@@ -55,10 +52,7 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	t.Cleanup(func() {
 		rt.CloseMCP()
 		deadline := time.Now().Add(5 * time.Second)
-		// The Rota binder's off-path queue writes trajectory.json under the store
-		// too; a worker's report is enqueued before its spawn slot releases, so
-		// waiting for the queue after the slots is enough (trajectory_queue.go).
-		for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0 || rt.trajectoryWorkPending()) && time.Now().Before(deadline) {
+		for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0) && time.Now().Before(deadline) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	})

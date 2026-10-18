@@ -1,5 +1,7 @@
 # TionHarness — Sohbet Kuyruğu + Çoklu-Ekran Senkronizasyonu (Event-Sourcing Refactor)
 
+> **Not (2026-10-18):** koordinatör/worker/peer'a ait bölümler (worker backpressure, koordinatör drain'i, `coordSlot`, `WorkerStatusStrip`, `send_to_worker`) kaldırıldı ve tarihsel işaretlendi; seri kuyruk, `turnqueue`, CAS ve tur kilidi geçerlidir.
+
 > Durum: **Faz 1–4 TAMAMEN UYGULANDI ✅** (2026-07-10). Tam otoriter cutover +
 > interaction CAS + durable send-queue + presence. Backend uçtan uca yeşil
 > (`go build`/`go vet`, **815 test / 35 paket geçti**), frontend `tsc --noEmit` +
@@ -205,7 +207,7 @@ type PendingInteraction struct {
   idleLimitSec taşır; `lastActivityAt` ve `hardLimitSec` alanları tüketicisi kalmadığı
   için kaldırıldı (2026-09-22).
   `SpawnTimeout` ve `ScheduleTimeout` da aynı biçimde deprecated/0'dır; spawn,
-  worker, coordinator drain, peer, automation, schedule ve wake yürütme yolları
+  automation, schedule ve wake yürütme yolları (worker/coordinator drain/peer yolları 2026-10-18'de kaldırıldı)
   yalnız semantic idle tracker ile kesilir.
 - **Operation lease + generation fence (TSK760 düzeltme turları):** opaque provider
   ve tool yalnız buffered-result goroutine'de çalışır; önceden iptal edilmiş context
@@ -252,8 +254,8 @@ type PendingInteraction struct {
   girdiyi çeker.
 - **Steer vs queue politikası (UI'da görünür):** tur çalışırken gelen mesaj →
   varsayılan **kuyruğa al** ("mevcut tur bitince gönderilecek" rozeti);
-  kullanıcı isterse **steer** (tur ortasına enjekte). Koordinatör tur kuyruğu +
-  coalesce mantığı (`coordination.go`) buraya taşınır.
+  kullanıcı isterse **steer** (tur ortasına enjekte). (Koordinatör tur kuyruğu +
+  coalesce mantığı `coordination.go` 2026-10-18'de kaldırıldı.)
 
 ## Faz 4 — Presence + bildirim
 
@@ -270,7 +272,7 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
 ## Uygulama durumu (2026-07-10)
 
 **Backend (tamam):**
-- **Delete/koordinasyon teardown atomikliği (2026-08-31):** session delete hazırlığı
+- **Delete/koordinasyon teardown atomikliği (2026-08-31; koordinatör/worker kısımları — ağaç teardown, `spawn_worker` kapısı, `coordination_teardown.go` — 2026-10-18'de kaldırıldı, inbox/hub/bridge-gate geri açma kuralı geçerli):** session delete hazırlığı
   inbox'u dondurur ve bridge call gate'i kapatır, fakat inbox/hub'u yalnız kalıcı
   `DB.DeleteSession` başarılı olunca bırakır; DB hatasında worker kuyruğuyla birlikte
   inbox, hub aboneleri/ring'i ve bridge gate tam geri açılır. Koordinatör dalı
@@ -551,7 +553,7 @@ andaki kayıtlara dokunur.
 > etmek zorundadır; tutamacın `started` alanı sıkışmış bir kaydın yaşını
 > tanılamak için tutulur.
 
-**Worker backpressure kapısı.** `send_to_worker`'ın "meşgul → kuyruğa park et"
+**Worker backpressure kapısı** *(kaldırıldı 2026-10-18; `send_to_worker`/`drainWorkerQueue` yok, tarihsel)*. `send_to_worker`'ın "meşgul → kuyruğa park et"
 dalı artık jenerik `isSessionActive` yerine `workerTurnActive`'e bakar: yalnız
 **worker** kaydı (`newWorkerRun` → `trackWorkerSession`) `drainWorkerQueue` ile
 eşleşir ve worker kendi kaydını o drain'den **önce** bırakır. Liste modelinde
@@ -567,7 +569,7 @@ Wake'in claim'i fire'a ait bağımsız cancellable context'ten türer; deprecate
 wake **failure teslimatı olarak kaydedilmez** (`errWakeCancelledBeforeTurn`) —
 iptal edilmiş bir wake başarısız bir wake değildir.
 
-**Koordinatör drain'i (2026-09-01, bu sınıfın son sitesi).** Tur ctx'i eskiden
+**Koordinatör drain'i (2026-09-01, bu sınıfın son sitesi)** *(kaldırıldı 2026-10-18; `drainCoordinator`/`runCoordinatorTurn` yok, tarihsel)*. Tur ctx'i eskiden
 `runCoordinatorTurn` içinde, yani claim döndükten SONRA açılıyordu; kuyrukta
 beklerken gelen "Durdur" `false` alıp yutuluyor, `stopRequested` hiç set
 edilmiyor ve döngü oto-turlarına devam ediyordu. Artık ctx `go
@@ -877,7 +879,7 @@ zincir tamamen temizlendi: frontend `api.runFlowStream`/`streamRunFlow`/
 + `/run-flow-stream` route'ları. Standalone Flows-paneli yolu (`/api/flows/{id}/run`
 + `/run-stream` → `handleRunFlow(Stream)`) korunuyor.
 
-**Koordinatör workerları koşarken mesaj DOĞRUDAN teslim (2026-08-04, park KALDIRILDI):**
+**Koordinatör workerları koşarken mesaj DOĞRUDAN teslim (2026-08-04, park KALDIRILDI)** *(koordinatör/worker 2026-10-18'de tümüyle kaldırıldı, tarihsel)*:
 Önce (aynı gün, ilk deneme) koordinatörün kendi turu bitip workerları arka planda
 koşarken kullanıcı mesajı inbox'ta **park ediliyordu** (tepside "Sırada #1", ancak
 workerlar tükenince gönderilir). Kullanıcı geri bildirimi: park istenmiyor — mesaj
@@ -932,7 +934,7 @@ Kuyruk bilerek **kalıcı değil**: zaten uçuşta olan turları sıralar; boot'
 dayanıklılığı sahiplenen taraflar (send-queue'nun `inbox.json`'ı, otonom turlar için
 `RecoverOrphanedTurns`) yeniden kurar.
 
-### `coordSlot` artık yalnız politika
+### `coordSlot` artık yalnız politika *(kaldırıldı 2026-10-18; koordinatör modu ile birlikte `coordSlot`/`drainCoordinator`/stall süpürücüsü silindi, tarihsel)*
 
 `running` alanı kalktı (kilit `turnqueue`'da). Kalanlar: `driving` (bir drain
 döngüsü var mı — bildirimlerin **tek** döngüde birleşmesi için), `pending`,

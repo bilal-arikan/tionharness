@@ -6,35 +6,17 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-// TestHandoffContinuationSpawnOpts_CarriesCoordinatorSettings: a /handoff from a
-// coordinator session must seed the clean-window continuation with the same
-// coordinator capability + workflow recipe (so it keeps driving the same multi-agent
-// setup), while dropping the tree/worker lineage (the continuation is its own fresh
-// top-level coordinator, not a worker reporting to the old tree).
-func TestHandoffContinuationSpawnOpts_CarriesCoordinatorSettings(t *testing.T) {
+// TestHandoffContinuationSpawnOpts_CarriesSessionSettings: a /handoff seeds the
+// clean-window continuation with the parent's working directory and kind, and links
+// it to the handed-off session as its parent.
+func TestHandoffContinuationSpawnOpts_CarriesSessionSettings(t *testing.T) {
 	parent := db.Session{
-		ID:                       "SES1",
-		Kind:                     "chat",
-		WorkingDir:               "C:\\proj",
-		CoordinatorMode:          true,
-		CoordinatorWorkflow:      "tournament",
-		CoordinatorMaxTurns:      12,
-		Role:                     "worker",
-		CoordinatorSessionID:     "SEScoord",
-		RootCoordinatorSessionID: "SESroot",
-		CoordinatorDepth:         3,
+		ID:         "SES1",
+		Kind:       "chat",
+		WorkingDir: "C:\\proj",
 	}
 	got := handoffContinuationSpawnOpts(parent, HandoffOptions{CreatedBy: "AGT1"})
 
-	if !got.CoordinatorMode {
-		t.Error("CoordinatorMode must carry over to the continuation")
-	}
-	if got.CoordinatorWorkflow != "tournament" {
-		t.Errorf("CoordinatorWorkflow = %q, want tournament", got.CoordinatorWorkflow)
-	}
-	if got.CoordinatorMaxTurns != 12 {
-		t.Errorf("CoordinatorMaxTurns = %d, want 12", got.CoordinatorMaxTurns)
-	}
 	if got.WorkingDir != "C:\\proj" {
 		t.Errorf("WorkingDir = %q, want C:\\proj", got.WorkingDir)
 	}
@@ -44,19 +26,11 @@ func TestHandoffContinuationSpawnOpts_CarriesCoordinatorSettings(t *testing.T) {
 	if got.Kind != "chat" {
 		t.Errorf("Kind = %q, want chat", got.Kind)
 	}
-	// Tree/worker lineage must NOT leak onto the continuation.
-	if got.Role != "" || got.CoordinatorSessionID != "" || got.RootCoordinatorSessionID != "" || got.CoordinatorDepth != 0 {
-		t.Errorf("worker/tree lineage leaked: Role=%q CoordSID=%q Root=%q Depth=%d",
-			got.Role, got.CoordinatorSessionID, got.RootCoordinatorSessionID, got.CoordinatorDepth)
+	if got.CreatedBy != "AGT1" {
+		t.Errorf("CreatedBy = %q, want AGT1", got.CreatedBy)
 	}
-}
-
-// TestHandoffContinuationSpawnOpts_NonCoordinator: an ordinary chat session hands
-// off to a plain continuation — no coordinator flags invented.
-func TestHandoffContinuationSpawnOpts_NonCoordinator(t *testing.T) {
-	got := handoffContinuationSpawnOpts(db.Session{ID: "SES2", Kind: "chat"}, HandoffOptions{})
-	if got.CoordinatorMode || got.CoordinatorWorkflow != "" || got.CoordinatorMaxTurns != 0 {
-		t.Errorf("non-coordinator parent must not gain coordinator settings: %+v", got)
+	if got.Origin == nil || got.Origin.Kind != db.OriginHandoff || got.Origin.TriggerSessionID != "SES1" {
+		t.Errorf("Origin = %+v, want a handoff edge from SES1", got.Origin)
 	}
 }
 

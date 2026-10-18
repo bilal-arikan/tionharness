@@ -19,11 +19,6 @@ export function SummaryHeader({ summary, onPick }: Props) {
       value: summary.workspaceOpt,
       onClick: () => onPick({ channel: 'workspace-opt' }),
     },
-    {
-      label: '✦ recipe-opt',
-      value: summary.recipeOpt,
-      onClick: () => onPick({ channel: 'recipe-opt' }),
-    },
     { label: t('severity.high'), value: summary.high, onClick: () => onPick({ severity: 'high' }) },
     {
       label: `⚠ ${t('filters.regression')}`,

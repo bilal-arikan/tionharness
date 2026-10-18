@@ -11,8 +11,7 @@ type frontmatter struct {
 	scalars map[string]string
 	lists   map[string][]string
 	// blocks keeps the RAW indented text under a `key:` line whose value is
-	// empty — nested structures (a list of maps such as the recipe `phases:`
-	// block) that the flat scalar/list model cannot represent. Dedented to the
+	// empty — nested structures (a list of maps) that the flat scalar/list model cannot represent. Dedented to the
 	// block's own base indentation; consumers parse it themselves.
 	blocks map[string]string
 }

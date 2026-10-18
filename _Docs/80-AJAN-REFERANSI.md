@@ -1,11 +1,11 @@
 # 80 — Ajan Referansı (CLAUDE.md'den taşınan ayrıntılar)
 
-> **Özet (2026-09-22):** Kök `CLAUDE.md` her Claude Code oturumuna yüklendiği için yalnız
+> **Özet (2026-10-18):** Kök `CLAUDE.md` her Claude Code oturumuna yüklendiği için yalnız
 > her turda geçerli kurallar orada tutulur (2026-09-03'te ~10k token'dan küçültüldü; ölçüm:
 > `_Docs/17` "claude-cli prefix anatomisi"); nadiren gereken referans bilgisi buradadır. Bir ajan bu dosyaya yalnız
 > ilgili bölüm gerektiğinde bakmalı: `internal/db` dosya haritası, codebase-memory-mcp
 > `project` argümanı, ertelenmiş (deferred) araç yükleme, Playwright MCP çıktı kökü, kısmi
-> commit reçetesi, Go araç zinciri keşfi ve `website/` notları.
+> commit reçetesi, Go araç zinciri keşfi ve `website/` notları. `internal/db` haritasından koordinatör (`store_session_coordinator.go`) ve Rota grafı (`*_trajectory.go`, `store_optimizer.go`) dosyaları çıkarıldı.
 
 ## 1. codebase-memory-mcp — `project` argümanı
 
@@ -112,9 +112,8 @@ klonda çalışmıyorsa `chmod +x .githooks/pre-commit`.
   Yeni test aynı deseni izlemeli.
 - Arka plan goroutine'i başlatan test dönmeden önce `drainSpawns(t, rt)` çağırmalı
   (`internal/agent/spawn_test.go`): Windows açık dosyayı silmeyi reddeder ve
-  `t.TempDir()` temizliği rastgele düşer. `SpawnSession`, `ReportToCoordinator`,
-  `NotifyCoordinator` çağıran her testin sonuna koy; rota grafını okuyan test
-  `drainSpawns` veya `waitTrajectory` kullanmalı.
+  `t.TempDir()` temizliği rastgele düşer. `SpawnSession` çağıran her testin sonuna
+  koy (`ReportToCoordinator` / `NotifyCoordinator` / `waitTrajectory` 2026-10-18'de koordinatör ve rota grafı ile birlikte kaldırıldı).
 - `internal/agent` testleri `TestMain` içinde `TIONHARNESS_DATA_DIR`'ı paket başına
   bir temp dizine yönlendirir (`runIsolated`, `spawn_test.go`): her `NewRuntime` global
   skills dizinine default seed yazar ve onu tarar; gerçek `~/.tionharness` paylaşılırsa
@@ -167,7 +166,6 @@ varlık ayrı bir `store_*.go` dosyasında sahiplenilir. Kesin liste için
 | `store_message.go` | Mesaj ekleme, geri bildirim, silme ve JSONL transkript yazımı |
 | `store_load.go` | Oturumların açılışta yüklenmesi ve eski dosya biçiminden göç |
 | `store_session_cli.go` | CLI devam kimliği ve native compaction kayıtları |
-| `store_session_coordinator.go` | Koordinatör modu, soy ağacı ve rapor durumu |
 | `db.go` | `DB` tipi, açılış, dizin sabitleri, kilit/persist yardımcıları |
 | `store_messages_read.go` | Dar transkript okuyucuları: `ListMessagesTail`, `LastMessage`, `FindMessage`, `StreamMessages` |
 | `store_stats.go` | `Stats()`: RAM ayak izi + boot faz süreleri |
@@ -190,8 +188,7 @@ varlık ayrı bir `store_*.go` dosyasında sahiplenilir. Kesin liste için
 | `models_session_origin.go` | `SessionOrigin`, `Lineage()`/`RootSession()` |
 | `store_session_hook.go` | `SetSessionHook` — oturum yaşam döngüsü gözlemcisi |
 | `sidecar.go` | `Sidecar[T]` — varlığın yanında tipli JSON dosyası, atomik yazım, bozuk dosya karantinası |
-| `models_trajectory.go` / `store_trajectory.go` | Rota modeli ve deposu (`sessions/<root>/trajectory.json`, `trajectories/index.json`, `UpdateTrajectory` CAS) |
-| `store_curator.go` / `store_optimizer.go` / `store_pin.go` | Küratör raporu, reçete optimizer bookkeeping, küratörden muafiyet bayrağı (Rota F3/F4) |
+| `store_curator.go` / `store_pin.go` | Küratör raporu, küratörden muafiyet bayrağı (`store_optimizer.go` / reçete optimizer 2026-10-18'de kaldırıldı) |
 | `store_model_resolution.go` | İstenen model id → servis edilen model eşlemesi |
 | `filestore.go` | Varlıktan bağımsız generic CRUD/persist yapı taşları |
 | `board_columns.go` | Kanban kolon anahtarı doğrulama ve yerleşik kolon sabitleri |

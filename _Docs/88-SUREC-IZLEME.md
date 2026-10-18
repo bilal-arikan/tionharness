@@ -122,7 +122,7 @@ görünmemek "süreç yok" demek **değildir**.
   çalışan satırlar için saniyede bir işleyen süre, satır detayında çıktı kuyruğu ve
   hata, `stoppable` satırlarda iki adımlı onaylı **Durdur**.
 - **Sahip sütunundaki oturum bağlantısı.** Oturum kimliği (ve varsa `üst:` ile
-  koordinatör oturumu) sohbet ekranına götüren bir bağlantıdır. Panel hangi
+  ebeveyn oturumu) sohbet ekranına götüren bir bağlantıdır. Panel hangi
   oturumların hâlâ var olduğunu `GET /api/sessions?ids=…` ile doğrular: silinmiş
   bir oturumun kimliği düz metin kalır — satır listeden düşmez, bağlantı ölü olmaz.
 

@@ -56,17 +56,17 @@ func TestExecutionRuntimeMergesLiveStateWithoutStoreMutation(t *testing.T) {
 	}
 }
 
-func TestExecutionRuntimePreservesHistoricalStatusesAndLineage(t *testing.T) {
+func TestExecutionRuntimePreservesHistoricalStatuses(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
 	ctx := t.Context()
-	task, err := wsp.DB.CreateTask(ctx, db.Task{Title: "t"})
+	task, err := wsp.DB.CreateTask(ctx, db.Task{Title: "t", LastRunStatus: "failed"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, seed := range []db.Session{
 		{Kind: "task", SourceID: task.ID},
 		{Kind: "chat"},
-		{Kind: "spawned", CoordinatorSessionID: "parent", RootCoordinatorSessionID: "root"},
+		{Kind: "spawned", ParentSessionID: "parent"},
 	} {
 		if _, err := wsp.DB.CreateSession(ctx, seed); err != nil {
 			t.Fatal(err)
@@ -76,9 +76,12 @@ func TestExecutionRuntimePreservesHistoricalStatusesAndLineage(t *testing.T) {
 	want := map[string]executionRuntimeItem{}
 	for _, session := range all {
 		status := s.lastStatusFor(ctx, wsp, session)
-		if status != "" || session.CoordinatorSessionID != "" {
-			want[session.ID] = executionRuntimeItem{SessionID: session.ID, LastStatus: status, CoordinatorSessionID: session.CoordinatorSessionID, RootCoordinatorSessionID: session.RootCoordinator()}
+		if status != "" {
+			want[session.ID] = executionRuntimeItem{SessionID: session.ID, LastStatus: status}
 		}
+	}
+	if len(want) != 1 {
+		t.Fatalf("seeded statuses = %+v, want only the task session", want)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/api/executions/runtime", nil)
 	req = req.WithContext(context.WithValue(req.Context(), workspaceCtxKey, wsp))

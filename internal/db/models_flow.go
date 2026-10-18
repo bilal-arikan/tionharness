@@ -60,9 +60,11 @@ type FlowPolicy struct {
 	AllowPromptChanges bool `json:"allowPromptChanges"`
 }
 
-// DefaultFlowPolicy is what a new flow gets.
+// DefaultFlowPolicy is what a new flow gets. The observer is OFF until a human
+// opts a flow in (2026-10-18): unattended proposals on every flow cost a model
+// call per few runs and mostly answered noChange.
 func DefaultFlowPolicy() FlowPolicy {
-	return FlowPolicy{Mode: FlowPolicyPropose, EveryRuns: 5, MinConfidence: 0.7, MaxNodes: 16, AllowPromptChanges: true}
+	return FlowPolicy{Mode: FlowPolicyOff, EveryRuns: 5, MinConfidence: 0.7, MaxNodes: 16, AllowPromptChanges: true}
 }
 
 // Normalized fills zero fields with the defaults.

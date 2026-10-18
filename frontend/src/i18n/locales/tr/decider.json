@@ -6,8 +6,7 @@
     "detailHint": "Bu iş akışının ne zaman uygulanacağını ve kararların nasıl kontrol edileceğini ayarla.",
     "groups": {
       "session": "Oturum başlangıcı",
-      "context": "Bağlam",
-      "collaboration": "Worker iş birliği"
+      "context": "Bağlam"
     },
     "limits": "İş akışı sınırları",
     "candidateLimit": "En fazla aday",
@@ -18,7 +17,7 @@
   },
   "title": "Karar mercileri",
   "intro": "Karar mercileri, uygulamada kararı bir karar sağlayıcısına devreden noktalardır. Karar sağlayıcısı, tipli sorulara (evet/hayır, birini seç, puanla) bir saniyenin çok altında cevap veren bir modeldir. Her merci kapalı kalabilir, gölgede çalışabilir (arka planda sorulur ve mevcut mantığın yanında ölçülür, hiçbir şeyi değiştirmez) ya da açılabilir; her biri kendi sağlayıcısını, yedeğini ve rakibini kullanabilir.",
-  "privacy": "Yargılanan içerik (bir shell komutu, bir koordinatör mesajı, bir flow çıktısı, bir transkript kesiti) belirgin sırlar maskelendikten sonra karar modeline gönderilir. Kendi makinendeki bir model içeriği yerelde tutar.",
+  "privacy": "Yargılanan içerik (bir shell komutu, bir flow çıktısı, bir transkript kesiti) belirgin sırlar maskelendikten sonra karar modeline gönderilir. Kendi makinendeki bir model içeriği yerelde tutar.",
   "enabled": "Karar katmanını kullan",
   "enabledHint": "Ana anahtar. Kapalıyken hiçbir yere bir şey gönderilmez ve her karar mercii eskisi gibi çalışır.",
   "defaultModel": "Varsayılan karar sağlayıcısı",
@@ -194,8 +193,7 @@
   },
   "group": {
     "safety": "Güvenlik",
-    "coordination": "Koordinasyon",
-    "flows": "Flow ve Rota",
+    "flows": "Flow",
     "routing": "Yönlendirme",
     "context": "Bağlam",
     "housekeeping": "Bakım"
@@ -233,16 +231,6 @@
       "description": "Ayarlanan compact aralığından sonra mevcut görev için kayıtlı bağlam parçalarını geri getirir. Başarılı yönetilen ve CLI compact işlemlerini sayar.",
       "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
     },
-    "worker-review": {
-      "label": "Worker sonucu inceleme",
-      "description": "Koordinatörün sentezi için doğrulama, alternatifler, varsayımlar, çelişkiler ve sonraki adım bakışlarını seçer. Karar modeli hata verse de worker sonucu teslim edilir.",
-      "threshold": "Mevcut akışı değiştirmek için gereken en düşük güven. Daha düşük güven mevcut davranışı korur."
-    },
-    "stall-judge": {
-      "label": "Koordinatör takılma yargıcı",
-      "description": "Koordinatörün son mesajı hiç açılmamış worker'lar açtığını mı iddia ediyor? Boşta kalan her koordinatör turundaki Haiku çağrısının yerini alır.",
-      "threshold": "Koordinatör dürtülmeden önce gereken en düşük \"takıldı\" olasılığı."
-    },
     "tool-risk": {
       "label": "Shell komutu risk kontrolü",
       "description": "Sormadan çalışacak shell komutlarına (auto mod ya da git * gibi bir \"her zaman izin ver\" kuralı) ikinci bir bakış. Açıkken riskli bir komut onay istemine dönüşür; gözetimsiz bir çalışma asla bloklanmaz.",
@@ -252,11 +240,6 @@
       "label": "Flow judge düğümleri",
       "description": "Eşleşme modu \"judge\" olan dallanma ve döngü düğümlerinde kolu ya da döngünün çıkış koşulunu metin eşleştirmek yerine model belirler.",
       "threshold": "Bir kolun seçilmesi (yoksa varsayılan kol) ya da çıkış koşulunun sağlanmış sayılması için gereken en düşük olasılık."
-    },
-    "phase-gate": {
-      "label": "Rota judge kapıları",
-      "description": "\"judge\" türündeki faz kapıları, fazın çıkış koşulunun sağlanıp sağlanmadığını kök oturumun son transkriptine bakarak sorar. Hiçbir model cevap veremezse kapı kapalı kalır.",
-      "threshold": "Kapının açılması için çıkış koşulunun sağlanma olasılığının en düşük değeri."
     },
     "flow-criteria": {
       "label": "Flow ölçüt kapıları",

@@ -1,6 +1,6 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-10-07):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
+> **Özet (2026-10-18):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
 
 Önceki kayıtlar:
 
@@ -8,6 +8,37 @@
 - [Ağustos 2026](arsiv/05-ILERLEME-2026-08.md)
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
+
+## Koordinatör/worker, peer mesajlaşma ve Rota grafı kaldırıldı; varsayılanlar ayarlandı (2026-10-18)
+
+Sistem sadeleştirmesi (Kısıt Raporu önerileri). Kaldırılanlar: koordinatör modu ve worker
+araçları (`set_coordinator_mode`, `spawn_worker`, `send_to_worker`, `stop_worker`,
+`list_workers`, `report_to_coordinator`), worker oturumları, koordinatör el kitabı ve reçeteleri,
+stall yargıcı + süpürücü, reçete optimizer'ı, `worker-review` / `phase-gate` karar mercileri,
+`send_message` ve peer inbox oturumları, trajectory (Rota) grafı/faz kapıları/faz otomasyonları,
+`/api/trajectories*` ve `/api/recipes*`, ilgili ayarlar (`coordinator*`, `agentMessageMaxKB`) ve
+"Ürün Ekibi" şablonu. Kalanlar: `run_subagent` (profiller "Worker: X" sistem ajanları),
+`spawn_session`, handoff, zamanlama/otomasyon/akış, Rota ekranı yalnız şerit zaman çizelgesi.
+Eski `recipe-optimizer` / `stall-judge` sistem ajanları `RetireSystemAgents` ile emekliye ayrılır.
+Frontend'de 44 dosya silindi; çalışma durdurma kontrolü `RunStatusStrip` olarak kaldı.
+
+Varsayılan değerler (`internal/settings/settings.go`, global `settings.json` da güncellendi):
+`maxContextTokens` 800000→64000 (800K taban, 256K tavanı ve aile oranını her modelde eziyordu;
+Opus bütçesi 800K'ya çıkıyordu), gpt/codex oranı 0.35→0.6, `autoCompactMode` rolling→auto,
+`spawnMaxConcurrent` 16→4, `spawnQueueMax` 16→8, `spawnIdleTimeoutMin` 5→10,
+`chatTurnIdleTimeoutMin` 3→10, `codexStdoutIdleSec` 90→300, `shellDefaultTimeoutSec` 30→120,
+`shellMaxTimeoutSec` 120→600 (Claude Code'un belgelenen Bash değerleri), `maxToolOutputKB` 100→50.
+E1 ölçümü: `codex exec --json` muhakeme boyunca hiçbir olay yaymıyor (reasoning summary açıkken
+de), bu yüzden codex sessizlik bekçisi uzun muhakemeyi kapsayacak kadar açıldı.
+
+Rapor maddeleri: D1 (sıcak CLI izi fold kapısından çıkarıldı, `warmCLIStepTerm`), C1 (akış
+gözlemcisi varsayılan `off`; mevcut 14 akış `off`), C2 (öneri motoruna `decider-not-ready` ve
+`insight-scan-off` kuralları), A1/A2/A3 (varsayılan talimat ve `tionharness-autonomous-ops`:
+commit SHA kanıtı, kart = güncel durum, kural önceliği kullanıcı > workspace > proje > ajan),
+D2 (varsayılan talimat sadeleştirildi; WS1/WS2/WS3/WS6 talimatları yenisiyle değiştirildi),
+E2 (`scripts/service.sh`: launchd kurulum + boşalt-sonra-dağıt).
+
+Doğrulama: `scripts/test.sh full`.
 
 ## FootballOracle izlemesinden çıkan harness düzeltmeleri (2026-10-18)
 
@@ -83,7 +114,7 @@ WS3 (FootballOracle) PM/worker oturumları izlenirken her PM turunda tekrarlanan
   bekçisi: beklenen sonuç dosyası henüz yok) bitince `deferWorkerReport` bunu bozuk
   dal sayıp `stopSubtree` ile az önce başlattığı doğrulayıcıyı öldürüyordu
   (SES314 → SES317, iki kez). Artık `incomplete`, `completed` gibi ertelenir; cascade
-  yalnız failed/killed/timeout'ta. Ayrıntı [47](47-KOORDINATOR-COKLU-AJAN.md).
+  yalnız failed/killed/timeout'ta. Ayrıntı [47](arsiv/47-KOORDINATOR-COKLU-AJAN.md).
 - **Kalan risk:** claude-cli kalıcı oturum bekçisi (15 dk) araç takibi yapmıyor;
   15 dakikadan uzun alt ajanlarda aynı kesinti olabilir.
 - **Doğrulama:** `codexcli_toolidle_test.go`, `subagent_activity_test.go`,

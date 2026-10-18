@@ -187,7 +187,7 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 // pinned. Re-seeding matters because the CLI can WIPE its own
 // <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when an
 // OAuth refresh fails — most easily when several of its processes race for the
-// single-use refresh token, which a coordinator tree does by design. The
+// single-use refresh token, which a nested subagent tree does by design. The
 // boot-time migration never runs again after that, so every remaining turn in
 // the workspace failed "not logged in" until a restart. Healing at this seam
 // bounds the damage to the call that actually lost the race; it is idempotent and

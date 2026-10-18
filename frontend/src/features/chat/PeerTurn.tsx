@@ -6,13 +6,14 @@ import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
 import { DirectionBadge } from './DirectionBadge'
 
-// PeerTurn renders an INCOMING peer message: another agent wrote it and it landed
-// in this agent's inbox. Although it is stored with role "user" (providers accept
-// only the system/user/assistant trichotomy, so a peer message cannot role-flip),
+// PeerTurn renders an INCOMING agent-authored message: another agent wrote it and
+// it landed in this transcript. Although it is stored with role "user" (providers
+// accept only the system/user/assistant trichotomy, so such a message cannot
+// role-flip),
 // it is authored by an agent — so we render it LEFT-aligned with the SENDER's
 // avatar + name, like an incoming message from someone else, instead of the
 // right-aligned accent bubble reserved for the human's own turns. A "→ <recipient>"
-// cue below states whom it was addressed to (the inbox owner in a DM). Falls back
+// cue below states whom it was addressed to. Falls back
 // to the raw author id when the sender agent is not in the roster, so attribution
 // is never silently dropped.
 export const PeerTurn = memo(function PeerTurn({

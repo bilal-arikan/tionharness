@@ -1,6 +1,6 @@
 # TionHarness — Depolama Katmanı (Dosya Sistemi)
 
-> **Özet (2026-09-22):** Dosya-tabanlı depolama tasarımını anlatır — SQLite'tan tamamen dosya sistemine geçiş, bellek-içi maps + atomik diske yazma (write-through), her workspace için `store/` altında entity-başına JSON + oturum-başına JSONL, insan-okunabilir prefix'li ID şeması (`WS`/`AGT`/`SES`/`TSK`/…), oturum header/transkript ayrımı ve tur-içi crash kurtarma (`inflight.json` sidecar). Durum: **uygulandı, canlı mimari**. En önemli kararlar: hiçbir veritabanı bağımlılığı yok (CGO-suz, tek binary hedefi), transkript yazımının oturum-başına ayrı mutex ile (global kilit değil) yapılması, aktivite sinyalinin WAL ile çökmeye dayanıklı teslimi. Dayandığı dosyalar: `internal/db/db.go`, `store.go`, `transcript_lock.go`, `inflight.go`.
+> **Özet (2026-10-18):** Dosya-tabanlı depolama tasarımını anlatır — SQLite'tan tamamen dosya sistemine geçiş, bellek-içi maps + atomik diske yazma (write-through), her workspace için `store/` altında entity-başına JSON + oturum-başına JSONL, insan-okunabilir prefix'li ID şeması (`WS`/`AGT`/`SES`/`TSK`/…), oturum header/transkript ayrımı ve tur-içi crash kurtarma (`inflight.json` sidecar). Durum: **uygulandı, canlı mimari**. En önemli kararlar: hiçbir veritabanı bağımlılığı yok (CGO-suz, tek binary hedefi), transkript yazımının oturum-başına ayrı mutex ile (global kilit değil) yapılması, aktivite sinyalinin WAL ile çökmeye dayanıklı teslimi. Dayandığı dosyalar: `internal/db/db.go`, `store.go`, `transcript_lock.go`, `inflight.go`. `AMS` (peer mesaj) ve `RTA` (rota grafiği) kimlik önekleri kaldırıldı; eski diskteki dosyalar yok sayılır.
 
 > TionHarness'in kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
 > SQLite (`modernc.org/sqlite`), migration runner ve `.sql` dosyaları kaldırıldı.
@@ -99,13 +99,13 @@ tarafından açılışta bir kez açılıp her workspace DB'sine bağlanır
 | Flow Run | `RUN` | `RUN128` |
 | Artifact | `ART` | `ART9` |
 | Session Ask | `SAK` | `SAK3` |
-| Agent Message | `AMS` | `AMS12` |
+| ~~Agent Message~~ (peer mesaj; kaldırıldı 2026-10-18) | `AMS` | `AMS12` |
 | MCP Server | `MCP` | `MCP4` |
 | Hook | `HOK` | `HOK2` |
 | Schedule | `SCH` | `SCH7` |
 | Goal | `GOL` | `GOL1` |
 | Automation | `AUT` | `AUT2` |
-| Trajectory (Rota) | `RTA` | `RTA5` |
+| ~~Trajectory (Rota)~~ (kaldırıldı 2026-10-18) | `RTA` | `RTA5` |
 
 > **Mesajlar** hâlâ UUID kullanır (yüksek hacimli hot-path + UI'da görünmez).
 > Merkez-dışı

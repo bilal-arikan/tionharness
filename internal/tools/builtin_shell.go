@@ -48,8 +48,8 @@ const shellMaxOutputBytes = 64 * 1024 // cap combined stdout+stderr
 // ShellMaxTimeoutSec) via SetShellTimeouts, pushed from applySettings. A per-call
 // timeout_sec arg still overrides shellDefaultTimeout, clamped to shellMaxTimeout.
 var (
-	shellMaxTimeout     = 120 * time.Second
-	shellDefaultTimeout = 30 * time.Second
+	shellMaxTimeout     = 600 * time.Second
+	shellDefaultTimeout = 120 * time.Second
 )
 
 // SetShellTimeouts overrides the default and hard-max shell command timeouts (in

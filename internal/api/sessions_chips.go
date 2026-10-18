@@ -16,18 +16,12 @@ import (
 // nothing. total/hasMore are then counted over the filtered set too, so the
 // footer count matches what the list can actually show.
 //
-// The two live-activity chips (running / awaiting-workers) are served here too
-// since liveness became server state (agent.Runtime.Liveness, _Docs/77 R2): when
-// ticked they NARROW the page to sessions in that state, and their badges count
-// the scope's live rows, so the footer count is right for them as well.
+// The live-activity chip (running) is served here too since liveness became
+// server state (agent.Runtime.Liveness, _Docs/77 R2): unticking it hides the
+// sessions running right now, and its badge counts the scope's live rows.
 
 const (
 	chipRunning         = "running"
-	chipAwaitingWorkers = "awaiting-workers"
-)
-
-const (
-	chipWorker          = "worker"
 	chipSubagent        = "subagent"
 	chipArchived        = "archived"
 	chipOther           = "other"
@@ -60,8 +54,7 @@ func parseSessionIDs(raw string) map[string]bool {
 // chipOther so no session can become unfilterable.
 var sessionChipKeys = []string{
 	"chat", "task", "spawned", chipSubagent, "automation", "insight",
-	"inbox", chipOther, "running", "awaiting-workers",
-	chipWorker, chipArchived,
+	chipOther, chipRunning, chipArchived,
 }
 
 func isSessionChipKey(k string) bool {
@@ -101,12 +94,6 @@ func sessionChipKey(s db.Session) string {
 	return kindChipKey(s.Kind)
 }
 
-// sessionIsWorker reports whether the session reports up to a coordinator —
-// the lineage test the frontend's isWorkerSession uses.
-func sessionIsWorker(s db.Session) bool {
-	return s.CoordinatorSessionID != "" || s.Role == "worker"
-}
-
 // parseChips reads the `chips` query value (comma-separated selected chip keys).
 // The second return is false when the parameter was absent, which means "no chip
 // filter" — an EMPTY value is a real selection (nothing selected) and matches
@@ -126,21 +113,14 @@ func parseChips(raw string, given bool) (map[string]bool, bool) {
 
 // sessionMatchesChips mirrors the sidebar predicate
 // (frontend sessionKindMeta.sessionMatchesChips): the kind chip must be on, and
-// an archived / worker / live session additionally needs its SCOPE chip on. The
-// live chips are scope gates exactly like worker and archived — unticking
-// "running" hides the sessions that are running right now and nothing else;
+// an archived / live session additionally needs its SCOPE chip on. The live
+// chip is a scope gate exactly like archived — unticking "running" hides the sessions that are running right now and nothing else;
 // an idle session is never touched by them. (The R2 cut had them the other way
 // round — "ticked = show only live" — which, with the sidebar sending every chip
 // by default, emptied the list down to the sessions in flight.)
-//
-// `running` wins over `awaiting-workers`: a coordinator that is itself
-// streaming is gated by the running chip only, so a row is filtered by exactly
-// one live scope (sessionLiveScope in the frontend).
+
 func sessionMatchesChips(s db.Session, sel map[string]bool, live liveness.Snapshot) bool {
 	if s.State == "archived" && !sel[chipArchived] {
-		return false
-	}
-	if sessionIsWorker(s) && !sel[chipWorker] {
 		return false
 	}
 	if scope := sessionLiveScope(s.ID, live); scope != "" && !sel[scope] {
@@ -149,14 +129,11 @@ func sessionMatchesChips(s db.Session, sel map[string]bool, live liveness.Snapsh
 	return sel[sessionChipKey(s)]
 }
 
-// sessionLiveScope classifies a session on the live-activity axis: running,
-// awaiting-workers, or "" when idle.
+// sessionLiveScope classifies a session on the live-activity axis: running, or
+// "" when idle.
 func sessionLiveScope(id string, live liveness.Snapshot) string {
 	if live.Is(id, liveness.Running) {
 		return chipRunning
-	}
-	if live.Is(id, liveness.AwaitingWorkers) {
-		return chipAwaitingWorkers
 	}
 	return ""
 }
@@ -170,19 +147,11 @@ func sessionChipCounts(sessions []db.Session, live liveness.Snapshot) map[string
 	for _, s := range sessions {
 		key := sessionChipKey(s)
 		counts[key]++
-		// A worker-category session already counts under the worker chip through
-		// its key; counting the scope again would double it.
-		if key != chipWorker && sessionIsWorker(s) {
-			counts[chipWorker]++
-		}
 		if s.State == "archived" {
 			counts[chipArchived]++
 		}
 		if live.Is(s.ID, liveness.Running) {
 			counts[chipRunning]++
-		}
-		if live.Is(s.ID, liveness.AwaitingWorkers) {
-			counts[chipAwaitingWorkers]++
 		}
 	}
 	return counts

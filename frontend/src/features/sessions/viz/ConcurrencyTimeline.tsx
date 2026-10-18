@@ -38,7 +38,7 @@ function fmtSpan(ms: number): string {
 
 // ConcurrencyTimeline draws a dependency-free SVG Gantt of a session's timed
 // events (llm calls, or turns as a fallback), one lane per agent. Overlapping
-// bars across lanes reveal genuine concurrency (a coordinator running workers);
+// bars across lanes reveal genuine concurrency (a parent running subagents);
 // a single-agent run reads as a serial cadence. Self-contained: it derives its
 // model from the raw debug events.
 export function ConcurrencyTimeline({

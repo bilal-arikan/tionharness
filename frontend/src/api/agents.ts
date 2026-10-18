@@ -28,12 +28,6 @@ export const agentApi = {
     thinkingLevel: string
     avatar?: string
     color?: string
-    // Coordinator defaults for the sessions the new agent opens. coordinatorMode
-    // defaults OFF server-side; the recipe slug and the coordinator-only prompt
-    // are only meaningful while it is on.
-    coordinatorMode?: boolean
-    coordinatorWorkflow?: string
-    coordinatorPrompt?: string
     // When set, the agent is created as a CHILD inheriting every field from
     // this agent; only the name and a non-empty soul are pinned on top.
     parentId?: string

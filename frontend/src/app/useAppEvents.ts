@@ -14,7 +14,6 @@ import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
 import { viewForEventType } from './eventViews'
 import { bumpSignalsForEvent, bumpWorkspaceActivityForEvent } from './eventToRefreshSignals'
-import { publishWorkerChange, publishWorkerChangeAll } from '@/shared/lib/workerBus'
 import { routeFromEvent, buildRoute } from './url'
 import type { ClientPrefs } from './useAppearance'
 import { recordPendingBoardChange } from '@/features/tasks/boardChangeHighlights'
@@ -38,19 +37,6 @@ export interface AppEventDeps {
   markViewUnread: (v: View) => void
 }
 
-// workerBusKeys returns the coordinator session ids a worker event must notify:
-// the direct coordinator plus, for a worker nested deeper than one level, the root
-// of its coordinator tree. Deduplicated, so a top-level worker (whose root IS its
-// coordinator) still yields a single key.
-export function workerBusKeys(e: AppEvent): string[] {
-  const keys: string[] = []
-  const direct = e.target?.coordinatorId
-  if (direct) keys.push(direct)
-  const root = e.target?.rootCoordinatorId
-  if (root && root !== direct) keys.push(root)
-  return keys
-}
-
 export function handleAutonomousCompletion(
   d: Pick<AppEventDeps, 'chat' | 'activeSessionId' | 'setMessages' | 'refreshMessages'>,
   e: AppEvent,
@@ -58,13 +44,11 @@ export function handleAutonomousCompletion(
   const sid = e.target?.sessionId
   if (
     (e.type !== 'spawned' &&
-      e.type !== 'worker' &&
       e.type !== 'schedule' &&
       e.type !== 'flow' &&
       e.type !== 'automation' &&
       e.type !== 'insight') ||
-    !sid ||
-    (e.type === 'worker' && e.target?.phase === 'start')
+    !sid
   ) {
     return
   }
@@ -235,10 +219,6 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       if (!phase || phase === 'done') {
         emitToast({
           type: 'chat',
-          // The server stamps liveWorkers when the session's workers are still
-          // running (or a drain turn is owed): this turn ended, the session did
-          // not. The chime plays on the turn that ends with nothing outstanding.
-          silent: chatTurnLeavesWorkersRunning(e),
           enabled: d.notifyEnabled.current,
           title: e.title || i18next.t('shell.replyReady'),
           body: e.body || '',
@@ -250,7 +230,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         })
       }
     }
-    // Autonomous turn completion (spawn / coordinator worker / scheduled run /
+    // Autonomous turn completion (spawn / scheduled run /
     // flow run / automation fire / insight scan): like the chat branch, drop the
     // live ghost bubble and reload the transcript so the authoritative persisted
     // turn (with its full trace) replaces it. These types carry no wake-phase
@@ -259,26 +239,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     // are selectable in the sidebar, so a running one must land its finished turn
     // without a manual reselect. (Board task runs surface as 'spawned'/'chat'
     // sessions; there is no distinct 'task' run event.)
-    // A worker event with phase='start' is the OPPOSITE of a completion: the turn
-    // is just beginning, so it must not clear the ghost bubble, reload the
-    // transcript or fan out a turn-end. It only feeds the coordination bus below.
     handleAutonomousCompletion(d, e)
-    // Coordination: every worker transition (start AND completion) tells the
-    // coordinator's running-worker banner to refetch its roster, which is what
-    // replaces polling for it. In a NESTED tree the event also carries the tree
-    // root, and both keys must be published: a grandchild's transition only ever
-    // names its direct sub-coordinator, so without the root key the root
-    // coordinator's open chat never refetches and its banner goes stale while
-    // work is still running deeper down.
-    if (e.type === 'worker') {
-      for (const key of workerBusKeys(e)) publishWorkerChange(key)
-    }
-    // A coordination signal (e.g. the phantom-spawn hard-halt notice) targets the
-    // coordinator session directly; route it onto the same bus so the open session's
-    // info panel refetches and its "durduruldu" badge appears without a manual refresh.
-    if (e.type === 'coordination' && e.target?.sessionId) {
-      publishWorkerChange(e.target.sessionId)
-    }
   }
   // Cross-window panel refresh: every event may move rows / status /
   // memberships inside one or more panels (TaskBoard, ExplorerView,
@@ -319,10 +280,6 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     e.type === 'interaction'
   )
     return
-  // A worker START is UI plumbing (roster/banner refresh), not an outcome worth
-  // interrupting the user for — a fan-out of 8 workers would fire 8 toasts. Only
-  // worker completions notify.
-  if (e.type === 'worker' && e.target?.phase === 'start') return
   // Route through the single funnel: it applies the per-type mute + the master
   // gate + the backgrounded-window rule. The tag carries the event identity so
   // multiple open tabs/windows (each receiving the same SSE event) collapse into
@@ -345,7 +302,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
 }
 
 // Live turn-activity frames (session_step): fold each step into the active
-// session's ghost bubble so an autonomous turn (scheduler/spawn/worker/wake) or
+// session's ghost bubble so an autonomous turn (scheduler/spawn/wake) or
 // the same chat turn viewed in another window renders its thinking/tool steps
 // live. Ignore frames from other workspaces (their session isn't on screen here).
 function onStep(d: AppEventDeps, e: AppEvent) {
@@ -359,14 +316,10 @@ function onStep(d: AppEventDeps, e: AppEvent) {
 // Everything published while it was down is lost (the backend bus has no replay),
 // so anything rendered purely from events is now stale with no way to notice:
 //   - the session list (ordering, unread dots, newly spawned sessions),
-//   - coordinator worker rosters, which no longer poll at all — a worker that
-//     started or finished during the outage would otherwise stay wrong until the
-//     next turn edge, i.e. a banner stuck on a worker that already reported,
 //   - the open transcript, which may be missing a turn that completed meanwhile.
 // Panels keep their own refetch paths; this is the SSE-only set.
 function onReconnect(d: AppEventDeps) {
   d.refreshSessions()
-  publishWorkerChangeAll()
   const sid = d.activeSessionId
   if (sid) {
     d.chat.clearAutoLive(sid)
@@ -413,10 +366,4 @@ function onFlowNode(e: AppEvent) {
     sessionId: e.target?.sessionId,
     event: e.node as FlowNodeEvent,
   })
-}
-
-// chatTurnLeavesWorkersRunning reports whether a chat completion event belongs to
-// a session that still has workers running below it (target.liveWorkers > 0).
-export function chatTurnLeavesWorkersRunning(e: Pick<AppEvent, 'target'>): boolean {
-  return Number(e.target?.liveWorkers ?? 0) > 0
 }

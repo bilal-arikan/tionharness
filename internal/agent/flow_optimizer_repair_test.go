@@ -107,29 +107,19 @@ func TestFlowObserverBacksOffAfterQuietPasses(t *testing.T) {
 	}
 }
 
-// gateLoopProposal is the shape that froze a coordinator: a criteria gate after
-// respond whose fail arm loops back into respond (thread context, tools).
+// gateLoopProposal is a criteria gate after respond whose fail arm loops back
+// into respond (thread context, tools).
 const gateLoopProposal = `{"noChange":false,"reason":"4/8 runs claimed PASS without evidence","confidence":0.9,"ops":[{"op":"insert_between","from":"respond","to":"output","node":{"id":"verify","type":"route","mode":"criteria","criteria":["no unproven PASS"]}},{"op":"add_edge","edge":{"from":"verify","to":"respond","when":"fail"}}]}`
 
-// TestCoordinatorFlowRejectsSelfTurnLoop: on a coordinator the gate-and-retry
-// loop back into its own turn is refused (after the repair round); the same
-// proposal stays valid for an ordinary agent.
-func TestCoordinatorFlowRejectsSelfTurnLoop(t *testing.T) {
-	for _, coordinator := range []bool{true, false} {
-		rt, f, _ := repairFixture(t, gateLoopProposal, gateLoopProposal)
-		if coordinator {
-			on := true
-			if _, err := rt.db.UpdateAgent(context.Background(), f.AgentID, db.AgentProfilePatch{CoordinatorMode: &on}); err != nil {
-				t.Fatal(err)
-			}
-		}
-		res, err := rt.OptimizeFlow(context.Background(), f.ID, "manual")
-		if err != nil {
-			t.Fatal(err)
-		}
-		gotInvalid := res.Proposal != nil && res.Proposal.Status == db.ProposalInvalid && strings.Contains(res.Proposal.Error, "coordinator")
-		if coordinator != gotInvalid {
-			t.Fatalf("coordinator=%v: proposal = %+v", coordinator, res.Proposal)
-		}
+// TestFlowAcceptsGateAndRetryLoop: the gate-and-retry loop back into the agent's
+// own turn is a valid proposal for an ordinary agent.
+func TestFlowAcceptsGateAndRetryLoop(t *testing.T) {
+	rt, f, _ := repairFixture(t, gateLoopProposal, gateLoopProposal)
+	res, err := rt.OptimizeFlow(context.Background(), f.ID, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Proposal != nil && res.Proposal.Status == db.ProposalInvalid {
+		t.Fatalf("proposal = %+v", res.Proposal)
 	}
 }

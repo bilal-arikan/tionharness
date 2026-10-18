@@ -38,8 +38,6 @@
       "agentCount_one": "{{count}} ajan",
       "agentCount_other": "{{count}} ajan",
       "flow": "akış",
-      "coordinatorCount_one": "{{count}} koordinatör",
-      "coordinatorCount_other": "{{count}} koordinatör",
       "automationCount_one": "{{count}} otomasyon",
       "automationCount_other": "{{count}} otomasyon"
     },
@@ -359,6 +357,19 @@
         "desc": "Harici veri veya araç bağlamak için market’ten ya da .mcp.json içe aktarımıyla bir MCP sunucusu ekleyebilirsin.",
         "action": "Market’i aç"
       },
+      "decider-not-ready": {
+        "title": "Karar modeli hazır değil",
+        "summary": "Karar katmanı açık ama yanıt veremiyor; tüm mercilerde varsayılana düşülüyor.",
+        "desc": "Karar modeli açık ama yanıt vermiyor ({{problem}}). Düzeltilene kadar merciler sessizce varsayılan davranışa düşer.",
+        "action": "Karar ayarları",
+        "unknown": "neden bildirilmedi"
+      },
+      "insight-scan-off": {
+        "title": "İçgörü taraması elle",
+        "summary": "Geriye dönük içgörü taramasını çalıştıran otomatik bir zamanlama yok.",
+        "desc": "İçgörü taraması yalnız elle başlatılınca çalışıyor. Tekrarlayan sorunlar kendiliğinden görünsün diye bir otomatik tarama zamanlaması ayarlayın.",
+        "action": "İçgörüleri aç"
+      },
       "backup-off": {
         "title": "Yedekleme kapalı",
         "summary": "Uygulama genelinde periyodik zip yedeği kapalıysa.",
@@ -385,10 +396,10 @@
   "agents": {
     "intro": "Bu workspace'te her worker profilini ve sistem rolünü hangi sistem ajanının çalıştıracağını seçin. Yalnız bizim sistem ajanlarımız seçilebilir — yerleşik ajan ya da Ayarlar ▸ Ajan kütüphanesi'nde ondan türettiğiniz özelleştirme; normal ajanlar bu işleri asla çalıştırmaz. Değişiklikler hemen kaydedilir.",
     "groupHints": {
-      "workers": "Koordinatör `explore` veya `coder` gibi bir profil başlattığında çalışan sistem ajanı. Profilin araç listesi her zaman uygulanır.",
+      "workers": "run_subagent `explore` veya `coder` gibi bir profile devrettiğinde çalışan sistem ajanı. Profilin araç listesi her zaman uygulanır.",
       "helpers": "Her sohbetin arka plan yardımcıları: başlık, bağlam sıkıştırma ve genel bakış özetleri.",
       "analysis": "İçgörü taramaları ve ders çıkarma kullanır. İçgörü ekranından da düzenlenebilir.",
-      "optimizers": "Akış gözlemcisi (Akışlar ▸ Evrim'de de), reçete iyileştirici (İçgörü ▸ Ayarlar'da da) ve koordinatör takılma hakemi."
+      "optimizers": "Akış gözlemcisi (Akışlar ▸ Evrim'de de)."
     }
   }
 }

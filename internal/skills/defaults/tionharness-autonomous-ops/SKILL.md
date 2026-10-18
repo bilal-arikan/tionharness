@@ -27,10 +27,10 @@ TionHarness primitive, not an aspiration.
 | `agents.md` / `CLAUDE.md` rules | **Workspace config** (editable prompt/instructions) + per-agent system prompt + `tionharness-settings` |
 | Skills ("anything done twice") | **File-based skills**: `create_skill` / `use_skill`, global+workspace tiers, auto-summary |
 | Automations (trigger → prompt) | **Schedules** (cron, workspace-scoped prompt delivery) for time triggers; **Automations** for board/session events; **Hooks** (tool + lifecycle events) for tool-level triggers |
-| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`spawn_worker`** (background worker, coordinator mode only), and per-agent **evolving flows** (a route node looping back inside one turn) — all gated by the per-workspace autonomy brake |
+| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`spawn_session`** (detached background session), and per-agent **evolving flows** (a route node looping back inside one turn) — all gated by the per-workspace autonomy brake |
 | Quality gates | **Permission/approval layer** (`auto`/`ask`/`read-only`, arg-patterns) + **Hooks** |
 | Auto code review (e.g. Greptile) | A dedicated **reviewer agent** invoked by a schedule or automation, or a critic stage in your own flow |
-| Cloud vs local / infinite parallel | **Physical workspace isolation** + `run_subagent` (parallel isolated workers, each call synchronous) |
+| Cloud vs local / infinite parallel | **Physical workspace isolation** + `run_subagent` (parallel isolated subagents, each call synchronous) |
 | Git worktrees (avoid conflicts) | **Card-owned git worktrees** (one branch per kanban card) + per-workspace `store/` isolation; see limits below |
 | Multimodal (model per task) | **Per-agent provider/model** + an evolving **flow** whose llm nodes may name another agent/model |
 | Flywheel: perfect tests/docs/logs | Recurring **schedules** that sweep docs, tests, and `read_logs` nightly |
@@ -70,6 +70,11 @@ Define *how* you want agents to behave once, not in every prompt:
 
 Start with the model's voice and your hard preferences; refine as you learn what
 you keep correcting by hand — then bake that correction into the rules.
+
+**Precedence when rules conflict:** the user's latest message > workspace
+instructions > project files (`CLAUDE.md` / `AGENTS.md`) > the agent's own prompt
+and notes > skills. A note or card text never overrides the user — correct the
+note instead.
 
 ## 3. Skills — anything you do more than once
 
@@ -124,7 +129,7 @@ one more (bounded) pass with its reason as guidance.
 
 > The video's "PR opened → wait for review comments → address → push" automation
 > translates to: a **schedule or automation** that triggers a **reviewer agent**, which
-> waits for / reads the review output and then has the worker agent apply fixes.
+> waits for / reads the review output and then has the implementing agent apply fixes.
 
 ## 5. Loops — run until a goal is met
 
@@ -140,12 +145,12 @@ heartbeat ticker; every autonomous run requires an explicit trigger:
 - **`schedule_wake`** — a single-shot self-wake timer inside an interactive chat
   turn; the agent fires once more after the delay. Good for "check back in N
   minutes" within a conversation, not for standing automation.
-- **`spawn_worker`** — the only native way to start a run that outlives the
-  current turn. Requires coordinator mode (`set_coordinator_mode`); the worker
-  runs its own session in the background and reports back when done.
-  `run_subagent` is NOT an option here — it always blocks until the subagent
-  replies, so a multi-minute task must instead be split into several smaller
-  self-contained `run_subagent` calls, or handed to a coordinator.
+- **`spawn_session`** — the native way to start a run that outlives the current
+  turn: a new, independent session runs the prompt in the background. Its result
+  stays in that session (it does not report back). `run_subagent` is NOT an
+  option here — it always blocks until the subagent replies, so a multi-minute
+  task must instead be split into several smaller self-contained `run_subagent`
+  calls, or spawned.
 - **Flows** — the graph engine (`agent`/`branch`/`parallel`/`delay`/`transform`)
   for a *structured* loop with explicit branch conditions and restart-safe state.
 
@@ -169,7 +174,7 @@ graph LR
 
 - **`run_subagent` (multiple calls in one turn)** — each `run_subagent` call in
   a single turn runs in parallel (goroutine fan-out, shared atomic budget). Use
-  built-in profiles (`explore`/`coder`/`reviewer`) for ephemeral isolated workers,
+  built-in profiles (`explore`/`coder`/`reviewer`) for ephemeral isolated subagents,
   or pass an existing agent name/ID for a persistent agent. Always installed
   (disable per-agent from the Tools screen). Concurrency is bounded by
   `SpawnMaxConcurrent` and `DelegationMaxCalls`.
@@ -185,7 +190,7 @@ unless the workspace's `worktreeRootDir` says otherwise, based on
 discards it, and a merge conflict leaves the card's `worktreeState` = `conflict`.
 Work that is not tied to a card (plain chat, `run_subagent`, schedules) runs in
 the shared working dir, so multiple agents writing the **same files** there can
-still conflict — route parallel code changes through cards, or give each worker a
+still conflict — route parallel code changes through cards, or give each agent a
 non-overlapping area of the codebase.
 
 > Beyond that card merge, TionHarness has no deploy orchestration — if a merge
@@ -287,8 +292,12 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
 - Re-run the baseline check; require green before you finish.
 - `git commit` with a descriptive message (a clean commit = the next turn's
   recoverable state). Remember `autonomousConfine` blocks `git push` — commit locally.
-- **Append** an outcome note to the board task (and the progress file): what changed,
-  what's still open. Append-only — never overwrite the prior note.
+- **Rewrite** the board card to its CURRENT state (what is done, what is open,
+  the commit SHA that proves it) — a card is a status, not a log; keep it short.
+  The history goes to `record_work` (and the progress file), not the card.
+- Cite evidence by **commit SHA** (`git rev-parse --short HEAD`) plus the command
+  that verified it. Never pin file-content hashes in cards or prompts: they go
+  stale on the next edit and turn every later check into a false failure.
 - Move the task to `done` only if it is fully verified; otherwise leave it
   `in_progress` with a note on where it stands.
 

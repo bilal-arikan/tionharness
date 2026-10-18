@@ -51,9 +51,9 @@ func TestRecordSystemAgentSession(t *testing.T) {
 
 	// No workspace row for the role: the caller's agent owns the session.
 	other, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Alice"})
-	id2 := rt.recordSystemAgentSession(ctx, "recipe-optimizer", other, "", "P", "R")
+	id2 := rt.recordSystemAgentSession(ctx, "flow-optimizer", other, "", "P", "R")
 	sess2, _ := rt.db.GetSession(ctx, id2)
-	if sess2.AgentID != other.ID || sess2.Title != "recipe-optimizer" {
+	if sess2.AgentID != other.ID || sess2.Title != "flow-optimizer" {
 		t.Fatalf("fallback owner/title: %+v", sess2)
 	}
 }

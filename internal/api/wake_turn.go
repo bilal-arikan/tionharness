@@ -70,8 +70,8 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		})
 		// Budget the fold against the true per-turn footprint (messages + the static
 		// prefix / tool schemas / artifacts shipped every turn), not messages alone —
-		// otherwise a large static prefix (e.g. a claude-cli coordinator draining
-		// worker notifications) holds the message-only estimate under budget and no
+		// otherwise a large static prefix (e.g. a claude-cli agent with many MCP tool
+		// schemas) holds the message-only estimate under budget and no
 		// fold ever fires while the real context runs over.
 		overhead, stepBase, err := s.contextOverheadTokens(ctx, wsp, session, history, multiAgent)
 		if err != nil {
@@ -106,10 +106,9 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// autonomous=true: a wake is a headless, budget-gated run (no live client);
 		// completeTraced auto-wires the Interaction MCP bridge for CLI agents. The
 		// session-step emitter streams this turn's activity to the bus so a window
-		// viewing the session sees the woken/worker/coordinator turn unfold live,
+		// viewing the session sees the woken turn unfold live,
 		// just like an interactive chat turn (nil when the ctx carries no session id).
-		// Auto-compaction visibility on autonomous turns (schedule_wake / worker /
-		// coordinator): Prepare may have folded older history silently. Surface it as a
+		// Auto-compaction visibility on autonomous turns (schedule_wake): Prepare may have folded older history silently. Surface it as a
 		// head-of-turn step on the SAME feed the turn's own steps use — emitted live for
 		// a watching window and prepended to the persisted trace below so it survives a
 		// refresh. This is the path that carried the invisible SES548 spawned-turn fold.

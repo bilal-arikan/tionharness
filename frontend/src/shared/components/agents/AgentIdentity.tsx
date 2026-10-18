@@ -37,7 +37,7 @@ interface Props {
    * Show the agent id dimly on the SECOND line, left of the model (e.g. "Ada" /
    * "AGT3 · Sonnet"). Used where an agent is picked from a list or addressed by
    * id, so the id is discoverable without opening the agent — the same id the
-   * send_message tool accepts. Keeping it off the name line lets the name use
+   * agent tools accept. Keeping it off the name line lets the name use
    * the full width and gives every id the same place across the app.
    */
   showId?: boolean

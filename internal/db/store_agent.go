@@ -342,16 +342,6 @@ type AgentProfilePatch struct {
 	// whole list (an empty slice clears it).
 	Skills   *[]string
 	Disabled *bool
-	// CoordinatorMode / CoordinatorWorkflow are the agent's coordinator DEFAULTS
-	// for the sessions it opens (see Agent.CoordinatorMode). Pointers so an
-	// explicit false is distinguishable from "not in this patch"; changing them
-	// never touches sessions that already exist.
-	CoordinatorMode     *bool
-	CoordinatorWorkflow *string
-	// CoordinatorPrompt is the agent's coordinator-only prompt block (see
-	// Agent.CoordinatorPrompt). Pointer so clearing it ("") is distinguishable
-	// from "not in this patch".
-	CoordinatorPrompt *string
 	// ParentID re-parents the agent (see Agent.ParentID); "" detaches it into a
 	// root that keeps its effective values. Validated for existence and cycles.
 	ParentID *string

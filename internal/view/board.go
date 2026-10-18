@@ -380,8 +380,8 @@ func cardsInColumn(cols []boardColumn, key string) []db.Task {
 
 // blockedCards are cards with at least one dependency that is not done.
 // reviewTreadmillCards are the OPEN cards that have failed at least
-// db.ReviewRoundBudget verification rounds — the board's view of the same
-// condition the coordinator is handed as <review-gate-exhausted>. A card that
+// db.ReviewRoundBudget verification rounds — the board's view of the
+// review treadmill (see Task.ReviewBounces). A card that
 // reached done or was cancelled is excluded: however many rounds it took, it is
 // no longer on a treadmill.
 func reviewTreadmillCards(tasks []db.Task) []db.Task {

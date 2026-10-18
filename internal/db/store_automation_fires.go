@@ -15,8 +15,8 @@ import (
 // guards skipped — is appended to <store>/automation-fires/<id>.jsonl. The row
 // itself only keeps the last outcome (LastFiredAt / LastSessionID / LastError),
 // which cannot answer "why did this rule not fire for the last three cards" or
-// "how often does it hit its cooldown"; the trajectory view and the curator
-// both need that history. Bounded: the file is trimmed to automationFireCap
+// "how often does it hit its cooldown"; the curator
+// needs that history. Bounded: the file is trimmed to automationFireCap
 // records once it grows past automationFireTrimAt, so a chatty rule never
 // grows a log without limit.
 

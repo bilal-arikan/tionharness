@@ -96,7 +96,7 @@ func TestDecisionEvidenceBoundsUTF8AndFitsSmallerDecisionWindow(t *testing.T) {
 }
 
 func TestDecisionRequestsIncludeEvidenceAndFullReminderText(t *testing.T) {
-	rt, stub, ctx, caller := decisionWorkflowFixture(t, map[string]decider.Mode{authClarification: decider.ModeOn, authContextReminder: decider.ModeOn, authWorkerReview: decider.ModeOn})
+	rt, stub, ctx, caller := decisionWorkflowFixture(t, map[string]decider.Mode{authClarification: decider.ModeOn, authContextReminder: decider.ModeOn})
 	sid := SessionIDFrom(ctx)
 	msg, _ := rt.db.AddMessage(ctx, db.Message{SessionID: sid, Role: "user", Text: "Important constraint beyond the short label: support an offline export."})
 	_, _ = rt.db.SetSessionSummary(ctx, sid, "Current work: export dashboard.", 1)
@@ -108,20 +108,19 @@ func TestDecisionRequestsIncludeEvidenceAndFullReminderText(t *testing.T) {
 		t.Fatal(err)
 	}
 	rt.ReviewClarification(ctx, caller, json.RawMessage(`{"question":"Need offline export?","required_input":false}`))
-	rt.reviewDecisionWorker(ctx, sid, "worker", "The dashboard is implemented.")
 	req := providers.Request{Messages: []providers.Message{{Role: providers.RoleUser, Text: "Continue export"}}}
 	rt.applyDecisionContext(ctx, caller, &req)
 	stub.mu.Lock()
 	defer stub.mu.Unlock()
-	if len(stub.bodies) != 3 {
-		t.Fatalf("expected three real workflow requests, got %d", len(stub.bodies))
+	if len(stub.bodies) != 2 {
+		t.Fatalf("expected two real workflow requests, got %d", len(stub.bodies))
 	}
 	for _, body := range stub.bodies {
 		if !strings.Contains(body, "Current work: export dashboard.") || !strings.Contains(body, "sessionContext") {
 			t.Fatal("workflow did not receive summary and conversation evidence")
 		}
 	}
-	if !strings.Contains(stub.bodies[2], "retainedFragments") || !strings.Contains(stub.bodies[2], msg.Text) {
+	if !strings.Contains(stub.bodies[1], "retainedFragments") || !strings.Contains(stub.bodies[1], msg.Text) {
 		t.Fatal("reminder selection saw only a short label instead of the retained constraint")
 	}
 }

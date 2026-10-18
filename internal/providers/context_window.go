@@ -209,10 +209,10 @@ func AdaptiveBudgetFraction(provider, model string) float64 {
 	}
 	switch {
 	case gptFamily(m):
-		// Same rationale as the MiniMax/DeepSeek/Gemini long-context families: the
-		// window is large but recall precision degrades over a big raw transcript,
-		// so keep the conservative 0.35 share and let retrieval carry the rest.
-		return 0.35
+		// The codex window (272K) is far smaller than the 1M families, so 0.35 folded
+		// at ~95K — every few turns on a tool-heavy run. 0.6 (~163K) stays well under
+		// codex's own ~90% auto-compact while keeping folds rare (2026-10-18).
+		return 0.6
 	case glmFamily(m):
 		// Same rationale as the other long-context families: even the 1M tiers lose
 		// recall precision over a big raw transcript, and the 200K tiers are simply

@@ -2,12 +2,12 @@
 
 // Session origin kinds (db.Origin* constants).
 type SessionOriginKind =
-  'user' | 'spawn' | 'coordinator' | 'subagent' | 'schedule' | 'automation' | 'handoff' | 'insight'
+  'user' | 'spawn' | 'subagent' | 'schedule' | 'automation' | 'handoff' | 'insight'
 
 // Who started a session and from where (db.SessionOrigin). Field meaning
 // depends on kind: entityId names the automation/schedule, runId the insight
 // run, triggerSessionId the session whose
-// activity caused this one (coordinator, parent turn, handed-off session, tagged
+// activity caused this one (parent turn, handed-off session, tagged
 // session), rootSessionId the top of the tree (empty = this session is a root).
 export interface SessionOrigin {
   kind: SessionOriginKind
@@ -43,7 +43,7 @@ export interface Session {
   // plain chat and agent-keyed kinds (schedule).
   sourceId?: string
   // Who started this session and from where (db.Session.Origin). The single
-  // lineage source for graph/trajectory views; absent on headers written before
+  // lineage source for graph/lane views; absent on headers written before
   // schema version 4 (the backend derives it in memory, so API responses carry it).
   origin?: SessionOrigin
   title: string
@@ -78,18 +78,6 @@ export interface Session {
   // ordinary session.
   parentSessionId?: string
   handoffArtifactId?: string
-  // Multi-agent coordination (M2, _Docs/47). Two INDEPENDENT axes since the
-  // unlimited-depth rework: `role` is lineage ('worker' = spawned by a
-  // coordinator, or '' ), `coordinatorMode` is the capability (drives workers).
-  // A mid-level node of a deep tree has both. coordinatorSessionId back-links to
-  // the coordinator above; rootCoordinatorSessionId/coordinatorDepth place the
-  // session in its tree. Never test `role === 'coordinator'` — use
-  // isCoordinatorSession() from shared/lib/coordination.
-  role?: string
-  coordinatorMode?: boolean
-  coordinatorSessionId?: string
-  rootCoordinatorSessionId?: string
-  coordinatorDepth?: number
   createdAt: number
   updatedAt: number
 }
@@ -173,21 +161,17 @@ export interface Execution {
   unread: boolean
   running: boolean
   lastStatus?: string
-  coordinatorSessionId?: string
-  rootCoordinatorSessionId?: string
   createdAt: number
   updatedAt: number
 }
 
 // ExecutionRuntimeRow is the live subset of an Execution served by
 // GET /api/executions/runtime — what the sidebar needs to draw a running dot,
-// a last-run chip and coordinator lineage, without titles or counters.
+// and a last-run chip, without titles or counters.
 export interface ExecutionRuntimeRow {
   sessionId: string
   running: boolean
   lastStatus?: string
-  coordinatorSessionId?: string
-  rootCoordinatorSessionId?: string
 }
 
 // The exact next-turn context a session's agent would be sent (debug preview):
@@ -351,19 +335,6 @@ export interface SessionInfo {
   // and the handoff artifact written into this session at reset.
   parentSessionId?: string
   handoffArtifactId?: string
-  // Coordination (M2). `role` is lineage ('worker' | ''), `coordinatorMode` the
-  // capability; see the Session type above. coordinatorSessionId back-links to
-  // the coordinator above, root/depth place this session in its tree.
-  role?: string
-  coordinatorMode?: boolean
-  coordinatorSessionId?: string
-  rootCoordinatorSessionId?: string
-  coordinatorDepth?: number
-  // Selected coordinator recipe/workflow slug (M5), if any.
-  coordinatorWorkflow?: string
-  // True when the phantom-spawn stall guard hard-halted this coordinator's auto-turns
-  // (see coordination_stall.go). Drives the persistent "durduruldu" badge + resume CTA.
-  coordinatorStallHalted?: boolean
   createdAt: number
   updatedAt: number
 
@@ -412,97 +383,4 @@ interface RunningTurn {
   lastProgressKind: string
   progressSequence: number
   idleLimitSec: number // inactivity window that will cancel the turn
-}
-
-// WorkerInfo is one worker's status under a coordinator session (M2).
-export interface WorkerInfo {
-  sessionId: string
-  agentName: string
-  // The worker agent's identity, so a worker can be rendered with the shared
-  // AgentIdentity component (avatar + name + id + model) rather than a bare name.
-  // All empty when the worker's agent row no longer exists — the UI then falls
-  // back to the session title/id.
-  agentId?: string
-  agentAvatar?: string
-  agentColor?: string
-  agentProvider?: string
-  agentModel?: string
-  // True for a soft-deleted agent, whose sessions outlive it; AgentIdentity
-  // badges it instead of showing a normal-looking agent.
-  agentDeleted?: boolean
-  title: string
-  running: boolean
-  summary: string
-  // Unix seconds when a RUNNING worker's current turn began, for live elapsed
-  // time. 0 when the worker is finished, or when its start time is unknown (a
-  // turn opened directly on the worker session, or one that survived a restart)
-  // — the UI then omits the duration rather than showing a bogus one.
-  startedAt: number
-  // True for a SUB-COORDINATOR that is "running" only in the sense that its own
-  // workers are: it has no turn of its own in flight, it is waiting on its
-  // branch. Shown as "delegating" rather than "running", because there is no live
-  // turn whose elapsed time would mean anything.
-  delegating?: boolean
-  // True while a follow-up (send_to_worker) is parked in this worker's single-slot
-  // queue, waiting for the current turn to finish. Shown as a "queued" badge so the
-  // coordinator sees the message landed and will be delivered, not lost. Only
-  // meaningful while running.
-  queued?: boolean
-}
-
-// CoordinatorTreeNode is one session in a coordinator tree
-// (GET /api/sessions/{id}/coordinator-tree), breadth-first from the root.
-export interface CoordinatorTreeNode {
-  sessionId: string
-  agentName: string
-  title: string
-  // Distance from the tree root (root = 0).
-  depth: number
-  // The coordinator this node reports to; empty on the root.
-  parentSessionId: string
-  // Whether this node drives workers of its own (a root or a mid-level node).
-  isCoordinator: boolean
-  state: string
-  // Whether a turn is in flight on this session right now.
-  running?: boolean
-  // A parked send_to_worker follow-up waiting for this node's current turn to end
-  // (single-slot per worker). Shown as a "queued" marker so a message on a deep
-  // node is visible from the root. Only meaningful while running.
-  queued?: boolean
-  // Branch health, derived from the session's auto-tags: 'stuck' (autonomous
-  // turns refused — needs a human), 'error' (last turn failed), '' (fine).
-  // Surfaced in the tree because the deeper a failure sits, the less likely
-  // anyone opens the session it happened in.
-  health?: string
-  // Still owes its coordinator an upward report. A node parked here is the one
-  // shape of "silently blocking everything above it".
-  reportPending?: boolean
-  // Phantom-spawn hard-halt: this coordinator's auto-turns are stopped until a human
-  // resumes it (distinct from generic 'stuck' — it has a one-click resume action).
-  stallHalted?: boolean
-  // This node's own lifetime spend. Absent when it has no recorded usage.
-  calls?: number
-  tokens?: number
-  costUSD?: number
-}
-
-// CoordinatorTree is the whole tree plus its rolled-up spend. The total matters
-// because billing is per-session: without it a deep fan-out's real cost is spread
-// across descendants nobody opens.
-export interface CoordinatorTree {
-  rootSessionId: string
-  nodes: CoordinatorTreeNode[]
-  totalCostUSD: number
-  totalSavingsUSD: number
-  priced: boolean
-  estimated: boolean
-}
-
-// CoordinatorAncestor is one step of the upward breadcrumb from a worker
-// (GET /api/sessions/{id}/coordinator-ancestors), root first.
-export interface CoordinatorAncestor {
-  sessionId: string
-  agentName: string
-  title: string
-  depth: number
 }

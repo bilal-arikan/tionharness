@@ -1,6 +1,6 @@
 # Generic Bildirim Sinyalleri (nav + workspace)
 
-> **Özet (2026-09-03):** Nav görünümleri ve workspace'ler için üç dik sinyalin
+> **Özet (2026-10-18):** Nav görünümleri ve workspace'ler için üç dik sinyalin
 > (busy/unread/dirty) tek generic sisteme toplandığı doküman — NavRail nokta
 > göstergeleri, çapraz-workspace "çalışıyor" nabzı, tab başlığı/taskbar rozeti ve
 > masaüstü toast'ları (tek funnel + tek registry) kapsar. Durum: uygulanmış ve
@@ -11,7 +11,7 @@
 > tip-bazlı susturma tek registry'den (`NOTIFY_TYPES`) türer.
 > Dayandığı dosyalar: `internal/api/running_sessions.go`, `internal/api/activity.go`,
 > `internal/events/types.go`, `frontend/src/shared/lib/{notifyBus,notifyTypes}.ts`,
-> `frontend/src/app/useWorkspaceActivity.ts`.
+> `frontend/src/app/useWorkspaceActivity.ts`. worker/koordinatör bildirim kuralları (worker olayı, `liveWorkers` ile ertelenen "bitti" sesi) kaldırıldı.
 
 > "Dışarıya ve kullanıcıya haber verme" katmanı tek bir generic sisteme toplandı.
 > Son güncelleme: **2026-07-24** (çapraz-workspace "çalışıyor" nabzı eklendi)
@@ -110,7 +110,7 @@ workspace'lerde de canlı koşuyu göstermek için ayrı bir çapraz-workspace s
 |-------|-------|
 | **Backend** `GET /api/workspaces/activity` (`api/activity.go` → `handleWorkspacesActivity` + `workspaceRunning`) | Her workspace için tek `running` bayrağı: aktif oturum (server-wide `chatRuns` + runtime + turn kuyruğu), çalışan task/flow run. Global route (aktif workspace gerektirmez). |
 | **Hook** `app/useWorkspaceActivity.ts` | 4sn poll + **iki** refresh sinyali → `busyWorkspaceIds: Set<string>`. `executions` (aktif ws'in kendi başlat/bitir) + `workspace-activity` (herhangi bir ws'te run-lifecycle olayı; aktif olmayan ws'ler için anlık). |
-| **SSE anlık tazeleme** `useAppEvents` | Çapraz-workspace dalında (`markWorkspaceUnread` yanında) `bumpWorkspaceActivityForEvent(e)` → run-lifecycle tipleri (`chat/flow/schedule/spawned/worker/task`) `workspace-activity` sinyalini bumlar. Aktif-scoped `executions`/`activity` sinyalleri çapraz-ws'te **bilerek bumlanmaz** (boşuna refetch olmasın). |
+| **SSE anlık tazeleme** `useAppEvents` | Çapraz-workspace dalında (`markWorkspaceUnread` yanında) `bumpWorkspaceActivityForEvent(e)` → run-lifecycle tipleri (`chat/flow/schedule/spawned/task`) `workspace-activity` sinyalini bumlar. Aktif-scoped `executions`/`activity` sinyalleri çapraz-ws'te **bilerek bumlanmaz** (boşuna refetch olmasın). |
 | **UI** | `WorkspaceSwitcher` / `MobileWorkspaceButton` açılır listede her satırda **açık metin etiketi**: yeşil nabız + **"çalışıyor"** (`--color-success`) ya da accent nokta + **"tamamlandı"** (`--color-accent`). `running` `unread`'in **önüne** geçer. Aktif olmayan bir workspace çalışıyorsa switcher trigger'ı + collapsed rail ikonu accent noktayı **pulse** eder (`anyOtherBusy`). Aktif workspace'in kendi "tamamlandı"sı listede filtrelenir (`unreadWs` aktif ws'i çıkarır) çünkü zaten oturum listesinde `StatusPill` ile zengin gösterilir. |
 
 **"Tamamlandı"** ayrı bir sinyal DEĞİL — biten koşu mevcut SSE `unread` accent
@@ -172,14 +172,9 @@ event'i). Refactor bunu tek kaynağa topladı:
 `chat` ve `prompt` artık gerçek susturulabilir tip: türü kapatmak yalnız OS toast'ı
 susturur; ses uyarısı Ses ekranındaki "Ses efektleri" tercihini izlemeye devam eder.
 
-**"Bitti" sesi worker'lar bitince çalar (2026-10-17).** Bir koordinatör turu, altındaki
-worker'lar hâlâ çalışırken bitebilir; o an oturum bitmiş değildir, worker raporları bir
-drain turu daha başlatacaktır. `Runtime.publish`, `chat` tamamlanma olayına
-(`phase` boş ya da `done`) oturumun bekleyen koordinasyon işini `target.liveWorkers`
-olarak ekler (`annotateChatCompletion`: koordinatör slotundaki canlı/ayrılmış worker
-sayısı + borçlu drain turu için 1). Ön yüz bu değer > 0 ise `emitToast({silent:true})`
-ile sesi atlar, toast'ı yine gösterir (`chatTurnLeavesWorkersRunning`). Ses, hiçbir iş
-kalmadan biten turda (genelde son worker raporunun drain turu) çalar.
+**~~"Bitti" sesi worker'lar bitince çalar (2026-10-17)~~ — kaldırıldı (2026-10-18).** Koordinatör/worker
+yapısı olmadığından `target.liveWorkers` açıklaması (`annotateChatCompletion`) ve ön yüzdeki
+`chatTurnLeavesWorkersRunning` sessiz-ses kuralı silindi; "bitti" sesi her tamamlanan sohbet turunda çalar.
 
 ## Yeni bir bildirim tipi eklemek
 

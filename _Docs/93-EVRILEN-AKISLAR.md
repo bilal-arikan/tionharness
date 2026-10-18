@@ -1,6 +1,6 @@
 # 93 — Evrilen Akışlar (Ajan-Başına Ana Akış)
 
-> **Özet (2026-10-17):** Orkestrasyon akışları (bağımsız flow varlığı, 13 node tipi, koşu
+> **Özet (2026-10-18):** Orkestrasyon akışları (bağımsız flow varlığı, 13 node tipi, koşu
 > ağacı, flow-backed schedule/automation/task, market flow paketleri) **kaldırıldı**; yerine
 > **her ajanın tek bir ana akışı** var ve ajanın **her turu** o akıştan geçer. Varsayılan akış
 > `girdi → yanıt → çıktı`'dır ve düz sohbet turuyla bire bir aynıdır. Akış sürümlüdür; kullanıcı
@@ -17,7 +17,7 @@
 > (koşu bitince ateşlenir). Beyin fırtınası ve uygulanmayan fikirler §8. **Ek (2026-10-17):**
 > workspace geneli **otomatik kabul** (`flowAutoAccept`): açıkken `propose` akışları da güven
 > eşiği + öneri kapısından geçen öneriyi elle kabulle aynı yoldan uygular, açıldığında bekleyen
-> öneriler taranır, uygulanan öneriye `autoApplied` yazılır (§3).
+> öneriler taranır, uygulanan öneriye `autoApplied` yazılır (§3). flow gözlemcisi (flow-optimizer) varsayılan olarak KAPALI (`DefaultFlowPolicy` mode `off`); koordinatör akışı kuralı koordinatör modu ile birlikte kaldırıldı.
 
 ## 1. Model
 
@@ -90,7 +90,7 @@ yeteneklerini (araçlar, izinler, prompt cache, resume) korur. Yardımcı çağr
   öncesi metin), `RestoreAgentPromptVersion` ile geri yüklenir. Rehber skill:
   `tionharness-flows`.
 - **Flow Observer** (`flow-optimizer` sistem ajanı, prompt `flow-optimizer`):
-  `Policy.Mode` `off` / `propose` / `auto`; `EveryRuns` (varsayılan 5) yeni koşuda bir kez
+  `Policy.Mode` `off` / `propose` / `auto` (**yeni akışın varsayılanı `off`** — `DefaultFlowPolicy`, 2026-10-18: gözlemci bir insan akışı açıkça seçene kadar kapalıdır; gözetimsiz önerilerin çoğu `noChange` dönüp tur başına model çağrısı harcıyordu); `EveryRuns` (varsayılan 5) yeni koşuda bir kez
   bakar (`maybeObserveFlow`, arka plan turu). Kanıt: baş graf, soul/identity, istatistik,
   son 8 koşunun düğüm izi ve geri bildirimi, önceki öneriler. Yanıt STRICT JSON
   (`noChange / reason / expected / confidence / ops / prompt`); kodda doğrulanır (op
@@ -112,18 +112,11 @@ yeteneklerini (araçlar, izinler, prompt cache, resume) korur. Yardımcı çağr
   fazla 8×), dosyalanan bir öneri sayacı sıfırlar, elle tetikleme her zaman çalışır
   (2026-10-18). Puan üretilemeyen bir workspace'te (karar modeli anahtarsız) gözlemci her
   beş koşuda aynı "ortam sorunu, değişiklik yok" cevabı için model çağrısı yapıyordu.
-- **Koordinatör akışında öz-tur döngüsü yasak (2026-10-18):** `validateProposal`, sahibi
-  koordinatör olan bir akışta ajanın kendi turunu (thread bağlamlı, araçlı, başka ajana
-  devredilmemiş `llm` düğümü) bir döngü içine sokan öneriyi reddeder (`rerunsAgentTurn`);
-  gözlemci kanıtında `role: COORDINATOR` satırı bunu söyler. WS3'te gözlemci, karar modeli
-  çalışmaya başlar başlamaz PM akışını üç kez otomatik evirdi (v3–v5): bir ölçüt kapısı +
-  `fail` kolunda `respond`'a dönüş, yeniden deneme isteminde "yeni test, görev veya worker
-  açma; yalnız kanıtı yeniden oku, 'doğrulama bekliyor' yaz", ölçütte de "doğrulama bekliyor"
-  ifadesi geçerli sonuç sayılıyordu. PM'in iş başlatan her yanıtı kapıda reddedildi, ikinci
-  geçiş iş açmayı yasakladı; koordinatör saatlerce "doğrulama bekliyor" yazıp hiçbir şey
-  başlatmadı. Gözlemci prompt'una iki kural eklendi: yeniden deneme istemi ajanın işini
-  yasaklamaz (kapı yanıtı düzeltir), ve bir ifadeyle karşılanabilen ölçüt iş değil ifade
-  ölçer. FLW2 ve FLW37 (20 tura kadar `PENDING` yoklama döngüsü) varsayılan akışa geri alındı.
+- ~~**Koordinatör akışında öz-tur döngüsü yasak (2026-10-18)**~~ — koordinatör modu aynı gün kaldırıldı;
+  `rerunsAgentTurn` doğrulaması ve `role: COORDINATOR` kanıt satırı yoktur. Gözlemci prompt'una
+  eklenen iki kural kalır: yeniden deneme istemi ajanın işini yasaklamaz (kapı yanıtı düzeltir),
+  ve bir ifadeyle karşılanabilen ölçüt iş değil ifade ölçer. (WS3 olayı: karar modeli açılır açılmaz
+  PM akışı üç kez otomatik evirildi; FLW2 ve FLW37 varsayılan akışa geri alındı.)
 - **Otomatik kabul** (`internal/agent/flow_autoaccept.go`, 2026-10-17): bir öneri iki
   durumda insansız uygulanır: akışın kendi politikası `auto` ise, ya da workspace
   ayarı `flowAutoAccept` açık ve akışın politikası `propose` ise (`off` kapalı kalır;

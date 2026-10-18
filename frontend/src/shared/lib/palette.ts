@@ -33,11 +33,10 @@ const ROLE_COLORS: Record<string, string> = {
   summary: '#f59e0b', // amber — folded history
   user: 'var(--color-accent)',
   // Machine-injected prompts that ride the "user" role on the wire but are not
-  // the human typing: worker results in a coordinator session, and wake/schedule
-  // auto-resumes. Split out so a coordinator's context does not read as if the
-  // user wrote hundreds of KB. Deliberately NOT accent-coloured — the accent is
-  // reserved for the human's own share.
-  'worker-note': '#f97316', // orange — <task-notification> / <coordination-status>
+  // the human typing: wake/schedule auto-resumes. Split out so an autonomous
+  // session's context does not read as if the user wrote hundreds of KB.
+  // Deliberately NOT accent-coloured — the accent is reserved for the human's
+  // own share.
   'auto-prompt': '#eab308', // yellow — schedule_wake / scheduled routine prompts
   assistant: '#10b981', // emerald
   tool: '#8b5cf6', // violet — tool-result messages

@@ -141,8 +141,7 @@ func (RunSubagentTool) Def() providers.ToolDef {
 			"or an existing agent's name/id. Default context: isolated. The call BLOCKS until the subagent " +
 			"finishes. Call several times in one turn to fan work out in parallel. A long run can hit the " +
 			"tool-call timeout, so split long work into several smaller self-contained subagent calls; for " +
-			"genuinely long-running work, let a coordinator drive it (`set_coordinator_mode` then " +
-			"`spawn_worker`). Set `objective`/`output_format`/`boundaries` for best results — vague " +
+			"genuinely long-running work, use `spawn_session` (fire-and-forget). Set `objective`/`output_format`/`boundaries` for best results — vague " +
 			"tasks cause gaps.",
 		InputSchema: json.RawMessage(`{
   "type": "object",

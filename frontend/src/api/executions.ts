@@ -10,6 +10,6 @@ export const executionApi = {
   listExecutions: (kind?: string) =>
     req<Execution[]>(kind ? `/api/executions?kind=${encodeURIComponent(kind)}` : '/api/executions'),
   // Compact live facts for the sidebar poll: only sessions that are running,
-  // carry a last-run status or sit under a coordinator. Absent = idle.
+  // or carry a last-run status. Absent = idle.
   listExecutionRuntime: () => req<ExecutionRuntimeRow[]>('/api/executions/runtime'),
 }

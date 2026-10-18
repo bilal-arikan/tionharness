@@ -5,8 +5,7 @@ import "strings"
 // skilltools.go marks the SKILL-DISCOVERY surface: the two tools an agent uses to
 // find and load a skill's instructions.
 //
-// They are separated from the work tools for the same reason the coordination
-// surface is (see builtin_coordination.go): the system prompt renders the
+// They are separated from the work tools because the system prompt renders the
 // "# Available Skills" block for EVERY agent and tells it to load a matching
 // skill before acting, so an allowlist-only profile would be instructed to call a
 // tool it cannot see. Reading a skill is read-only, so the exemption is safe even

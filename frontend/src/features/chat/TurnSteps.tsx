@@ -134,7 +134,7 @@ function renderLiveStep(
 // execution is visible at a glance.
 // memo: a long transcript re-renders on every streaming delta, and re-running
 // this over every finished turn's trace (each one a tree of markdown/diff cards)
-// is what made scrolling a worker session stutter. The finished turns' `steps`
+// is what made scrolling a long session stutter. The finished turns' `steps`
 // arrays are referentially stable (AssistantTurn memoizes the parse), so only
 // the live turn actually re-renders.
 export const TurnSteps = memo(function TurnSteps({

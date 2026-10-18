@@ -9,18 +9,18 @@ import (
 
 // turnslot.go is the runtime's face onto the per-session turn admission queue
 // (internal/turnqueue). The queue itself is layer-free — it only orders turns; the
-// wrappers here name the callers so the UI can say WHAT is waiting ("worker
-// bildirimi", "zamanlanmış tur") rather than just "meşgul".
+// wrappers here name the callers so the UI can say WHAT is waiting
+// ("zamanlanmış tur", "otomasyon tetiği") rather than just "meşgul".
 //
 // Every turn-entry path in the process goes through one of these:
 //
 //	BeginSessionUserTurn                        → a user message (interactive or queued)
 //	ClaimSessionCommandTurn                      → /compact, /handoff
-//	claimSessionTurnSlotCtx(kind)                → coordinator, worker, wake, peer, spawn, automation
+//	claimSessionTurnSlotCtx(kind)                → wake, spawn, automation
 //
 // There is no priority: whoever asked first runs first. A priority scheme is
-// exactly how the coordinator's own auto-turns used to starve a waiting user
-// message (_Docs/58).
+// exactly how autonomous auto-turns used to starve a waiting user message
+// (_Docs/58).
 
 // TurnQueue exposes the admission queue so the API layer can render it (what holds
 // the session and what is queued behind) and so tests can observe it.
@@ -28,20 +28,16 @@ func (r *Runtime) TurnQueue() *turnqueue.Queue { return r.turns }
 
 // BeginSessionUserTurn claims the session's turn slot for an interactive
 // (user-initiated) turn so it never overlaps ANY other turn on the same session.
-// Blocks until the slot is free; the returned release func MUST be deferred. A user
-// turn also resets the coordinator auto-turn cap (a human is back in the loop);
-// harmless on a plain session where the cap is never consulted.
+// Blocks until the slot is free; the returned release func MUST be deferred.
 func (r *Runtime) BeginSessionUserTurn(sessionID string) (release func()) {
-	rel, _ := r.claimTurnSlot(context.Background(), sessionID, turnqueue.KindUser, "kullanıcı mesajı", true)
+	rel, _ := r.claimTurnSlot(context.Background(), sessionID, turnqueue.KindUser, "kullanıcı mesajı")
 	return rel
 }
 
 // ClaimSessionCommandTurn claims the slot for an out-of-queue slash command
-// (/compact, /handoff) that runs a direct provider call on the HTTP goroutine. It
-// does NOT reset the auto-turn cap — a compaction is not a human re-entering the
-// conversation.
+// (/compact, /handoff) that runs a direct provider call on the HTTP goroutine.
 func (r *Runtime) ClaimSessionCommandTurn(ctx context.Context, sessionID, label string) (release func(), err error) {
-	return r.claimTurnSlot(ctx, sessionID, turnqueue.KindCommand, label, false)
+	return r.claimTurnSlot(ctx, sessionID, turnqueue.KindCommand, label)
 }
 
 // claimSessionTurnSlotCtx claims an autonomous turn slot whose cancel func is
@@ -49,12 +45,11 @@ func (r *Runtime) ClaimSessionCommandTurn(ctx context.Context, sessionID, label 
 // while the turn waits for the slot would be silently outlived — the queued turn
 // would start after the stop and run to completion.
 func (r *Runtime) claimSessionTurnSlotCtx(ctx context.Context, sessionID string, kind turnqueue.Kind, label string) (release func(), err error) {
-	return r.claimTurnSlot(ctx, sessionID, kind, label, false)
+	return r.claimTurnSlot(ctx, sessionID, kind, label)
 }
 
-// claimTurnSlot is the single choke point onto the queue. resetCap zeroes the
-// coordinator auto-turn budget (human back in the loop).
-func (r *Runtime) claimTurnSlot(ctx context.Context, sessionID string, kind turnqueue.Kind, label string, resetCap bool) (func(), error) {
+// claimTurnSlot is the single choke point onto the queue.
+func (r *Runtime) claimTurnSlot(ctx context.Context, sessionID string, kind turnqueue.Kind, label string) (func(), error) {
 	if err := r.refuseWakeOnArchivedSession(ctx, sessionID, kind); err != nil {
 		return func() {}, err
 	}
@@ -68,23 +63,16 @@ func (r *Runtime) claimTurnSlot(ctx context.Context, sessionID string, kind turn
 	// tiny metadata write must not be skipped just because the caller's run
 	// context is about to be cancelled.
 	r.reactivateArchivedSession(context.WithoutCancel(ctx), sessionID, kind)
-	if resetCap {
-		slot := r.coordSlotFor(sessionID)
-		slot.mu.Lock()
-		slot.turns = 0
-		slot.capWarn = false
-		slot.mu.Unlock()
-	}
 	return rel, nil
 }
 
 // sessionTurnBusy reports whether a turn currently holds the session's slot — the
 // replacement for the old coordSlot.running flag that callers outside the queue
-// (the stall sweeper, the flow-coordinator idle check) used to read.
+// used to read.
 func (r *Runtime) sessionTurnBusy(sessionID string) bool { return r.turns.Busy(sessionID) }
 
 // publishTurnQueue announces that a session's admission state changed, so the API
-// layer can push the live queue view ("gönderiliyor" / "sırada: worker bildirimi")
+// layer can push the live queue view ("gönderiliyor" / "sırada: uyandırma")
 // to every open window. Wired as the queue's observer in NewRuntime's caller; the
 // event is deliberately thin — the API re-reads the snapshot rather than the bus
 // carrying it, so a burst of changes can coalesce into one read.

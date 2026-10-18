@@ -4,8 +4,6 @@ import type { PanelProps } from './settingsPanelShared'
 import { DelegationLimits } from './DelegationLimits'
 import { BackgroundLimits } from './BackgroundLimits'
 import { ToolExecutionLimits } from './ToolExecutionLimits'
-import { CoordinatorLimits } from './CoordinatorLimits'
-import { CoordinatorRecovery } from './CoordinatorRecovery'
 import { AutonomousWork } from './AutonomousWork'
 
 export function ExecutionPanel(props: PanelProps) {
@@ -20,12 +18,6 @@ export function ExecutionPanel(props: PanelProps) {
       </SettingsDisclosure>
       <SettingsDisclosure title={t('execution.toolLimits')}>
         <ToolExecutionLimits {...props} />
-      </SettingsDisclosure>
-      <SettingsDisclosure title={t('execution.coordinatorLimits')}>
-        <CoordinatorLimits {...props} />
-      </SettingsDisclosure>
-      <SettingsDisclosure title={t('execution.coordinatorRecovery')}>
-        <CoordinatorRecovery {...props} />
       </SettingsDisclosure>
       <SettingsDisclosure title={t('execution.autonomous')}>
         <AutonomousWork {...props} />

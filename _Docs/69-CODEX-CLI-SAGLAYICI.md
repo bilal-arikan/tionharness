@@ -12,7 +12,7 @@
 > geçersizdir. Güncel davranış ve doğrulama:
 > [Araç izinleri raporu](69-CODEX-ARAC-IZINLERI-2026-09-28.md).
 
-> **Özet (2026-09-10):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`.
+> **Özet (2026-10-18):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`. `codexStdoutIdleSec` varsayılanı 90→300 sn (codex exec muhakeme boyunca sessizdir), koordinatör spawn iddiası guard'ı kaldırıldı.
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
 > yaklaşımı OpenAI **Codex CLI** için de kurabilir miyiz?
@@ -784,7 +784,7 @@ multi_agent_v2 = false                    # legacy, ETKİSİZ
 > `[features] multi_agent` / `multi_agent_v2` `--strict-config` altında kabul
 > edilir ama **davranışı değiştirmez**: `spawn_agent` katalogda kalır ve gerçek
 > turda çalışır. Native alt-ajanları kapatan tek anahtar `[agents] enabled = false`
-> (`-c agents.enabled=false`). A/B ölçümü: `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §18.
+> (`-c agents.enabled=false`). A/B ölçümü: `_Docs/arsiv/47-KOORDINATOR-COKLU-AJAN.md` §18 (arşiv).
 
 Codex'in native araç seti (`codex-rs/core/src/tools/handlers/`):
 `shell` / `unified_exec`, `apply_patch`, `view_image`, `plan`,
@@ -981,7 +981,7 @@ endpoint URL'lerine `?full=1` sorgu parametresi ekliyor
 etiketlediyse doğru cevap verir. Otonom turlar (spawn edilen subagent,
 scheduler, flow adımı) `internal/api/autonomous_interaction.go` içinde
 `run.setProvider(ag.Provider)` ile aynı etiketi koyar, dolayısıyla full-tier
-geçidi **otonom turlarda da** uygulanır. Etiket eksikken codex-cli worker'ları
+geçidi **otonom turlarda da** uygulanır. Etiket eksikken codex-cli otonom turları
 `?full=1` sayesinde extended listeyi görüyor ama `update_task`/`move_task` gibi
 her çağrı "is not activated" ile reddediliyordu ve `activate_tools` da o
 yüzeyde sunulmadığı için tur kilitleniyordu. Etiketsiz turların kapıyı
@@ -1011,7 +1011,7 @@ listesi `splitInteractionTiers`'tan gelir ve "gizli" görünürlükteki araçlar
 koymaz. Sunucu `?full=1` ile bunları ilan etse de codex istemcisi süzüyordu;
 WS3'teki codex PM her turda "pano yazma aracı erişilemez" deyip kartları REST
 API'ye curl ile yazıyordu, worker'lar "katalogda tool_search/update_task yok"
-diyordu. Hepsini her tura eklemek yerine (`providers.StaticToolList` sağlayıcıları,
+diyordu (o dönemin worker oturumları). Hepsini her tura eklemek yerine (`providers.StaticToolList` sağlayıcıları,
 yani codex-cli ve opencode-cli için):
 
 1. `tool_search` artık `-full` core katmanında kalır (açıklaması codex'e göre
@@ -1139,8 +1139,9 @@ Codex turunun kendi zaman aşımı katmanı bunlara ek bir savunma sağlar:
 
 - `codexStartupTimeout` (90 saniye) yalnız **ilk stdout satırına kadar** işler;
   hiç çıktı üretmeyen MCP başlangıç takılmasını retryable hata olarak keser.
-- `codexIdleOutputTimeout` (varsayılan 90 saniye; `codexStdoutIdleSec` ayarı ile
-  yapılandırılır, 0 = kapalı), ilk çıktıdan sonra ardışık iki stdout
+- `codexIdleOutputTimeout` (sabit 90 sn kod varsayılanı; **`codexStdoutIdleSec` ayarının
+  varsayılanı 2026-10-18'de 90→300 sn** — `codex exec` muhakeme boyunca hiç olay yaymıyor;
+  0 = kapalı), ilk çıktıdan sonra ardışık iki stdout
   satırı arasındaki sessizliği ölçer. Her satır timer'ı sıfırlar; timer yaşam
   döngüsü `defer idle.Stop()` ile kapatılır.
 - Idle süresi dolunca `proc.KillTree` tüm proses ağacını öldürür. Hata o ana
@@ -1177,7 +1178,7 @@ Codex turunun kendi zaman aşımı katmanı bunlara ek bir savunma sağlar:
   **Anlamsal bekçi de araç çalışırken bekler (2026-10-18):** codex bir araç bitene
   kadar adım yayınlamadığından 5 dk'lık spawn idle bekçisi, çıktısız uzun bir komutu
   (`-race` + izole PostgreSQL testleri) çalıştıran worker'ı komutun ortasında
-  kesiyordu (SES366, `worker: turn truncated status=timeout idleCap=5m`). Parser
+  kesiyordu (SES366, o dönemin `worker: turn truncated status=timeout idleCap=5m` kaydı; spawn idle varsayılanı 2026-10-18'de 5→10 dk oldu). Parser
   artık araç öğesi başlarken öğe kimliğiyle bir `Running` karesi yayınlar (canlı
   görünümde çalışan komut görünür; tamamlanan adım aynı kimlikle yerine geçer);
   `ActivityTracker` bu kareyi ilerleme saymaz ama aynı kimliğin bitiş adımı gelene
@@ -1226,15 +1227,10 @@ yazıp susan sahte bir codex çalıştırır.
 
 ---
 
-## Koordinatör spawn iddiası guard'ı
+## ~~Koordinatör spawn iddiası guard'ı~~ (kaldırıldı 2026-10-18)
 
-Codex CLI kendi araç döngüsünü çalıştırdığı için TionHarness'in MCP onarım katmanı
-bu yolda devreye girmez. Koordinatör turu hiç araç adımı üretmeden worker veya
-validator başlattığını/delege ettiğini iddia ederse `internal/agent` içindeki
-deterministik guard mesajın sonuna görünür İngilizce uyarı ekler ve
-`debug.jsonl` dosyasına `type:"guard"`, `name:"unbacked_spawn_claim"` kaydı
-yazar. Soru ve gelecek-zaman planları iddia sayılmaz; turdaki herhangi bir araç
-çağrısı guard'ı kapatır.
+Koordinatör modu ile birlikte `unbacked_spawn_claim` guard'ı (koordinatör turunun araç adımı
+üretmeden worker başlattığını iddia etmesini yakalayan deterministik uyarı) silindi.
 
 ---
 
@@ -1356,7 +1352,7 @@ sağlayıcı evini ve oturum yaşam döngüsünü kurar.
 |---|---|
 | Devam ve cache | Kapsamlanmış kalıcı CLI evi, `exec resume`, delta geçmiş ve native compaction mevcut; her tur sıfırdan tam geçmiş göndermek zorunda değil |
 | Tur sırasında yönlendirme | `steerableForTurn` Codex için false; Desktop'taki çalışma sırasında yönlendirme deneyimi yok |
-| Native alt ajanlar | `[agents] enabled = false`; TionHarness kendi worker/delegasyon katmanını kullanır. `ultra` iletmek Desktop'ın otomatik delegasyon davranışını geri getirmez |
+| Native alt ajanlar | `[agents] enabled = false`; TionHarness kendi delegasyon katmanını (`run_subagent` / `spawn_session`) kullanır. `ultra` iletmek Desktop'ın otomatik delegasyon davranışını geri getirmez |
 | Onay | `ask`, native araç başına etkileşimli onay yerine `workspace-write` sandbox seçer; `auto` sandbox/onay bypass eder |
 | Hook ve token optimizasyonu | `AppliesToolHooks: false`; TionHarness'in Pre/PostToolUse hook'ları Codex turunda çalışmaz |
 | MCP şema yükü | Köprü `?full=1` ile katalogları baştan verir; tembel yükleme tasarrufuyla eşdeğer değildir |

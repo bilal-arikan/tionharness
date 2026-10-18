@@ -22,7 +22,7 @@ import (
 // The rule that makes the split safe: anything the original function REASSIGNED
 // mid-body is a field here, not a parameter. ctx is the load-bearing case — the
 // setup phase rebinds it repeatedly (sandbox root, session id, artifact/todo
-// sinks, interaction endpoint, active tools, coordination, MCP failure sink,
+// sinks, interaction endpoint, active tools, MCP failure sink,
 // subagent runner) and every later phase must observe the wrapped value. Passing
 // ctx as a parameter would silently confine each wrap to its own phase.
 type toolLoopTurn struct {
@@ -131,8 +131,8 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// the ctx built in this phase is the one that reaches all of them. Stamped
 	// unconditionally: an unowned entry is still tracked, it is just harder to
 	// place in the panel. The parent session comes from the session row
-	// (SessionParentID): a worker's processes have to be groupable under the
-	// coordinator that spawned it, and the turn context carries only its OWN id.
+	// (SessionParentID): a subagent's processes have to be groupable under the
+	// session that delegated to it, and the turn context carries only its OWN id.
 	turnSessionID := SessionIDFrom(t.ctx)
 	t.ctx = procwatch.WithOwner(t.ctx, procwatch.Owner{
 		WorkspaceID:     t.r.wsID,
@@ -222,9 +222,9 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// CLI turns that arrive without an Interaction endpoint — autonomous ones
 	// (scheduler/spawn/flow) AND the non-stream /api/chat path (only /api/chat/stream
 	// registers a run) — can't reach the bridged use_skill/shell/self-manage/
-	// coordination tools and fall back to native (now-disallowed/foreign) ones: the
-	// cause of scheduled "Unknown skill", the POSIX-Bash mismatch, and a coordinator
-	// fanning out via the CLI's own Agent tool instead of spawn_worker. Wire the
+	// delegation tools and fall back to native (now-disallowed/foreign) ones: the
+	// cause of scheduled "Unknown skill", the POSIX-Bash mismatch, and a model
+	// fanning out via the CLI's own Agent tool instead of run_subagent. Wire the
 	// headless endpoint on demand for ANY such CLI turn; skipped whenever one is
 	// already present (the stream path installs its own).
 	cleanup := noop
@@ -445,11 +445,6 @@ func (t *toolLoopTurn) prepareNativeLoop() (resp *providers.Response, steps []Tu
 	// activated tool's schema is shipped on the next step.
 	t.active = tools.NewActiveTools()
 	t.ctx = withActiveTools(t.ctx, t.active)
-	// Coordinator/worker tools (M2): wired only when this turn runs on a coordinator
-	// session. Injected BEFORE buildRegistry so the registry can gate their
-	// registration on the runner's presence (so ordinary/worker sessions never see
-	// them). No-op on every other turn.
-	t.ctx = t.r.withCoordination(t.ctx, t.agent)
 	// Collect per-server MCP catalog failures during the build so the turn can
 	// report them once (mcpnotice.go); without this they are log-only and the
 	// missing tools look like they never existed.

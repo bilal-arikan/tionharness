@@ -102,10 +102,8 @@ export interface WorkspaceTemplate {
   icon: string
   agentCount: number
   hasFlow: boolean
-  /** How many seeded agents arrive as coordinators, and how many starter
-   *  automation rules ship (always installed disabled). Both 0 on an ordinary
-   *  template — the picker only mentions them when non-zero. */
-  coordinatorCount?: number
+  /** How many starter automation rules ship (always installed disabled). 0 on
+   *  an ordinary template — the picker only mentions them when non-zero. */
   automationCount?: number
 }
 

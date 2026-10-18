@@ -11,7 +11,7 @@ import (
 
 // TestSpawnToolSessionIsAChat (TSK1005): a session an agent opens with the
 // spawn_session tool is an independent conversation, so it is created as a plain
-// chat — kind/category "chat", no subagent or worker classification — while its
+// chat — kind/category "chat", no subagent classification — while its
 // lineage still names the session that spawned it.
 func TestSpawnToolSessionIsAChat(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
@@ -42,9 +42,6 @@ func TestSpawnToolSessionIsAChat(t *testing.T) {
 		t.Errorf("classification = kind %q / category %q / executionType %q, want chat/chat/interactive",
 			sess.Kind, sess.Category, sess.ExecutionType)
 	}
-	if sess.IsWorker() || sess.CoordinatorSessionID != "" {
-		t.Errorf("spawn_session child must not be a worker: role=%q coordinator=%q", sess.Role, sess.CoordinatorSessionID)
-	}
 	o := sess.Lineage()
 	if o.Kind != db.OriginSpawn || o.TriggerSessionID != parent.ID {
 		t.Errorf("lineage = %+v, want spawn triggered by %s", o, parent.ID)
@@ -66,8 +63,8 @@ func TestSpawnToolOptionsWithoutCallerSession(t *testing.T) {
 	if opts.Origin == nil || opts.Origin.Kind != db.OriginSpawn || opts.Origin.TriggerSessionID != "" {
 		t.Fatalf("origin = %+v, want spawn with no trigger", opts.Origin)
 	}
-	if opts.CoordinatorSessionID != "" || opts.ChildSession != nil {
-		t.Fatalf("spawn_session options must not describe a worker or a child run: %+v", opts)
+	if opts.ChildSession != nil {
+		t.Fatalf("spawn_session options must not describe a child run: %+v", opts)
 	}
 }
 
@@ -106,8 +103,7 @@ func TestRecoverOrphanedSpawnToolChat(t *testing.T) {
 }
 
 // TestDelegatedRunsKeepTheirLabels is the other half of TSK1005: real delegations
-// are unaffected — a run_subagent child stays in the subagent category and a
-// spawn_worker child stays a worker.
+// are unaffected — a run_subagent child stays in the subagent category.
 func TestDelegatedRunsKeepTheirLabels(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
@@ -133,24 +129,5 @@ func TestDelegatedRunsKeepTheirLabels(t *testing.T) {
 		t.Errorf("run_subagent child lineage = %q, want subagent", o.Kind)
 	}
 
-	res, err := rt.SpawnSession(ctx, lead.ID, "work", SpawnOptions{
-		CreatedBy:            lead.ID,
-		CoordinatorSessionID: parent.ID,
-		Role:                 db.SessionRoleWorker,
-	})
-	if err != nil {
-		t.Fatalf("spawn worker: %v", err)
-	}
-	worker, err := rt.db.GetSession(ctx, res.SessionID)
-	if err != nil {
-		t.Fatalf("get worker: %v", err)
-	}
-	if worker.Kind != "worker" || worker.Category != db.CategoryWorker || !worker.IsWorker() {
-		t.Errorf("spawn_worker child = kind %q / category %q / worker %v, want worker/worker/true",
-			worker.Kind, worker.Category, worker.IsWorker())
-	}
-	if o := worker.Lineage(); o.Kind != db.OriginCoordinator || o.TriggerSessionID != parent.ID {
-		t.Errorf("worker lineage = %+v, want coordinator triggered by %s", o, parent.ID)
-	}
 	drainSpawns(t, rt)
 }

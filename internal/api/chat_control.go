@@ -37,8 +37,8 @@ type chatRun struct {
 	// "is a turn in flight for session X?" after a page reload (turns are
 	// detached from the client connection and keep running server-side).
 	sessionID string
-	// parentSessionID is the session this one hangs off (the coordinator that
-	// spawned a worker, the delegating session of a subagent), taken from the
+	// parentSessionID is the session this one hangs off (the delegating session
+	// of a subagent, the one a handoff continues), taken from the
 	// session row. It is what stampRunSession puts on the process ledger's owner
 	// so a CLI subprocess's processes group under the fan-out root. Empty for a
 	// top-level session. Installed after register (the session is loaded by the

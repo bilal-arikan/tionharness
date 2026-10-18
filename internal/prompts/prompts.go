@@ -84,22 +84,10 @@ var specs = []Spec{
 		OwnedBySystemKey: "insight",
 	},
 	{
-		Key:              "recipe-optimizer",
-		Label:            "Reçete optimizer promptu",
-		Hint:             "Rota F4: bir koordinatör reçetesinin koşu istatistiklerinden ölçülü, koşullu değişiklik önerileri üreten sistem ajanı promptu (öneri kanalı recipe-opt; hiçbir şeyi kendisi uygulamaz).",
-		OwnedBySystemKey: "recipe-optimizer",
-	},
-	{
 		Key:              "flow-optimizer",
 		Label:            "Akış gözlemcisi promptu",
 		Hint:             "Evrilen akışlar (_Docs/93): bir ajanın ana akışını son koşularına bakarak değiştirmeyi öneren gözlemci sistem ajanının promptu. Yanıt STRICT JSON (noChange/reason/confidence/ops/prompt) kalmalı; op sözlüğü koddaki flow.Op ile aynıdır.",
 		OwnedBySystemKey: "flow-optimizer",
-	},
-	{
-		Key:              "stall-judge",
-		Label:            "Koordinatör stall yargıcı promptu",
-		Hint:             "Koordinatörün son mesajının gerçekte yapılmamış bir worker spawn'ını anlatıp anlatmadığını sınıflandıran ucuz yargıcın sistem promptu. Yanıt STRICT JSON ({\"stalled\": true|false}) kalmalı.",
-		OwnedBySystemKey: "stall-judge",
 	},
 	{
 		Key:              "insight-applier",
@@ -113,12 +101,6 @@ var specs = []Spec{
 		Hint:  "Otonom turda iş yarım kaldığında oturuma kullanıcı mesajı olarak yazılan devam talimatı.",
 	},
 	{
-		Key:            "coordinator",
-		Label:          "Koordinatör el kitabı",
-		Hint:           "Koordinatör oturumlarının statik prefix'ine eklenen işletme talimatı. Değişiklik YENİ oturum/epoch'larda etkili olur.",
-		EpochAffecting: true,
-	},
-	{
 		Key:              "subagent-explore",
 		Label:            "Subagent: explore",
 		Hint:             "run_subagent 'explore' profilinin (salt-okunur araştırmacı) sistem promptu.",
@@ -128,7 +110,7 @@ var specs = []Spec{
 	{
 		Key:              "subagent-planner",
 		Label:            "Subagent: planner",
-		Hint:             "run_subagent/spawn_worker 'planner' profilinin (kodu okuyup uygulanabilir plan üreten, düzenleme yapmayan) sistem promptu.",
+		Hint:             "run_subagent 'planner' profilinin (kodu okuyup uygulanabilir plan üreten, düzenleme yapmayan) sistem promptu.",
 		EpochAffecting:   true,
 		OwnedBySystemKey: "subagent-planner",
 	},
@@ -149,7 +131,7 @@ var specs = []Spec{
 	{
 		Key:              "subagent-validator",
 		Label:            "Subagent: validator",
-		Hint:             "run_subagent/spawn_worker 'validator' profilinin (kodu düzenlemeden test/typecheck/build/e2e ile doğrulayan, kompakt PASS/FAIL verdict dönen) sistem promptu.",
+		Hint:             "run_subagent 'validator' profilinin (kodu düzenlemeden test/typecheck/build/e2e ile doğrulayan, kompakt PASS/FAIL verdict dönen) sistem promptu.",
 		EpochAffecting:   true,
 		OwnedBySystemKey: "subagent-validator",
 	},

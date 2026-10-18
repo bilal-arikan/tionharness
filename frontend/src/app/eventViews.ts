@@ -7,7 +7,7 @@
 // (notifyTypes.ts), so a view assignment and its Settings toggle cannot drift.
 // `skills` is deliberately a non-toast control event, handled here explicitly.
 // `task` is a legacy alias for `board` (handled inside viewIdForType);
-// spawned/worker runs are sessions, so their badge lands on 'chat'.
+// spawned runs are sessions, so their badge lands on 'chat'.
 import type { View } from './NavRail'
 import { viewIdForType } from '@/shared/lib/notifyTypes'
 

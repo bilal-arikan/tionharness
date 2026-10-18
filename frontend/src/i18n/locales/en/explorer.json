@@ -83,7 +83,6 @@
     "skill": "Skill",
     "insight": "Insight",
     "logs": "Logs",
-    "trajectory": "Rota",
     "note": "Note"
   },
   "role": {
@@ -99,11 +98,8 @@
     "chat": "Chat",
     "task": "Task",
     "flow": "Flow",
-    "flowCoordinator": "Flow coordinator",
     "schedule": "Schedule",
     "spawned": "Spawn",
-    "worker": "Worker",
-    "inbox": "Inbox",
     "other": "Other"
   },
   "category": {
@@ -127,13 +123,12 @@
     "hiddenChildren_one": "{{count}} child node hidden",
     "hiddenChildren_other": "{{count}} child nodes hidden",
     "running": "running",
-    "awaitingWorkers": "waiting for workers",
     "session": "session: {{id}}",
     "doubleClickChat": "double-click to open chat",
     "attention": {
       "waiting-ask": "waiting for your answer",
       "stuck": "stuck",
-      "blocked": "coordinator blocked",
+      "blocked": "session blocked",
       "failed-card": "card in the failed column",
       "stale-card": "card has not moved for a while",
       "tool-errors": "tool errors in the last digest"

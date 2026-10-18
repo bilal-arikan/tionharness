@@ -9,15 +9,14 @@ import { useTranslation } from 'react-i18next'
 import type { RotaBar, RotaEdge, RotaLayout, RotaMark, RotaRow } from './rotaLayout'
 import { laneOriginGlyph } from './rotaLabels'
 import { buildTimeScale, formatGapSpan } from './rotaTimeScale'
-import { formatWait } from './rotaWaits'
 import { formatSegments } from './rotaSegments'
 import { ROTA_FUTURE_W, ROTA_LABEL_W, ROTA_PAD_R, rotaPastWidth } from './rotaActivityGap'
 import { formatDateTime } from '@/shared/lib/intl'
 
-// What the side panel can project from either canvas: a session bar, a whole
-// trajectory (phase header click), an automation ghost.
+// What the side panel can project from the canvas: a session bar or an
+// automation ghost.
 export interface RotaSelection {
-  kind: 'session' | 'trajectory' | 'automation'
+  kind: 'session' | 'automation'
   id: string
 }
 
@@ -27,8 +26,6 @@ interface Props {
   selected: RotaSelection | null
   onSelect: (sel: RotaSelection | null) => void
   onOpenSession?: (sessionId: string) => void
-  // Zoom into a lane's trajectory (the ◈ glyph).
-  onOpenTrajectory?: (trajectoryId: string) => void
   // Collapse stretches of the past window where no lane did anything.
   collapseGaps?: boolean
   // Spend time on a log scale, so long sessions stop eating the panel while
@@ -51,9 +48,6 @@ const LABEL_W = ROTA_LABEL_W
 const FUTURE_W = ROTA_FUTURE_W
 const TOP_H = 20
 const PAD_R = ROTA_PAD_R
-/** Floor for a wait segment: a wait long enough to draw stays visible even when
- *  the window spans days and its true width would round to zero. */
-const WAIT_MIN_PX = 3
 /** Floor for a session bar, so an instant session is still clickable. */
 const MIN_BAR_PX = 3
 
@@ -88,8 +82,6 @@ function markGlyph(m: RotaMark): string {
       return '⚡'
     case 'skipped':
       return '↷'
-    case 'stall':
-      return '✕'
   }
 }
 
@@ -99,7 +91,6 @@ export function RotaCanvas({
   selected,
   onSelect,
   onOpenSession,
-  onOpenTrajectory,
   collapseGaps = true,
   normalizeBars = true,
   zoom = 1,
@@ -148,21 +139,6 @@ export function RotaCanvas({
         if (e.target === e.currentTarget) onSelect(null)
       }}
     >
-      <defs>
-        {/* Wait stretches: same bar, dimmed and hatched, so the lane still
-            reads as one run and the state colours keep their meaning. */}
-        <pattern
-          id="rota-wait-hatch"
-          width={5}
-          height={5}
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
-        >
-          <rect width={5} height={5} fill="var(--color-surface)" opacity={0.55} />
-          <line x1={0} y1={0} x2={0} y2={5} stroke="var(--color-surface)" strokeWidth={2} />
-        </pattern>
-      </defs>
-
       {/* Lane backgrounds + labels */}
       {rows.map((r) => (
         <g key={r.id}>
@@ -174,11 +150,7 @@ export function RotaCanvas({
             fill={r.y % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}
             opacity={0.5}
           />
-          <RowLabel
-            row={r}
-            onClick={() => onSelect({ kind: 'session', id: r.id })}
-            onOpenTrajectory={onOpenTrajectory}
-          />
+          <RowLabel row={r} onClick={() => onSelect({ kind: 'session', id: r.id })} />
         </g>
       ))}
 
@@ -355,31 +327,6 @@ export function RotaCanvas({
                 strokeWidth={sel ? 1.5 : 0}
               />
             )}
-            {b.waits?.map((w) => {
-              // Waits ride the same axis as the bar, so no extra mapping.
-              const wx1 = Math.max(x1, x(w.start))
-              const wx2 = Math.min(x2, x(w.end))
-              // A wait that cleared the minimum duration deserves to be seen:
-              // over a multi-day window a 20-minute wait is sub-pixel, so it
-              // gets a floor and is nudged back inside the bar when the floor
-              // would push it past the end.
-              const ww = Math.max(WAIT_MIN_PX, wx2 - wx1)
-              const wx = Math.min(wx1, Math.max(x1, x2 - ww))
-              if (wx2 <= wx1 || x2 - x1 < WAIT_MIN_PX) return null
-              return (
-                <rect
-                  key={`wait:${w.start}`}
-                  x={wx}
-                  y={y}
-                  width={Math.min(ww, x2 - wx)}
-                  height={h}
-                  rx={2}
-                  fill="url(#rota-wait-hatch)"
-                >
-                  <title>{formatWait(w)}</title>
-                </rect>
-              )
-            })}
             {b.live && (
               <circle cx={x2 - 3} cy={cy} r={3} fill="#fff" opacity={0.9}>
                 <animate
@@ -403,13 +350,7 @@ export function RotaCanvas({
             key={m.id}
             x={x(m.at) - 5}
             y={cy - 9}
-            fill={
-              m.kind === 'stall'
-                ? '#ef4444'
-                : m.kind === 'fired'
-                  ? '#f59e0b'
-                  : 'var(--color-text-dim)'
-            }
+            fill={m.kind === 'fired' ? '#f59e0b' : 'var(--color-text-dim)'}
           >
             <title>{m.label}</title>
             {markGlyph(m)}
@@ -434,15 +375,7 @@ export function RotaCanvas({
   )
 }
 
-function RowLabel({
-  row,
-  onClick,
-  onOpenTrajectory,
-}: {
-  row: RotaRow
-  onClick: () => void
-  onOpenTrajectory?: (id: string) => void
-}) {
+function RowLabel({ row, onClick }: { row: RotaRow; onClick: () => void }) {
   const { t } = useTranslation('rota')
   const s = row.session
   const y = TOP_H + row.y * ROW_H + ROW_H / 2 + 3.5
@@ -450,22 +383,9 @@ function RowLabel({
   const label = (s.title || s.id).slice(0, row.depth === 0 ? 22 : 19)
   return (
     <text x={indent} y={y} fill="var(--color-text)" className="cursor-pointer" onClick={onClick}>
-      <title>{`${s.id} · ${t(`sessionKind.${s.kind}`, { defaultValue: s.kind })}${s.origin ? ` · ${t(`origin.${s.origin.kind}`, { defaultValue: s.origin.kind })}` : ''}${row.trajectory ? ` · ${t('common.trajectory')} ${row.trajectory.trajectoryId} rev ${row.trajectory.revision}` : ''}`}</title>
+      <title>{`${s.id} · ${t(`sessionKind.${s.kind}`, { defaultValue: s.kind })}${s.origin ? ` · ${t(`origin.${s.origin.kind}`, { defaultValue: s.origin.kind })}` : ''}`}</title>
       <tspan fill="var(--color-text-dim)">{laneOriginGlyph(s)} </tspan>
       {label}
-      {row.trajectory && (
-        <tspan
-          fill="var(--color-accent)"
-          className="cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation()
-            onOpenTrajectory?.(row.trajectory!.trajectoryId)
-          }}
-        >
-          {' '}
-          ◈
-        </tspan>
-      )}
     </text>
   )
 }

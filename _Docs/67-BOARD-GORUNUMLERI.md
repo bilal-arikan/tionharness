@@ -1,6 +1,6 @@
 # 67 — Board Görünümleri: filtre çubuğu, gruplama ekseni ve kayıtlı görünümler
 
-> **Özet (2026-09-03):** Uygulanmış bir özelliktir — Kanban panosuna client-side filtre çubuğu (facet'ler AND/OR karışık), türetilmiş gruplama eksenleri (status/agent/priority/tag/due) ve workspace başına kayıtlı görünümler ekler; büyük panolarda (300+ kart) kullanılabilirliği hedefler. Önemli kararlar: filtreleme sunucu tarafında değil client tarafında (`filterTasks.ts`), aktif görünüm seçimi pencereye özel `localStorage`'da tutulur (ayarlarda değil, çoklu pencere çakışmasın diye), Türkçe arama katlaması `İ/I` sorununu özel `foldForSearch()` ile çözer. Ayrıca kart görsel önizlemesi (TSK437), açılışta değişen kart vurgusu (TSK461) ve doğrulama turu rozeti (review bounces, TSK'lar) gibi sonradan eklenen alt özellikleri kapsar. Ana dosyalar: `internal/db/models_board_view.go`, `frontend/src/features/tasks/views/*`.
+> **Özet (2026-10-18):** Uygulanmış bir özelliktir — Kanban panosuna client-side filtre çubuğu (facet'ler AND/OR karışık), türetilmiş gruplama eksenleri (status/agent/priority/tag/due) ve workspace başına kayıtlı görünümler ekler; büyük panolarda (300+ kart) kullanılabilirliği hedefler. Önemli kararlar: filtreleme sunucu tarafında değil client tarafında (`filterTasks.ts`), aktif görünüm seçimi pencereye özel `localStorage`'da tutulur (ayarlarda değil, çoklu pencere çakışmasın diye), Türkçe arama katlaması `İ/I` sorununu özel `foldForSearch()` ile çözer. Ayrıca kart görsel önizlemesi (TSK437), açılışta değişen kart vurgusu (TSK461) ve doğrulama turu rozeti (review bounces, TSK'lar) gibi sonradan eklenen alt özellikleri kapsar. Ana dosyalar: `internal/db/models_board_view.go`, `frontend/src/features/tasks/views/*`. doğrulama turu rozetinin koordinatör gerekçesi tarihsel kaldı (koordinatör modu kaldırıldı).
 
 > **Uygulandı.** Kanban panosunun üstüne bir _görünüm katmanı_ eklendi: tek veri
 > kümesi, çok eksende gruplanabilen sütunlar, facet filtreleri ve workspace
@@ -220,8 +220,9 @@ içindedir ve board state'i değiştirebilen **her iki** yazma yolu onu çağır
 `MoveTask` (move_task aracı) ve `UpdateTask` (kart sürükleme / kart formunun
 `PUT /api/tasks/{id}` isteği). Alan sunucu-sahiplidir — istemcinin gönderdiği
 `reviewBounces` değeri yok sayılır. Bu sayaç
-koordinatörün doğrulama koşu bandına girdiğini gösteren tek dayanıklı kayıttır —
-gerekçe ve backend tarafı: `_Docs\47-KOORDINATOR-COKLU-AJAN.md` §19.5.
+kartın doğrulama koşu bandına girdiğini gösteren tek dayanıklı kayıttır
+(koordinatör modu 2026-10-18'de kaldırıldı; tarihsel gerekçe:
+`_Docs\arsiv\47-KOORDINATOR-COKLU-AJAN.md` §19.5).
 
 Panoda üç yerde görünür:
 

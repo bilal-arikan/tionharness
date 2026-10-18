@@ -1,6 +1,6 @@
 # 81 — Paket Bölme Planı (`internal/agent`, `internal/api`)
 
-> **Özet (2026-09-03):** Kısmen uygulandı — adım 1/2/3/5 tamam (dört yeni paket, ~4,5k
+> **Özet (2026-10-18):** Kısmen uygulandı — adım 1/2/3/5 tamam (dört yeni paket, ~4,5k
 > satır `internal/agent`'tan çıktı: 62.603 → 58.412), adım 4/6/7 tasarım gerektirdiği için
 > bekliyor (aşağıda §6). `internal/agent` 323 dosya / 62.603
 > satır, `internal/api` 269 / 46.351, `internal/tools` 190 / 31.820. Bu boyut ajan
@@ -8,7 +8,7 @@
 > (65–78 sn) doğrudan uzatıyor. Bölme, `Runtime` üzerindeki yöntem kümelerinin ayrı
 > paketlere taşınmasıyla değil, **önce bağımsız veri/algoritma katmanlarının**
 > (trajectory grafı, coordination policy, flow state) çıkarılmasıyla yapılmalı; `Runtime`
-> yöntemleri arayüzler üzerinden bu paketlere delege eder. Sıra ve kabul ölçütleri aşağıda.
+> yöntemleri arayüzler üzerinden bu paketlere delege eder. Sıra ve kabul ölçütleri aşağıda. `internal/trajectory` (graf, geçişler, özet, reçete istatistikleri) ve koordinasyon politikası kaldırıldı; pakette yalnız oturuş katlama (`Bouts`) kaldı, plan ilgili satırlarda tarihseldir.
 
 ## 1. Ölçüm (2026-09-03)
 
@@ -72,7 +72,7 @@
 | Adım | Paket | Satır | Commit | Not |
 |---|---|---:|---|---|
 | 1 | `internal/climcp` | 1.289 | `415b1647` | `Host` arayüzü (`EnabledServers`, `ServerGate`, `EnabledHooks`, tunable'lar, logger, debug); `agent.cliHost` adaptörü; saf testler sahte host ile, db-bağımlı olanlar `agent`'ta kaldı |
-| 2 | `internal/trajectory` | 1.324 | `75f27660` | graf/özet/geçiş differ'ı/reçete istatistikleri; `agent` tarafında `TrajectoryPlanPhase`/`TrajectoryTransition`/`RecipeStats` alias'ları, `api`/`workspace` dokunulmadı |
+| 2 | `internal/trajectory` | 1.324 | `75f27660` | graf/özet/geçiş differ'ı/reçete istatistikleri (**2026-10-18: Rota grafiği kaldırıldı; pakette yalnız `activity.go` / `Bouts` kaldı**); `agent` tarafında `TrajectoryPlanPhase`/`TrajectoryTransition`/`RecipeStats` alias'ları, `api`/`workspace` dokunulmadı |
 | 3 | `internal/mcp/repair` | 1.312 | `0e7e84e1` | `Guard`, `FailStreaks`, `FailureCollector`, `CallKey`; proje-id kuralı `mcp.ProjectIDForPath` oldu (capabilities + repair tek kaynak) |
 | 5 | `internal/flows` | 586 | `067de343` | state-delta yazıcısı + varsayılan flow tohumlama/migrasyon; `workspace` yeni paketi çağırır |
 

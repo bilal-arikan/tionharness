@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -94,30 +93,5 @@ func TestCheckSystemRoleAssignment(t *testing.T) {
 		if c.want == nil && err != nil || c.want != nil && !errors.Is(err, c.want) {
 			t.Errorf("Check(%s,%s) = %v, want %v", c.key, c.id, err, c.want)
 		}
-	}
-}
-
-// A worker profile assigned to one of its own system agents spawns that agent,
-// and the profile allowlist contract is still re-asserted on it.
-func TestWorkerProfileAssignedSystemAgent(t *testing.T) {
-	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	ctx := context.Background()
-	seedSystemAgents(t, rt)
-	builtin, ok := rt.db.FindBuiltinAgentBySystemKey("subagent-explore")
-	if !ok {
-		t.Fatal("subagent-explore built-in missing")
-	}
-	custom, err := rt.db.DeriveAgent(ctx, builtin.ID, db.DeriveAgentOptions{BindRole: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rt.SetSystemRoleAssignments(map[string]string{"subagent-explore": builtin.ID})
-
-	id, err := rt.resolveWorkerTarget(ctx, "", "", "explore")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if id != builtin.ID {
-		t.Fatalf("resolveWorkerTarget = %q, want assigned built-in %q (not customisation %q)", id, builtin.ID, custom.ID)
 	}
 }

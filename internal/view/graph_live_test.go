@@ -8,17 +8,17 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-// TestGraphLiveLayer: running sessions and coordinators awaiting a running
-// worker are live, carry their agent's avatar data, and vanish from the layer
-// when the running set no longer names them. Session meta is always present.
+// TestGraphLiveLayer: running sessions are live, carry their agent's avatar
+// data, and vanish from the layer when the running set no longer names them.
+// Session meta is always present.
 func TestGraphLiveLayer(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Unix()
 	store := &fakeStore{
 		agents: []db.Agent{{ID: "AG1", Name: "builder", Avatar: "🔧", Color: "#123456"}},
 		sessions: []db.Session{
-			{ID: "COORD", AgentID: "AG1", UpdatedAt: now, CoordinatorMode: true, Kind: "chat", Tags: []string{"x"}},
-			{ID: "W1", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "COORD", Kind: "worker"},
+			{ID: "CHAT", AgentID: "AG1", UpdatedAt: now, Kind: "chat", Tags: []string{"x"}},
+			{ID: "W1", AgentID: "AG1", UpdatedAt: now, Kind: "task"},
 			{ID: "IDLE", AgentID: "AG1", UpdatedAt: now, Kind: "task"},
 			{ID: "GONE", AgentID: "NOPE", UpdatedAt: now},
 			{ID: "ARCH", AgentID: "AG1", UpdatedAt: now, State: "archived"},
@@ -30,14 +30,14 @@ func TestGraphLiveLayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("graph: %v", err)
 	}
-	if len(g.Live) != 2 {
-		t.Fatalf("live = %+v, want W1 running + COORD awaiting", g.Live)
+	if len(g.Live) != 1 {
+		t.Fatalf("live = %+v, want only W1 running", g.Live)
 	}
 	byID := map[string]GraphLive{}
 	for _, l := range g.Live {
 		byID[l.Session.ID] = l
 	}
-	if byID["W1"].State != LiveRunning || byID["COORD"].State != LiveAwaitingWorkers {
+	if byID["W1"].State != LiveRunning {
 		t.Errorf("states: %+v", byID)
 	}
 	if a := byID["W1"].Agent; a.ID != "AG1" || a.Emoji != "🔧" || a.Color != "#123456" || a.Name != "builder" {
@@ -50,7 +50,7 @@ func TestGraphLiveLayer(t *testing.T) {
 	if _, ok := byID["ARCH"]; ok {
 		t.Error("archived session must not be live")
 	}
-	m := g.Meta["session:COORD"]
+	m := g.Meta["session:CHAT"]
 	if m.Kind != "chat" || m.AgentID != "AG1" || len(m.Tags) != 1 {
 		t.Errorf("meta: %+v", m)
 	}

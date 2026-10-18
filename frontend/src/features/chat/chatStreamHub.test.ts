@@ -363,7 +363,7 @@ function queueHarness() {
 }
 
 describe('queue_update pending items', () => {
-  const holder = { kind: 'coordinator', since: 5 }
+  const holder = { kind: 'automation', since: 5 }
 
   it('keeps the dispatched head in the model for the tray to reconcile', () => {
     const { send, queued } = queueHarness()

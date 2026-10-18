@@ -6,9 +6,6 @@ export const ChatView = lazy(() =>
 export const SessionDetailPanel = lazy(() =>
   import('@/features/sessions/SessionDetailPanel').then((m) => ({ default: m.SessionDetailPanel })),
 )
-export const CoordinatorPanel = lazy(() =>
-  import('@/features/sessions/CoordinatorPanel').then((m) => ({ default: m.CoordinatorPanel })),
-)
 export const SessionContextModal = lazy(() =>
   import('@/features/sessions/SessionContextModal').then((m) => ({
     default: m.SessionContextModal,

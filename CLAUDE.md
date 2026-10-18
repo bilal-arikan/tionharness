@@ -39,6 +39,6 @@ scripts/test.sh full      # go test ./... -count=1 + vitest + depcheck + git dif
 
 ## Delegasyon
 
-- `spawn_worker` / `run_subagent` için ajan adını önce `list_agents` ile doğrula.
+- `run_subagent` / `spawn_session` için ajan adını önce `list_agents` ile doğrula.
 - Yerleşik `Agent` aracının `subagent_type` listesi TionHarness ajan listesinden ayrıdır;
   ikisini karıştırma.

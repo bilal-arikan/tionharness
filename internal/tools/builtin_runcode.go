@@ -81,12 +81,11 @@ func NewRunCodeTool(sb Sandbox, entries []mcp.CatalogEntry, caller MCPCaller, bu
 }
 
 // codeModeExcludedBuiltins are the built-in tools NEVER exposed as run_code
-// bindings, regardless of the agent's tool filter. They fall into four groups,
+// bindings, regardless of the agent's tool filter. They fall into three groups,
 // each nonsensical or unsafe to drive from a script:
 //   - interactive (block for a live human → would hang the bridge for the whole run)
 //   - other execution engines / code-in-code (no added value, extra risk)
 //   - delegation, recursion and meta tool-loading (run_code inside run_code, etc.)
-//   - coordinator worker controls (only valid on a coordinator turn; recursion-ish)
 //
 // Everything else that is a registered built-in AND passes the agent's tool filter
 // gets a binding — so code mode grants no capability the agent lacks directly.
@@ -104,8 +103,6 @@ var codeModeExcludedBuiltins = map[string]bool{
 	"run_subagent": true, "run_adhoc_flow": true, "use_skill": true, "skill_search": true,
 	"activate_tools": true, "deactivate_tools": true, "tool_search": true,
 	"spawn_session": true,
-	// Coordinator worker controls.
-	"spawn_worker": true, "send_to_worker": true, "stop_worker": true, "list_workers": true,
 }
 
 // CodeModeEligible reports whether a built-in tool NAME may be exposed as a

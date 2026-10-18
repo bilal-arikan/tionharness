@@ -7,33 +7,6 @@ import type { SeedDefaultState } from './seed'
 
 export type SkillSource = 'global' | 'workspace'
 
-// A phase's exit condition (recipe frontmatter `gate`).
-interface GateSpec {
-  kind: 'artifact' | 'verdict' | 'human' | 'schema' | 'judge'
-  value?: string
-}
-
-// One declared phase of a coordinator recipe.
-interface PhaseSpec {
-  id: string
-  label?: string
-  profile?: string
-  gate?: GateSpec
-  watchers?: string[]
-  maxRounds?: number
-  optional?: boolean
-}
-
-// The structured part of a coordinator recipe (skills.RecipeSpec, _Docs/77 R6).
-interface RecipeSpec {
-  version?: string
-  phases: PhaseSpec[]
-  watchers?: string[]
-  optimizer?: string
-  // auto_prune: true — the optimizer's pruning proposals are applied automatically (F4-v2).
-  autoPrune?: boolean
-}
-
 export interface Skill {
   slug: string
   name: string
@@ -74,28 +47,10 @@ export interface Skill {
   // archive view; never advertised to agents, and use_skill refuses it.
   archived?: boolean
   source: SkillSource
-  // Non-empty for a specialised skill. 'coordinator-workflow' marks a saved
-  // coordinator recipe (M5) — a reusable orchestration pattern selectable in the
-  // coordinator composer, not plain instructions.
+  // Non-empty for a specialised skill.
   kind?: string
-  // Frontmatter `version` (recipe refs are stamped as slug@version, _Docs/77 R6).
+  // Frontmatter `version`.
   version?: string
-  // Orchestration strategy a coordinator-workflow encodes (fanout | adversarial |
-  // loop | classify | generate-filter | tournament | custom). Only for kind
-  // 'coordinator-workflow'.
-  pattern?: string
-  // Default fan-out targets a coordinator-workflow suggests (advisory).
-  workerTargets?: string[]
-  // Human-readable done-criteria for loop-style recipes.
-  stopCondition?: string
-  // Optional per-session CoordinatorMaxTurns override a recipe applies (0 = default).
-  maxTurns?: number
-  // Structured recipe (phases / watchers / optimizer) parsed from the
-  // frontmatter of a coordinator-workflow skill (_Docs/77 R6). Absent for a
-  // prose-only recipe; recipeError set when the block is present but invalid
-  // (the recipe still works as prose, no trajectory is seeded from it).
-  recipe?: RecipeSpec
-  recipeError?: string
   // SKILL.md last-modified time (Unix seconds). Surfaced in the Skills screen as
   // a "last edited" label; skills are sorted within each group newest-first by it.
   modifiedAt?: number

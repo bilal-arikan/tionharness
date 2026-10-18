@@ -239,16 +239,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.ShellDefaultTimeoutSec, p.ShellDefaultTimeoutSec)
 	applyInt(&next.ShellMaxTimeoutSec, p.ShellMaxTimeoutSec)
 	applyInt(&next.MaxToolOutputKB, p.MaxToolOutputKB)
-	applyInt(&next.AgentMessageMaxKB, p.AgentMessageMaxKB)
-	applyInt(&next.CoordinatorMaxWorkers, p.CoordinatorMaxWorkers)
-	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
-	applyInt(&next.CoordinatorMaxDepth, p.CoordinatorMaxDepth)
-	applyInt(&next.CoordinatorMaxSubtreeSessions, p.CoordinatorMaxSubtreeSessions)
-	applyInt(&next.CoordinatorSettleGraceSec, p.CoordinatorSettleGraceSec)
-	applyBool(&next.CoordinatorStallGuard, p.CoordinatorStallGuard)
-	applyInt(&next.CoordinatorStallSweepMin, p.CoordinatorStallSweepMin)
-	applyInt(&next.CoordinatorStallMaxNudges, p.CoordinatorStallMaxNudges)
-	applyBool(&next.CoordinatorStallNoteVisible, p.CoordinatorStallNoteVisible)
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
 	applyBool(&next.AutonomousBootSeq, p.AutonomousBootSeq)
@@ -487,57 +477,6 @@ func normalize(v Settings) Settings {
 	// Semantic inactivity is independent from the deprecated absolute setting.
 	if v.TurnIdleWatchdogMin < 1 {
 		v.TurnIdleWatchdogMin = 1
-	}
-	// Coordinator guards: workers ≥ 1 (≤ 64).
-	if v.CoordinatorMaxWorkers < 1 {
-		v.CoordinatorMaxWorkers = 1
-	}
-	if v.CoordinatorMaxWorkers > 64 {
-		v.CoordinatorMaxWorkers = 64
-	}
-	// Auto-turns and the tree-wide worker budget are no longer user-configurable:
-	// the settings UI dropped both inputs, and the product decision is that they
-	// stay unlimited (-1). normalize runs on every load and save, so this also
-	// coerces any previously-persisted finite value in existing workspaces to
-	// unlimited the next time their settings.json is read.
-	v.CoordinatorMaxTurns = -1
-	// -1 is meaningful here (explicitly unlimited), so only values below that are
-	// clamped. The upper bounds are sanity ceilings, not policy: depth 12 with the
-	// default 8 workers per node is already astronomically wide, and the subtree cap
-	// is the guard that actually holds.
-	if v.CoordinatorMaxDepth < -1 {
-		v.CoordinatorMaxDepth = -1
-	}
-	if v.CoordinatorMaxDepth > 12 {
-		v.CoordinatorMaxDepth = 12
-	}
-	// Tree-wide worker budget: welded unlimited alongside CoordinatorMaxTurns above
-	// (UI input removed; -1 = unlimited).
-	v.CoordinatorMaxSubtreeSessions = -1
-	// A backstop firing in a couple of seconds would race every normal synthesis
-	// turn and report "incomplete" over work that was about to finish; one that
-	// waits an hour is not a backstop. 0 keeps the built-in default.
-	if v.CoordinatorSettleGraceSec != 0 && v.CoordinatorSettleGraceSec < 5 {
-		v.CoordinatorSettleGraceSec = 5
-	}
-	if v.CoordinatorSettleGraceSec > 1800 {
-		v.CoordinatorSettleGraceSec = 1800
-	}
-	// Stall sweeper window: 0 = built-in default (5 min); any negative = sweeper off
-	// (normalized to -1); positive is minutes with a 1-day sanity ceiling.
-	if v.CoordinatorStallSweepMin < -1 {
-		v.CoordinatorStallSweepMin = -1
-	}
-	if v.CoordinatorStallSweepMin > 1440 {
-		v.CoordinatorStallSweepMin = 1440
-	}
-	// Stall nudge cap: 0 = default (2); no negatives; a small sanity ceiling — beyond
-	// a handful the sweeper's escalation is the right tool, not more nagging.
-	if v.CoordinatorStallMaxNudges < 0 {
-		v.CoordinatorStallMaxNudges = 0
-	}
-	if v.CoordinatorStallMaxNudges > 10 {
-		v.CoordinatorStallMaxNudges = 10
 	}
 	// Workspace backups: interval ≥ 1h, retention ≥ 1 archive; clamp ceilings.
 	if v.BackupIntervalHours < 1 {

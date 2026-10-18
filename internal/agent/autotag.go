@@ -22,7 +22,6 @@ const (
 	TagAuthError = "auth-error" // the turn failed on authentication (login/token) — TERMINAL, not repairable
 	TagArchived  = "archived"   // session is archived
 	TagStuck     = "stuck"      // StuckTurns crossed the threshold — autonomous turns refused
-	TagBlocked   = "blocked"    // coordinator drain ended with no runnable work
 )
 
 // AutoTagTurn inspects a finished turn (its trace steps + an optional turn-level
@@ -209,28 +208,6 @@ func (r *Runtime) addSessionTags(ctx context.Context, sess db.Session, add []str
 		Target: map[string]string{"sessionId": sess.ID},
 	})
 	return true
-}
-
-// markCoordinatorBlocked tags and notifies once when a coordinator drain has no
-// live worker and no queued notification left. The persisted tag is the dedup key.
-func (r *Runtime) markCoordinatorBlocked(ctx context.Context, sessionID string) {
-	if !r.tun.AutoTagSessions() {
-		return
-	}
-	sess, err := r.db.GetSession(ctx, sessionID)
-	if err != nil || containsTag(sess.Tags, TagBlocked) {
-		return
-	}
-	if !r.addSessionTags(ctx, sess, []string{TagBlocked}) {
-		return
-	}
-	r.publish(events.Event{
-		Type:   events.TypeCoordination,
-		Level:  "warn",
-		Title:  "🧭 Koordinatör bloke oldu",
-		Body:   "Koordinatör turu worker çalışmadan ve bekleyen iş bırakmadan sona erdi. Devam etmek için oturumu inceleyin veya manuel mesaj gönderin.",
-		Target: map[string]string{"view": "executions", "sessionId": sessionID},
-	})
 }
 
 // RemoveSessionTags deletes each tag in drop from a session's tags, persisting and

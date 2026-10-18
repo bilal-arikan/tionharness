@@ -10,8 +10,8 @@ import (
 // second use_skill for the same slug returns a short pointer instead of the full
 // markdown again.
 //
-// Why this exists: a coordinator re-reads its doctrine/context skills on almost
-// every turn. In SES2570 (a 20h coordinator run) use_skill was called 174 times
+// Why this exists: a long-running session re-reads its doctrine/context skills on almost
+// every turn. In SES2570 (a 20h run) use_skill was called 174 times
 // and 167 of those loads were slugs the SAME session had already loaded —
 // ~2.25 MB of duplicate skill body, which was essentially the whole growth of
 // that session's context between folds. The body is already in the model's

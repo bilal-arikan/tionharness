@@ -11,7 +11,7 @@ import (
 )
 
 // recordAutonomousStop writes a durable transcript card saying a human stopped
-// an AUTONOMOUS turn (schedule / wake / spawn / coordination / flow). Those turns
+// an AUTONOMOUS turn (schedule / wake / spawn / flow). Those turns
 // are cancelled through Runtime.CancelSession, which only kills the context: the
 // turn simply stops emitting and, on reload, the log looks like it died on its
 // own. The card makes the cause explicit for whoever reads the run later — and

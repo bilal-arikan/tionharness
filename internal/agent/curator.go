@@ -3,18 +3,16 @@ package agent
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
-	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
-// Curator (Rota F3, brief §7.4–7.5): the weekly, idle-triggered, LLM-free
+// Curator: the weekly, idle-triggered, LLM-free
 // pass that keeps the automation surface from growing monotonically. It never
-// deletes — it archives — and only touches what an agent or a recipe created;
+// deletes — it archives — and only touches what an agent created;
 // anything user-made becomes a suggestion. Pinned entities are exempt from
 // every automatic action.
 //
@@ -22,27 +20,20 @@ import (
 //   - automation exhausted (iteration cap reached) or expired → archive
 //     (agent-made) / suggest (user-made);
 //   - one-shot schedule already fired, or expired schedule → archive / suggest;
-//   - hook that never fired in curatorHookQuietDays → suggest;
-//   - recipe watcher unfired in every one of ≥ curatorMinRuns summarized runs
-//     → suggest "unbind from the recipe";
-//   - declared phase never reached in every one of ≥ curatorMinRuns runs →
-//     suggest "make optional / drop".
+//   - hook that never fired in curatorHookQuietDays → suggest.
 
 const (
 	curatorInterval      = 7 * 24 * time.Hour
 	curatorCheckEvery    = time.Hour
 	curatorHookQuietDays = 30
-	curatorMinRuns       = 3
 )
 
 // Curator reasons.
 const (
-	CuratorReasonExhausted      = "exhausted"
-	CuratorReasonExpired        = "expired"
-	CuratorReasonOneShotDone    = "one_shot_done"
-	CuratorReasonNeverFired     = "never_fired"
-	CuratorReasonUnfiredWatcher = "unfired_watcher"
-	CuratorReasonGhostPhase     = "ghost_phase"
+	CuratorReasonExhausted   = "exhausted"
+	CuratorReasonExpired     = "expired"
+	CuratorReasonOneShotDone = "one_shot_done"
+	CuratorReasonNeverFired  = "never_fired"
 )
 
 // agentMade reports whether an entity was created by an agent / automation /
@@ -126,25 +117,6 @@ func (r *Runtime) RunCurator(ctx context.Context, trigger string, apply bool) (d
 				Reason: CuratorReasonNeverFired, Detail: fmt.Sprintf("%d gündür hiç tetiklenmedi", curatorHookQuietDays)})
 		}
 	}
-	// Recipes: from the trajectory index summaries.
-	for _, st := range trajectory.RecipeStatsFromIndex(r.db.ListTrajectories(ctx, db.TrajectoryFilter{})) {
-		if st.TemplateRef == "" || st.Summarized < curatorMinRuns {
-			continue
-		}
-		evidence := fmt.Sprintf("%d özetlenmiş koşu, son %s", st.Summarized, st.LatestID)
-		for _, w := range sortedKeys(st.UnfiredWatchers) {
-			if st.UnfiredWatchers[w] == st.Summarized {
-				add(db.CuratorAction{Kind: db.CuratorActionSuggest, Entity: db.CuratorEntityRecipe, ID: st.Slug, Name: st.TemplateRef,
-					Reason: CuratorReasonUnfiredWatcher, Detail: fmt.Sprintf("izleyici %q hiçbir koşuda ateşlenmedi — reçeteden çöz", w), Evidence: evidence})
-			}
-		}
-		for _, p := range sortedKeys(st.GhostPhases) {
-			if st.GhostPhases[p] == st.Summarized {
-				add(db.CuratorAction{Kind: db.CuratorActionSuggest, Entity: db.CuratorEntityRecipe, ID: st.Slug, Name: st.TemplateRef,
-					Reason: CuratorReasonGhostPhase, Detail: fmt.Sprintf("faz %q hiçbir koşuda başlamadı — optional yap ya da kaldır", p), Evidence: evidence})
-			}
-		}
-	}
 	if err := r.db.SaveCuratorReport(ctx, rep); err != nil {
 		return rep, err
 	}
@@ -158,15 +130,6 @@ func (r *Runtime) RunCurator(ctx context.Context, trigger string, apply bool) (d
 	}
 	r.logger.Info("curator pass", "trigger", trigger, "apply", apply, "archived", rep.Archived, "suggestions", rep.Suggestions, "idle", rep.Idle)
 	return rep, nil
-}
-
-func sortedKeys(m map[string]int) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	slices.Sort(out)
-	return out
 }
 
 // workspaceIdle reports whether no session is running or waiting right now.

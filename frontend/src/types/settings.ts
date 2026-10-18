@@ -101,7 +101,7 @@ export interface AppSettings {
   delegationMaxDepth: number
   delegationMaxCalls: number
 
-  // Spawn guards — the detached background surface (spawn_worker + bridged spawn).
+  // Spawn guards — the detached background surface (spawn_session + bridged spawn).
   spawnMaxConcurrent: number
   spawnQueueMax: number
   spawnMaxPerTurn: number
@@ -117,31 +117,6 @@ export interface AppSettings {
   shellDefaultTimeoutSec: number
   shellMaxTimeoutSec: number
   maxToolOutputKB: number
-  // Per-message byte cap (in KB) for send_message / send_to_worker; over it the
-  // call fails with an explicit message_too_large error.
-  agentMessageMaxKB: number
-
-  // Coordinator/worker guards (M2): active workers per coordinator + auto-turn cap,
-  // plus the TREE guards. The per-coordinator worker cap is enforced per node, so
-  // nesting multiplies it — coordinatorMaxSubtreeSessions is the one that actually
-  // bounds a deep tree. -1 = unlimited on both tree guards.
-  coordinatorMaxWorkers: number
-  coordinatorMaxTurns: number
-  coordinatorMaxDepth: number
-  coordinatorMaxSubtreeSessions: number
-  // Upward-report backstop delay (seconds). Too short and a slow synthesis turn
-  // loses the race, so the parent gets a needless "incomplete"; too long and a
-  // stalled branch keeps its coordinator waiting.
-  coordinatorSettleGraceSec: number
-
-  // Coordinator stall/hallucination protection: judge-based turn-end guard +
-  // staleness sweeper that catch a coordinator narrating a spawn it never issued.
-  coordinatorStallGuard: boolean // master on/off (default true)
-  coordinatorStallSweepMin: number // staleness sweeper window in minutes (0 = default 5; -1 disables the sweeper)
-  coordinatorStallMaxNudges: number // max consecutive corrective nudges (0 = default 2)
-  // Display-only: whether the injected <coordination-guard> note is rendered in
-  // the transcript. The note is always recorded and always reaches the next turn.
-  coordinatorStallNoteVisible: boolean // default false (hidden)
 
   // Working-directory guards for the (unconfined) fs/shell tools.
   autonomousConfine: boolean

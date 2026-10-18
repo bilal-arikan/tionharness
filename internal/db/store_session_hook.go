@@ -33,8 +33,7 @@ type SessionChangeFn func(ev SessionChangeEvent)
 
 // SetSessionHook registers (or clears, with nil) the session-change observer.
 // Same contract as SetBoardHook: wired once at workspace boot, best-effort,
-// never on the store's critical path. It backs the workspace event log and the
-// trajectory projection (see _Docs/77 R1/R3); nothing in the store itself
+// never on the store's critical path. It backs the workspace event log (see _Docs/77 R1/R3); nothing in the store itself
 // depends on a hook being present.
 func (d *DB) SetSessionHook(fn SessionChangeFn) {
 	d.sessionHookMu.Lock()

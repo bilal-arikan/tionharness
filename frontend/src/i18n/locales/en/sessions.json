@@ -40,8 +40,7 @@
       "model-router": "Execution model routing",
       "clarification": "Clarification check",
       "compact-retention": "Compact context protection",
-      "context-reminder": "Context reminders",
-      "worker-review": "Worker result review"
+      "context-reminder": "Context reminders"
     },
     "action": {
       "select": "Selected",
@@ -87,18 +86,14 @@
   "chip": {
     "archived": "Archive",
     "automation": "Automation",
-    "awaitingWorkers": "Waiting",
     "chat": "Chat",
     "flow": "Flow",
-    "flowCoordinator": "Flow Coord.",
-    "inbox": "Inbox",
     "insight": "Insight",
     "other": "Other",
     "running": "Running",
     "spawned": "Spawn",
     "subagent": "Subagent",
-    "task": "Task",
-    "worker": "Worker"
+    "task": "Task"
   },
   "common": {
     "empty": "(empty)",
@@ -241,71 +236,11 @@
       "toolActivity": "Tool calls and results",
       "toolHistory": "Within-turn tool context",
       "tools": "Tools",
-      "user": "User",
-      "workerResults": "Worker results"
+      "user": "User"
     },
     "summarized_one": "The first {{count}} message was folded into the summary (~{{tokens}} tokens).",
     "summarized_other": "The first {{count}} messages were folded into the summary (~{{tokens}} tokens).",
     "title": "Context window · {{used}}/{{window}} ({{percent}}%)"
-  },
-  "coordinator": {
-    "ancestorChain": "Ancestor chain",
-    "back": "Back to coordinator",
-    "completedWorkers_one": "Completed · {{count}}",
-    "completedWorkers_other": "Completed · {{count}}",
-    "depth": "d{{depth}}",
-    "enable": "Enable coordinator mode (manage parallel workers)",
-    "enableNested": "Enable coordinator mode (let this worker manage its own workers)",
-    "enabled": "Coordinator mode is on",
-    "halted": {
-      "description": "The coordinator claimed to start a worker without making a real <code>spawn_worker</code> call; corrective warnings did not help, so automatic turns were stopped. Send a message such as <code>actually call spawn_worker</code> or resume it for one turn below.",
-      "resume": "Resume",
-      "title": "Coordinator stopped"
-    },
-    "noCompletedWorkers": "No workers have completed yet.",
-    "noRunningWorkers": "No workers are running now.",
-    "noWorkers": "No workers yet. Start parallel workers in chat with <code>spawn_worker</code>.",
-    "openCoordinator": "Open coordinator session",
-    "openSession": "Open {{title}} session",
-    "openWorker": "Open worker session",
-    "pendingMessage": "Pending message",
-    "queued": "queued",
-    "queuedMessage": "Pending message: delivered automatically when this turn ends",
-    "runningWorkers_one": "Running · {{count}}",
-    "runningWorkers_other": "Running · {{count}}",
-    "scopeHint": "This switch affects <strong>this session only</strong>. If the agent is configured as a coordinator (Agents ▸ Coordinator), every new session it opens will still start as a coordinator.",
-    "thisSession": "this session",
-    "title": "Coordination",
-    "tree": {
-      "cacheSavings": "Prompt-cache savings",
-      "empty": "This session is not part of a coordinator tree yet.",
-      "health": {
-        "errored": "The last turn ended with an error",
-        "halted": "Stopped — phantom spawn; automatic turns stopped and must be resumed",
-        "stuck": "Stuck — autonomous turns are being rejected and intervention is required"
-      },
-      "queuedMessage": "Pending message: delivered when this turn ends",
-      "reportPending": "Has not closed its report to the coordinator yet",
-      "sessionCount_one": "{{count}} session",
-      "sessionCount_other": "{{count}} sessions",
-      "title": "Coordinator tree",
-      "total": "Tree total",
-      "unhealthy_one": "Error/stall in {{count}} session",
-      "unhealthy_other": "Errors/stalls in {{count}} sessions"
-    },
-    "workerHeader": {
-      "subCoordinator": "This session is a <strong>sub-coordinator</strong> — it manages its own workers and reports to the coordinator above it. The end of its turn does not mean its work is done; it closes the result with <code>report_to_coordinator</code>.",
-      "worker": "This session is a <strong>worker</strong> — it was started by a coordinator. Its result is delivered to the coordinator session as a <code>&lt;task-notification&gt;</code>."
-    },
-    "workerState": {
-      "delegating": "delegating",
-      "done": "done",
-      "running": "running"
-    },
-    "workers_one": "Workers · {{count}}",
-    "workers_other": "Workers · {{count}}",
-    "workflow": "Workflow",
-    "workflowHelp": "What is a workflow?"
   },
   "debug": {
     "all": "all",
@@ -411,7 +346,6 @@
     "automation": "Automation",
     "chat": "Chat",
     "flow": "Flow",
-    "flowCoordinator": "Flow Coordinator",
     "insight": "Insight",
     "other": "Other",
     "schedule": "Schedule",
@@ -462,7 +396,7 @@
       "main": "Conversations",
       "mainHint": "Conversations you started and the chats spawned or handed off from them",
       "other": "Background",
-      "otherHint": "Worker, subagent, task, automation, schedule, insight, agent message inbox and system sessions"
+      "otherHint": "Subagent, task, automation, schedule, insight and system sessions"
     },
     "handoff": "handoff",
     "inMessages": "In messages",
@@ -484,8 +418,6 @@
     "title": "Sessions",
     "unread": "Unread",
     "unsentDraft": "There is an unsent draft message",
-    "workersRunning_one": "{{count}} worker running",
-    "workersRunning_other": "{{count}} workers running",
     "writing": "writing…"
   },
   "state": {

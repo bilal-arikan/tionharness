@@ -27,12 +27,12 @@ func TestUnpinnedSystemAuthFallsBackAndQuarantines(t *testing.T) {
 	}
 	routed := caller
 	routed.System = true
-	routed.SystemKey = "stall-judge"
+	routed.SystemKey = "flow-optimizer"
 	routed.Provider = "claude-cli"
 	routed.ProviderInstanceID = "claude-cli"
 	authErr := errors.New("claude CLI authentication failed: organization disabled subscription access")
 	fallback, ok := rt.systemAuthFallback(ctx, routed, authErr)
-	if !ok || fallback.ProviderRef() != caller.ProviderRef() || fallback.ID != caller.ID || fallback.SystemKey != "stall-judge" {
+	if !ok || fallback.ProviderRef() != caller.ProviderRef() || fallback.ID != caller.ID || fallback.SystemKey != "flow-optimizer" {
 		t.Fatalf("fallback: %+v / %v", fallback, ok)
 	}
 	if !rt.systemRouteQuarantined("claude-cli") {
@@ -58,15 +58,15 @@ func TestPinnedSystemAuthNeverChangesProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Default judge", System: true, SystemKey: "stall-judge", Provider: "claude-cli", Locked: true})
+	parent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Default judge", System: true, SystemKey: "flow-optimizer", Provider: "claude-cli", Locked: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Pinned judge", System: true, SystemKey: "stall-judge", Provider: "claude-cli", ParentID: parent.ID, Overrides: []string{"provider"}}); err != nil {
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Pinned judge", System: true, SystemKey: "flow-optimizer", Provider: "claude-cli", ParentID: parent.ID, Overrides: []string{"provider"}}); err != nil {
 		t.Fatal(err)
 	}
 	routed := caller
-	routed.SystemKey = "stall-judge"
+	routed.SystemKey = "flow-optimizer"
 	routed.Provider = "claude-cli"
 	routed.ProviderInstanceID = "claude-cli"
 	if _, ok := rt.systemAuthFallback(ctx, routed, errors.New("authentication failed")); ok {

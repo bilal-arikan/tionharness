@@ -16,7 +16,7 @@ import (
 //  2. Process-tree reaping on timeout: when a command hits its deadline, kill the
 //     whole child tree, not just the shell — otherwise git.exe and the editor it
 //     spawned survive as zombies and leave a .git/index.lock that wedges the next
-//     commit (the failure mode that stalled the coordinator for a full turn).
+//     commit (the failure mode that stalled an agent for a full turn).
 //  3. Credential stripping: the shell is agent-driven, so its environment must not
 //     carry ANTHROPIC_API_KEY, CREDENTIAL_SECRET or the user's personal tokens — a
 //     single `env` would otherwise write all of them into the transcript, the UI

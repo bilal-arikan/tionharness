@@ -7,7 +7,7 @@
 // (GET /api/workspace/stream, _Docs/77 R3). One ordered, replayable log of
 // structured lifecycle facts for the active workspace: sessions created /
 // changed state / deleted, schedules
-// armed for a future fire, automation fires, trajectory revisions. A live
+// armed for a future fire, automation fires, liveness changes. A live
 // workspace view keeps an incremental picture from it and gap-fills after a
 // reconnect instead of re-fetching everything.
 //
@@ -21,51 +21,11 @@ import type { SessionOrigin } from '@/types/session'
 // Kinds mirror internal/sessionhub KindWS* constants.
 export const WorkspaceStreamKind = {
   SessionLifecycle: 'session_lifecycle',
-  Trajectory: 'trajectory',
   ScheduleArmed: 'schedule_armed',
   AutomationFire: 'automation_fire',
-  Spawn: 'spawn',
-  Report: 'report',
   Liveness: 'liveness',
-  Coordination: 'coordination',
   MCPStatus: 'mcp_status',
 } as const
-
-// ws:spawn — a coordinator spawned a worker (agent.SpawnEvent).
-export interface SpawnData {
-  coordinatorId: string
-  workerId: string
-  rootId: string
-  depth: number
-  agentRef: string
-  agentName?: string
-  subCoordinator?: boolean
-  workflow?: string
-  queued?: boolean
-  at: number
-}
-
-// ws:report — a worker's task-notification reached its coordinator (agent.ReportEvent).
-export interface ReportData {
-  coordinatorId: string
-  workerId: string
-  status: string
-  lastWorker: boolean
-  toolUses: number
-  noteBytes: number
-  at: number
-}
-
-// ws:coordination — a drain turn started/ended (DrainEvent) or the stall guard
-// halted the coordinator (StallEvent); narrow on payload.target.phase.
-export interface CoordinationData {
-  coordinatorId: string
-  phase?: 'turn_start' | 'turn_end'
-  turn?: number
-  reason?: string
-  streak?: number
-  at: number
-}
 
 // One session's turn-admission state right after it changed (ws:liveness).
 // The full picture is GET /api/workspace/liveness (LivenessSnapshot).
@@ -94,20 +54,8 @@ export interface SessionLifecycleData {
   prevRunState?: string
   rootSessionId: string
   origin: SessionOrigin
-  coordinator?: boolean
   createdAt?: number
   updatedAt: number
-}
-
-export interface TrajectoryData {
-  trajectoryId: string
-  rootSessionId: string
-  op: 'create' | 'update' | 'delete'
-  templateRef?: string
-  status?: string
-  revision: number
-  nodeCount: number
-  updatedAt?: number
 }
 
 export interface ScheduleArmedData {

@@ -83,7 +83,6 @@
     "skill": "Skill",
     "insight": "İçgörü",
     "logs": "Günlükler",
-    "trajectory": "Rota",
     "note": "Not"
   },
   "role": {
@@ -99,11 +98,8 @@
     "chat": "Sohbet",
     "task": "Görev",
     "flow": "Akış",
-    "flowCoordinator": "Akış koordinatörü",
     "schedule": "Zamanlama",
     "spawned": "Spawn",
-    "worker": "Worker",
-    "inbox": "Inbox",
     "other": "Diğer"
   },
   "category": {
@@ -127,13 +123,12 @@
     "hiddenChildren_one": "{{count}} alt düğüm gizli",
     "hiddenChildren_other": "{{count}} alt düğüm gizli",
     "running": "çalışıyor",
-    "awaitingWorkers": "worker bekliyor",
     "session": "oturum: {{id}}",
     "doubleClickChat": "çift tık sohbeti açar",
     "attention": {
       "waiting-ask": "senden bir cevap bekliyor",
       "stuck": "takıldı",
-      "blocked": "koordinatör engellendi",
+      "blocked": "oturum engellendi",
       "failed-card": "kart başarısız sütununda",
       "stale-card": "kart uzun süredir ilerlemiyor",
       "tool-errors": "son özette araç hataları var"

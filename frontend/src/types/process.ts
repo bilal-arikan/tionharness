@@ -22,7 +22,7 @@ export interface ProcessOwner {
   sessionId?: string
   agentId?: string
   agentName?: string
-  // The coordinator/spawning session when this one is a worker or sub-session.
+  // The spawning session when this one is a sub-session.
   parentSessionId?: string
 }
 

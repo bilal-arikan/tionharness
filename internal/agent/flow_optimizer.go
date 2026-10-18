@@ -352,11 +352,6 @@ func (r *Runtime) validateProposal(head flow.Graph, pol db.FlowPolicy, p db.Flow
 		if len(next.Nodes) > pol.MaxNodes {
 			return fmt.Errorf("growth budget: %d nodes exceeds the policy cap %d", len(next.Nodes), pol.MaxNodes)
 		}
-		if owner.CoordinatorMode {
-			if id, loops := rerunsAgentTurn(next); loops {
-				return fmt.Errorf("node %q runs the coordinator's own turn (thread context, tools) inside a loop; a coordinator turn launches workers, so a re-run duplicates them or, told to hold back, stops delegation. Gate a fresh tool-less node instead, or change the prompt", id)
-			}
-		}
 	} else if p.Prompt == nil {
 		return errors.New("proposal changes nothing")
 	}
@@ -366,40 +361,6 @@ func (r *Runtime) validateProposal(head flow.Graph, pol db.FlowPolicy, p db.Flow
 		}
 	}
 	return nil
-}
-
-// rerunsAgentTurn reports an llm node that runs as the agent itself — thread
-// context with its tools (the defaults) — and sits on a cycle, so a loop would
-// execute the agent's full turn again. A fresh or tool-less node (a critic) may
-// loop freely.
-func rerunsAgentTurn(g flow.Graph) (string, bool) {
-	reach := func(from, to string) bool {
-		seen := map[string]bool{}
-		stack := []string{from}
-		for len(stack) > 0 {
-			id := stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-			for _, e := range g.Outgoing(id) {
-				if e.To == to {
-					return true
-				}
-				if !seen[e.To] {
-					seen[e.To] = true
-					stack = append(stack, e.To)
-				}
-			}
-		}
-		return false
-	}
-	for _, n := range g.Nodes {
-		if n.Type != flow.NodeLLM || n.Context == "fresh" || n.Tools == "none" || n.AgentID != "" {
-			continue
-		}
-		if reach(n.ID, n.ID) {
-			return n.ID, true
-		}
-	}
-	return "", false
 }
 
 // ApplyFlowProposal applies a pending proposal on top of the CURRENT head
@@ -628,9 +589,6 @@ func flowOptimizerUserPrompt(f db.Flow, g flow.Graph, owner db.Agent, runs []db.
 		f.Name, f.ID, owner.Name, owner.ID, f.Version, pol.Mode, pol.EveryRuns, pol.MinConfidence, pol.MaxNodes, pol.AllowPromptChanges)
 	if f.Note != "" {
 		fmt.Fprintf(&b, "note: %s\n", f.Note)
-	}
-	if owner.CoordinatorMode {
-		b.WriteString("role: COORDINATOR (its turns launch workers; never loop back into the node that runs its own turn)\n")
 	}
 	fmt.Fprintf(&b, "shape: %s\n", g.Summary())
 	fmt.Fprintf(&b, "\n## Graph JSON\n%s\n", flow.Encode(g))

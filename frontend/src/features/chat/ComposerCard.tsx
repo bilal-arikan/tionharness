@@ -13,8 +13,6 @@ type ComposerCardTone =
   | 'plain'
   // Faint grey — staged/queued interventions.
   | 'muted'
-  // Accent — running workers.
-  | 'worker'
   // Faint accent — the agent's question.
   | 'ask'
   // Amber — a timed auto-resume is armed.
@@ -29,8 +27,6 @@ const TONE: Record<ComposerCardTone, string> = {
   plain: 'border-[var(--color-border)] bg-[var(--color-surface)]',
   muted:
     'border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-text-dim)_10%,var(--color-surface))]',
-  worker:
-    'border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))] bg-[var(--color-accent-soft)]',
   ask: 'border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_8%,var(--color-surface))]',
   wake: 'border-[color-mix(in_srgb,var(--color-warning)_35%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-warning)_12%,var(--color-surface))]',
   permission:

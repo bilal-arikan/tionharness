@@ -17,7 +17,7 @@ import (
 
 // spawnTimeout bounds the turn-finished / failed-turn HOOK firing (a completion
 // side-effect, not a work turn) that shares this package-level default. Every
-// background WORK turn — spawn, worker, coordinator, inbox delivery — instead uses
+// background WORK turn (a spawn) instead uses
 // the run-scoped semantic inactivity watchdog (see WithActivityTimeout). Deprecated
 // SpawnTimeout storage no longer bounds productive execution.
 const spawnTimeout = 10 * time.Minute
@@ -26,13 +26,13 @@ const spawnTimeout = 10 * time.Minute
 // agent's provider is always preserved); Title overrides the auto-generated one;
 // CreatedBy records provenance (the spawning agent's id, or "" for user/API).
 type SpawnOptions struct {
-	ExpectedDeliverables []string
-	ModelOverride        string
-	Title                string
-	CreatedBy            string
-	IdempotencyKey       string
-	// RuntimeBaseAgentID supplies provider/model/permission settings for a worker
-	// system agent while leaving its identity, soul, and allowlist intact.
+	ModelOverride  string
+	Title          string
+	CreatedBy      string
+	IdempotencyKey string
+	// RuntimeBaseAgentID supplies provider/model/permission settings for a
+	// subagent-profile system agent while leaving its identity, soul, and
+	// allowlist intact.
 	RuntimeBaseAgentID string
 	// ParentSessionID links a spawned session back to the one it continues, set by
 	// a context-reset handoff so the UI can walk the reset chain. "" for an
@@ -42,9 +42,8 @@ type SpawnOptions struct {
 	// inherits the workspace's configured default working directory (Path), same
 	// as a UI-created session — so spawns/handoffs start scoped to that folder.
 	WorkingDir string
-	// Kind overrides the created session's kind for a NON-worker spawn (ignored
-	// when CoordinatorSessionID is set, which always forces "worker"). Empty keeps
-	// the default "spawned". A context-reset handoff sets this to "chat" when it
+	// Kind overrides the created session's kind. Empty keeps the default
+	// "spawned". A context-reset handoff sets this to "chat" when it
 	// continues a chat, so the continuation lands under the sidebar's "Sohbet"
 	// filter next to its parent instead of being hidden under the "Spawn" tab —
 	// handoff children are explicitly human-continuable (see isWritableSessionKind).
@@ -67,44 +66,13 @@ type SpawnOptions struct {
 	// (db.Session.Origin). Launchers that know more than the legacy fields carry
 	// — the automation and the session that tripped it, the schedule, the
 	// handed-off session — set it; left nil, the store derives the origin from the
-	// spawn's own shape (worker → coordinator, subagent, handoff, plain spawn), so
+	// spawn's own shape (subagent, handoff, plain spawn), so
 	// a caller never has to set it just to be correct.
 	Origin *db.SessionOrigin
-
-	// Coordinator/worker link (see coordination.go, _Docs/47). When
-	// CoordinatorSessionID is set the spawn is a WORKER: the session is created with
-	// Kind="worker" + Role="worker" + this back-link, and its background turn runs
-	// via runWorker (history-aware, notifies the coordinator on completion) instead
-	// of runSpawn. Empty leaves an ordinary detached spawn unchanged.
-	CoordinatorSessionID string
-	Role                 string
-
-	// Coordinator tree placement, stamped once at creation (see
-	// db.Session.RootCoordinatorSessionID / CoordinatorDepth): the tree root this
-	// worker belongs to and its distance from that root. Computed by SpawnWorker
-	// from the parent session, never supplied by a tool caller.
-	RootCoordinatorSessionID string
-	CoordinatorDepth         int
-
-	// CoordinatorMode makes the SPAWNED session a coordinator in its own right, so
-	// it can nest another level of workers under itself. This is what turns a flat
-	// coordinator/worker pair into an arbitrarily deep tree.
-	CoordinatorMode bool
-	// CoordinatorWorkflow optionally pins a coordinator recipe (M5) on the spawned
-	// sub-coordinator, with CoordinatorMaxTurns as its resolved notify-loop cap.
-	// Deliberately NOT inherited from the parent: a recursive recipe (tournament,
-	// fanout) would otherwise repeat itself all the way down the tree.
-	CoordinatorWorkflow string
-	CoordinatorMaxTurns int
 
 	// NoQueue preserves callers that require an immediate SessionID.
 	NoQueue      bool
 	ChildSession *db.Session
-	// onDrop releases caller-owned reservations if shutdown discards this spawn.
-	// It returns whether releasing them took the owning coordinator's fleet to zero
-	// (the same zero-crossing runWorkerWithCtl observes), so the drop notification
-	// can carry the all-idle signal instead of losing the transition.
-	onDrop func(error) bool
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new
@@ -113,15 +81,8 @@ type SpawnResult struct {
 	SessionID string
 	AgentName string
 	Queued    bool
-	// QueuePosition is one-based across both priority queues at enqueue time.
+	// QueuePosition is one-based at enqueue time.
 	QueuePosition int
-	// TreeBudgetUsed / TreeBudgetTotal report the coordinator TREE's LIVE-worker
-	// occupancy right after this spawn (Used counts the just-spawned worker). Total
-	// is the ceiling; 0 means no ceiling is configured (or this was not a worker
-	// spawn). They let a coordinator see remaining quota on every spawn instead of
-	// only when it slams into the wall.
-	TreeBudgetUsed  int
-	TreeBudgetTotal int
 }
 
 // SpawnSession opens a NEW, independent session ("spawned" kind), records the
@@ -147,17 +108,17 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	if baseID := strings.TrimSpace(opts.RuntimeBaseAgentID); baseID != "" && agent.System && strings.HasPrefix(agent.SystemKey, "subagent-") {
 		base, err := r.db.GetAgent(ctx, baseID)
 		if err != nil {
-			return SpawnResult{}, fmt.Errorf("worker runtime base agent unavailable: %w", err)
+			return SpawnResult{}, fmt.Errorf("runtime base agent unavailable: %w", err)
 		}
 		agent.Provider = base.Provider
 		agent.ProviderInstanceID = base.ProviderInstanceID
 		agent.Model = base.Model
 		agent.PermissionMode = base.PermissionMode
 	}
-	// A profile worker's allowlist is a SAFETY CONTRACT that lives in code, not a
+	// A subagent profile's allowlist is a SAFETY CONTRACT that lives in code, not a
 	// user preference stored on the agent row. Re-assert it for this run whatever
 	// the record says, so an edited (or stale) system-agent row can never widen
-	// what an explore/reviewer/validator worker may touch.
+	// what an explore/reviewer/validator profile may touch.
 	if err := r.applyProfileAllowlist(&agent); err != nil {
 		return SpawnResult{}, err
 	}
@@ -202,10 +163,8 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	}
 
 	// Concurrency guard: refuse once the cap of simultaneously-running spawns is
-	// reached. The slot is released when the background turn finishes. Depth-aware
-	// so a deep coordinator branch cannot drain the pool that shallower work — and
-	// any unrelated chat/schedule spawn — depends on.
-	if !r.acquireSpawnSlotAtDepth(opts.CoordinatorDepth) {
+	// reached. The slot is released when the background turn finishes.
+	if !r.acquireSpawnSlot() {
 		if opts.NoQueue {
 			return SpawnResult{}, fmt.Errorf("spawn limit reached (%d concurrent spawned sessions); try again once some finish", r.tun.SpawnMaxConcurrent())
 		}
@@ -223,13 +182,7 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 
 	title := strings.TrimSpace(opts.Title)
 	if title == "" {
-		// Worker sessions (coordinator fan-out) carry their own marker so the
-		// session list tells them apart from plain spawn_session runs at a glance.
-		marker := "✨ "
-		if opts.Role == db.SessionRoleWorker {
-			marker = "🤖 "
-		}
-		title = marker + spawnTitle(prompt)
+		title = "✨ " + spawnTitle(prompt)
 	}
 
 	// Seed the cwd like a UI-created session: an explicit option wins (e.g. a
@@ -243,22 +196,11 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		}
 	}
 
-	// Worker spawns (coordinator/worker M2) are tagged as such so the UI and the
-	// coordination loop can tell them apart from ordinary detached spawns.
 	kind := "spawned"
 	if k := strings.TrimSpace(opts.Kind); k != "" {
 		kind = k
 	}
-	coordID := strings.TrimSpace(opts.CoordinatorSessionID)
-	if coordID != "" {
-		kind = "worker"
-	}
 	parentID := strings.TrimSpace(opts.ParentSessionID)
-	if coordID != "" {
-		// CoordinatorSessionID drives report-back; ParentSessionID exposes the same
-		// owner to generic session/execution consumers.
-		parentID = coordID
-	}
 
 	// Each spawn is its own independent session — a fresh sourceID (not GetOrCreate)
 	// so two spawns never collapse into one thread.
@@ -267,25 +209,15 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		sourceID = "spawn-dispatch:" + opts.IdempotencyKey
 	}
 	newSession := db.Session{
-		ExpectedDeliverables:     append([]string(nil), opts.ExpectedDeliverables...),
-		AgentID:                  agent.ID,
-		Kind:                     kind,
-		SourceID:                 sourceID,
-		DispatchKey:              opts.IdempotencyKey,
-		Title:                    title,
-		ParentSessionID:          parentID,
-		Origin:                   opts.Origin,
-		WorkingDir:               cwd,
-		Tags:                     opts.Tags,
-		Role:                     strings.TrimSpace(opts.Role),
-		CoordinatorSessionID:     coordID,
-		RootCoordinatorSessionID: strings.TrimSpace(opts.RootCoordinatorSessionID),
-		CoordinatorDepth:         opts.CoordinatorDepth,
-		// A sub-coordinator: this worker may spawn workers of its own (the nesting
-		// switch). Role stays "worker" — it still reports up to coordID.
-		CoordinatorMode:     opts.CoordinatorMode,
-		CoordinatorWorkflow: strings.TrimSpace(opts.CoordinatorWorkflow),
-		CoordinatorMaxTurns: opts.CoordinatorMaxTurns,
+		AgentID:         agent.ID,
+		Kind:            kind,
+		SourceID:        sourceID,
+		DispatchKey:     opts.IdempotencyKey,
+		Title:           title,
+		ParentSessionID: parentID,
+		Origin:          opts.Origin,
+		WorkingDir:      cwd,
+		Tags:            opts.Tags,
 	}
 	if opts.ChildSession != nil {
 		meta := *opts.ChildSession
@@ -314,7 +246,7 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 	// (_Docs/58), not only on reload.
 	//
 	// When an AGENT ordered this spawn (opts.CreatedBy), the prompt is that agent
-	// speaking, so it is attributed to it and renders as an incoming peer message
+	// speaking, so it is attributed to it and renders as an incoming agent message
 	// rather than as the human's own turn (TSK507). A user/API spawn leaves
 	// CreatedBy empty and keeps the plain bubble.
 	addOpeningMessage := func() error {
@@ -347,44 +279,22 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 	})
 
 	// Fire-and-forget: run the turn detached from the caller's context so a closed
-	// HTTP request or finished tool call can never cancel the spawn mid-flight. A
-	// worker takes the coordinator-aware path (history-aware turn + notify-back);
-	// an ordinary spawn takes the plain path.
-	if coordID != "" {
-		// Same reason as the plain-spawn branch below: SpawnWorker returns the worker
-		// session id to the coordinator's tool loop, which may call stop_worker in the
-		// very next iteration. Registering the ctl and the session cancel BEFORE the
-		// goroutine starts is what makes that stop land.
-		runCtx, cancelRun, ctl := r.newWorkerRun(session.ID)
-		if !r.startBackgroundTurn(func() {
-			r.runWorkerRegistered(runCtx, cancelRun, agent, session.ID, prompt, coordID, ctl)
-		}) {
-			// Nothing was launched, so every registration newWorkerRun made is ours to
-			// undo — including the slot the turn would have released.
-			cancelRun()
-			ctl.run.release()
-			r.workerCancels.CompareAndDelete(session.ID, ctl)
-			close(ctl.done)
-			r.releaseSpawnSlot()
-			return SpawnResult{}, errSpawnQueueShutdown
-		}
-	} else {
-		// The cancel func is registered HERE, not inside runSpawn: SpawnSession hands
-		// the session id back to its caller the moment this returns, and a caller may
-		// stop the run before the goroutine is even scheduled — let alone before it
-		// clears the blocking turn-slot claim. Registering inside the turn left that
-		// whole window uncancellable while the row already read "running", so a stop
-		// answered "already finished" for a run that kept going.
-		runCtx, cancelRun := context.WithCancel(context.Background())
-		run := r.trackSession(session.ID, cancelRun)
-		if !r.startBackgroundTurn(func() {
-			r.runSpawn(runCtx, cancelRun, run, agent, session.ID, prompt, opts)
-		}) {
-			cancelRun()
-			run.release()
-			r.releaseSpawnSlot()
-			return SpawnResult{}, errSpawnQueueShutdown
-		}
+	// HTTP request or finished tool call can never cancel the spawn mid-flight.
+	// The cancel func is registered HERE, not inside runSpawn: SpawnSession hands
+	// the session id back to its caller the moment this returns, and a caller may
+	// stop the run before the goroutine is even scheduled — let alone before it
+	// clears the blocking turn-slot claim. Registering inside the turn left that
+	// whole window uncancellable while the row already read "running", so a stop
+	// answered "already finished" for a run that kept going.
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	run := r.trackSession(session.ID, cancelRun)
+	if !r.startBackgroundTurn(func() {
+		r.runSpawn(runCtx, cancelRun, run, agent, session.ID, prompt, opts)
+	}) {
+		cancelRun()
+		run.release()
+		r.releaseSpawnSlot()
+		return SpawnResult{}, errSpawnQueueShutdown
 	}
 
 	return SpawnResult{SessionID: session.ID, AgentName: agent.Name}, nil
@@ -413,7 +323,7 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 	hardCap, idleCap := time.Duration(0), r.tun.SpawnIdleTimeout()
 
 	// Serialize this detached spawn turn on the session's turn slot so it never
-	// overlaps a user/wake/peer turn opened on the same session (all of which claim
+	// overlaps a user/wake turn opened on the same session (all of which claim
 	// the same slot). A fresh spawn is usually alone, but the session can be chatted
 	// into or woken while the spawn runs. The claim watches runCtx: a stop issued
 	// while this turn waits in the queue must not be outlived by it.
@@ -574,9 +484,9 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 }
 
 // emitTurnStart raises the chat "thinking" indicator for an autonomous turn the
-// user did not initiate (spawn / worker) by publishing a "chat" event tagged
+// user did not initiate (a spawn) by publishing a "chat" event tagged
 // phase=start for the session — the same signal the scheduler's wake path uses.
-// The matching completion event ("spawned" / "worker") clears the indicator.
+// The matching completion event ("spawned") clears the indicator.
 // "chat" events never raise an OS toast (the frontend returns before notifying),
 // so this is a quiet pending/reload signal, not a notification.
 func (r *Runtime) emitTurnStart(sessionID, title string) {
@@ -609,45 +519,10 @@ func (r *Runtime) emitSpawnEvent(agent db.Agent, sessionID, prompt string, ok bo
 	})
 }
 
-// deepSpawnDepth is the coordinator-tree depth from which a spawn counts as
-// "deep" and must leave headroom for shallower work. Depth 0 is a root
-// coordinator and depth 1 its direct workers — the level a user or a flow is
-// actually waiting on — so the squeeze starts at 2.
-const deepSpawnDepth = 2
-
 // acquireSpawnSlot reserves one of the bounded concurrency slots, returning false
-// when the cap is already reached. Paired with releaseSpawnSlot. Equivalent to a
-// top-level spawn (see acquireSpawnSlotAtDepth).
-func (r *Runtime) acquireSpawnSlot() bool { return r.acquireSpawnSlotAtDepth(0) }
-
-// acquireSpawnSlotAtDepth reserves a background-turn slot for a spawn at a given
-// coordinator-tree depth, keeping part of the pool for shallow work.
-//
-// SpawnMaxConcurrent is a single GLOBAL pool, and a deep coordinator tree can
-// legitimately want more background turns than it holds. Without a reservation
-// one busy branch fills every slot and its siblings — and any unrelated
-// chat/schedule spawn — simply fail with "spawn limit reached" until it drains.
-// That is not a deadlock (a coordinator's auto turns take no slot, so the tree
-// still makes progress), but it starves exactly the levels a human is watching.
-//
-// So a deep spawn may only take a slot while a quarter of the pool is still
-// free. Shallow spawns keep the full pool: the top of the tree never waits on
-// its own descendants.
-func (r *Runtime) acquireSpawnSlotAtDepth(depth int) bool {
-	max := int64(r.tun.SpawnMaxConcurrent())
-	limit := max
-	if depth >= deepSpawnDepth {
-		reserve := max / 4
-		if reserve < 1 {
-			reserve = 1
-		}
-		if limit = max - reserve; limit < 1 {
-			// A pool of 1 cannot be shared; let the deep spawn have it rather than
-			// making deep work impossible on a tiny cap.
-			limit = 1
-		}
-	}
-	if r.spawnActive.Add(1) > limit {
+// when the cap is already reached. Paired with releaseSpawnSlot.
+func (r *Runtime) acquireSpawnSlot() bool {
+	if r.spawnActive.Add(1) > int64(r.tun.SpawnMaxConcurrent()) {
 		r.spawnActive.Add(-1)
 		return false
 	}

@@ -20,21 +20,20 @@ const (
 	CuratorEntityAutomation = "automation"
 	CuratorEntitySchedule   = "schedule"
 	CuratorEntityHook       = "hook"
-	CuratorEntityRecipe     = "recipe"
 )
 
 // CuratorAction is one thing the curator did or proposes.
 type CuratorAction struct {
 	Kind   string `json:"kind"`   // CuratorAction*
 	Entity string `json:"entity"` // CuratorEntity*
-	ID     string `json:"id"`     // entity id (recipe: slug)
+	ID     string `json:"id"`     // entity id
 	Name   string `json:"name,omitempty"`
 	// Reason is the short machine reason (exhausted, expired, never_fired,
 	// unfired_watcher, ghost_phase, one_shot_done); Detail the human line.
 	Reason  string `json:"reason"`
 	Detail  string `json:"detail,omitempty"`
 	Applied bool   `json:"applied"`
-	// Evidence names the trajectories / counts the recipe suggestions rest on.
+	// Evidence names what the suggestion rests on.
 	Evidence string `json:"evidence,omitempty"`
 }
 

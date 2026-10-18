@@ -245,13 +245,12 @@ func (s *Server) runInboxWorker(wsID, sessionID string) {
 			return
 		}
 		// Claim the runtime turn slot BEFORE popping. That slot is the session's other
-		// serializer — a coordinator auto-turn, a worker notification, a scheduler wake
-		// all hold it without passing through this queue — and the turn we are about to
+		// serializer — a scheduler wake or an automation delivery
+		// holds it without passing through this queue — and the turn we are about to
 		// dispatch blocks on it anyway (runChatTurn). Popping first meant the message
 		// left the WAITING tail (vanishing from every window's queue tray) and then
-		// waited, invisible and no longer cancellable, until the coordinator released
-		// the slot — surfacing in the transcript only when some worker's reply happened
-		// to end that turn. Waiting HERE keeps it WAITING until it can really run.
+		// waited, invisible and no longer cancellable, until the slot was released.
+		// Waiting HERE keeps it WAITING until it can really run.
 		// See _Docs/58-QUEUE-SENKRON.md.
 		release := s.claimRuntimeTurn(wsID, sessionID)
 		item, ok := s.popInboxHead(wsID, sessionID)
@@ -427,7 +426,7 @@ func (s *Server) flushInbox(wsID, sessionID string) {
 // publishQueue broadcasts a session's complete turn queue to every window: the
 // user's own durable send-queue (staged / dispatched) PLUS the runtime admission
 // queue (what actually holds the session and what is queued behind it — a
-// coordinator's worker notification, a wake, a peer delivery). The two used to be
+// wake, a spawn's opening turn). The two used to be
 // invisible to each other, which is how a dispatched message could sit waiting on
 // something the UI never showed (_Docs/58).
 //
@@ -572,12 +571,11 @@ func (s *Server) recoverInboxes() {
 	}
 }
 
-// recoverAutonomousTurns reclaims worker/spawn/coordinator turns orphaned by a
+// recoverAutonomousTurns reclaims detached spawn turns orphaned by a
 // crash/restart, per workspace. Unlike inbox turns (durably queued), autonomous
 // turns run as fire-and-forget goroutines with no sidecar, so a restart leaves the
-// worker session with no reply AND its coordinator waiting forever. The per-runtime
-// pass records an interrupted reply and, for a worker, injects a synthetic killed
-// notification so the coordinator resumes. Best-effort; runs once at startup.
+// session with no reply. The per-runtime pass records an interrupted reply.
+// Best-effort; runs once at startup.
 func (s *Server) recoverAutonomousTurns() {
 	for _, meta := range s.workspaces.List() {
 		wsp, err := s.workspaces.Get(meta.ID)
@@ -585,12 +583,6 @@ func (s *Server) recoverAutonomousTurns() {
 			continue
 		}
 		wsp.Runtime.RecoverOrphanedTurns(context.Background())
-		// AFTER the orphan pass, never before: a sub-coordinator that still owes its
-		// coordinator a report usually gets one more turn out of that pass (its
-		// recovered workers notify it), and should report for itself. Re-arming the
-		// backstop here lets it do exactly that — the backstop only fires for a node
-		// that is still quiet once the grace period elapses.
-		wsp.Runtime.RecoverPendingReports(context.Background())
 	}
 }
 
@@ -700,7 +692,7 @@ func (s *Server) stopSessionTurn(wsp *workspace.Workspace, sessionID string) boo
 		return true
 	}
 	// No chat run: the turn may still be an AUTONOMOUS one (schedule / wake /
-	// spawn / coordination), which the runtime tracks separately and which never
+	// spawn), which the runtime tracks separately and which never
 	// enters chatRuns.
 	if wsp.Runtime != nil && wsp.Runtime.CancelSession(sessionID) {
 		// A cancelled autonomous turn leaves no trace of WHY it stopped — the

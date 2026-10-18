@@ -83,7 +83,6 @@ const KIND_KEY: Record<ViewKind, string> = {
   skill: 'skill',
   insight: 'insight',
   logs: 'logs',
-  trajectory: 'trajectory',
   note: 'note',
 }
 
@@ -123,7 +122,6 @@ const KIND_COLOR: Partial<Record<ViewKind, string>> = {
   automation: '#f97316',
   skill: '#eab308',
   insight: '#ec4899',
-  trajectory: '#a855f7',
   note: '#8b5cf6',
 }
 
@@ -227,7 +225,7 @@ export function displayLabel(handle: ViewHandle): string {
     if (localized) label = label.replace(kind, localized)
     return label || kind
   }
-  const prefixes = [key, `${handle.ref.kind}:${handle.ref.id}`, `rota:${handle.ref.id}`]
+  const prefixes = [key, `${handle.ref.kind}:${handle.ref.id}`]
   for (const prefix of prefixes) {
     if (label.startsWith(prefix)) {
       label = label.slice(prefix.length).trim()
@@ -290,7 +288,6 @@ function shapeFor(ref: ViewRef, depth: number): Node['shape'] {
     case 'session':
       return 'box'
     case 'flowrun':
-    case 'trajectory':
       return 'diamond'
     case 'skill':
       return 'star'
@@ -359,19 +356,16 @@ function attentionRing(
 }
 
 // Glow of a live session: a wide, tinted shadow plus a thick border in the
-// agent's color. Running is full strength; a coordinator awaiting its workers
-// glows softer in the warning hue.
+// agent's color.
 function liveGlow(
-  state: ViewGraphLive['state'],
   agentColor: string | undefined,
   theme: ExplorerTheme,
 ): Pick<Node, 'shadow' | 'borderWidth'> & { border: string } {
-  const running = state === 'running'
-  const border = running ? agentColor || theme.accent : theme.warning
+  const border = agentColor || theme.accent
   return {
     border,
-    borderWidth: running ? 3 : 2.5,
-    shadow: { enabled: true, color: border, size: running ? 28 : 18, x: 0, y: 0 },
+    borderWidth: 3,
+    shadow: { enabled: true, color: border, size: 28, x: 0, y: 0 },
   }
 }
 
@@ -424,13 +418,9 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
     const liveEntry = opts.liveAgents?.get(key)
     const liveSessionState = handle.ref.kind === 'session' ? opts.liveState?.get(key) : undefined
     const glow = liveSessionState
-      ? liveGlow(
-          liveSessionState,
-          opts.liveAgents && liveAgentColor(key, opts.liveAgents),
-          opts.theme,
-        )
+      ? liveGlow(opts.liveAgents && liveAgentColor(key, opts.liveAgents), opts.theme)
       : liveEntry
-        ? liveGlow(liveEntry.state, liveEntry.agent.color, opts.theme)
+        ? liveGlow(liveEntry.agent.color, opts.theme)
         : null
     // Attention ring + spotlight. The ring outranks the live glow on the border
     // (a stuck session that is also running must read as stuck); the spotlight
@@ -470,9 +460,7 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
           : []),
         ...(liveSessionState === 'running'
           ? [`● ${i18next.t('tooltip.running', { ns: 'explorer' })}`]
-          : liveSessionState === 'awaiting-workers'
-            ? [`◐ ${i18next.t('tooltip.awaitingWorkers', { ns: 'explorer' })}`]
-            : []),
+          : []),
         ...(liveEntry
           ? [i18next.t('tooltip.session', { ns: 'explorer', id: liveEntry.session.id })]
           : []),

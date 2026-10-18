@@ -49,14 +49,14 @@ const graph: ViewGraphResult = {
     { source: sessions, target: s2 },
     { source: ag1, target: s1 },
     { source: ag2, target: s2 },
-    { source: s1, target: w1 }, // worker under coordinator, not in the sessions bucket
+    { source: s1, target: w1 }, // subagent under its parent, not in the sessions bucket
     { source: tools, target: mcp },
   ],
   live: [{ session: s1, state: 'running', agent: { id: 'AG1', name: 'builder' } }],
   meta: {
     'session:SES1': { kind: 'chat', agentId: 'AG1', tags: ['x'] },
     'session:SES2': { kind: 'task', agentId: 'AG2', tags: ['y'] },
-    'session:W1': { kind: 'worker', agentId: 'AG1' },
+    'session:W1': { kind: 'subagent', agentId: 'AG1' },
   },
 }
 
@@ -81,7 +81,7 @@ describe('applyExplorerFilter', () => {
     )
     const k = keys(out)
     expect(k).not.toContain('category:sessions')
-    // SES1/SES2 survive through their agents; the worker through SES1.
+    // SES1/SES2 survive through their agents; the subagent through SES1.
     expect(k).toContain('session:SES1')
     expect(k).toContain('session:W1')
     expect(k).toContain('agent:AG1#live:SES1')
@@ -175,7 +175,7 @@ describe('collapsed nodes', () => {
     expect(keys(foldedSession)).not.toContain('agent:AG1#live:SES1')
     const counts = childCounts(layer.graph)
     expect(counts.get('category:agents')).toBe(2)
-    expect(counts.get('session:SES1')).toBe(2) // worker + live avatar
+    expect(counts.get('session:SES1')).toBe(2) // subagent + live avatar
     expect(counts.get('session:W1')).toBeUndefined()
   })
 })
@@ -183,7 +183,7 @@ describe('collapsed nodes', () => {
 describe('explorerFacets', () => {
   it('reads the vocabularies off the graph', () => {
     expect(explorerFacets(graph)).toEqual({
-      kinds: ['chat', 'task', 'worker'],
+      kinds: ['chat', 'subagent', 'task'],
       agents: [
         { id: 'AG1', label: 'builder' },
         { id: 'AG2', label: 'researcher' },
@@ -291,7 +291,7 @@ describe('time window', () => {
 
   it('keeps nodes whose newest stamp (created, edited or read) is inside the window', () => {
     const hour = cut(3600)
-    // W1 counts through its agent read; its coordinator SES1 stays as its parent.
+    // W1 counts through its agent read; its parent SES1 stays too.
     expect(hour).toContain('session:W1')
     expect(hour).toContain('session:SES1')
     expect(hour).not.toContain('session:SES2')

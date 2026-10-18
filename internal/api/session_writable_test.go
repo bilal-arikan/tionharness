@@ -155,22 +155,6 @@ func TestEnqueueMessageRejectsOrchestratorSessions(t *testing.T) {
 	}
 }
 
-// TestEnqueueMessageAcceptedOnWorkerSession: the composer half of TSK507. A
-// worker transcript is a live conversation its coordinator already injects turns
-// into, so a human turn must be ENQUEUED rather than refused — otherwise the UI
-// shows a composer the API rejects, the exact drift the writable list exists to
-// prevent.
-func TestEnqueueMessageAcceptedOnWorkerSession(t *testing.T) {
-	s, wsp := newWorkspaceServer(t)
-	sess, err := wsp.DB.CreateSession(context.Background(), db.Session{Kind: "worker", Title: "worker"})
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	if rec := postMessage(t, s, wsp, sess.ID); rec.Code == http.StatusForbidden {
-		t.Fatalf("a worker session must accept a user message: %s", rec.Body.String())
-	}
-}
-
 // TestRunningTurnControlsAllowedOnOrchestratorSessions: stop/steer and answering
 // an ask_user belong to an ALREADY RUNNING turn, which a task/flow session very
 // much has. The immutable guard must not touch them (they may still fail for

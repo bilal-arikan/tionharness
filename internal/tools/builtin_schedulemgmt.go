@@ -99,7 +99,7 @@ func NewCreateScheduleTool(database *db.DB, actorID string, reload func(context.
 func (CreateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_schedule",
-		Description: "Create a recurring schedule (routine) on a cron expression. It delivers a prompt to an agent (agentId+prompt); the agent's own evolving flow shapes the turn. With sessionId every fire is delivered INTO that existing session as a new turn instead (e.g. to wake your own coordinator session at a known time hours ahead — schedule_wake reaches at most one hour); agentId may then be omitted. New schedules default to disabled, matching REST. The schedule is tagged as created by you. Returns the new schedule id.",
+		Description: "Create a recurring schedule (routine) on a cron expression. It delivers a prompt to an agent (agentId+prompt); the agent's own evolving flow shapes the turn. With sessionId every fire is delivered INTO that existing session as a new turn instead (e.g. to wake your own session at a known time hours ahead — schedule_wake reaches at most one hour); agentId may then be omitted. New schedules default to disabled, matching REST. The schedule is tagged as created by you. Returns the new schedule id.",
 		InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{

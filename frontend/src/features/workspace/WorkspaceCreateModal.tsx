@@ -175,10 +175,6 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
                       <span className="text-[10px] font-normal text-[var(--color-text-dim)]">
                         {t('create.template.agentCount', { count: template.agentCount })}
                         {template.hasFlow ? ` · ${t('create.template.flow')}` : ''}
-                        {/* "2 ajan" reads identically for a chat pair and for a
-                            delegation chain — say which one this is. */}
-                        {!!template.coordinatorCount &&
-                          ` · ${t('create.template.coordinatorCount', { count: template.coordinatorCount })}`}
                         {!!template.automationCount &&
                           ` · ${t('create.template.automationCount', { count: template.automationCount })}`}
                       </span>

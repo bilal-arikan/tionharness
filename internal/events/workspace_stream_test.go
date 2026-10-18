@@ -3,7 +3,7 @@ package events
 import "testing"
 
 func TestWorkspaceStreamTypes(t *testing.T) {
-	for _, typ := range []string{TypeWSSessionLifecycle, TypeWSTrajectory, TypeWSFlowRun, TypeWSScheduleArmed, TypeWSAutomationFire, TypeWSSpawn, TypeWSReport} {
+	for _, typ := range []string{TypeWSSessionLifecycle, TypeWSFlowRun, TypeWSScheduleArmed, TypeWSAutomationFire} {
 		if !IsWorkspaceStream(typ) {
 			t.Fatalf("%q must be a workspace-stream type", typ)
 		}

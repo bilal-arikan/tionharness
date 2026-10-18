@@ -11,7 +11,7 @@ import (
 //
 // Structured lifecycle facts the runtime already knows — a session appeared or
 // finished, a flow run changed status, a schedule was armed, an automation
-// fired, a trajectory gained a revision — are published on the process bus
+// fired — are published on the process bus
 // under events.WorkspaceStreamPrefix types with a JSON payload in Event.Data.
 // The API layer bridges them onto the ordered, replayable per-workspace hub
 // stream and keeps them OFF the fire-and-forget notification feed. This file is
@@ -43,9 +43,8 @@ type SessionLifecyclePayload struct {
 	PrevRunState  string           `json:"prevRunState,omitempty"`
 	RootSessionID string           `json:"rootSessionId"`
 	Origin        db.SessionOrigin `json:"origin"`
-	Coordinator   bool             `json:"coordinator,omitempty"`
 	// CreatedAt lets a time-axis view place a session it first hears of over the
-	// stream without a REST round trip (Rota F0).
+	// stream without a REST round trip.
 	CreatedAt int64 `json:"createdAt,omitempty"`
 	UpdatedAt int64 `json:"updatedAt"`
 }
@@ -60,39 +59,12 @@ func (r *Runtime) OnSessionChange(ev db.SessionChangeEvent) {
 		SessionLifecyclePayload{
 			SessionID: ev.SessionID, Op: ev.Op, Kind: s.Kind, AgentID: s.AgentID, Title: s.Title,
 			State: s.State, PrevState: ev.PrevState, RunState: s.RunState, PrevRunState: ev.PrevRunState,
-			RootSessionID: s.RootSession(), Origin: s.Lineage(), Coordinator: s.IsCoordinator(),
+			RootSessionID: s.RootSession(), Origin: s.Lineage(),
 			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		})
-	r.onSessionChangeForTrajectory(ev)
 	// Archiving is the user's stop gesture: a schedule bound to the session must
 	// not keep firing into it (schedulearchive.go).
 	r.onSessionArchivedDisableSchedules(ev)
-}
-
-// TrajectoryPayload is the Data shape of a ws:trajectory event — the index row,
-// not the graph: a client that cares re-reads the trajectory by id.
-type TrajectoryPayload struct {
-	TrajectoryID  string `json:"trajectoryId"`
-	RootSessionID string `json:"rootSessionId"`
-	Op            string `json:"op"` // db.TrajectoryOp*
-	TemplateRef   string `json:"templateRef,omitempty"`
-	Status        string `json:"status,omitempty"`
-	Revision      uint64 `json:"revision"`
-	NodeCount     int    `json:"nodeCount"`
-	UpdatedAt     int64  `json:"updatedAt,omitempty"`
-}
-
-// OnTrajectoryChange is the db.TrajectoryChangeFn wired next to OnSessionChange.
-func (r *Runtime) OnTrajectoryChange(ev db.TrajectoryChangeEvent) {
-	t := ev.Trajectory
-	r.emitWorkspaceEvent(events.TypeWSTrajectory,
-		map[string]string{"trajectoryId": ev.TrajectoryID, "rootSessionId": ev.RootSessionID, "op": ev.Op},
-		TrajectoryPayload{
-			TrajectoryID: ev.TrajectoryID, RootSessionID: ev.RootSessionID, Op: ev.Op,
-			TemplateRef: t.TemplateRef, Status: t.Status, Revision: t.Revision,
-			NodeCount: len(t.Nodes), UpdatedAt: t.UpdatedAt,
-		})
-	r.observeTrajectoryTransitions(ev)
 }
 
 // FlowRunPayload is the Data shape of a ws:flow_run event: one agent turn's

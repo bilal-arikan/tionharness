@@ -16,7 +16,7 @@ package events
 const (
 	// --- Notify kinds (toastable, appear in notification settings) ---
 
-	// TypeChat is a completed assistant reply (chat/scheduler/spawn/coordination
+	// TypeChat is a completed assistant reply (chat/scheduler/spawn
 	// turn end). The frontend raises the "reply ready" chime + toast for it.
 	TypeChat = "chat"
 	// TypeSchedule is a scheduled-prompt run outcome.
@@ -25,10 +25,6 @@ const (
 	TypeFlow = "flow"
 	// TypeSpawned is a spawned sub-session run outcome.
 	TypeSpawned = "spawned"
-	// TypeWorker is a coordinator worker run outcome.
-	TypeWorker = "worker"
-	// TypeCoordination is a coordinator lifecycle signal (e.g. worker-cap warning).
-	TypeCoordination = "coordination"
 	// TypeAutomation is a tag/board automation fire outcome.
 	TypeAutomation = "automation"
 	// TypeArtifact is an artifact create/update (the "produced something" signal).
@@ -66,8 +62,7 @@ const (
 	// TypeSessionStep carries one live turn-step frame (Event.Step).
 	TypeSessionStep = "session_step"
 	// TypeSessionUserMessage carries one runtime-injected user-role message
-	// (Event.Msg) for live hub bridging — a worker task-notification, a
-	// send_to_worker prompt, a coordination status/guard note. A control signal,
+	// (Event.Msg) for live hub bridging — e.g. a runtime status note. A control signal,
 	// never a toast (the assistant reply that follows carries the TypeChat toast).
 	TypeSessionUserMessage = "session_user_message"
 	// TypeSessionTurnQueue signals that a session's TURN ADMISSION state changed —
@@ -103,21 +98,12 @@ const (
 	// TypeWSSessionLifecycle: a session was created / changed state or run-state /
 	// gained its origin run id / was deleted (db.SetSessionHook).
 	TypeWSSessionLifecycle = WorkspaceStreamPrefix + "session_lifecycle"
-	// TypeWSTrajectory: a trajectory ("Rota") was created / updated / deleted.
-	TypeWSTrajectory = WorkspaceStreamPrefix + "trajectory"
 	// TypeWSFlowRun: a flow run started, suspended (waiting) or finished.
 	TypeWSFlowRun = WorkspaceStreamPrefix + "flow_run"
 	// TypeWSScheduleArmed: a schedule's next fire time (or a one-shot wake) was armed.
 	TypeWSScheduleArmed = WorkspaceStreamPrefix + "schedule_armed"
 	// TypeWSAutomationFire: an automation fired (or, later, was skipped with a reason).
 	TypeWSAutomationFire = WorkspaceStreamPrefix + "automation_fire"
-	// TypeWSSpawn / TypeWSReport: coordinator spawned a worker / a worker reported
-	// back. Reserved for the coordination observer (_Docs/77 R7).
-	TypeWSSpawn  = WorkspaceStreamPrefix + "spawn"
-	TypeWSReport = WorkspaceStreamPrefix + "report"
-	// TypeWSCoordination: a coordinator's drain turn started/ended or its
-	// phantom-spawn guard halted it (target phase: turn_start | turn_end | stall_halt).
-	TypeWSCoordination = WorkspaceStreamPrefix + "coordination"
 	// TypeWSBoard: a kanban card was created / moved / updated / deleted. Mirrors
 	// the "board" notify onto the ordered stream: that feed (/api/events) has no
 	// cursor and no replay, so a consumer that drops the connection loses board
@@ -129,7 +115,7 @@ const (
 	// workspace picture. Payload-light: sessionId + busy + waiting depth; the
 	// full picture is GET /api/workspace/liveness (_Docs/77 R2).
 	TypeWSLiveness = WorkspaceStreamPrefix + "liveness"
-	// TypeWSAsk: a durable ask was parked outside a turn (a phase gate, Rota F5)
+	// TypeWSAsk: a durable ask was parked outside a turn
 	// — the API opens the card on the session hub when it sees op=open.
 	TypeWSAsk = WorkspaceStreamPrefix + "ask"
 	// TypeWSMCPStatus: a pooled MCP server connection changed state — currently
@@ -168,8 +154,6 @@ var NotifyKinds = []string{
 	TypeSchedule,
 	TypeFlow,
 	TypeSpawned,
-	TypeWorker,
-	TypeCoordination,
 	TypeAutomation,
 	TypeArtifact,
 	TypeBoard,

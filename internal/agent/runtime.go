@@ -28,12 +28,11 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/secrets"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 	"github.com/bilal-arikan/tionharness/internal/tools"
-	"github.com/bilal-arikan/tionharness/internal/trajectory"
 	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // backgroundTurnDrainGrace bounds how long CloseMCP waits for the in-flight
-// background turns (spawn / worker / inbox delivery) to unwind before the caller
+// background turns (spawns) to unwind before the caller
 // closes the workspace DB under them. Same value as sessionTeardownGrace in
 // internal/api/session_teardown.go; the constant is duplicated on purpose because
 // internal/agent may not import internal/api (scripts/depcheck.sh).
@@ -116,8 +115,7 @@ type Runtime struct {
 
 	// turnHooks are called (detached, non-blocking) whenever an agent turn finishes
 	// on any path (chat/spawn/schedule/wake). The workspace manager wires the
-	// AutomationEngine (tag-triggered automations) and the CoordinationEngine
-	// (worker → coordinator <task-notification> feedback) here. Empty before wiring;
+	// AutomationEngine (tag-triggered automations) here. Empty before wiring;
 	// guarded by turnHooksMu since SetTurnHook runs during boot while
 	// FireTurnFinished may already be firing.
 	turnHooks   []func(context.Context, TurnFinished)
@@ -132,24 +130,11 @@ type Runtime struct {
 	flowRunHooks []func(context.Context, FlowRunFinished)
 
 	// turns is the per-session TURN ADMISSION queue (internal/turnqueue): the single
-	// FIFO every turn-entry path — a queued user message, a coordinator auto-turn, a
-	// worker, a scheduler wake, a peer delivery, a slash command — passes through, so
+	// FIFO every turn-entry path — a queued user message, a scheduler wake, an
+	// automation delivery, a spawn, a slash command — passes through, so
 	// exactly one turn runs per session and the wait order is first-come-first-served
 	// AND observable. See _Docs/58.
 	turns *turnqueue.Queue
-
-	// coordSlots holds the coordinator POLICY state per session (notify coalescing,
-	// the auto-turn cap, idle reconciliation, stall guards). Mutual exclusion itself
-	// lives in `turns`, not here — this is only "what should the coordinator do
-	// next". Keyed by session id; value is *coordSlot. See coordination.go.
-	coordSlots sync.Map
-	// coordCtx owns coordinator drain goroutines, including their batch timers and
-	// admission waits. coordLifeMu serializes Add against shutdown's Wait.
-	coordCtx     context.Context
-	coordCancel  context.CancelFunc
-	coordLifeMu  sync.Mutex
-	coordClosing bool
-	coordWG      sync.WaitGroup
 
 	// readTrackers holds one *tools.ReadTracker per session id, the freshness
 	// baseline the Edit/Write guard compares against. Session-scoped and persistent
@@ -177,57 +162,6 @@ type Runtime struct {
 	// turn. Memory-only; released by ReleaseSessionRuntimeState. Unstamped-session
 	// builds (catalog/preview) get nil, which disables monitoring for that build.
 	monitorMgrs sync.Map
-
-	// workerCancels tracks in-flight worker turns so stop_worker can cancel one.
-	// Keyed by worker session id; value is *workerCtl (cancel func + stopped flag,
-	// so a cancelled turn reports "killed" rather than "failed"). Populated by
-	// runWorker for its lifetime.
-	workerCancels sync.Map
-
-	// coordRunFn, when non-nil, replaces runCoordinatorTurn in the per-session queue
-	// drain — a test seam so the queue's serialization/coalescing can be exercised
-	// without a live provider. Nil in production (the real turn runs).
-	coordRunFn func(coordSessionID string)
-	// Test-only deterministic barrier after durable worker-note persistence and
-	// before worker archive/batch arming. Production leaves it nil.
-	coordAfterWorkerNotePersist func(coordSessionID string)
-	// coordObservers are the coordinator/worker lifecycle subscribers
-	// (coordination_observer.go, _Docs/77 R7).
-	coordObservers coordObserverRegistry
-	// trajWork is the ordered off-path queue for trajectory binder writes (Rota F1).
-	trajWork trajectoryQueue
-	// trajTransitions diffs trajectory snapshots into phase / end transitions
-	// for the automation engine (Rota F2); the hook is wired by the manager.
-	trajTransitions    trajectory.TransitionDiffer
-	trajTransitionHook func(context.Context, TrajectoryTransition)
-	trajTransitionMu   sync.RWMutex
-
-	// stallJudgeFn, when non-nil, replaces judgeCoordinatorStalled — a test seam so
-	// the tiers acting on a verdict (nudge, re-arm, hard halt) can be exercised
-	// without a live provider. Nil in production (the real judge call runs).
-	stallJudgeFn func(ctx context.Context, agent db.Agent, text string) (bool, error)
-
-	// workerQueueMu guards workerQueue, the bounded per-worker backpressure queue
-	// behind send_to_worker: when a worker is mid-turn a follow-up is parked here
-	// instead of being rejected, and delivered the moment its turn ends (see
-	// SendToWorker + drainWorkerQueue in coordination.go). The mutex covers the
-	// whole busy-check + store so it stays atomic against the drain that pops on
-	// turn end.
-	workerQueueMu sync.Mutex
-	workerQueue   map[string][]string // worker session id -> queued follow-up messages
-	// treeTeardowns keeps a coordinator branch closed to new spawn_worker calls
-	// from delete preparation until its durable DB delete commits or rolls back.
-	treeTeardownMu    sync.Mutex
-	treeTeardowns     map[string]map[string]bool // tree root -> branch roots being torn down
-	teardownTreeRoots map[string]string          // prepared session -> tree root
-
-	// workerRunFn, when non-nil, replaces the registered worker launch in
-	// dispatchWorkerTurn — a test seam so the queue's accept/refuse/deliver logic
-	// can be exercised without a live provider. Nil in production.
-	workerRunFn func(agent db.Agent, workerSessionID, prompt, coordSessionID string)
-	// workerDrainBeforeDispatch is a deterministic test barrier inside the queue
-	// decision critical section. Nil in production.
-	workerDrainBeforeDispatch func()
 
 	// settingsBridge backs the get_settings / update_settings self-management
 	// tools: read and live-apply the application-wide settings. Wired by the
@@ -320,7 +254,7 @@ type Runtime struct {
 	optLog optimizerLog
 
 	// activeMu guards activeSessions, which tracks the sessions currently executing
-	// an autonomous invoke (schedule / wake / spawn / coordination). Keyed by session
+	// an autonomous invoke (schedule / wake / spawn). Keyed by session
 	// id; the value is EVERY registration that session currently holds, because each
 	// entry path registers its cancel func BEFORE it queues for the session's turn
 	// slot — so a running turn and a queued one coexist. CancelSession cancels all of
@@ -347,8 +281,7 @@ type Runtime struct {
 	spawnClose     sync.Once
 
 	// spawnLifeMu / spawnClosing / spawnWG form the shutdown barrier for background
-	// TURN goroutines (spawn, worker, inbox delivery) — the same contract as
-	// coordLifeMu/coordWG above, applied to the fire-and-forget turns. Every one of
+	// TURN goroutines (spawn and similar fire-and-forget turns). Every one of
 	// them is launched through startBackgroundTurn, which calls Add(1) on the
 	// STARTING goroutine, before the `go`, so a turn that is about to launch can
 	// never be missed. stopSpawnQueue alone only stops the dispatcher: the turns it
@@ -393,11 +326,6 @@ type Runtime struct {
 	// telemetry only — never gates a turn.
 	cacheProbes sync.Map
 
-	// stallJudgeMemo remembers, per coordinator session id, the last message the
-	// stall judge classified and its verdict (stallJudgeVerdict), so the sweeper
-	// does not re-judge an unchanged message every minute. Zero value ready.
-	stallJudgeMemo sync.Map
-
 	// pendingCacheBreaks holds the one-shot inline notice for a cache break the
 	// chat turn should card (keyed by session id, value agent.CacheBreak). Armed by
 	// noteCacheOutcome for the "something changed" causes only, drained by
@@ -440,26 +368,18 @@ type Runtime struct {
 // CAUTION: a leaked handle no longer heals itself. Under the old single-entry map
 // the next turn's Store overwrote a stale entry; in the list it accumulates, and
 // the session then reads "running" forever — permanently busy agent, permanently
-// non-idle in the sessions view, and a permanently consumed coordinator subtree
-// slot (countsAgainstTreeBudget). Every trackSession call site MUST release on
+// non-idle in the sessions view. Every trackSession call site MUST release on
 // every exit path; prefer `defer run.release()`.
 type sessionRun struct {
 	rt      *Runtime
 	id      string
 	cancel  context.CancelFunc
 	started time.Time // diagnostics only: how long this registration has been live
-	// worker marks a registration made for a WORKER turn (newWorkerRun). The
-	// send_to_worker backpressure gate keys off THIS rather than the generic
-	// "session has any registration": a wake/user/peer turn registered on the same
-	// worker session must not make a follow-up look queueable after the worker's
-	// own drain already ran. Written once under activeMu before the handle escapes.
-	worker bool
 }
 
 // release removes THIS registration from its session's list, leaving every other
-// turn's registration alone. Idempotent: releasing twice (the coordinator drain
-// releases the same handle from two frames) is a no-op the second time, because
-// removal is by pointer identity.
+// turn's registration alone. Idempotent: releasing twice is a no-op the second
+// time, because removal is by pointer identity.
 func (run *sessionRun) release() {
 	if run == nil || run.rt == nil {
 		return
@@ -488,34 +408,6 @@ func (r *Runtime) trackSession(id string, cancel context.CancelFunc) *sessionRun
 	}
 	r.activeSessions[id] = append(r.activeSessions[id], run)
 	return run
-}
-
-// trackWorkerSession is trackSession for a worker turn, tagging the registration so
-// workerTurnActive can tell it apart from a foreign turn opened on the same session.
-func (r *Runtime) trackWorkerSession(id string, cancel context.CancelFunc) *sessionRun {
-	run := r.trackSession(id, cancel)
-	r.activeMu.Lock()
-	run.worker = true
-	r.activeMu.Unlock()
-	return run
-}
-
-// workerTurnActive reports whether a WORKER turn currently holds a registration on
-// this session — running or queued. It is the backpressure gate behind
-// send_to_worker: a follow-up accepted while this is true is guaranteed to be seen
-// by drainWorkerQueue, because the worker releases its own registration BEFORE its
-// deferred drain runs. The generic isSessionActive cannot promise that any more:
-// with a per-turn list it stays true while some OTHER turn is registered, and a
-// message queued in that window would sit parked until the next worker turn.
-func (r *Runtime) workerTurnActive(id string) bool {
-	r.activeMu.Lock()
-	defer r.activeMu.Unlock()
-	for _, run := range r.activeSessions[id] {
-		if run.worker {
-			return true
-		}
-	}
-	return false
 }
 
 // CancelSession cancels EVERY autonomous turn registered for a session — the one
@@ -752,7 +644,6 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	}
 	// The marketplace has no bundled/workspace tiers: packs live only in the
 	// global market dir (<DataDir>/market) and remote registries. No seeding.
-	coordCtx, coordCancel := context.WithCancel(context.Background())
 	skillStore := skills.New(globalSkillsDir(), workspaceSkillsDir(workDir))
 	// Establish the catalog fingerprint before wiring notifications. This keeps
 	// boot silent while ensuring a first action from Market (which writes files
@@ -775,13 +666,10 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		mcpPool:     mcp.NewPool(),
 		mcpDeaths:   newMCPDisconnectLog(),
 		cliSessions: providers.NewCLISessionPool(),
-		workerQueue: make(map[string][]string),
 		spawnWake:   make(chan struct{}, 1),
 		spawnStop:   make(chan struct{}),
 		spawnDone:   make(chan struct{}),
 		turns:       turnqueue.New(func() int64 { return time.Now().Unix() }),
-		coordCtx:    coordCtx,
-		coordCancel: coordCancel,
 	}
 	// Workspace memory + awareness (_Docs/94). The notes dir sits next to the
 	// entity store; a failure to open it is logged and leaves both nil.
@@ -807,9 +695,6 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		})
 	})
 	go r.runSpawnQueue()
-	// Rota (F1): the trajectory binder turns coordinator lifecycle into graph
-	// appends. Registered first so it sees every spawn/report of this runtime.
-	r.AddCoordinationObserver(trajectoryBinder{r})
 	// The codebase-memory capability defaults ON; workspace settings (loadSettings)
 	// override it at boot. Seeded here so bare runtimes (before settings apply) still
 	// behave as "on" rather than silently off.
@@ -848,13 +733,10 @@ func (r *Runtime) MCPPool() *mcp.Pool { return r.mcpPool }
 // The order is the contract: the caller closes the workspace DB the moment this
 // returns, so every goroutine that may still write to it has to be shut out and
 // drained here. Background TURNS go first (they are the ones holding a live db
-// handle), then the spawn dispatcher, then the coordinator drains — the queue
-// drop notifications raised in step 2 can arm a drain, so draining coordinators
-// before stopping the queue would leave one behind.
+// handle), then the spawn dispatcher.
 func (r *Runtime) CloseMCP() {
 	r.closeBackgroundTurns()
 	r.stopSpawnQueue()
-	r.closeCoordinatorDrains()
 	if r.mcpPool != nil {
 		r.mcpPool.Close()
 	}
@@ -863,39 +745,11 @@ func (r *Runtime) CloseMCP() {
 	}
 }
 
-// startCoordinatorDrain launches one coordinator drain under the runtime's shutdown
-// barrier. runCtx/cancelRun/run are the FIRST iteration's turn context and its
-// trackSession registration, minted by the caller BEFORE this call so a stop issued in
-// the instant after arming already finds something to cancel. Returns false once
-// CloseMCP has started, in which case the caller owns undoing that registration.
-func (r *Runtime) startCoordinatorDrain(coordSessionID string, slot *coordSlot, runCtx context.Context, cancelRun context.CancelFunc, run *sessionRun) bool {
-	r.coordLifeMu.Lock()
-	defer r.coordLifeMu.Unlock()
-	if r.coordClosing {
-		return false
-	}
-	r.coordWG.Go(func() {
-		r.drainCoordinator(r.coordCtx, coordSessionID, slot, runCtx, cancelRun, run)
-	})
-	return true
-}
-
-func (r *Runtime) closeCoordinatorDrains() {
-	r.coordLifeMu.Lock()
-	if !r.coordClosing {
-		r.coordClosing = true
-		r.coordCancel()
-	}
-	r.coordLifeMu.Unlock()
-	r.coordWG.Wait()
-}
-
-// startBackgroundTurn launches one fire-and-forget TURN goroutine (spawn, worker
-// or inbox delivery) under the runtime's shutdown barrier, so CloseMCP can wait
+// startBackgroundTurn launches one fire-and-forget TURN goroutine (a spawn)
+// under the runtime's shutdown barrier, so CloseMCP can wait
 // for it before the workspace DB is closed. Returns false once CloseMCP has
 // started, in which case NOTHING was launched and the caller owns undoing its own
-// bookkeeping — the spawn slot, the session registration, the worker ctl — exactly
-// as with startCoordinatorDrain.
+// bookkeeping — the spawn slot and the session registration.
 func (r *Runtime) startBackgroundTurn(fn func()) bool {
 	r.spawnLifeMu.Lock()
 	defer r.spawnLifeMu.Unlock()
@@ -923,7 +777,7 @@ func (r *Runtime) closeBackgroundTurns() {
 	r.spawnClosing = true
 	r.spawnLifeMu.Unlock()
 	// Cancel with the mutex RELEASED, and wait with it released too: a turn that is
-	// opening a child worker blocks in startBackgroundTurn on this very mutex, and a
+	// opening a child spawn blocks in startBackgroundTurn on this very mutex, and a
 	// Wait holding it would wait for that turn forever — a deadlock.
 	r.cancelAllSessions()
 
@@ -1273,40 +1127,11 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent, autonomous ..
 	// lacks the turn's current-session id; inject it (captured from the build ctx)
 	// so session-scoped bridged tools (read_session_debug) default to this session.
 	sid := SessionIDFrom(ctx)
-	upwardReport := pendingUpwardReportFrom(ctx)
-
-	// Coordination tools (M2): bridge them to the CLI path too, so a claude-cli
-	// coordinator can drive workers, a claude-cli sub-coordinator can report up, and
-	// any claude-cli session can toggle its own coordinator mode. They dispatch
-	// outside reg (via the coordination runner), so they need no registry
-	// registration. coordinationBridgeDefs advertises exactly the subset this
-	// session is entitled to — same per-function gating as the native registry.
-	var coordFuncs *tools.CoordinationFuncs
-	if sid != "" {
-		if sess, err := r.db.GetSession(ctx, sid); err == nil {
-			coordFuncs = r.coordinationFuncsFor(sess, agent.ID)
-			for _, d := range coordinationBridgeDefs(coordFuncs) {
-				if allow == nil || allow(d.Name) {
-					defs = append(defs, d)
-				}
-			}
-		}
-	}
 
 	call := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
-		// HTTP tool calls have their own context. Preserve the worker's terminal
-		// report stash so an early self-report cannot wake its parent mid-turn.
-		if upwardReport != nil {
-			ctx = withPendingUpwardReport(ctx, upwardReport)
-		}
 		if sid != "" {
 			ctx = tools.WithCurrentSession(ctx, sid)
 			ctx = WithSessionID(ctx, sid)
-		}
-		if coordFuncs != nil {
-			if out, handled, err := dispatchCoordinationBridge(ctx, coordFuncs, name, args); handled {
-				return out, err
-			}
 		}
 		res := reg.Call(ctx, providers.ToolCall{Name: name, Input: args})
 		if res.IsError {
@@ -1361,8 +1186,7 @@ func (r *Runtime) SetTurnHook(fn func(context.Context, TurnFinished)) {
 }
 
 // AddFailedTurnHook appends a FAILED-turn observer. Kept separate from the
-// success hooks: coordination must never receive an error turn as a worker
-// result, but the automation engine must — a repair automation watching an
+// success hooks: the automation engine must — a repair automation watching an
 // error-class tag ("stuck"/"error") has to fire on the very turn that failed,
 // not wait for a success that may never come (the stuck gate refuses further
 // autonomous turns). Wired by the workspace manager next to SetTurnHook.
@@ -1603,7 +1427,6 @@ func (r *Runtime) CancelWake(ctx context.Context, sessionID string) (int, error)
 
 // publish stamps the workspace identity onto an event and pushes it to the bus.
 func (r *Runtime) publish(e events.Event) {
-	e = r.annotateChatCompletion(e)
 	e.WorkspaceID = r.wsID
 	e.WorkspaceName = r.wsName
 	r.bus.Publish(e) // nil-safe
@@ -1621,7 +1444,3 @@ func (r *Runtime) agentName(id string) string {
 	}
 	return id
 }
-
-// AgentName is agentName for callers outside the package (the coordinator-tree
-// API endpoints, which render agent names alongside session ids).
-func (r *Runtime) AgentName(id string) string { return r.agentName(id) }

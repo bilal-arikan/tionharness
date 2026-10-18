@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { i18next } from '@/i18n'
 import { STEP_KINDS } from '@/shared/stepKinds'
 import { deletedAgentLabel } from './agentLookup'
-import { coordinationLabel } from './coordination'
 import { NOTIFY_TYPES } from './notifyTypes'
 import { phaseLook } from './searchIndexState'
 import { THEME_COLORS } from './themePresets'
@@ -18,7 +17,6 @@ describe('shared UI localization', () => {
     expect(THEME_COLORS[0].label).toBe('Mor')
     expect(STEP_KINDS[0].label).toBe('Metin')
     expect(phaseLook('ready').label).toBe('hazır')
-    expect(coordinationLabel({ coordinatorMode: true })).toBe('Koordinatör')
     expect(deletedAgentLabel()).toBe('Silinmiş ajan')
 
     await i18next.changeLanguage('en')
@@ -26,7 +24,6 @@ describe('shared UI localization', () => {
     expect(THEME_COLORS[0].label).toBe('Violet')
     expect(STEP_KINDS[0].label).toBe('Text')
     expect(phaseLook('ready').label).toBe('ready')
-    expect(coordinationLabel({ coordinatorMode: true })).toBe('Coordinator')
     expect(deletedAgentLabel()).toBe('Deleted agent')
   })
 })

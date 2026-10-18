@@ -61,8 +61,8 @@ describe('ActivityCard collab metadata', () => {
 describe('ActivityCard agent action tones', () => {
   const cases = [
     ['create_agent', 'create'],
-    ['stop_worker', 'stop'],
-    ['send_message', 'message'],
+    ['close_agent', 'stop'],
+    ['send_input', 'message'],
   ] as const
 
   for (const [tool, tone] of cases) {

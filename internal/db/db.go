@@ -62,14 +62,11 @@ type DB struct {
 	flowRuns          map[string]FlowRun
 	flowProposals     map[string]FlowProposal
 	sessionAsks       map[string]SessionAsk // durable ask suspend/resume (MVP)
-	// agentMessages holds the delivery receipts for agent→agent / coordinator→
-	// worker messages, including the parked bodies of held ones.
-	agentMessages map[string]AgentMessage
-	automations   map[string]Automation
-	artifacts     map[string]Artifact
-	hooks         map[string]Hook
-	usage         map[string]Usage        // keyed by agentID + "|" + day
-	sessionUsage  map[string]SessionUsage // keyed by session id (lifetime rollup)
+	automations       map[string]Automation
+	artifacts         map[string]Artifact
+	hooks             map[string]Hook
+	usage             map[string]Usage        // keyed by agentID + "|" + day
+	sessionUsage      map[string]SessionUsage // keyed by session id (lifetime rollup)
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 
@@ -134,20 +131,10 @@ type DB struct {
 	// created, changes state/run-state, gains its origin run id, or is deleted.
 	// Same contract as boardHook: called AFTER the store and transcript locks are
 	// released, callback dispatches on its own goroutine. Backs the workspace
-	// event log / trajectory projection (see store_session_hook.go).
+	// event log (see store_session_hook.go).
 	sessionHook   SessionChangeFn
 	sessionHookMu sync.RWMutex
 
-	// Trajectory ("Rota") store: sidecars live in each root session's directory;
-	// trajIndex is the boot-loaded listing (trajectories/index.json). trajLocks
-	// serialise writers per root; trajIndexMu guards the map + its file. See the
-	// lock-order note in store_trajectory.go.
-	trajIndex   map[string]TrajectoryIndexEntry
-	trajIndexMu sync.RWMutex
-	trajLocks   map[string]*sync.Mutex
-	trajLocksMu sync.Mutex
-	trajHook    TrajectoryChangeFn
-	trajHookMu  sync.RWMutex
 	// activityDeliveryMu protects the per-event delivery claims. It is never held
 	// while invoking a hook: callbacks may re-enter this DB and may be slow.
 	activityDeliveryMu sync.Mutex
@@ -247,7 +234,6 @@ func Open(path string) (*DB, error) {
 		flowRuns:           map[string]FlowRun{},
 		flowProposals:      map[string]FlowProposal{},
 		sessionAsks:        map[string]SessionAsk{},
-		agentMessages:      map[string]AgentMessage{},
 		automations:        map[string]Automation{},
 		artifacts:          map[string]Artifact{},
 		hooks:              map[string]Hook{},
@@ -322,14 +308,12 @@ const (
 	dirAgentFlowProposals  = "agent-flow-proposals"
 	dirAgentPromptVersions = "agent-prompt-versions"
 	dirSessionAsks         = "session-asks"
-	dirAgentMsgs           = "agent-messages"
 	dirAutomations         = "automations"
 	dirArtifacts           = "artifacts"
 	dirRender              = "render" // per-session render_template output (transient, swept)
 	dirHooks               = "hooks"
 	dirUsage               = "usage"
 	dirSessionUsage        = "session-usage"
-	dirTrajectories        = "trajectories" // index.json only; the graphs are session sidecars
 )
 
 // countersFile stores the per-entity id sequence at the workspace store root.
@@ -348,7 +332,6 @@ const (
 	idFlowRun      = "RUN"
 	idFlowProposal = "FPR"
 	idSessionAsk   = "SAK"
-	idAgentMsg     = "AMS"
 	idArtifact     = "ART"
 	idKnowledge    = "MEM"
 	idMCP          = "MCP"
@@ -356,7 +339,6 @@ const (
 	idGoal         = "GOL"
 	idSchedule     = "SCH"
 	idAutomation   = "AUT"
-	idTrajectory   = "RTA" // "Rota"
 )
 
 // loadCounters reads the persisted id sequence. A missing file is fine (fresh
@@ -525,9 +507,6 @@ func (d *DB) load() error {
 	if err := d.timeLoadPhase("activitySequence", d.loadActivitySequence); err != nil {
 		return err
 	}
-	if err := d.timeLoadPhase("trajectoryIndex", d.loadTrajectoryIndex); err != nil {
-		return err
-	}
 	// One bucket for the flat entity directories (agents/tasks/schedules/mcp/
 	// flows/flow-runs/session-asks/automations/artifacts/hooks): they share one
 	// loader and one failure mode, so splitting them further would be noise until
@@ -616,15 +595,6 @@ func (d *DB) load() error {
 	}
 	for _, a := range sessionAsks {
 		d.sessionAsks[a.ID] = a
-		d.markMutatedLocked()
-	}
-
-	agentMessages, err := loadJSONDir[AgentMessage](d.dir(dirAgentMsgs))
-	if err != nil {
-		return err
-	}
-	for _, m := range agentMessages {
-		d.agentMessages[m.ID] = m
 		d.markMutatedLocked()
 	}
 
@@ -720,19 +690,6 @@ func (d *DB) load() error {
 	// Consolidate any pre-unification files into the per-session artifacts layout
 	// and back existing chat attachments with artifacts (idempotent, best-effort).
 	d.timeLoadPhase("migrateUnifiedLayout", func() error { d.migrateUnifiedLayout(); return nil })
-	// Convert pre-TSK507 "inbox" sessions into ordinary writable chat threads, so
-	// peer transcripts written by an older build stop being read-only and keep
-	// receiving new deliveries instead of being orphaned beside a fresh thread.
-	d.timeLoadPhase("migrateLegacyInboxSessions", func() error {
-		converted, failed := d.migrateLegacyInboxSessions()
-		if converted > 0 {
-			slog.Info("migrated legacy inbox sessions to chat", "component", "db", "converted", converted)
-		}
-		if failed > 0 {
-			slog.Warn("some legacy inbox sessions could not be migrated", "component", "db", "failed", failed)
-		}
-		return nil
-	})
 	// Reclaim transient render_template output: drop dirs for sessions that no
 	// longer exist and TTL-sweep stale files (startup-only, best-effort).
 	d.timeLoadPhase("cleanupRenders", func() error { d.cleanupRenders(); return nil })

@@ -15,9 +15,6 @@ vi.mock('./AgentToolsSection', () => ({ AgentToolsSection: () => null }))
 vi.mock('./AgentSkillsSection', () => ({ AgentSkillsSection: () => null }))
 vi.mock('./AgentContextModal', () => ({ AgentContextModal: () => null }))
 vi.mock('./SystemAgentStatusBadge', () => ({ SystemAgentStatusBadge: () => null }))
-vi.mock('@/shared/components/CoordinatorWorkflowPicker', () => ({
-  CoordinatorWorkflowPicker: () => <div data-testid="agent-coordinator-workflow" />,
-}))
 vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [],
   thinkingOptionsForModel: (available: unknown) => available,
@@ -32,9 +29,6 @@ const baseAgent = {
   provider: 'claude-cli',
   model: 'sonnet',
   permissionMode: 'auto',
-  coordinatorMode: true,
-  coordinatorWorkflow: 'coordinator-wf-plan-dev-test',
-  coordinatorPrompt: 'İşi workerlara böl.',
 } as Agent
 
 function renderForm(agent: Agent = baseAgent, onSave = vi.fn(async (_patch: AgentPatch) => {})) {
@@ -81,29 +75,10 @@ describe('AgentSettingsForm boolean option pills', () => {
     expect(option(container, 'agent-native-shell', 'on').getAttribute('aria-checked')).toBe('true')
   })
 
-  it('defaults an unstored coordinator setting to Kapalı and hides coordinator fields', () => {
-    const { container } = renderForm({ ...baseAgent, coordinatorMode: undefined })
-
-    expect(option(container, 'agent-coordinator-mode', 'off').getAttribute('aria-checked')).toBe(
-      'true',
-    )
-    expect(container.querySelector('[data-testid="agent-coordinator-workflow"]')).toBeNull()
-    expect(container.querySelector('[data-testid="agent-coordinator-prompt-textarea"]')).toBeNull()
-  })
-
-  it('saves booleans and clears coordinator-only fields when Kapalı is selected', async () => {
+  it('saves booleans when Kapalı is selected', async () => {
     const { container, onSave } = renderForm({ ...baseAgent, nativeWebSearch: true })
 
-    expect(container.querySelector('[data-testid="agent-coordinator-workflow"]')).not.toBeNull()
-    expect(
-      container.querySelector('[data-testid="agent-coordinator-prompt-textarea"]'),
-    ).not.toBeNull()
-
     act(() => option(container, 'agent-native-web-search', 'off').click())
-    act(() => option(container, 'agent-coordinator-mode', 'off').click())
-
-    expect(container.querySelector('[data-testid="agent-coordinator-workflow"]')).toBeNull()
-    expect(container.querySelector('[data-testid="agent-coordinator-prompt-textarea"]')).toBeNull()
 
     const save = container.querySelector<HTMLButtonElement>('[data-testid="agent-save"]')
     if (!save) throw new Error('Save button not found')
@@ -112,9 +87,6 @@ describe('AgentSettingsForm boolean option pills', () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         nativeWebSearch: false,
-        coordinatorMode: false,
-        coordinatorWorkflow: '',
-        coordinatorPrompt: '',
       }),
     )
   })

@@ -217,7 +217,7 @@ func (s *Server) publishHub(wsID, sessionID, kind string, v any, ephemeral bool)
 
 // bridgeBusToHub mirrors AUTONOMOUS turns' live steps from the process-wide bus
 // onto the per-session hub, so a window watching an autonomous session
-// (scheduler/spawn/worker/wake) renders its activity from the same authoritative
+// (scheduler/spawn/wake) renders its activity from the same authoritative
 // stream as an interactive turn. Interactive turns already publish to the hub
 // directly, in order, from the chat stream handler — so those are skipped here
 // (a session with a registered chatRun) to avoid double-publishing. Runs for the
@@ -262,7 +262,7 @@ func (s *Server) bridgeBusToHub() {
 			// run unregisters (defer) would re-arm the client's "conversing" indicator
 			// that turn_done just cleared (stuck-live bug). Skip interactive steps
 			// outright, regardless of run liveness. Only AUTONOMOUS turns
-			// (coordinator/scheduler/spawn/worker/wake) reach the hub via this bridge:
+			// (scheduler/spawn/flow/wake) reach the hub via this bridge:
 			// their runtime onStep does NOT self-publish, and many carry no chatRun at
 			// all, so liveness is not a reliable discriminator — origin is.
 			if e.Target["origin"] == "interactive" {
@@ -277,10 +277,10 @@ func (s *Server) bridgeBusToHub() {
 			// the current snapshot here, so a burst coalesces into one read.
 			s.republishQueue(wsID, sid)
 		case "session_user_message":
-			// A runtime-injected user-role message (a worker task-notification, a
-			// send_to_worker prompt, a coordination status/guard note) was just
+			// A runtime-injected user-role message (a gate record, an auto-continue
+			// nudge, an agent-authored spawn prompt) was just
 			// persisted mid-autonomous-flow. Publish it to the hub as a durable
-			// user_message so every window watching the coordinator/worker renders it
+			// user_message so every window watching the session renders it
 			// live and IN ORDER — the assistant reply that follows already bridges via
 			// the completion case below, but without this the reply appeared to answer
 			// a message the window never saw (looked like a duplicate reply out of
@@ -293,8 +293,8 @@ func (s *Server) bridgeBusToHub() {
 				continue
 			}
 			s.hub.Publish(wsID, sid, sessionhub.KindUserMessage, e.Msg, false)
-		case "chat", "spawned", "worker", "schedule", "flow", "automation", "insight":
-			// An AUTONOMOUS turn (scheduler/spawn/worker/flow) finished: it publishes
+		case "chat", "spawned", "schedule", "flow", "automation", "insight":
+			// An AUTONOMOUS turn (scheduler/spawn/flow) finished: it publishes
 			// no hub reply/turn_done of its own, so bridge a turn_done here — every
 			// window watching the session then reloads the persisted turn. Skip wake
 			// lifecycle phases (armed/start are not ends) and skip interactive turns

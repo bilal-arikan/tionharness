@@ -40,8 +40,7 @@
       "model-router": "Çalıştırma modeli yönlendirme",
       "clarification": "Kullanıcıya soru kontrolü",
       "compact-retention": "Compact bağlam koruması",
-      "context-reminder": "Bağlam hatırlatmaları",
-      "worker-review": "Worker sonucu inceleme"
+      "context-reminder": "Bağlam hatırlatmaları"
     },
     "action": {
       "select": "Seçildi",
@@ -87,18 +86,14 @@
   "chip": {
     "archived": "Arşiv",
     "automation": "Otomasyon",
-    "awaitingWorkers": "Bekleyen",
     "chat": "Sohbet",
     "flow": "Akış",
-    "flowCoordinator": "Akış Koord.",
-    "inbox": "Gelen kutusu",
     "insight": "İçgörü",
     "other": "Diğer",
     "running": "Çalışan",
     "spawned": "Spawn",
     "subagent": "Alt ajan",
-    "task": "Görev",
-    "worker": "Worker"
+    "task": "Görev"
   },
   "common": {
     "empty": "(boş)",
@@ -241,71 +236,11 @@
       "toolActivity": "Araç çağrıları ve sonuçları",
       "toolHistory": "Tur içi araç bağlamı",
       "tools": "Araçlar",
-      "user": "Kullanıcı",
-      "workerResults": "Worker sonuçları"
+      "user": "Kullanıcı"
     },
     "summarized_one": "İlk {{count}} mesaj özete katlandı (~{{tokens}} token).",
     "summarized_other": "İlk {{count}} mesaj özete katlandı (~{{tokens}} token).",
     "title": "Bağlam penceresi · {{used}}/{{window}} (%{{percent}})"
-  },
-  "coordinator": {
-    "ancestorChain": "Üst zincir",
-    "back": "Koordinatöre dön",
-    "completedWorkers_one": "Tamamlanan · {{count}}",
-    "completedWorkers_other": "Tamamlanan · {{count}}",
-    "depth": "s{{depth}}",
-    "enable": "Koordinatör modunu aç (paralel worker'ları yönet)",
-    "enableNested": "Koordinatör modunu aç (bu worker kendi worker'larını yönetsin)",
-    "enabled": "Koordinatör modu açık",
-    "halted": {
-      "description": "Koordinatör worker başlattığını anlatıp gerçek bir <code>spawn_worker</code> çağrısı yapmadı; düzeltici uyarılar sonuç vermedi, otomatik turlar durduruldu. Sohbete <code>spawn_worker'ı gerçekten çağır</code> gibi bir mesaj yazın ya da aşağıdan tek turluk devam ettirin.",
-      "resume": "Devam ettir",
-      "title": "Koordinatör durduruldu"
-    },
-    "noCompletedWorkers": "Henüz tamamlanan worker yok.",
-    "noRunningWorkers": "Şu an çalışan worker yok.",
-    "noWorkers": "Henüz worker yok. Sohbette <code>spawn_worker</code> ile paralel worker başlatın.",
-    "openCoordinator": "Koordinatör oturumunu aç",
-    "openSession": "{{title}} oturumunu aç",
-    "openWorker": "Worker oturumunu aç",
-    "pendingMessage": "Bekleyen mesaj",
-    "queued": "kuyrukta",
-    "queuedMessage": "Bekleyen mesaj: bu tur bitince otomatik teslim edilecek",
-    "runningWorkers_one": "Çalışan · {{count}}",
-    "runningWorkers_other": "Çalışan · {{count}}",
-    "scopeHint": "Bu anahtar yalnız <strong>bu oturumu</strong> etkiler. Ajan koordinatör olarak ayarlanmışsa (Ajanlar ▸ Koordinatör) açtığı her yeni oturum yine koordinatör başlar.",
-    "thisSession": "bu oturum",
-    "title": "Koordinasyon",
-    "tree": {
-      "cacheSavings": "Prompt-cache tasarrufu",
-      "empty": "Bu oturum henüz bir koordinatör ağacının parçası değil.",
-      "health": {
-        "errored": "Son turu hata ile bitti",
-        "halted": "Durduruldu — hayalet spawn; otomatik turlar durdu, devam ettirilmesi gerekiyor",
-        "stuck": "Takıldı — otonom turlar reddediliyor, müdahale gerekiyor"
-      },
-      "queuedMessage": "Bekleyen mesaj: bu tur bitince teslim edilecek",
-      "reportPending": "Koordinatörüne raporunu henüz kapatmadı",
-      "sessionCount_one": "{{count}} oturum",
-      "sessionCount_other": "{{count}} oturum",
-      "title": "Koordinatör ağacı",
-      "total": "Ağaç toplamı",
-      "unhealthy_one": "{{count}} oturumda hata/takılma",
-      "unhealthy_other": "{{count}} oturumda hata/takılma"
-    },
-    "workerHeader": {
-      "subCoordinator": "Bu oturum bir <strong>alt koordinatör</strong> — hem kendi worker'larını yönetir hem de üstündeki koordinatöre rapor verir. Turunun bitmesi işinin bittiği anlamına gelmez; sonucu <code>report_to_coordinator</code> ile kapatır.",
-      "worker": "Bu oturum bir <strong>worker</strong> — bir koordinatör tarafından başlatıldı. Sonucu, koordinatör oturumuna <code>&lt;task-notification&gt;</code> olarak iletilir."
-    },
-    "workerState": {
-      "delegating": "dağıtıyor",
-      "done": "bitti",
-      "running": "çalışıyor"
-    },
-    "workers_one": "Worker'lar · {{count}}",
-    "workers_other": "Worker'lar · {{count}}",
-    "workflow": "Workflow",
-    "workflowHelp": "Workflow nedir?"
   },
   "debug": {
     "all": "hepsi",
@@ -411,7 +346,6 @@
     "automation": "Otomasyon",
     "chat": "Sohbet",
     "flow": "Akış",
-    "flowCoordinator": "Akış Koordinatörü",
     "insight": "İçgörü",
     "other": "Diğer",
     "schedule": "Zamanlama",
@@ -462,7 +396,7 @@
       "main": "Konuşmalar",
       "mainHint": "Senin başlattığın konuşmalar ve onlardan açılan (spawn / handoff) sohbetler",
       "other": "Arka plan",
-      "otherHint": "Worker, subagent, görev, otomasyon, zamanlama, analiz, ajan mesaj kutuları ve sistem oturumları"
+      "otherHint": "Subagent, görev, otomasyon, zamanlama, analiz ve sistem oturumları"
     },
     "handoff": "handoff",
     "inMessages": "Mesajlarda",
@@ -484,8 +418,6 @@
     "title": "Oturumlar",
     "unread": "Okunmadı",
     "unsentDraft": "Gönderilmemiş taslak mesaj var",
-    "workersRunning_one": "{{count}} worker çalışıyor",
-    "workersRunning_other": "{{count}} worker çalışıyor",
     "writing": "yazıyor…"
   },
   "state": {

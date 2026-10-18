@@ -38,12 +38,10 @@ type templateListItem struct {
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 	AgentCount  int    `json:"agentCount"`
-	// CoordinatorCount / AutomationCount describe how the team is WIRED, which the
-	// agent count alone cannot: "2 agents" reads the same for a chat pair and for a
-	// delegation chain. Both 0 for an ordinary template, so the picker only
-	// mentions them when they exist.
-	CoordinatorCount int `json:"coordinatorCount"`
-	AutomationCount  int `json:"automationCount"`
+	// AutomationCount describes how the team is WIRED, which the agent count
+	// alone cannot. 0 for an ordinary template, so the picker only mentions it
+	// when it exists.
+	AutomationCount int `json:"automationCount"`
 }
 
 // handleListWorkspaceTemplates returns the available workspace templates, sourced
@@ -59,11 +57,6 @@ func (s *Server) handleListWorkspaceTemplates(w http.ResponseWriter, _ *http.Req
 			wp := full.Payload.Workspace
 			item.AgentCount = len(wp.Agents)
 			item.AutomationCount = len(wp.Automations)
-			for _, a := range wp.Agents {
-				if a.CoordinatorMode {
-					item.CoordinatorCount++
-				}
-			}
 		}
 		out = append(out, item)
 	}
@@ -178,14 +171,6 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 		if !mcpEnabled {
 			mcpEnabled = true
 		}
-		// A pinned coordinator recipe is only carried over when it resolves against
-		// this workspace's skills (the pack normally bundles it — seeded in step 1
-		// above, before agents, precisely so this works).
-		workflow := resolvableRecipe(skillStore, ta.CoordinatorWorkflow)
-		if workflow == "" && strings.TrimSpace(ta.CoordinatorWorkflow) != "" {
-			s.logger.Warn("seed template agent: unknown coordinator recipe, ignoring",
-				"workspace", wsNew.ID, "agent", ta.Name, "workflow", ta.CoordinatorWorkflow)
-		}
 		// ap is a template's kind id, accepted as a provider INSTANCE id here too
 		// (default-instance-id-equals-kind-id convention, _Docs/71 §3/§5). A
 		// template referencing a kind that no longer exists is logged and
@@ -208,17 +193,14 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			// Same as pack install: a template agent predating thinkingLevel
 			// carries none, so the seeder names the tier explicitly instead of
 			// leaving it to db.CreateAgent.
-			ThinkingLevel:       explicitThinkingLevel(ta.ThinkingLevel, providerKind),
-			NativeWebSearch:     ta.NativeWebSearch,
-			PermissionMode:      ta.PermissionMode,
-			MCPEnabled:          mcpEnabled,
-			AllowedTools:        ta.AllowedTools,
-			BlockedTools:        ta.BlockedTools,
-			ToolOverrides:       ta.ToolOverrides,
-			Skills:              known,
-			CoordinatorMode:     ta.CoordinatorMode,
-			CoordinatorWorkflow: workflow,
-			CoordinatorPrompt:   ta.CoordinatorPrompt,
+			ThinkingLevel:   explicitThinkingLevel(ta.ThinkingLevel, providerKind),
+			NativeWebSearch: ta.NativeWebSearch,
+			PermissionMode:  ta.PermissionMode,
+			MCPEnabled:      mcpEnabled,
+			AllowedTools:    ta.AllowedTools,
+			BlockedTools:    ta.BlockedTools,
+			ToolOverrides:   ta.ToolOverrides,
+			Skills:          known,
 		})
 		if err != nil {
 			s.logger.Warn("seed template agent failed", "workspace", wsNew.ID, "agent", ta.Name, "error", err)

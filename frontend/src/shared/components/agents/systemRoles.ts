@@ -14,7 +14,7 @@ export const SYSTEM_ROLE_GROUPS = {
   ],
   helpers: ['titler', 'compaction', 'overview-summarizer'],
   analysis: ['insight', 'lesson-extractor'],
-  optimizers: ['flow-optimizer', 'recipe-optimizer', 'stall-judge'],
+  optimizers: ['flow-optimizer'],
 } as const
 
 export type SystemRoleGroup = keyof typeof SYSTEM_ROLE_GROUPS

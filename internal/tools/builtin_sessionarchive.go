@@ -23,7 +23,7 @@ const defaultArchiveLimit = 100
 //
 // Session kind: by default only "chat" sessions match (see defaultArchiveKinds),
 // which is the behaviour this tool shipped with. Autonomous runs (spawn, flow,
-// task, schedule, inbox, worker) produce their own session kinds and used to be
+// task, schedule) produce their own session kinds and used to be
 // unreachable by any bulk tool; pass `kinds` to include them, or kinds:["*"] for
 // every kind.
 //
@@ -56,7 +56,7 @@ func (ArchiveSessionsTool) Def() providers.ToolDef {
 			"to clean up old/finished sessions instead of raw HTTP calls — it is scoped to this " +
 			"workspace and by default excludes the session you are running in. " +
 			"By default it only matches `chat` sessions; pass `kinds` to also sweep the sessions " +
-			"autonomous runs leave behind (spawned/worker/flow/task/schedule/inbox), e.g. " +
+			"autonomous runs leave behind (spawned/flow/task/schedule), e.g. " +
 			"`kinds:[\"spawned\",\"flow\"]`, or `kinds:[\"*\"]` for every kind. " +
 			"Filter further with `idle_days` (only sessions whose last activity is older than N days) " +
 			"and/or `title_contains`. " +
@@ -68,7 +68,7 @@ func (ArchiveSessionsTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "kinds":           { "type": "array", "items": { "type": "string" }, "description": "Session kinds to archive: chat, spawned, worker, flow, task, schedule, inbox — or [\"*\"] for all of them. Omitted = [\"chat\"] only (the historical behaviour). An unknown kind is an error. Note: schedule and inbox sessions are long-lived/system-owned, so \"*\" sweeps them too — preview with dry_run first." },
+    "kinds":           { "type": "array", "items": { "type": "string" }, "description": "Session kinds to archive: chat, spawned, flow, task, schedule — or [\"*\"] for all of them. Omitted = [\"chat\"] only (the historical behaviour). An unknown kind is an error. Note: schedule and inbox sessions are long-lived/system-owned, so \"*\" sweeps them too — preview with dry_run first." },
     "idle_days":       { "type": "integer", "description": "Only archive sessions whose last activity is older than this many days. 0 or omitted = no age filter (all active sessions match)." },
     "title_contains":  { "type": "string", "description": "Only archive sessions whose title contains this text (case-insensitive)." },
     "exclude":         { "type": "array", "items": { "type": "string" }, "description": "Session IDs to keep active." },

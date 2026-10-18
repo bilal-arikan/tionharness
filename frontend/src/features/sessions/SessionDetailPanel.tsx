@@ -19,7 +19,6 @@ import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { formatBytes, formatDate, cacheRemaining } from './sessionDetailFormat'
 import { serverNow } from '@/shared/lib/serverClock'
 import { isWritableSessionKind } from '@/shared/lib/sessionKind'
-import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 
 interface Props {
   sessionId: string
@@ -124,14 +123,6 @@ export function SessionDetailPanel({
       alive = false
     }
   }, [sessionId, refreshKey, localRefresh])
-
-  // Live coordination refresh: a worker transition OR a coordination signal for this
-  // session (fed onto workerBus by useAppEvents) refetches session info, so the
-  // phantom-spawn "durduruldu" badge appears/clears without waiting for a manual
-  // refresh or the busy-poll (a halted coordinator is idle, so nothing else refetches).
-  useEffect(() => {
-    return subscribeWorkerChange(sessionId, () => setLocalRefresh((n) => n + 1))
-  }, [sessionId])
 
   // While a turn is running (or a warm CLI process is held), poll the info endpoint
   // so the process card appears/updates/clears live even without a chat SSE bound to
@@ -311,7 +302,7 @@ export function SessionDetailPanel({
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
               {t('detail.title')}
             </span>
-            {/* Machine-written transcripts (insight scans, inbox, run logs) take
+            {/* Machine-written transcripts (insight scans, run logs) take
                 no new user turns, so the composer is hidden. Say so here, or the
                 missing composer looks like a bug. */}
             {info && !isWritableSessionKind(info.kind) && (

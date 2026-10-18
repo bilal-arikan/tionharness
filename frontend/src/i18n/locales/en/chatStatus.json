@@ -1,6 +1,5 @@
 {
   "executionNotice": {
-    "traceUnavailable": "The saved activity details could not be read. The worker report remains available.",
     "interrupted": "Work interrupted — unfinished",
     "filesPresent": "Expected files are present",
     "filesMissing": "Delivery incomplete — expected files missing",
@@ -92,20 +91,6 @@
     "emptyMessage": "(empty message)",
     "working": "Rewinding…"
   },
-  "sessionStart": {
-    "title": "Start settings",
-    "dismissTitle": "Hide for this session",
-    "dismissLabel": "Close the start panel",
-    "coordinatorOn": "Coordinator mode is on — this session manages parallel workers",
-    "coordinatorOff": "Turn on coordinator mode (manage parallel workers)",
-    "disable": "Turn off",
-    "enable": "Turn on",
-    "workflow": "Workflow",
-    "workflowLabel": "What is a workflow?",
-    "footerBefore": "This panel closes when you send the first message. These settings apply only to this session and can be changed later in the",
-    "coordination": "Coordination",
-    "footerAfter": "section of the session panel."
-  },
   "steps": {
     "guidance": "Guidance:",
     "subagent": "Subagent",
@@ -121,26 +106,6 @@
     "running": "running…",
     "parallel_one": "{{count}} parallel tool call (in one request)",
     "parallel_other": "{{count}} parallel tool calls (in one request)"
-  },
-  "taskNotification": {
-    "status": {
-      "completed": "completed",
-      "failed": "failed",
-      "killed": "stopped",
-      "timeout": "timed out",
-      "incomplete": "incomplete"
-    },
-    "runtimeOutcome": "Worker turn completed. Test success must be supported by its execution records.",
-    "laterReport": "A later report exists for this worker: {{status}}. Review it before relying on this result.",
-    "reportedOutcome": "Reported completion. This notification does not establish that tests passed; open the worker session for evidence.",
-    "collapse": "Collapse worker result",
-    "expand": "Expand worker result",
-    "openSession": "Open {{name}} worker session",
-    "model": "model",
-    "none": "none",
-    "notification": "Worker notification",
-    "toolCount_one": "{{count}} tool",
-    "toolCount_other": "{{count}} tools"
   },
   "todos": {
     "title": "Task List",
@@ -176,23 +141,11 @@
     "empty": "No subfolders",
     "use": "Use this folder"
   },
-  "workerStatus": {
-    "worker": "Worker is running",
+  "runStatus": {
     "session": "Session is running",
     "turn": "— turn in progress",
     "stopTitle": "Stop this session's running turn",
     "stop": "Stop"
-  },
-  "workerWait": {
-    "running_one": "{{count}} worker is running",
-    "running_other": "{{count}} workers are running",
-    "waiting": "— waiting for results",
-    "done": " · {{done}}/{{total}} done",
-    "openSession": "{{name}} — open worker session",
-    "model": "model",
-    "seconds": "{{seconds}}s",
-    "minutes": "{{minutes}}m",
-    "minutesSeconds": "{{minutes}}m {{seconds}}s"
   },
   "tools": {
     "items_one": "{{count}} item",

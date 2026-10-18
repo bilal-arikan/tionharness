@@ -2,21 +2,16 @@
 import { useTranslation } from 'react-i18next'
 
 export function ChannelBadge({ channel }: { channel: string }) {
-  const { t } = useTranslation('insight')
   const appFix = channel === 'app-fix'
-  const recipe = channel === 'recipe-opt'
   return (
     <span
       className={`rounded px-1.5 py-0.5 text-xs ${
         appFix
           ? 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
-          : recipe
-            ? 'bg-[#6B7FD8]/15 text-[#6B7FD8]'
-            : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
+          : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
       }`}
-      title={recipe ? t('badges.recipeOptimizerTitle') : undefined}
     >
-      {appFix ? 'app-fix' : recipe ? '✦ recipe-opt' : 'workspace-opt'}
+      {appFix ? 'app-fix' : 'workspace-opt'}
     </span>
   )
 }

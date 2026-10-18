@@ -1,6 +1,5 @@
 {
   "executionNotice": {
-    "traceUnavailable": "Kaydedilmiş işlem ayrıntıları okunamadı. Worker raporu hâlâ görüntülenebilir.",
     "interrupted": "Çalışma kesildi — tamamlanmadı",
     "filesPresent": "Beklenen dosyalar mevcut",
     "filesMissing": "Teslim eksik — beklenen dosyalar bulunamadı",
@@ -92,20 +91,6 @@
     "emptyMessage": "(boş mesaj)",
     "working": "Geri sarılıyor…"
   },
-  "sessionStart": {
-    "title": "Başlangıç ayarları",
-    "dismissTitle": "Bu oturum için gizle",
-    "dismissLabel": "Başlangıç panelini kapat",
-    "coordinatorOn": "Koordinatör modu açık — bu oturum paralel worker'ları yönetir",
-    "coordinatorOff": "Koordinatör modunu aç (paralel worker'ları yönet)",
-    "disable": "Kapat",
-    "enable": "Aç",
-    "workflow": "Workflow",
-    "workflowLabel": "Workflow nedir?",
-    "footerBefore": "İlk mesajı gönderdiğinde bu panel kapanır. Ayarlar yalnız bu oturuma aittir ve sonradan oturum panelindeki",
-    "coordination": "Koordinasyon",
-    "footerAfter": "bölümünden değiştirilebilir."
-  },
   "steps": {
     "guidance": "Yönlendirme:",
     "subagent": "Alt-ajan",
@@ -121,26 +106,6 @@
     "running": "çalışıyor…",
     "parallel_one": "{{count}} paralel araç çağrısı (tek istekte)",
     "parallel_other": "{{count}} paralel araç çağrısı (tek istekte)"
-  },
-  "taskNotification": {
-    "status": {
-      "completed": "tamamlandı",
-      "failed": "başarısız",
-      "killed": "durduruldu",
-      "timeout": "zaman aşımı",
-      "incomplete": "eksik"
-    },
-    "runtimeOutcome": "Worker turu tamamlandı. Test başarısı, çalıştırma kayıtlarıyla desteklenmelidir.",
-    "laterReport": "Bu worker için daha yeni bir rapor var: {{status}}. Bu sonuca güvenmeden önce yeni raporu inceleyin.",
-    "reportedOutcome": "Tamamlandığı bildirildi. Bu bildirim testlerin geçtiğini kanıtlamaz; kanıt için worker oturumunu açın.",
-    "collapse": "Worker sonucunu daralt",
-    "expand": "Worker sonucunu genişlet",
-    "openSession": "{{name}} worker oturumunu aç",
-    "model": "model",
-    "none": "yok",
-    "notification": "Worker bildirimi",
-    "toolCount_one": "{{count}} araç",
-    "toolCount_other": "{{count}} araç"
   },
   "todos": {
     "title": "Görev Listesi",
@@ -176,23 +141,11 @@
     "empty": "Alt klasör yok",
     "use": "Bu klasörü kullan"
   },
-  "workerStatus": {
-    "worker": "Worker çalışıyor",
+  "runStatus": {
     "session": "Oturum çalışıyor",
     "turn": "— turu sürüyor",
     "stopTitle": "Bu oturumun süren turunu durdur",
     "stop": "Durdur"
-  },
-  "workerWait": {
-    "running_one": "{{count}} worker çalışıyor",
-    "running_other": "{{count}} worker çalışıyor",
-    "waiting": "— sonuçları bekleniyor",
-    "done": " · {{done}}/{{total}} bitti",
-    "openSession": "{{name}} — worker oturumunu aç",
-    "model": "model",
-    "seconds": "{{seconds}} sn",
-    "minutes": "{{minutes}} dk",
-    "minutesSeconds": "{{minutes}} dk {{seconds}} sn"
   },
   "tools": {
     "items_one": "{{count}} öğe",

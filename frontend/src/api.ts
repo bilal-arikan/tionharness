@@ -25,7 +25,6 @@ import { systemApi } from './api/system'
 import { providerApi } from './api/providers'
 import { sttServerApi } from './api/stt'
 import { viewApi } from './api/views'
-import { trajectoryApi } from './api/trajectories'
 import { curatorApi } from './api/curator'
 import { dashboardApi } from './api/dashboard'
 import { searchIndexApi } from './api/searchIndexes'
@@ -56,7 +55,6 @@ export const api = {
   ...providerApi,
   ...sttServerApi,
   ...viewApi,
-  ...trajectoryApi,
   ...curatorApi,
   ...dashboardApi,
   ...searchIndexApi,

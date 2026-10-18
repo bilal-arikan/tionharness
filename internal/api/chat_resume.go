@@ -58,7 +58,7 @@ func (s *Server) planCLIResume(ctx context.Context, provider providers.Provider,
 // thread unverifiable and forces a cold, full-summary restart.
 func (s *Server) planCodexResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, agentRow db.Agent, rawHistory []db.Message, compacted bool, llmReq *providers.Request) cliResumePlan {
 	resumer, ok := provider.(providers.ScopedCLIResumer)
-	multiParticipant := len(db.SessionParticipants(session)) > 1 && !workerResumeOwner(session, agentRow.ID, rawHistory)
+	multiParticipant := len(db.SessionParticipants(session)) > 1
 	personaMatch := strings.TrimSpace(session.AgentID) != "" && session.AgentID == agentRow.ID
 	scope := strings.Join([]string{
 		session.ID,

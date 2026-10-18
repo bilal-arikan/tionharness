@@ -62,22 +62,6 @@ func TestNeedsAutoContinue(t *testing.T) {
 	}
 }
 
-func TestShouldAutoContinueSuppressedWhileWorkerRunning(t *testing.T) {
-	rt := testRuntime(t)
-	sessionID := "SES-coordinator"
-	steps := []TurnStep{todoStep("in_progress")}
-
-	rt.coordSlotFor(sessionID).workers.Add(1)
-	if rt.shouldAutoContinue(sessionID, steps) {
-		t.Fatal("auto-continue must be suppressed while a worker is running")
-	}
-
-	rt.coordSlotFor(sessionID).workers.Add(-1)
-	if !rt.shouldAutoContinue(sessionID, steps) {
-		t.Fatal("open work must trigger auto-continue after workers finish")
-	}
-}
-
 // TestAutoContinueSkipsStoppedAndCutShortTurns pins the two suppressions the nudge
 // must honour: a turn that was CUT SHORT (watchdog cut, iteration/guardrail ceiling)
 // and a run the human STOPPED get no "you stopped without finishing" nudge. Both must

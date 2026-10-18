@@ -10,7 +10,7 @@ import (
 // (_Docs/71 §2.5, K3): after SyncProviderFields resolves an instance id, the
 // returned provider ALWAYS equals Registry.KindOf(providerInstanceID) — the
 // property every agent-writing call site (agents.go, builtin_agentmgmt.go,
-// market_install.go, templates.go, coordination.go) relies on.
+// market_install.go, templates.go) relies on.
 func TestSyncProviderFieldsInvariant(t *testing.T) {
 	r := providers.NewRegistry()
 	r.SetInstances([]providers.Instance{

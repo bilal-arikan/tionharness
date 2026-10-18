@@ -29,14 +29,12 @@ type GraphLiveAgent struct {
 	Color string `json:"color,omitempty"`
 }
 
-// GraphLive is one live session on the map: running, or a coordinator that is
-// idle between turns while one of its direct workers runs (awaiting-workers).
-// The Explorer draws these glowing and attaches the agent's avatar to them; the
+// GraphLive is one live (running) session on the map. The Explorer draws these glowing and attaches the agent's avatar to them; the
 // entry disappears — and with it the glow and the avatar — once the session
 // stops.
 type GraphLive struct {
 	Session Ref            `json:"session"`
-	State   string         `json:"state"` // running | awaiting-workers
+	State   string         `json:"state"` // running
 	Agent   GraphLiveAgent `json:"agent"`
 }
 
@@ -51,15 +49,14 @@ type GraphMeta struct {
 }
 
 const (
-	LiveRunning         = "running"
-	LiveAwaitingWorkers = "awaiting-workers"
+	LiveRunning = "running"
 )
 
 // Attention levels, strongest first. The map draws a ring per level; the
 // status strip counts them.
 const (
 	AttentionDanger = "danger" // stuck session, failed run or card
-	AttentionWarn   = "warn"   // waiting for a human answer, blocked coordinator, stale card
+	AttentionWarn   = "warn"   // waiting for a human answer, stale card
 	AttentionNotice = "notice" // tool errors piled up in the last digest
 )
 
@@ -89,7 +86,7 @@ type GraphStatus struct {
 	At      int64 `json:"at"`
 	Running int   `json:"running"`
 	Waiting int   `json:"waiting"` // sessions waiting for a human answer
-	Stuck   int   `json:"stuck"`   // stuck sessions + blocked coordinators
+	Stuck   int   `json:"stuck"`   // stuck sessions
 	// FailedCards are cards in the failed column (map nodes); FailedRuns are
 	// flow runs failed in the last 24h (counted only: runs are not map nodes).
 	FailedCards int `json:"failedCards"`
@@ -101,9 +98,7 @@ type GraphStatus struct {
 	LastDigestAt int64 `json:"lastDigestAt,omitempty"`
 }
 
-// graphLive computes the live layer against the walk's session snapshot. The
-// awaiting-workers rule mirrors the Network screen's: a coordinator counts as
-// live while any of its direct workers is running.
+// graphLive computes the live layer against the walk's session snapshot.
 func (p *Projector) graphLive(ctx context.Context, cache *structuralCache) ([]GraphLive, map[string]GraphMeta, error) {
 	sessions, err := cache.allSessions(ctx)
 	if err != nil {
@@ -139,13 +134,6 @@ func (p *Projector) graphLive(ctx context.Context, cache *structuralCache) ([]Gr
 	for _, s := range sessions {
 		if running[s.ID] && s.State != "archived" {
 			scope[s.ID] = LiveRunning
-		}
-	}
-	for _, s := range sessions {
-		if scope[s.ID] == LiveRunning && s.CoordinatorSessionID != "" {
-			if _, already := scope[s.CoordinatorSessionID]; !already {
-				scope[s.CoordinatorSessionID] = LiveAwaitingWorkers
-			}
 		}
 	}
 

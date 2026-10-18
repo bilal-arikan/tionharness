@@ -30,8 +30,8 @@ type Event struct {
 	// like db.Message.Steps. Empty for ordinary notifications.
 	Step json.RawMessage `json:"step,omitempty"`
 	// Msg carries an already-marshalled db.Message for a "session_user_message"
-	// event: a user-role message the runtime INJECTED mid-autonomous-flow (a worker
-	// task-notification, a send_to_worker prompt, a coordination status/guard note).
+	// event: a user-role message the runtime INJECTED mid-autonomous-flow (e.g. a
+	// runtime status note).
 	// Bridged to the session hub as KindUserMessage so a window watching the session
 	// renders the note live and in order — assistant replies already bridge via
 	// publishAutonomousReply, but these injected user messages did not, so the reply
@@ -52,7 +52,7 @@ type Event struct {
 	Log json.RawMessage `json:"log,omitempty"`
 	// Data carries the structured payload of a WORKSPACE-STREAM event (a type
 	// with the WorkspaceStreamPrefix, see types.go): a session lifecycle change,
-	// a trajectory revision, a flow-run status, an armed schedule, an automation
+	// a flow-run status, an armed schedule, an automation
 	// fire. Such events never reach the fire-and-forget /api/events feed; the API
 	// bridges them onto the ordered, replayable per-workspace hub stream
 	// (GET /api/workspace/stream, _Docs/77 R3). Opaque JSON here so this package

@@ -40,8 +40,7 @@
   },
   "channel": {
     "appFix": "app-fix",
-    "workspaceOpt": "workspace-opt",
-    "recipeOpt": "recipe-opt"
+    "workspaceOpt": "workspace-opt"
   },
   "filters": {
     "searchPlaceholder": "Search findings…",
@@ -59,8 +58,7 @@
     "open": "Open"
   },
   "badges": {
-    "regression": "REGRESSION",
-    "recipeOptimizerTitle": "Recipe optimizer suggestion (Rota F4) — edit the recipe yourself"
+    "regression": "REGRESSION"
   },
   "scan": {
     "completed": "Scan completed — findings updated.",
@@ -76,14 +74,6 @@
   "finding": {
     "rootCause": "Root cause",
     "proposedFix": "Proposed fix",
-    "recipeProposal": "Recipe proposal",
-    "target": "target",
-    "value": "value",
-    "removes": "removes",
-    "recipe": "recipe",
-    "evidence": "Evidence",
-    "recipeHintBefore": "The suggestion is not applied automatically; edit the recipe from the Skills screen. If you applied it, close the finding as",
-    "recipeHintAfter": "(evidence: skill/{{slug}}).",
     "fileSuggestion": "File (suggested)",
     "evidenceSessions": "Evidence sessions",
     "openTranscript": "Open session transcript",

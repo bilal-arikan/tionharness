@@ -1,7 +1,7 @@
 ---
 name: "TionHarness Self-Management"
 description: "The self-management tool suite an agent uses to run TionHarness itself — create/edit agents, schedules, tasks, hooks, MCP servers, skills, workspaces, evolve your own flow and prompts, delegate work to subagents, manage artifacts/secrets/logs and app settings — plus how to activate these load-on-demand tools with activate_tools when a task needs them."
-when_to_use: "When you need to create or change TionHarness entities (agents, schedules, tasks, hooks, MCP servers, skills, workspaces), evolve your own flow, delegate a sub-task to an isolated worker, store a secret, manage artifacts, read logs, or change app settings — and the matching tool is not active yet"
+when_to_use: "When you need to create or change TionHarness entities (agents, schedules, tasks, hooks, MCP servers, skills, workspaces), evolve your own flow, delegate a sub-task to an isolated subagent, store a secret, manage artifacts, read logs, or change app settings — and the matching tool is not active yet"
 icon: "🛠️"
 color: "#10b981"
 access: shared
@@ -60,8 +60,8 @@ System agents cannot be deleted (`delete_agent` returns HTTP 409). Disable one t
 use its built-in fallback, or use restore-default to replace its editable profile
 fields with the compiled defaults.
 
-**Agent delegation & messaging** —
-- `run_subagent` — launch an isolated worker (a built-in profile or an existing
+**Agent delegation** —
+- `run_subagent` — launch an isolated subagent (a built-in profile or an existing
   agent) and get back only the final result, so the sub-task's tool output never
   floods the current context. It is always synchronous: the call blocks until the
   subagent finishes and returns its final reply. Persistent execution sessions become `running` only
@@ -72,13 +72,10 @@ fields with the compiled defaults.
   system prompt so it has a clear goal, a required reply shape and explicit scope
   limits (prevents duplicated work and gaps). Always installed (disable per-agent
   from the Tools screen). Use when you need a RESULT back.
-- `send_message` — send a direct, addressed message (`{to, message, summary?}`) to
-  ANOTHER agent. It lands in that agent's persistent inbox tagged with your name,
-  and the agent processes it on its own in the background — you do NOT wait, and
-  its reply does NOT return to this conversation (it may message you back, landing
-  in YOUR inbox). Your plain reply text is not visible to other agents; to reach
-  one you must use this tool. Use for ONGOING peer collaboration (vs `run_subagent`
-  for a result-in-this-turn).
+- `spawn_session` — start ANOTHER agent (or yourself) on a self-contained prompt in
+  a NEW, independent session that runs in the background. Fire-and-forget: you do
+  NOT wait and its result does NOT come back here; it lands in that session. Use
+  when the work must outlive this turn (vs `run_subagent` for a result-in-this-turn).
 - `handoff_session` — **context reset**: when THIS conversation is getting long and
   you are nearing the context limit, write a structured handoff document (objective,
   progress done/pending, environment, next concrete step) as an artifact and continue
@@ -95,9 +92,8 @@ fields with the compiled defaults.
 > the config tools). Pass an existing agent's name or ID as `target` to use a
 > persistent agent instead of an ephemeral profile.
 >
-> There is no separate `call_agent` / `spawn_session` / `send_agent_message` tool:
-> `run_subagent` covers delegation (isolated task → result) and `send_message`
-> covers peer messaging (addressed DM → recipient's inbox).
+> There is no agent-to-agent messaging tool: `run_subagent` covers delegation
+> (isolated task → result) and `spawn_session` covers detached background work.
 
 **Flows (evolving)** — every agent has one main flow its turns run through.
 `get_flow` (read it, `versions:true` for history), `edit_flow` (apply ops, new
@@ -215,7 +211,7 @@ large piece of state into a context-cheap compact DSL instead of re-listing it. 
 kinds: `session`, `board` (the
 kanban ledger — `id:"board"`, optional `lens` e.g. `stale`), `workspace`
 (`id:"workspace"`). `level` = `tiny|card|full`. Prefer it over repeated
-`list_tasks`/`list_sessions` when you only need the shape — a coordinator watching the
+`list_tasks`/`list_sessions` when you only need the shape — an agent watching the
 board should poll `get_view board` rather than re-listing every turn.
 
 **Logs** — `read_logs` (read the app log ring buffer). Load-on-demand — activate
@@ -233,7 +229,7 @@ and your OWN background shells are stopped with `shell_manage`.
 
 **Secrets & sessions** — `secret` (one tool, `action: list|get|set|delete`) reads
 the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions
-of EVERY kind — chat + spawn/worker/task/schedule; optional `kind`/`state` filters; a context
+of EVERY kind — chat + spawn/task/schedule; optional `kind`/`state` filters; a context
 block of recent chats is also pushed automatically), `conversation_search` (full-text search across
 the workspace's message history — deeper than list_sessions). These are
 load-on-demand: `activate_tools` first. (`WebFetch` is NOT here — it is an EAGER
@@ -266,8 +262,6 @@ Settings → Providers screen — there is no tool for that, so don't look for o
 - **Background work:** `run_subagent` cannot do it — it always blocks until the
   subagent replies, and there is no tool to cancel a running one. For work that
   must outlive the current turn, either split it into several smaller
-  self-contained `run_subagent` calls, or become a coordinator
-  (`set_coordinator_mode`) and start background workers with `spawn_worker` —
-  those are stopped with the coordinator's own `stop_worker`, a different tool.
+  self-contained `run_subagent` calls, or start it detached with `spawn_session`.
   Standing automation belongs in a schedule or a flow.
 - For a conceptual overview of TionHarness's pieces, load `tionharness-guide`.

@@ -2,8 +2,6 @@ package api
 
 import (
 	"net/http"
-
-	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // Curator + pin endpoints (Rota F3).
@@ -75,32 +73,4 @@ func (s *Server) handlePinHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "pinned": req.Pinned})
-}
-
-// handleRecipeStats serves the per-recipe-version rollup of the trajectory
-// index (GET /api/trajectories/recipes?slug=…).
-func (s *Server) handleRecipeStats(w http.ResponseWriter, r *http.Request) {
-	wsp := ws(r)
-	rows := wsp.DB.ListTrajectories(r.Context(), db.TrajectoryFilter{})
-	stats := wsp.Runtime.RecipeStats(rows)
-	if slug := r.URL.Query().Get("slug"); slug != "" {
-		filtered := stats[:0]
-		for _, st := range stats {
-			if st.Slug == slug {
-				filtered = append(filtered, st)
-			}
-		}
-		stats = filtered
-	}
-	writeJSON(w, http.StatusOK, stats)
-}
-
-// handleSummarizeTrajectory recomputes a trajectory's summary on demand
-// (POST /api/trajectories/{id}/summarize) and returns the graph.
-func (s *Server) handleSummarizeTrajectory(w http.ResponseWriter, r *http.Request) {
-	t, err := ws(r).Runtime.SummarizeTrajectory(r.Context(), r.PathValue("id"))
-	if writeDBError(w, err, "trajectory not found") {
-		return
-	}
-	writeJSON(w, http.StatusOK, t)
 }

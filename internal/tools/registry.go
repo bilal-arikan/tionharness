@@ -25,7 +25,7 @@ import (
 // shell / fs) stay well under this ceiling; this is the backstop for everything
 // else — notably MCP tools, whose output size we do not control. Process-global and
 // settings-driven (MaxToolOutputKB) via SetMaxToolOutputBytes, pushed from applySettings.
-var maxToolOutputBytes = 100 * 1024
+var maxToolOutputBytes = 50 * 1024
 
 // SetMaxToolOutputBytes overrides the tool-output backstop cap (in bytes). A value
 // <= 0 leaves it unchanged, so a partial settings push never zeroes the cap.
@@ -866,7 +866,7 @@ func (r *Registry) unknownToolMessage(name string) string {
 	// typo. Saying "unknown tool; use tool_search" there sends the model hunting
 	// for a spelling that does not exist: a read-only worker asked to write a file
 	// retried Write under different names, reported a vague failure, and its
-	// coordinator re-spawned the same read-only worker five times (SES2570, ~70
+	// parent re-spawned the same read-only subagent five times (SES2570, ~70
 	// minutes). Name the boundary instead, and say the retry is pointless.
 	bare := name
 	if i := strings.LastIndex(bare, nsSep); i >= 0 {

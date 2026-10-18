@@ -33,7 +33,7 @@ func (r *Runtime) recordChildAssistantMessage(ctx context.Context, sessionID, ag
 
 // This file holds the shared reply/error recording for session-reuse continuation
 // turns — a turn delivered into an EXISTING session (scheduled prompt, wake, and
-// future adopters like the inbox worker / coordinator auto-turns). Only the
+// future adopters like the inbox worker). Only the
 // most-duplicated, drift-prone block is shared: constructing the assistant
 // message, substituting an empty reply, encoding the step trace, and stamping
 // turn meta. The surrounding lifecycle (slot claim, ctx flags, which invoke to
@@ -45,7 +45,7 @@ func (r *Runtime) recordChildAssistantMessage(ctx context.Context, sessionID, ag
 // the assistant message (agent id + encoded step trace), stamps turn meta
 // (model / usage / duration), and persists it. It performs NO empty-substitution
 // — callers that need it (or that pre-compose stop/fail/empty text, like the
-// coordinator/worker turns) shape `text` first. Returns the AddMessage error; the
+// autonomous turns) shape `text` first. Returns the AddMessage error; the
 // caller decides whether to propagate or just log it (each site keeps its own
 // distinct warning message).
 func (r *Runtime) recordAssistantMessage(ctx context.Context, sessionID, agentID, text string, steps []TurnStep, meta *turnMeta, elapsedMs int64) error {

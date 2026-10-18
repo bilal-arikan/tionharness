@@ -10,7 +10,7 @@ import (
 // Besides one ordered log per session, the hub keeps ONE ordered log per
 // workspace for structured lifecycle events that are not about a single
 // transcript: sessions appearing/finishing, flow runs, armed schedules,
-// automation fires, trajectory revisions. It reuses the per-session machinery
+// automation fires. It reuses the per-session machinery
 // unchanged — seq, ring, epoch, replay, gap detection — under a reserved scope
 // id, so the client contract (cursor + epoch + reset) is identical to the
 // session stream and _Docs/58's reasoning carries over.

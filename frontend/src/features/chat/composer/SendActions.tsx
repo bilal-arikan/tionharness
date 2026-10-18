@@ -83,9 +83,8 @@ export function SendActions({
   }
 
   if (!streaming) {
-    // Idle (including when this coordinator has background workers running): a message
-    // is delivered directly. It runs as soon as the per-session turn slot is free —
-    // serialized against any worker <task-notification> turn, not held for all workers.
+    // Idle: a message is delivered directly. It runs as soon as the per-session turn
+    // slot is free — serialized against any autonomous turn on the same session.
     return sendBtn
   }
 

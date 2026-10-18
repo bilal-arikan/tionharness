@@ -62,7 +62,7 @@ func (r *Runtime) awarenessInput(ctx context.Context, session db.Session, agent 
 		WorkspaceID: r.wsID, WorkspaceName: r.wsName, DataDir: r.dataDir,
 		Store: r.db, Notes: r.notes,
 		Cwd: cwd, ProgressDir: r.ProgressDir(session.ID), ProgressResume: r.tun != nil && r.tun.ProgressResume(),
-		Fresh: fresh, IsCoordinator: session.IsCoordinator(), Running: running,
+		Fresh: fresh, Running: running,
 	}
 	in.RankNotes = r.briefNoteRanker(agent)
 	in.JudgeUrgent = r.pulseUrgencyJudge(agent)

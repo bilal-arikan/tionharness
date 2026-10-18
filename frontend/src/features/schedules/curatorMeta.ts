@@ -16,12 +16,6 @@ export const CURATOR_REASON_LABEL: Record<string, string> = {
   get never_fired() {
     return label('curator.reasons.neverFired')
   },
-  get unfired_watcher() {
-    return label('curator.reasons.unfiredWatcher')
-  },
-  get ghost_phase() {
-    return label('curator.reasons.ghostPhase')
-  },
 }
 
 export const CURATOR_ENTITY_LABEL: Record<string, string> = {
@@ -32,7 +26,4 @@ export const CURATOR_ENTITY_LABEL: Record<string, string> = {
     return label('curator.entities.schedule')
   },
   hook: 'hook',
-  get recipe() {
-    return label('curator.entities.recipe')
-  },
 }

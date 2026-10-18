@@ -10,7 +10,7 @@ import (
 )
 
 // agentFixture builds an agent with a mix of session conditions: active, idle,
-// stuck, coordinator, and one archived (which must be excluded from every count).
+// stuck, and one archived (which must be excluded from every count).
 func agentFixture(now time.Time) AgentInput {
 	fresh := now.Add(-2 * time.Hour).Unix()
 	old := now.Add(-9 * 24 * time.Hour).Unix()
@@ -23,7 +23,7 @@ func agentFixture(now time.Time) AgentInput {
 			{ID: "SES2", AgentID: "AG1", UpdatedAt: fresh, StuckTurns: 2, Title: "takılan"},
 			{ID: "SES3", AgentID: "AG1", UpdatedAt: old}, // idle
 			{ID: "SES4", AgentID: "AG1", UpdatedAt: fresh, State: "archived"},
-			{ID: "SES5", AgentID: "AG1", UpdatedAt: fresh, CoordinatorMode: true},
+			{ID: "SES5", AgentID: "AG1", UpdatedAt: fresh},
 		},
 		Usage: db.Usage{
 			AgentID: "AG1", InputTokens: 800_000, OutputTokens: 200_000,
@@ -53,7 +53,7 @@ func TestAgentHeaderCountsLiveSessions(t *testing.T) {
 	}
 }
 
-func TestAgentSurfacesStuckAndCoordinator(t *testing.T) {
+func TestAgentSurfacesStuck(t *testing.T) {
 	v, err := ProjectAgent(agentFixture(time.Now()), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
@@ -61,9 +61,6 @@ func TestAgentSurfacesStuckAndCoordinator(t *testing.T) {
 	txt := v.Text()
 	if !strings.Contains(txt, "1 oturum takılmış") || !strings.Contains(txt, "SES2") {
 		t.Errorf("stuck session not flagged:\n%s", txt)
-	}
-	if !strings.Contains(txt, "1 koordinatör oturumu") {
-		t.Errorf("coordinator session not counted:\n%s", txt)
 	}
 }
 
@@ -99,7 +96,6 @@ func TestAgentCardCarriesBindingAndFlags(t *testing.T) {
 	in := agentFixture(time.Now())
 	in.IsDefault = true
 	in.Agent.ThinkingLevel = "high"
-	in.Agent.CoordinatorMode = true
 	in.Agent.BlockedTools = `["shell","write_file","edit_file","delete_file","git_push","deploy"]`
 
 	v, err := ProjectAgent(in, LevelCard)
@@ -109,7 +105,7 @@ func TestAgentCardCarriesBindingAndFlags(t *testing.T) {
 	txt := v.Text()
 	for _, want := range []string{
 		"düşünme: high",
-		"koordinatör", "varsayılan",
+		"varsayılan",
 		"yasaklı araçlar (6): shell, write_file, edit_file, delete_file, git_push … +1",
 	} {
 		if !strings.Contains(txt, want) {

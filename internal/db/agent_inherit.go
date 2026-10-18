@@ -110,15 +110,6 @@ var inheritableFields = []inheritableField{
 	{"skills",
 		func(d, s *Agent) { d.Skills = append([]string{}, s.Skills...) },
 		func(a, b *Agent) bool { return stringSlicesEqual(a.Skills, b.Skills) }},
-	{"coordinatorMode",
-		func(d, s *Agent) { d.CoordinatorMode = s.CoordinatorMode },
-		func(a, b *Agent) bool { return a.CoordinatorMode == b.CoordinatorMode }},
-	{"coordinatorWorkflow",
-		func(d, s *Agent) { d.CoordinatorWorkflow = s.CoordinatorWorkflow },
-		func(a, b *Agent) bool { return a.CoordinatorWorkflow == b.CoordinatorWorkflow }},
-	{"coordinatorPrompt",
-		func(d, s *Agent) { d.CoordinatorPrompt = s.CoordinatorPrompt },
-		func(a, b *Agent) bool { return a.CoordinatorPrompt == b.CoordinatorPrompt }},
 }
 
 func providerKindOrDefault(kind string) string {

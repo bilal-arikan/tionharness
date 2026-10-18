@@ -955,8 +955,7 @@ func toolNameDistance(a, b string) int {
 
 // stampRunSession puts the run's session id on ctx under BOTH keys the bridged
 // handlers need: tools.WithCurrentSession (session-scoped built-ins) and
-// agent.WithSessionID (runtime paths: effectiveWorkDir, subagent parenting,
-// coordination). The Interaction HTTP server's request ctx carries neither, so
+// agent.WithSessionID (runtime paths: effectiveWorkDir, subagent parenting). The Interaction HTTP server's request ctx carries neither, so
 // every bridged tool used to stamp it itself — three copies that a new tool could
 // silently forget. No-op on a run with no persisted session: what the empty case
 // means stays each tool's own decision (callRunSubagent rejects, callShell warns).
@@ -966,7 +965,7 @@ func toolNameDistance(a, b string) int {
 // the owner the agent runtime stamped for the turn is not on it: without this a
 // shell run by claude-cli lands in the ledger unattributed. The parent session
 // rides along (installed on the run from the session row, see setParentSession)
-// so a worker's CLI-spawned processes still group under their coordinator. The
+// so a subagent's CLI-spawned processes still group under the delegating session. The
 // agent fields stay empty here — the run only knows its session — and
 // handleListProcesses resolves them on read.
 func stampRunSession(ctx context.Context, run *chatRun) context.Context {

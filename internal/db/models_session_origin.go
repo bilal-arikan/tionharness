@@ -9,9 +9,9 @@ import (
 // Session origin kinds — WHO started a session. This is the single vocabulary
 // for session lineage: every creation path stamps exactly one of these (see
 // createSessionLocked), and every consumer that wants to draw an edge between
-// sessions (the network graph, the trajectory/"Rota" projection, the executions
+// sessions (the network graph, the "Rota" timeline, the executions
 // feed) reads Session.Lineage() instead of guessing from Kind/SourceID/
-// ParentSessionID/CoordinatorSessionID.
+// ParentSessionID.
 //
 // Kind stays what it is — the broad transcript category shown in the sidebar —
 // and is NOT redefined here; origin is an additional axis, not a replacement.
@@ -19,11 +19,8 @@ const (
 	// OriginUser: created by a human through the UI/API (plain chat).
 	OriginUser = "user"
 	// OriginSpawn: a detached spawn ordered by an agent or the API (spawn_session,
-	// POST /spawn) that is neither a worker nor a subagent.
+	// POST /spawn) that is not a subagent.
 	OriginSpawn = "spawn"
-	// OriginCoordinator: a worker spawned by a coordinator (spawn_worker).
-	// TriggerSessionID is the coordinator, RootSessionID the tree root.
-	OriginCoordinator = "coordinator"
 	// OriginSubagent: a synchronous run_subagent child. TriggerSessionID is the
 	// parent turn's session.
 	OriginSubagent = "subagent"
@@ -47,7 +44,7 @@ const (
 )
 
 var originKinds = []string{
-	OriginUser, OriginSpawn, OriginCoordinator, OriginSubagent,
+	OriginUser, OriginSpawn, OriginSubagent,
 	OriginSchedule, OriginAutomation, OriginHandoff, OriginInsight,
 }
 
@@ -65,16 +62,14 @@ type SessionOrigin struct {
 	EntityID string `json:"entityId,omitempty"`
 	// RunID is the flow run (RUN…) or insight scan run this session belongs to.
 	RunID string `json:"runId,omitempty"`
-	// NodeID is the flow node that opened this session (a coordinator node), or
-	// later a trajectory phase id.
+	// NodeID is the flow node that opened this session.
 	NodeID string `json:"nodeId,omitempty"`
 	// TriggerSessionID is the session whose activity caused this one to exist:
-	// the coordinator for a worker, the parent turn for a subagent, the handed-off
+	// the parent turn for a subagent, the handed-off
 	// session for a continuation, the tagged session for a tag-fired automation.
 	TriggerSessionID string `json:"triggerSessionId,omitempty"`
 	// RootSessionID is the top of this session's tree. Empty means SELF (this
-	// session is a root) — never a self-reference, mirroring FlowRun.RootRunID and
-	// Session.RootCoordinatorSessionID. Read it through Session.RootSession().
+	// session is a root) — never a self-reference, mirroring FlowRun.RootRunID. Read it through Session.RootSession().
 	RootSessionID string `json:"rootSessionId,omitempty"`
 	// At is when the origin was stamped (unix seconds) — the session's CreatedAt.
 	At int64 `json:"at"`
@@ -103,9 +98,8 @@ func validateOrigin(o *SessionOrigin) error {
 // default when a caller passes no explicit origin, so a session created by an
 // old build and one created today answer identically.
 //
-// Derivation order matters: the coordinator back-link beats everything (a worker
-// is spawned-by, whatever its Kind says), then the execution classification,
-// then Kind + SourceID, then ParentSessionID (handoff), then user.
+// Derivation order matters: the execution classification first, then Kind +
+// SourceID, then ParentSessionID (handoff), then user.
 func (s Session) Lineage() SessionOrigin {
 	if s.Origin != nil {
 		return *s.Origin
@@ -129,16 +123,6 @@ func (s Session) RootSession() string {
 // consults Origin itself (callers do that) so it can serve as both the backfill
 // and the default-at-creation path.
 func deriveOrigin(s Session) SessionOrigin {
-	coord := strings.TrimSpace(s.CoordinatorSessionID)
-	if coord != "" || s.Role == SessionRoleWorker {
-		root := s.RootCoordinatorSessionID
-		if root == "" {
-			// Pre-root-stamp worker: every such tree was one level deep, so the
-			// coordinator IS the root (same rule as RootCoordinator()).
-			root = coord
-		}
-		return SessionOrigin{Kind: OriginCoordinator, TriggerSessionID: coord, RootSessionID: root}
-	}
 	if s.ExecutionType == ExecutionSubagent {
 		return SessionOrigin{Kind: OriginSubagent, TriggerSessionID: s.ParentSessionID, RootSessionID: s.ParentSessionID}
 	}
@@ -153,8 +137,7 @@ func deriveOrigin(s Session) SessionOrigin {
 		return SessionOrigin{Kind: OriginAutomation, TriggerSessionID: s.ParentSessionID}
 	}
 	if parent := strings.TrimSpace(s.ParentSessionID); parent != "" {
-		// A parent without a coordinator link is a context-reset continuation: the
-		// continuation stays in its parent's tree (same lane, "next" edge).
+		// A parent is a context-reset continuation: the continuation stays in its parent's tree (same lane, "next" edge).
 		return SessionOrigin{Kind: OriginHandoff, TriggerSessionID: parent, RootSessionID: parent}
 	}
 	if s.Kind == "spawned" {

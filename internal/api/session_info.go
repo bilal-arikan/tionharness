@@ -54,27 +54,9 @@ type sessionInfoResp struct {
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
 	// Origin is who started this session and from where (R1 lineage), so the
 	// inspector can say "automation X fired this" / "forked from Y".
-	Origin *db.SessionOrigin `json:"origin,omitempty"`
-	// Coordination (M2). Role is LINEAGE ("worker" = spawned by a coordinator, or
-	// ""); CoordinatorMode is the CAPABILITY (drives workers, gets the coordinator
-	// prompt + spawn_worker/... tools). They are independent — a mid-level node of
-	// a deep tree has both. CoordinatorSessionID is the back-link to the
-	// coordinator above; RootCoordinatorSessionID/CoordinatorDepth address this
-	// session inside its tree so the UI renders the hierarchy without walking
-	// parent links one request at a time.
-	Role                     string `json:"role,omitempty"`
-	CoordinatorMode          bool   `json:"coordinatorMode,omitempty"`
-	CoordinatorSessionID     string `json:"coordinatorSessionId,omitempty"`
-	RootCoordinatorSessionID string `json:"rootCoordinatorSessionId,omitempty"`
-	CoordinatorDepth         int    `json:"coordinatorDepth,omitempty"`
-	// CoordinatorWorkflow is the selected coordinator recipe slug (M5), if any.
-	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
-	// CoordinatorStallHalted is true when the phantom-spawn stall guard has hard-halted
-	// this coordinator's auto-turns (see coordination_stall.go). Drives the persistent
-	// "durduruldu" badge + resume CTA in the coordination panel.
-	CoordinatorStallHalted bool  `json:"coordinatorStallHalted,omitempty"`
-	CreatedAt              int64 `json:"createdAt"`
-	UpdatedAt              int64 `json:"updatedAt"`
+	Origin    *db.SessionOrigin `json:"origin,omitempty"`
+	CreatedAt int64             `json:"createdAt"`
+	UpdatedAt int64             `json:"updatedAt"`
 
 	// Tags are the session's free-form labels (also drive tag-triggered automations).
 	Tags []string `json:"tags,omitempty"`
@@ -185,10 +167,10 @@ func roleLabel(role string) string {
 // Synthetic filler "roles" that split the user bucket. They are NOT message
 // roles — on the wire these messages carry role "user" (the model must replay
 // them as user turns) and are told apart by db.Message.Origin. Without the split
-// a coordinator session reads as "the user wrote 400 KB", when in truth the user
-// typed a few lines and the rest is machine-injected worker output.
+// a session reads as "the user wrote 400 KB", when in truth the user
+// typed a few lines and the rest is machine-injected notes.
 const (
-	fillerRoleWorkerNote = "worker-note" // <task-notification> / <coordination-status> injections
+	fillerRoleWorkerNote = "worker-note" // legacy worker <task-notification> injections (older transcripts)
 	fillerRoleAutoPrompt = "auto-prompt" // schedule_wake resumes + scheduled routine prompts
 )
 
@@ -231,39 +213,32 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := sessionInfoResp{
-		ID:                       session.ID,
-		Title:                    session.Title,
-		Kind:                     session.Kind,
-		State:                    session.State,
-		Pinned:                   session.Pinned,
-		AgentID:                  session.OwnerAgentID(),
-		MessageCount:             session.MessageCount,
-		Unread:                   session.Unread,
-		ExecutionType:            session.ExecutionType,
-		Category:                 session.Category,
-		ContextMode:              session.ContextMode,
-		TargetProfile:            session.TargetProfile,
-		TargetAgentID:            session.TargetAgentID,
-		RunState:                 session.RunState,
-		RunStateAt:               session.RunStateAt,
-		Terminal:                 terminalRunState(session.RunState),
-		ToolCallCount:            session.ToolCallCount,
-		Tags:                     session.Tags,
-		ParentSessionID:          session.ParentSessionID,
-		HandoffArtifactID:        session.HandoffArtifactID,
-		Origin:                   sessionOriginPtr(session),
-		Role:                     session.Role,
-		CoordinatorMode:          session.IsCoordinator(),
-		CoordinatorSessionID:     session.CoordinatorSessionID,
-		RootCoordinatorSessionID: session.RootCoordinator(),
-		CoordinatorDepth:         session.CoordinatorDepth,
-		CoordinatorWorkflow:      session.CoordinatorWorkflow,
-		CoordinatorStallHalted:   wsp.Runtime.CoordinatorStallHalted(id),
-		CreatedAt:                session.CreatedAt,
-		UpdatedAt:                session.UpdatedAt,
-		HasSummary:               session.Summary != "",
-		SummaryMsgCount:          session.SummaryMsgCount,
-		SummaryTokens:            conversation.EstimateText(session.Summary),
+		ID:                session.ID,
+		Title:             session.Title,
+		Kind:              session.Kind,
+		State:             session.State,
+		Pinned:            session.Pinned,
+		AgentID:           session.OwnerAgentID(),
+		MessageCount:      session.MessageCount,
+		Unread:            session.Unread,
+		ExecutionType:     session.ExecutionType,
+		Category:          session.Category,
+		ContextMode:       session.ContextMode,
+		TargetProfile:     session.TargetProfile,
+		TargetAgentID:     session.TargetAgentID,
+		RunState:          session.RunState,
+		RunStateAt:        session.RunStateAt,
+		Terminal:          terminalRunState(session.RunState),
+		ToolCallCount:     session.ToolCallCount,
+		Tags:              session.Tags,
+		ParentSessionID:   session.ParentSessionID,
+		HandoffArtifactID: session.HandoffArtifactID,
+		Origin:            sessionOriginPtr(session),
+		CreatedAt:         session.CreatedAt,
+		UpdatedAt:         session.UpdatedAt,
+		HasSummary:        session.Summary != "",
+		SummaryMsgCount:   session.SummaryMsgCount,
+		SummaryTokens:     conversation.EstimateText(session.Summary),
 	}
 	applyExecutionObservability(&resp, history)
 

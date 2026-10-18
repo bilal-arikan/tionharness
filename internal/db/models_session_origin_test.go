@@ -21,21 +21,6 @@ func TestDeriveOrigin(t *testing.T) {
 		{"empty kind is chat", Session{}, SessionOrigin{Kind: OriginUser}},
 		{"detached spawn", Session{Kind: "spawned"}, SessionOrigin{Kind: OriginSpawn}},
 		{
-			"worker with stamped root",
-			Session{Kind: "worker", Role: SessionRoleWorker, CoordinatorSessionID: "SES1", RootCoordinatorSessionID: "SES0"},
-			SessionOrigin{Kind: OriginCoordinator, TriggerSessionID: "SES1", RootSessionID: "SES0"},
-		},
-		{
-			"legacy one-level worker: coordinator is the root",
-			Session{Kind: "worker", CoordinatorSessionID: "SES1"},
-			SessionOrigin{Kind: OriginCoordinator, TriggerSessionID: "SES1", RootSessionID: "SES1"},
-		},
-		{
-			"coordinator link beats a handoff parent",
-			Session{Kind: "chat", ParentSessionID: "SES1", CoordinatorSessionID: "SES1"},
-			SessionOrigin{Kind: OriginCoordinator, TriggerSessionID: "SES1", RootSessionID: "SES1"},
-		},
-		{
 			"subagent child",
 			Session{Kind: "spawned", ExecutionType: ExecutionSubagent, ParentSessionID: "SES7"},
 			SessionOrigin{Kind: OriginSubagent, TriggerSessionID: "SES7", RootSessionID: "SES7"},
@@ -111,19 +96,6 @@ func TestCreateSessionStampsOrigin(t *testing.T) {
 	if _, err := d.CreateSession(ctx, Session{AgentID: ag.ID, Origin: &SessionOrigin{Kind: "martian"}}); err == nil {
 		t.Fatal("an unknown origin kind must be rejected")
 	}
-
-	// The worker path: the coordinator back-link drives the origin even though the
-	// caller passed none.
-	worker, err := d.CreateSession(ctx, Session{
-		AgentID: ag.ID, Kind: "worker", Role: SessionRoleWorker,
-		CoordinatorSessionID: plain.ID, RootCoordinatorSessionID: "", CoordinatorDepth: 1,
-	})
-	if err != nil {
-		t.Fatalf("create worker: %v", err)
-	}
-	if worker.Origin.Kind != OriginCoordinator || worker.Origin.TriggerSessionID != plain.ID || worker.RootSession() != plain.ID {
-		t.Fatalf("worker origin = %+v (root %q), want coordinator←%s", worker.Origin, worker.RootSession(), plain.ID)
-	}
 }
 
 // TestLegacyHeaderOriginBackfilledOnLoad: a header written before schema v4 has
@@ -137,12 +109,12 @@ func TestLegacyHeaderOriginBackfilledOnLoad(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	ag, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
-	coord, _ := d.CreateSession(ctx, Session{AgentID: ag.ID, Title: "coord", CoordinatorMode: true})
-	worker, _ := d.CreateSession(ctx, Session{AgentID: ag.ID, Kind: "worker", Role: SessionRoleWorker, CoordinatorSessionID: coord.ID})
+	parent, _ := d.CreateSession(ctx, Session{AgentID: ag.ID, Title: "parent"})
+	child, _ := d.CreateSession(ctx, Session{AgentID: ag.ID, ParentSessionID: parent.ID})
 	_ = d.Close()
 
 	// Simulate the pre-v4 header: strip origin + downgrade the version on disk.
-	headerPath := filepath.Join(dir, dirSessions, worker.ID, sessionHeaderFile)
+	headerPath := filepath.Join(dir, dirSessions, child.ID, sessionHeaderFile)
 	raw, err := os.ReadFile(headerPath)
 	if err != nil {
 		t.Fatalf("read header: %v", err)
@@ -163,12 +135,12 @@ func TestLegacyHeaderOriginBackfilledOnLoad(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	defer d2.Close()
-	got, err := d2.GetSession(ctx, worker.ID)
+	got, err := d2.GetSession(ctx, child.ID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.Origin == nil || got.Origin.Kind != OriginCoordinator || got.Origin.TriggerSessionID != coord.ID {
-		t.Fatalf("legacy worker origin not backfilled: %+v", got.Origin)
+	if got.Origin == nil || got.Origin.Kind != OriginHandoff || got.Origin.TriggerSessionID != parent.ID {
+		t.Fatalf("legacy handoff origin not backfilled: %+v", got.Origin)
 	}
 	if got.Origin.At != got.CreatedAt {
 		t.Fatalf("backfilled At = %d, want CreatedAt %d", got.Origin.At, got.CreatedAt)

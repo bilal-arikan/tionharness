@@ -152,7 +152,6 @@ export function routeIdForView(
     insightTab: string | null
     flowsTab: string | null
     explorerNode: string | null
-    rotaTrajectory?: string | null
     boardTask?: string | null
     toolsGroup?: string | null
   },
@@ -189,10 +188,6 @@ export function routeIdForView(
       // Default "flows" tab carries no URL segment (clean #/w/{ws}/flows); only
       // the runs/templates tabs add /{tab}.
       return state.flowsTab && state.flowsTab !== 'flows' ? state.flowsTab : null
-    case 'rota':
-      // The zoomed trajectory (#/w/{ws}/rota/RTA12); the workspace root carries
-      // no segment.
-      return state.rotaTrajectory ?? null
     default:
       return null
   }

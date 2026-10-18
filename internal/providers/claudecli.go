@@ -849,7 +849,7 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// Refresh tokens are single-use, so concurrent processes that all find the token
 	// expired race for it: the losers get invalid_grant and the CLI CLEARS the shared
 	// credential file, breaking every later turn in the workspace (observed live with
-	// a 3-level coordinator tree). A no-op while the token is comfortably valid —
+	// a 3-level nested session tree). A no-op while the token is comfortably valid —
 	// the normal case — so parallel fan-out is unaffected. Immediately before Start,
 	// so the gate covers the launch it admits rather than the whole turn.
 	claudeauth.SerializeRefresh(c.configDir)

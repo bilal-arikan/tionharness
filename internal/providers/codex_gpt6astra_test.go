@@ -36,8 +36,8 @@ func TestGPT6AstraWindowAndOutput(t *testing.T) {
 	if got := MaxOutputFor("codex-cli", "gpt-6-astra"); got != maxOutGPT {
 		t.Errorf("max output = %d, want %d", got, maxOutGPT)
 	}
-	if got := AdaptiveBudgetFraction("codex-cli", "gpt-6-astra"); got != 0.35 {
-		t.Errorf("budget fraction = %v, want 0.35", got)
+	if got := AdaptiveBudgetFraction("codex-cli", "gpt-6-astra"); got != 0.6 {
+		t.Errorf("budget fraction = %v, want 0.6", got)
 	}
 }
 

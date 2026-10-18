@@ -33,7 +33,7 @@ interface TurnEntry {
 
 // turnKindLabel renders an admission-queue entry for the tray.
 function turnKindLabel(e: TurnEntry): string {
-  const knownKinds = ['coordinator', 'worker', 'wake', 'peer', 'spawn', 'automation', 'command']
+  const knownKinds = ['wake', 'spawn', 'automation', 'command']
   const base = knownKinds.includes(e.kind)
     ? i18next.t(`queue.kind.${e.kind}`, { ns: 'chat' })
     : i18next.t('queue.kind.generic', { ns: 'chat' })
@@ -327,19 +327,14 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           if (!m?.id) return
           // A runtime-INJECTED note bridged from the bus (_Docs/58) does not itself
           // start an interactive turn — the autonomous turn it belongs to may be
-          // deferred (coordinator turn cap) or is mid-run (auto-continue). So it must
-          // NOT arm the "working" indicator here; that turn's own AgentStart/Step lights
-          // it up if and when it actually runs. Covers the coordinator notes
-          // (worker-note/coordination-guard) and the scheduler/auto-continue notes that
-          // render as "⏰ …"/nudge cards rather than user bubbles. A genuine
-          // turn-starting message (spawn/inbox opening turn, origin unset) still marks
-          // the session busy immediately.
+          // deferred or is mid-run (auto-continue). So it must NOT arm the "working"
+          // indicator here; that turn's own AgentStart/Step lights it up if and when
+          // it actually runs. Covers the scheduler/auto-continue notes that render as
+          // "⏰ …"/nudge cards rather than user bubbles. A genuine turn-starting
+          // message (spawn opening turn, origin unset) still marks the session busy
+          // immediately.
           const injectedNote =
-            m.origin === 'worker-note' ||
-            m.origin === 'coordination-guard' ||
-            m.origin === 'auto-continue' ||
-            m.origin === 'wake' ||
-            m.origin === 'schedule'
+            m.origin === 'auto-continue' || m.origin === 'wake' || m.origin === 'schedule'
           if (!injectedNote) {
             // The serial worker just started this turn → mark the session busy.
             setStreamingSessions((p) => withAdded(p, sid))
@@ -373,7 +368,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // reloads mid-turn replays it and gets the real start — not the moment
           // it happened to connect.
           ghostStartedAt = ev.time || serverNow()
-          // An AUTONOMOUS turn (coordinator/scheduler/spawn) publishes no
+          // An AUTONOMOUS turn (scheduler/spawn) publishes no
           // UserMessage, so mark the session busy here (and on the first Step) —
           // otherwise the "working" indicator + composer stop/steer cluster never
           // light up for a turn the user is merely watching.
@@ -467,7 +462,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // holds the session and what else is queued for it. Shown only while the
           // user has something of their own waiting — otherwise the running turn is
           // already obvious from the transcript. This is what makes "my message is
-          // waiting behind a worker notification" visible instead of a silent stall.
+          // waiting behind an automation turn" visible instead of a silent stall.
           // Gated on the items the tray actually RENDERS: the dispatched head is
           // hidden, so counting it here would leave a lone "Şu an" row explaining
           // what a message is waiting behind when nothing of the user's is waiting.

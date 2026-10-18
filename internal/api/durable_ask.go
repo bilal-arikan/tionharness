@@ -67,23 +67,6 @@ func (s *Server) answerDurableAsk(r *http.Request, sessionID, askID, answer, by 
 		s.deliverAsyncAnswer(wsp, sessionID)
 		return true
 	}
-	// A phase gate (Rota F5) is a durable ask with no suspended turn behind it:
-	// its answer moves the trajectory instead of resuming a turn.
-	if _, _, isGate := agent.GateAskRef(ask); isGate {
-		if wsp.Runtime != nil {
-			if err := wsp.Runtime.ResolvePhaseGate(r.Context(), ask, answer); err != nil {
-				s.logger.Warn("phase gate resolve failed", "ask", askID, "error", err)
-			}
-		}
-		s.publishHub(wsp.ID, sessionID, sessionhub.KindInteractionResolve, map[string]any{
-			"id": askID, "answer": answer, "resolvedBy": by,
-		}, false)
-		_ = wsp.DB.DeleteSessionAsk(r.Context(), ask.ID)
-		return true
-	}
-	if wsp.Runtime != nil {
-		wsp.Runtime.ReleaseAsk(ask, db.SessionAskResolved)
-	}
 	// Close the card on every window (the resolve-once broadcast).
 	s.publishHub(wsp.ID, sessionID, sessionhub.KindInteractionResolve, map[string]any{
 		"id": askID, "answer": answer, "resolvedBy": by,

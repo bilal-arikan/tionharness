@@ -14,8 +14,8 @@ import (
 // walk needs.
 //
 // Neighborhood enumerates every node in the workspace and then asks each one for
-// its children. The session-shaped answers (an agent's sessions, a coordinator's
-// worker sessions) each re-read the WHOLE session list from the store, and the
+// its children. The session-shaped answers (an agent's sessions, a session's
+// child sessions) each re-read the WHOLE session list from the store, and the
 // store returns a fresh copy — normalised and sorted — on every call. With N
 // sessions and A agents the walk therefore paid for roughly 2*(N+A) full copies
 // of the session list per focus request. The cache reads each list at most once
@@ -160,8 +160,6 @@ func (c *structuralCache) children(ctx context.Context, ref Ref) ([]Handle, erro
 		return c.boardColumnChildren(ctx)
 	case KindAgent:
 		return c.agentSessionChildren(ctx, ref.ID)
-	case KindSession:
-		return c.sessionWorkerChildren(ctx, ref.ID)
 	case KindTools:
 		if ref.Sub != "" {
 			return nil, nil
@@ -186,7 +184,7 @@ func (c *structuralCache) children(ctx context.Context, ref Ref) ([]Handle, erro
 		// seen-set absorbs link cycles. Missing here, the whole-map walk failed
 		// with "children unsupported" as soon as the workspace had one note.
 		return c.p.noteChildren(ref.ID)
-	case KindSchedule,
+	case KindSession, KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		return nil, nil
 	default:
@@ -290,26 +288,6 @@ func (c *structuralCache) agentSessionChildren(ctx context.Context, agentID stri
 	return sessionHandleList(liveSessions(sessions)), nil
 }
 
-// sessionWorkerChildren is a session's structural children: the worker sessions
-// that report up to it (a coordinator drills into its fleet). A plain session
-// simply has none.
-func (c *structuralCache) sessionWorkerChildren(ctx context.Context, sessionID string) ([]Handle, error) {
-	if sessionID == "" {
-		return nil, fmt.Errorf("view: session children: empty id")
-	}
-	all, err := c.allSessions(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("view: session %s workers: %w", sessionID, err)
-	}
-	var workers []db.Session
-	for _, s := range all {
-		if s.State != "archived" && s.CoordinatorSessionID == sessionID {
-			workers = append(workers, s)
-		}
-	}
-	return sessionHandleList(workers), nil
-}
-
 // nodes enumerates every possible parent node once, against the snapshot.
 func (c *structuralCache) nodes(ctx context.Context) ([]Handle, error) {
 	root := Handle{Label: "workspace", Ref: Ref{Kind: KindSpace, ID: WorkspaceRefID}, Level: LevelCard}
@@ -332,12 +310,11 @@ func (c *structuralCache) nodes(ctx context.Context) ([]Handle, error) {
 	}
 
 	// Second-level groups (session-kind groups, board columns) parent the
-	// entities; sessions can also parent worker sessions, and agents parent their
-	// sessions. Expanding these discovered nodes once is enough to find every
+	// entities, and agents parent their sessions. Expanding these discovered nodes once is enough to find every
 	// incoming structural edge without recursion.
 	base := uniqueSortedHandles(nodes)
 	for _, node := range base {
-		if node.Ref.Kind != KindAgent && node.Ref.Kind != KindSession && node.Ref.Kind != KindCategory {
+		if node.Ref.Kind != KindAgent && node.Ref.Kind != KindCategory {
 			continue
 		}
 		if node.Ref.Kind == KindCategory && !isSecondLevelCategory(node.Ref.ID) {

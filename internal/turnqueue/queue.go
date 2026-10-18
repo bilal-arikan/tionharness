@@ -2,14 +2,14 @@
 // decides which turn runs on a session and in what order.
 //
 // A session can be driven from many directions — a message the user queued, a
-// coordinator auto-turn triggered by a worker's <task-notification>, a scheduler
-// wake, a peer inbox delivery, a spawn opening prompt, a /compact command. Every
+// scheduler wake, an automation delivery, a spawn opening prompt, a /compact
+// command. Every
 // one of them runs a turn against the SAME transcript, so exactly one may run at a
 // time. Before this package that ordering lived in two disconnected places: a
 // durable FIFO in internal/api (visible in the UI, cancellable) and an anonymous
 // mutex in internal/agent. A message could leave the first and wait, invisible and
-// uncancellable, in the second — the "queued message vanished, then appeared when a
-// worker replied" bug (_Docs/58).
+// uncancellable, in the second — the "queued message vanished, then reappeared"
+// bug (_Docs/58).
 //
 // Now there is one queue and both layers hold it:
 //
@@ -32,18 +32,15 @@ import (
 
 // Kind labels who wants the turn. It exists for observability — the queue itself
 // is strictly first-come-first-served, with no priority by kind (a priority scheme
-// is how the coordinator starved the user in the first place).
+// is how autonomous turns starved the user in the first place).
 type Kind string
 
 const (
-	KindUser        Kind = "user"        // a message the user sent/queued
-	KindCommand     Kind = "command"     // a slash command (/compact, /handoff)
-	KindCoordinator Kind = "coordinator" // an auto-turn from a worker notification
-	KindWorker      Kind = "worker"      // a worker session running its task
-	KindWake        Kind = "wake"        // scheduler wake / scheduled prompt
-	KindPeer        Kind = "peer"        // peer inbox delivery (agent-to-agent)
-	KindSpawn       Kind = "spawn"       // spawned session's opening turn
-	KindAutomation  Kind = "automation"  // automation delivery
+	KindUser       Kind = "user"       // a message the user sent/queued
+	KindCommand    Kind = "command"    // a slash command (/compact, /handoff)
+	KindWake       Kind = "wake"       // scheduler wake / scheduled prompt
+	KindSpawn      Kind = "spawn"      // spawned session's opening turn
+	KindAutomation Kind = "automation" // automation delivery
 )
 
 // Entry is one turn holding or waiting for a session's slot.
@@ -249,7 +246,7 @@ func (q *Queue) Snapshot(sessionID string) Snapshot {
 	return snap
 }
 
-// Forget drops a session's slot state (session deleted, or a flow coordinator node
+// Forget drops a session's slot state (session deleted, or a flow node
 // finished). A no-op while a turn is running or queued — dropping live state would
 // strand its waiters.
 func (q *Queue) Forget(sessionID string) {

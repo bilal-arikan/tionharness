@@ -305,12 +305,9 @@
     "kind": {
       "automation": "Automation turn running",
       "command": "Command running",
-      "coordinator": "Processing worker notification",
       "generic": "Turn running",
-      "peer": "Processing agent message",
       "spawn": "Spawn turn running",
-      "wake": "Scheduled turn running",
-      "worker": "Worker task running"
+      "wake": "Scheduled turn running"
     },
     "runningLabel": "{{label}} running"
   }

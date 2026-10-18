@@ -73,9 +73,6 @@ describe('displayLabel', () => {
   it('strips the kind:ID spelling and falls back to the id', () => {
     expect(displayLabel({ label: 'session:SES1 Fix login', ref: s1 })).toBe('Fix login')
     expect(displayLabel({ label: 'session:SES2', ref: s2 })).toBe('SES2')
-    expect(
-      displayLabel({ label: 'rota:RTA1 plan [running]', ref: { kind: 'trajectory', id: 'RTA1' } }),
-    ).toBe('plan [running]')
     expect(displayLabel({ label: 'Oturumlar', ref: sessions })).toBe('Oturumlar')
   })
 
@@ -259,7 +256,7 @@ describe('live layer rendering', () => {
       },
       {
         session: s2,
-        state: 'awaiting-workers',
+        state: 'running',
         agent: { id: 'AG1', name: 'builder', color: '#ff0000' },
       },
     ],
@@ -279,8 +276,8 @@ describe('live layer rendering', () => {
     expect(running.shadow).toMatchObject({ enabled: true, color: '#ff0000', size: 28 })
     expect(running.color).toMatchObject({ border: '#ff0000' })
     expect(running.borderWidth).toBe(3)
-    const awaiting = byId.get('session:SES2')!
-    expect(awaiting.shadow).toMatchObject({ enabled: true, color: theme.warning })
+    const second = byId.get('session:SES2')!
+    expect(second.shadow).toMatchObject({ enabled: true, color: '#ff0000' })
     expect(byId.get('flowrun:RUN1')!.shadow).toBeUndefined()
 
     const avatar = byId.get('agent:AG1#live:SES1')!

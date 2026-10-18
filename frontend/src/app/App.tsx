@@ -52,11 +52,9 @@ import { useActivity } from './useActivity'
 import { useWorkspaceActivity } from './useWorkspaceActivity'
 import { useUnreadViews } from './useUnreadViews'
 import { useUnreadBadge } from './useUnreadBadge'
-import { setSessionState } from '@/shared/hooks/useSessionState'
 import {
   ChatView,
   SessionDetailPanel,
-  CoordinatorPanel,
   SessionContextModal,
   SessionDebugModal,
   ArtifactPreviewModal,
@@ -285,11 +283,6 @@ export default function App() {
       return next
     })
   }, [])
-  // Coordination drawer (chat header's {t('shell.coordination')} button): a right-anchored side sheet
-  // hosting the coordination UI (worker roster, workflow, tree). Not persisted — it
-  // is an on-demand overlay, not a docked column like the detail panel.
-  const [coordOpen, setCoordOpen] = useState(false)
-
   // Theme / keep-awake / desktop-notification preferences.
   const { applyClientPrefs, onAppearanceSaved, notifyEnabled } = useAppearance(
     activeWorkspaceId,
@@ -303,7 +296,7 @@ export default function App() {
   // session list request carries it: the server applies the chip filter before
   // paging, so the same selection drives the fetch and the rendered rows.
   const sessionChips = useSessionChips()
-  // Sidebar tab (main conversations vs. workers/runs); also a server filter.
+  // Sidebar tab (main conversations vs. other runs); also a server filter.
   const [sessionGroup, setSessionGroup] = useSessionGroup()
   const [showArchivedSessions, setShowArchivedSessions] = useState(false)
   // The sidebar's title/id search (debounced there); the controller sends it to
@@ -371,9 +364,6 @@ export default function App() {
   useEffect(() => {
     chatRef.current = chat
   })
-
-  // Open session, resolved once for the ChatView props below.
-  const activeSession = ctl.sessions.find((s) => s.id === ctl.activeSessionId)
 
   // handleRewind rewinds the conversation to a message (via the "/rewind" dialog
   // or a user bubble's ⟲ hover action): truncate to that checkpoint, then drop the
@@ -488,8 +478,8 @@ export default function App() {
     markViewUnread,
   })
 
-  // Workspace stream → toasts (automation fires, stall halts, trajectory
-  // start/end, flow failures) for the active workspace, whatever screen is open.
+  // Workspace stream → toasts (automation fires, flow failures) for the active
+  // workspace, whatever screen is open.
   useWorkspaceSignals(activeWorkspaceId)
 
   // Probe for the optional server-side whisper.cpp STT engine.
@@ -519,17 +509,6 @@ export default function App() {
       }
     },
     [confirmLeaveIfDirty, isMobile, setSessionsListOpen],
-  )
-
-  // Open the Skills screen focused on one skill. SkillsPanel is mounted by the
-  // view switch and reads its selection from the session-state store in its
-  // initialiser, so the seed has to be written before we navigate.
-  const openSkill = useCallback(
-    (slug: string) => {
-      setSessionState('skills.activeSlug', slug)
-      selectView('skills')
-    },
-    [selectView],
   )
 
   // Warn on tab close / reload (browser-native prompt) whenever any screen has
@@ -574,7 +553,6 @@ export default function App() {
     insightTab: links.insightTab,
     explorerNode: links.explorerNode,
     flowsTab: links.flowsTab,
-    rotaTrajectory: links.rotaTrajectory,
     boardTarget: links.boardTarget,
     toolsGroup: links.toolsGroup,
     pendingRouteRef: ctl.pendingRouteRef,
@@ -589,7 +567,6 @@ export default function App() {
     setInsightTab: links.setInsightTab,
     setExplorerNode: links.setExplorerNode,
     setFlowsTab: links.setFlowsTab,
-    setRotaTrajectory: links.setRotaTrajectory,
     setBoardTarget: links.setBoardTarget,
     setToolsGroup: links.setToolsGroup,
   })
@@ -708,10 +685,8 @@ export default function App() {
             navOpen={view === 'workspace' ? workspaceNav.open : settingsNav.open}
             onToggleNav={view === 'workspace' ? workspaceNav.toggle : settingsNav.toggle}
             onOpenContextPreview={() => setCtxPreviewOpen(true)}
-            onOpenCoord={() => setCoordOpen(true)}
             onToggleDetail={toggleDetail}
             onError={setError}
-            onOpenTrajectory={links.openTrajectory}
           />
         )}
 
@@ -729,11 +704,6 @@ export default function App() {
               messagesLoading={ctl.messagesLoading}
               transcriptPaging={ctl.transcriptPaging}
               readOnly={!ctl.activeSessionWritable}
-              sessionCoordination={activeSession}
-              onCoordinationChanged={ctl.refreshSessions}
-              onOpenSkill={openSkill}
-              onError={setError}
-              onSelectSession={ctl.selectSession}
               defaultAgentId={ctl.defaultAgentId}
               defaultAgentDeleted={ctl.defaultAgentDeleted}
               allAgents={ctl.allAgents}
@@ -787,9 +757,7 @@ export default function App() {
             />
           )}
           {view === 'rota' && activeWorkspaceId !== null && (
-            <Suspense
-              fallback={<LoadingState label={t('shell.loadingTrajectory')} className="flex-1" />}
-            >
+            <Suspense fallback={<LoadingState label={t('shell.loading')} className="flex-1" />}>
               <RotaPanel
                 workspaceId={activeWorkspaceId}
                 onError={setError}
@@ -797,8 +765,6 @@ export default function App() {
                   setView('chat')
                   ctl.selectSession(sid)
                 }}
-                trajectoryId={links.rotaTrajectory}
-                onTrajectory={links.setRotaTrajectory}
               />
             </Suspense>
           )}
@@ -861,16 +827,7 @@ export default function App() {
               }}
             />
           )}
-          {view === 'skills' && (
-            <SkillsPanel
-              onError={setError}
-              onOpenTrajectory={links.openTrajectory}
-              onOpenSession={(sid) => {
-                setView('chat')
-                ctl.selectSession(sid)
-              }}
-            />
-          )}
+          {view === 'skills' && <SkillsPanel onError={setError} />}
           {view === 'tools' && (
             <ToolCatalogPanel
               onError={setError}
@@ -1000,20 +957,6 @@ export default function App() {
             </Suspense>
           </div>
         </>
-      )}
-
-      {/* Coordination side sheet, opened from the chat header's {t('shell.coordination')} button. */}
-      {view === 'chat' && coordOpen && ctl.activeSessionId && (
-        <Suspense fallback={null}>
-          <CoordinatorPanel
-            sessionId={ctl.activeSessionId}
-            refreshKey={ctl.meterRefresh}
-            onClose={() => setCoordOpen(false)}
-            onError={setError}
-            onSelectSession={ctl.selectSession}
-            onOpenSkill={openSkill}
-          />
-        </Suspense>
       )}
 
       {/* Bottom navigation for portrait phones (hidden on md+ where the rail

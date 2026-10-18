@@ -30,10 +30,10 @@ func waitForWaiting(t *testing.T, q *Queue, sessionID string, n int) {
 
 // TestFIFOOrder: the slot goes to whoever asked first. The predecessor was a
 // sync.Cond broadcast — every blocked turn woke to race, which is how a queued
-// user message could lose repeatedly to a coordinator's own auto-turns.
+// user message could lose repeatedly to autonomous auto-turns.
 func TestFIFOOrder(t *testing.T) {
 	q := newTestQueue()
-	hold, _ := q.Acquire(context.Background(), "S", KindCoordinator, "ilk")
+	hold, _ := q.Acquire(context.Background(), "S", KindAutomation, "ilk")
 
 	var mu sync.Mutex
 	order := []int{}
@@ -85,7 +85,7 @@ func TestNoBargingPastWaiters(t *testing.T) {
 
 	second := make(chan struct{})
 	go func() {
-		rel, _ := q.Acquire(context.Background(), "S", KindCoordinator, "c")
+		rel, _ := q.Acquire(context.Background(), "S", KindAutomation, "c")
 		close(second)
 		rel()
 	}()
@@ -106,7 +106,7 @@ func TestNoBargingPastWaiters(t *testing.T) {
 // handed to it in the same instant it abandons the wait.
 func TestCancelledWaiterDoesNotWedge(t *testing.T) {
 	q := newTestQueue()
-	hold, _ := q.Acquire(context.Background(), "S", KindCoordinator, "tur")
+	hold, _ := q.Acquire(context.Background(), "S", KindAutomation, "tur")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -144,7 +144,7 @@ func TestCancelledWaiterDoesNotWedge(t *testing.T) {
 // chat tray renders, so a user can see WHAT their message is waiting behind.
 func TestSnapshotReportsRunningAndWaiting(t *testing.T) {
 	q := newTestQueue()
-	hold, _ := q.Acquire(context.Background(), "S", KindCoordinator, "worker bildirimi")
+	hold, _ := q.Acquire(context.Background(), "S", KindAutomation, "otomasyon")
 	go func() {
 		rel, _ := q.Acquire(context.Background(), "S", KindUser, "kullanıcı mesajı")
 		rel()
@@ -152,8 +152,8 @@ func TestSnapshotReportsRunningAndWaiting(t *testing.T) {
 	waitForWaiting(t, q, "S", 1)
 
 	snap := q.Snapshot("S")
-	if snap.Running == nil || snap.Running.Kind != KindCoordinator {
-		t.Fatalf("running entry = %+v, want the coordinator turn", snap.Running)
+	if snap.Running == nil || snap.Running.Kind != KindAutomation {
+		t.Fatalf("running entry = %+v, want the automation turn", snap.Running)
 	}
 	if len(snap.Waiting) != 1 || snap.Waiting[0].Kind != KindUser {
 		t.Fatalf("waiting = %+v, want one user turn", snap.Waiting)
@@ -165,7 +165,7 @@ func TestSnapshotReportsRunningAndWaiting(t *testing.T) {
 // strand its waiters, so Forget must refuse until it is idle.
 func TestForgetKeepsLiveState(t *testing.T) {
 	q := newTestQueue()
-	hold, _ := q.Acquire(context.Background(), "S", KindWorker, "görev")
+	hold, _ := q.Acquire(context.Background(), "S", KindSpawn, "görev")
 	q.Forget("S")
 	if !q.Busy("S") {
 		t.Fatal("Forget dropped a slot that was still held")

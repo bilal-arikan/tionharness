@@ -305,12 +305,9 @@
     "kind": {
       "automation": "Otomasyon turu çalışıyor",
       "command": "Komut çalışıyor",
-      "coordinator": "Worker bildirimi işleniyor",
       "generic": "Tur çalışıyor",
-      "peer": "Ajan mesajı işleniyor",
       "spawn": "Spawn turu çalışıyor",
-      "wake": "Zamanlanmış tur çalışıyor",
-      "worker": "Worker görevi çalışıyor"
+      "wake": "Zamanlanmış tur çalışıyor"
     },
     "runningLabel": "{{label}} çalışıyor"
   }

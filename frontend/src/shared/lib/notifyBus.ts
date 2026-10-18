@@ -35,10 +35,6 @@ export interface ToastRequest {
   // per-event sound (e.g. 'permission' for a tool-approval prompt) without
   // splitting that toggle into more notify types.
   cue?: NotifyCue
-  // Skip the sound cue for this one call while still raising the toast. Used for a
-  // chat turn that ended while the session's workers run on: the reply landed, but
-  // the session is not done, so the "done" chime waits for the final turn.
-  silent?: boolean
 }
 
 // playCue fires a sound cue (if any). Gated only by the sound-effects pref
@@ -63,7 +59,7 @@ export function playCue(type: string, cueOverride?: NotifyCue) {
 // emitToast plays the cue then raises the OS toast subject to the per-type mute and
 // the master gate. Best-effort; safe to fire-and-forget.
 export function emitToast(req: ToastRequest) {
-  if (!req.silent) playCue(req.type, req.cue)
+  playCue(req.type, req.cue)
   if (!isTypeEnabled(req.type)) return
   notify(req.enabled, req.title, req.body ?? '', req.onClick, req.tag)
 }

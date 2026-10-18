@@ -8,17 +8,13 @@ import { MessageList } from './MessageList'
 import { Composer } from './Composer'
 import { ChatEmptyState } from './ChatEmptyState'
 import { ChatSkeleton } from './ChatSkeleton'
-import { SessionStartPanel } from './SessionStartPanel'
-import { shouldShowStartPanel } from './sessionStartGate'
 import { RewindDialog } from './RewindDialog'
 import { InteractionPrompts } from './InteractionPrompts'
 import { PendingTray } from './PendingTray'
 import { WakeWaitBanner } from './WakeWaitBanner'
 import { CacheWarmthStrip } from './CacheWarmthStrip'
-import { WorkerWaitBanner } from './WorkerWaitBanner'
-import { useRunningWorkers } from './useRunningWorkers'
 import { TodoPanel } from './TodoPanel'
-import { WorkerStatusStrip } from './WorkerStatusStrip'
+import { RunStatusStrip } from './RunStatusStrip'
 import {
   dismissCompletedTodo,
   isCompletedTodoDismissed,
@@ -27,15 +23,7 @@ import {
 } from './todos'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import { selectableChatAgents } from '@/app/startableAgents'
-import { dropGuardNotes, useGuardNoteVisible } from '@/shared/lib/coordinationGuardNote'
 import type { useChatStream } from './useChatStream'
-import { CoordinatorBreadcrumb } from '@/features/sessions/CoordinatorBreadcrumb'
-import {
-  isCoordinatorSession,
-  isInCoordinatorTree,
-  isWorkerSession,
-  type CoordinationFields,
-} from '@/shared/lib/coordination'
 import { useTranslation } from 'react-i18next'
 
 export interface ChatViewProps {
@@ -57,22 +45,6 @@ export interface ChatViewProps {
   // shown instead. The transcript, context preview, debug and info panels stay
   // fully available.
   readOnly: boolean
-  // The open session's coordination fields (role/coordinatorMode/...). Only a
-  // session with coordinator mode gets the running-worker banner above the
-  // composer — which now includes a mid-level node of a nested tree, so this is
-  // the whole object rather than the old `role` string (`role === 'coordinator'`
-  // would silently miss every sub-coordinator).
-  sessionCoordination?: CoordinationFields
-  // Opens another session's transcript (used to jump into a running worker).
-  onSelectSession?: (id: string) => void
-  // Re-fetches the session list after the start panel changed coordinator mode /
-  // workflow, so the sidebar chip and the coordination UI follow immediately.
-  onCoordinationChanged?: () => void
-  // Opens the Skills screen on a slug — the start panel's recipe rows link to the
-  // coordinator-workflow skill they select. Optional; the link hides when absent.
-  onOpenSkill?: (slug: string) => void
-  // Surfaces an API failure from the start panel in the shell's error banner.
-  onError: (msg: string) => void
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
   defaultAgentId: string | null
   defaultAgentDeleted?: boolean
@@ -112,11 +84,6 @@ export function ChatView({
   messagesLoading,
   transcriptPaging,
   readOnly,
-  sessionCoordination,
-  onSelectSession,
-  onCoordinationChanged,
-  onOpenSkill,
-  onError,
   defaultAgentId,
   defaultAgentDeleted,
   allAgents,
@@ -171,16 +138,6 @@ export function ChatView({
     [messages, transcriptPaging],
   )
 
-  // The rendered transcript hides the runtime's <coordination-guard> corrective
-  // notes unless the app setting turns them on. Display-only: the note stays in
-  // the session and still reaches the coordinator's next turn — only the reader's
-  // view drops it. Everything else on this screen (todos, cache warmth, rewind)
-  // keeps working off the full list.
-  const guardNotesVisible = useGuardNoteVisible()
-  const shownMessages = useMemo(
-    () => dropGuardNotes(messages, guardNotesVisible),
-    [messages, guardNotesVisible],
-  )
   const currentTodos = useMemo(() => currentTodo?.todos ?? [], [currentTodo])
   const [locallyDismissedTodo, setLocallyDismissedTodo] = useState<string | null>(null)
   const todoDismissed = useMemo(() => {
@@ -224,34 +181,6 @@ export function ChatView({
   // now to see their message land (or its chip appear in the pending tray).
   const [sendTick, setSendTick] = useState(0)
   const jumpToBottom = () => setSendTick((n) => n + 1)
-
-  // The pre-first-message setup card (coordinator mode + recipe). Dismissal is
-  // per-session and in-memory: the card is only ever shown before the first turn,
-  // so there is nothing to persist beyond this page's view of that session.
-  const [startPanelDismissed, setStartPanelDismissed] = useState<string | null>(null)
-  // Shown only while the session is genuinely un-started — see shouldShowStartPanel
-  // for the exact rule.
-  const showStartPanel = shouldShowStartPanel({
-    readOnly,
-    activeSessionId,
-    dismissedSessionId: startPanelDismissed,
-    messageCount: transcriptPaging?.total ?? messages.length,
-    messagesLoading,
-    streaming: chat.activeStreaming,
-    pending: chat.activePending,
-    queuedCount: chat.activeQueued.length,
-    isWorker: isWorkerSession(sessionCoordination),
-  })
-
-  // Coordinator sessions: the live worker roster, so the chat can show that it is
-  // waiting on background workers rather than looking idle. Disabled (and never
-  // polled) for ordinary and worker sessions.
-  const workers = useRunningWorkers(
-    activeSessionId,
-    isCoordinatorSession(sessionCoordination),
-    chat.activeStreaming,
-  )
-  const runningWorkers = useMemo(() => workers.filter((w) => w.running), [workers])
 
   // Retry policy for a failed turn's error card. Read-only run logs (task
   // / schedule) retry non-destructively so the audit trail is preserved;
@@ -301,14 +230,14 @@ export function ChatView({
       ) : (
         <MessageList
           transcriptPaging={transcriptPaging}
-          messages={shownMessages}
+          messages={messages}
           sessionId={activeSessionId ?? undefined}
           pending={chat.activePending}
           // Who the not-yet-arrived turn belongs to, so the standalone "working"
           // bubble carries the agent header BEFORE the first token/AgentStart —
           // otherwise the identity only appears once the reply streams in. The
-          // active session's agent (set to sess.agentId on select, worker sessions
-          // included) is the responder for the pending turn.
+          // active session's agent (set to sess.agentId on select) is the
+          // responder for the pending turn.
           pendingAgentId={activeAgentId ?? undefined}
           agents={allAgents}
           artifacts={artifacts}
@@ -317,7 +246,6 @@ export function ChatView({
           onHighlightConsumed={onHighlightConsumed}
           onOpenFile={onOpenFile}
           onOpenArtifact={onOpenArtifact}
-          onSelectSession={onSelectSession}
           onDeleteMessage={onDeleteMessage}
           onRewind={rewind}
           onRetry={onRetry}
@@ -337,40 +265,23 @@ export function ChatView({
           ref={bottomStackRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-1 px-4 pb-2 [&>*]:pointer-events-auto"
         >
-          {/* Prompt-cache warmth also matters in a read-only log: a worker parked
+          {/* Prompt-cache warmth also matters in a read-only log: a run parked
               on an ask/permission (below) is answered as a suspend-point resolve,
               and that reply reads the still-warm prefix — so the countdown is
               actionable here too. Same gate as the writable stack. */}
           {!chat.activeStreaming && (
             <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
           )}
-          {/* NAVIGATION (B): the upward coordinator chain, so a worker log links
-              back to where the work came from. Self-hides for a root/ordinary
-              session (empty ancestor chain). */}
-          {activeSessionId && (
-            <CoordinatorBreadcrumb
-              sessionId={activeSessionId}
-              onSelectSession={onSelectSession}
-              floating
-            />
-          )}
-          {/* VISIBILITY (A): a durable ask/permission/plan that the worker parked
-              on. Hidden here before, this made a worker silently block on input
+          {/* VISIBILITY (A): a durable ask/permission/plan that the run parked
+              on. Hidden here before, this made a run silently block on input
               with no on-screen cue. Answering resolves a suspend point (not a new
               user turn), so it is legitimate even in a read-only log. */}
           <InteractionPrompts asks={chat.activeAsks} onAnswer={chat.answerAsk} />
-          {/* Read-only status surfaces the transcript can't replace: the LIVE
-              checklist (always the latest todo_write, updating as items tick) and
-              the running sub-worker roster. Both are display-only — no user input —
-              so they belong here even though the composer stack is gone. The
-              worker banner self-gates: its roster is empty unless THIS session is
-              itself a coordinator, so a plain worker log shows nothing. */}
+          {/* Read-only status surface the transcript can't replace: the LIVE
+              checklist (always the latest todo_write, updating as items tick).
+              Display-only — no user input — so it belongs here even though the
+              composer stack is gone. */}
           <TodoPanel todos={currentTodos} dismissed={todoDismissed} onDismiss={dismissTodo} />
-          <WorkerWaitBanner
-            workers={runningWorkers}
-            doneCount={workers.length - runningWorkers.length}
-            onSelectSession={onSelectSession}
-          />
           {/* CONTROL (C): the self-wake countdown for context — but with its Durdur
               hidden, since disarming an automation's own wake from a read-only log
               would silently derail it. */}
@@ -386,12 +297,7 @@ export function ChatView({
               show it is alive and offer a Durdur. Every read-only log gets it —
               schedule and flow runs included: the server stops an autonomous turn
               through Runtime.CancelSession when it has no live chat run. */}
-          {chat.activeStreaming && (
-            <WorkerStatusStrip
-              coordinatorTree={isInCoordinatorTree(sessionCoordination)}
-              onStop={chat.stopTurn}
-            />
-          )}
+          {chat.activeStreaming && <RunStatusStrip onStop={chat.stopTurn} />}
         </div>
       ) : (
         /* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
@@ -403,35 +309,13 @@ export function ChatView({
         >
           {/* Prompt-cache warmth: the one cache surface that can still change the
               outcome — it counts down the warm window BEFORE the next turn is sent.
-              Sits at the TOP of the bottom stack so it stays visible above the
-              worker parent chain and any transient panel (todo checklist, pending
+              Sits at the TOP of the bottom stack so it stays visible above any
+              transient panel (todo checklist, pending
               tray, ask/permission prompts). Hidden while a turn streams (the
               countdown is about to reset anyway) and on an empty session (nothing
               is cached yet). */}
           {!chat.activeStreaming && (
             <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
-          )}
-          {/* Pre-first-message setup: coordinator mode + recipe, decided here
-              instead of hidden in the session info panel. Self-closes on send
-              (showStartPanel). */}
-          {showStartPanel && activeSessionId && (
-            <SessionStartPanel
-              sessionId={activeSessionId}
-              onError={onError}
-              onChanged={onCoordinationChanged}
-              onDismiss={() => setStartPanelDismissed(activeSessionId)}
-              onOpenSkill={onOpenSkill}
-            />
-          )}
-          {/* A worker's parent chain belongs next to its input: it explains where
-              replies are reported and gives a one-click route back to the parent.
-              Root coordinators and ordinary chats stay unchanged. */}
-          {isWorkerSession(sessionCoordination) && (
-            <CoordinatorBreadcrumb
-              sessionId={activeSessionId}
-              onSelectSession={onSelectSession}
-              floating
-            />
           )}
           {(chat.activePresence > 1 || chat.activeTyping) && (
             <div className="flex justify-center pb-1">
@@ -454,11 +338,6 @@ export function ChatView({
             canSteer={chat.activeSteerable}
             turnRunning={chat.activeStreaming}
             onClear={chat.clearQueue}
-          />
-          <WorkerWaitBanner
-            workers={runningWorkers}
-            doneCount={workers.length - runningWorkers.length}
-            onSelectSession={onSelectSession}
           />
           {chat.activeWakeWait && (
             <WakeWaitBanner

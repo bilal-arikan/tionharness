@@ -1,5 +1,7 @@
 # 74 — Sistem Ajanları
 
+> **Not (2026-10-18):** `stall-judge` ve `recipe-optimizer` sistem ajanları kaldırıldı (`RetireSystemAgents`); "Worker: X" profilleri yalnız `run_subagent` hedefidir.
+
 > **Durum: UYGULANDI (2026-08-26; kilitli yerleşik + kalıtım modeli 2026-09-03).**
 > Başlıklandırma, sıkıştırma, ders çıkarma ve içgörü analizi gibi uygulama içi LLM işleri
 > sistem ajanlarıyla yürütülür. Her rolün **kilitli yerleşik** satırı (koddan dayatılır,
@@ -16,7 +18,7 @@ işaretlenen özel ajandır. Ayrı bir oturum türü veya `Session` alanı yoktu
 oturumun sistem ajanına ait olup olmadığı ajan kaydından çözülür
 (`internal/agent/systemsession.go:10-21`).
 
-Derlenmiş kayıt defteri altyapı rolleri ve altı yerleşik worker profili tanımlar:
+Derlenmiş kayıt defteri altyapı rolleri ve altı yerleşik "Worker: X" alt-ajan profili tanımlar (adı kalmıştır; koordinatör worker'ları 2026-10-18'de kaldırıldı, bu profiller yalnız `run_subagent` hedefidir):
 
 | `SystemKey` | Varsayılan durum | Prompt anahtarı | Görev |
 |---|---|---|---|
@@ -27,7 +29,7 @@ Derlenmiş kayıt defteri altyapı rolleri ve altı yerleşik worker profili tan
 | `insight` | **Devre dışı** | `insight-analyzer` | Oturum kanıtlarında tekrarlanan, eyleme dönük bulguları analiz eder (`internal/agent/systemagents.go:37-43`, `internal/agent/lessons_systemagent.go:9-10`). |
 | `insight-applier` | Etkin | `insight-applier` | İçgörü taramasının `workspace-opt` bulgularını workspace varlıklarına uygular (`internal/agent/systemagents.go`, `internal/prompts/defaults/insight-applier.md`). |
 | `flow-optimizer` | Etkin | `flow-optimizer` | Akış gözlemcisi (2026-10-04): bir ajanın son akış koşularına bakıp ana akışı ve promptları için ölçülü bir değişiklik önerir; yanıt STRICT JSON, kodda doğrulanıp sürüm olarak uygulanır (`internal/agent/flow_optimizer.go`, `93-EVRILEN-AKISLAR.md`). |
-| `stall-judge` | Etkin | `stall-judge` | Koordinatörün son mesajının gerçekte yapılmamış bir worker spawn'ını anlatıp anlatmadığını sınıflandırır; araçsız, tek satır JSON (`internal/agent/coordination_stall.go`, 2026-09-03). |
+| ~~`stall-judge`~~ | **Kaldırıldı (2026-10-18)** | ~~`stall-judge`~~ | Koordinatör stall yargıcı koordinatör modu ile birlikte silindi; kayıt `RetireSystemAgents` ile emekliye ayrılır (geçmiş oturumlar korunur). |
 
 ### Yardımcı çağrılar nerede koşar — `auxNativeRouting` (2026-09-03)
 
@@ -106,7 +108,7 @@ idempotent: dolu bir sağlayıcı asla ezilmez). Böylece UI ajanın sağlayıc�
 oturum modelidir (bkz. `_Docs/05-ILERLEME.md`, "Model etiketlerinden 'Varsayılan'
 kalktı").
 
-`run_subagent` ve `spawn_worker` hedefi olan altı yerleşik profil de sistem ajanı
+`run_subagent` hedefi olan altı yerleşik profil (`spawn_worker` 2026-10-18'de kaldırıldı) de sistem ajanı
 olarak tutulur: `subagent-explore`, `subagent-planner`, `subagent-coder`,
 `subagent-reviewer`, `subagent-validator`, `subagent-config`. Tanımları
 `buildSystemAgentDefaults` üretir; prompt `prompts.Default("subagent-<id>")`,
@@ -117,13 +119,13 @@ araç listesi ise `defaultSubagentProfiles[<id>].AllowedTools` alanından gelir
 
 - **Araç listesi bir güvenlik sözleşmesidir, kullanıcı tercihi değil.** Ajan
   kaydındaki `AllowedTools`, koddaki profilin önbelleğidir: `resolveWorkerTarget`
-  farklıysa kaydı geri yazar, `SpawnSession` ve `SendToWorker` ise o turun ajan
-  kopyasına listeyi yeniden uygular (`applyProfileAllowlist`,
+  farklıysa kaydı geri yazar, `SpawnSession` ise o turun ajan
+  kopyasına listeyi yeniden uygular (`SendToWorker` 2026-10-18'de kaldırıldı) (`applyProfileAllowlist`,
   `internal/agent/subagent_allowlist.go`). Böylece elle düzenlenmiş bir kayıt
   worker'ın erişimini genişletemez. UI'da bu ajanlarda araç bölümü salt-okunurdur
   (`frontend/src/features/agents/AgentToolsSection.tsx`, `locked` prop'u).
-- **Model ve sağlayıcı dinamiktir.** Tanımda `SuggestedModel` boştur; worker,
-  spawn anında koordinatörün provider/instance/model/permission değerlerini
+- **Model ve sağlayıcı dinamiktir.** Tanımda `SuggestedModel` boştur; spawn edilen
+  profil oturumu, spawn anında çağıranın provider/instance/model/permission değerlerini
   klonlar (`SpawnSession`, `RuntimeBaseAgentID`). **`run_subagent` (2026-10-07):**
   geçici profil ajanı, profilin sistem ajanı bunları gerçekten belirtiyorsa onun
   sağlayıcısını (yalnız `provider` override'ı = kullanıcı sabitlediyse) ve modelini
@@ -259,9 +261,9 @@ tabanlı): seçim boşken tetikleyici rolü fiilen çalıştıran ajanı avatar 
 
 | Ekran | Roller |
 |---|---|
-| Workspace ▸ **Ajanlar** sekmesi | Hepsi: Worker'lar, Sohbet yardımcıları (başlık, sıkıştırma, özet), Analiz, Gözlemciler ve hakemler |
+| Workspace ▸ **Ajanlar** sekmesi | Hepsi: Alt-ajan profilleri ("Worker: X"), Sohbet yardımcıları (başlık, sıkıştırma, özet), Analiz, Gözlemciler ve hakemler |
 | İçgörü kenar çubuğu ▸ Analiz ajanı | `insight` (eski "herhangi bir ajan" seçicisinin yerine) |
-| İçgörü ▸ Ayarlar ▸ İçgörü ajanları | `lesson-extractor`, `recipe-optimizer` |
+| İçgörü ▸ Ayarlar ▸ İçgörü ajanları | `lesson-extractor` (`recipe-optimizer` 2026-10-18'de kaldırıldı) |
 | Akışlar ▸ Evrim ▸ Gözlemci politikası | `flow-optimizer` (workspace geneli) |
 
 ### Sahipsiz işlerin kimliği (2026-10-07)
@@ -272,7 +274,7 @@ faturalanır (`systemRoleCaller`, `internal/agent/systemagent_caller.go`):
 | İş | Önce | Şimdi |
 |---|---|---|
 | İçgörü taraması (elle, cron, `insight_scan` aracı) + tarama oturumu | `autoScanAgentId` → varsayılan → en yeni ajan | `insight` sistem ajanı; açık id yalnız bir insight sistem ajanıysa kabul edilir, `autoScanAgentId` artık eski alan |
-| Reçete iyileştirici | varsayılan/en yeni ajan | `recipe-optimizer` sistem ajanı |
+| ~~Reçete iyileştirici~~ | varsayılan/en yeni ajan | ~~`recipe-optimizer`~~ — kaldırıldı (2026-10-18) |
 | Sahipsiz başlık (otomasyon, zamanlayıcı, sahipsiz görev) | en yeni ajan (devre dışı/sistem olabilirdi) | `titler` sistem ajanı; sahibi olan işin başlığı sahibine faturalanmaya devam eder |
 
 Yalnız **taşıyıcı** ödünç alınabilir: sistem ajanının sağlayıcısı burada sunulamıyorsa

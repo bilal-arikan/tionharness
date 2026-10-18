@@ -1,17 +1,16 @@
-// Rota (trajectory) view — F0, read-only (_Docs/77 brief §11 F0).
-// Workspace root zoom level: every recently active session is a lane on a
-// time axis (git-graph metaphor), workers hang under their coordinator with
-// spawn/report edges, automation fires and stall halts mark the lanes, armed
-// schedules sit in the future strip. Data comes solely from the lane store
-// (workspace stream + REST seed); nothing here writes.
+// Rota lane timeline — read-only (_Docs/77 brief §11 F0).
+// Every recently active session is a lane on a time axis (git-graph metaphor),
+// spawned sessions and subagents hang under the session that started them,
+// automation fires mark the lanes, armed schedules sit in the future strip.
+// Data comes solely from the lane store (workspace stream + REST seed); nothing
+// here writes.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MessageSquare, Waypoints, X } from 'lucide-react'
 import { api } from '@/api'
 import { EmptyState, InfoPopover } from '@/shared/components'
 import { useLanes, connectLanes, seedLanes, resetLanes } from '@/shared/lib/laneStore'
-import { trajectoryForRoot } from '@/shared/lib/laneModel'
-import { seedLiveness, seedSessions, seedTrajectories } from '@/shared/lib/laneReducer'
+import { seedLiveness, seedSessions } from '@/shared/lib/laneReducer'
 import { useServerNow } from './useServerNow'
 import { layoutRota } from './rotaLayout'
 import { RotaCanvas, type RotaSelection } from './RotaCanvas'
@@ -26,28 +25,18 @@ import { laneChipCounts, laneChipFilter } from './rotaChips'
 import { useRotaChips } from './useRotaChips'
 import { useRotaPrefs } from './useRotaPrefs'
 import { useActivitySpans } from './useActivitySpans'
-import { RotaTrajectoryView } from './RotaTrajectoryView'
 
 interface Props {
   workspaceId: string
   onError: (msg: string) => void
   onOpenSession?: (sessionId: string) => void
-  // Zoomed trajectory (deep link #/w/WS/rota/RTA12); null = workspace lanes.
-  trajectoryId: string | null
-  onTrajectory: (id: string | null) => void
 }
 
 // Sessions the seed pulls: the most recently active ones; older lanes arrive
 // through the stream only when they change again.
 const SEED_LIMIT = 200
 
-export function RotaPanel({
-  workspaceId,
-  onError,
-  onOpenSession,
-  trajectoryId,
-  onTrajectory,
-}: Props) {
+export function RotaPanel({ workspaceId, onError, onOpenSession }: Props) {
   const { t } = useTranslation('rota')
   const lanes = useLanes()
   const now = useServerNow(5000)
@@ -87,18 +76,15 @@ export function RotaPanel({
     const controller = new AbortController()
     seedController.current = controller
     try {
-      const [page, live, trajectories] = await Promise.all([
+      const [page, live] = await Promise.all([
         api.listSessions(
           { limit: SEED_LIMIT, sort: 'updated_desc', state: 'active' },
           controller.signal,
         ),
         api.workspaceLiveness(controller.signal),
-        api.listTrajectories({ limit: SEED_LIMIT }, controller.signal),
       ])
       if (controller.signal.aborted) return
-      seedLanes((s) =>
-        seedTrajectories(seedLiveness(seedSessions(s, page.items), live), trajectories),
-      )
+      seedLanes((s) => seedLiveness(seedSessions(s, page.items), live))
     } catch (e) {
       if (!controller.signal.aborted) onError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -195,24 +181,17 @@ export function RotaPanel({
       : base
   const loading = lanes.revision === 0 || lanes.stale
 
-  // The selected session's own trajectory (for the "◈ Rotayı aç" shortcut).
   const selectedLane = selected?.kind === 'session' ? lanes.sessions.get(selected.id) : undefined
   const selectedRoot = selectedLane ? selectedLane.rootSessionId || selectedLane.id : undefined
-  const selectedTrajectory = (() => {
-    if (selected?.kind !== 'session') return undefined
-    return trajectoryForRoot(lanes, selectedRoot ?? selected.id)
-  })()
-  // A worker lane's own thread is a fragment of the coordinator's run, so the
-  // side panel offers both: this lane, and the root session it belongs to.
+  // A member lane's own thread is a fragment of the root's run, so the side
+  // panel offers both: this lane, and the root session it belongs to.
   const rootIsOther = !!selectedRoot && !!selectedLane && selectedRoot !== selectedLane.id
   const rootTitle = rootIsOther ? lanes.sessions.get(selectedRoot)?.title : undefined
 
-  // ↑/↓ walk the lanes; Enter opens the selected session; Esc clears (or
-  // leaves the trajectory zoom).
+  // ↑/↓ walk the lanes; Enter opens the selected session; Esc clears.
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       if (selected) setSelected(null)
-      else if (trajectoryId) onTrajectory(null)
       return
     }
     if (e.key === '+' || e.key === '=') {
@@ -230,7 +209,7 @@ export function RotaPanel({
       setZoom(MIN_ZOOM)
       return
     }
-    if (trajectoryId || layout.rows.length === 0) return
+    if (layout.rows.length === 0) return
     if (e.key === 'Enter' && selected?.kind === 'session') {
       onOpenSession?.(selected.id)
       return
@@ -256,7 +235,6 @@ export function RotaPanel({
           {t('panel.counts', {
             lanes: layout.rows.filter((r) => r.depth === 0).length,
             sessions: lanes.sessions.size,
-            trajectories: lanes.trajectories.size,
             triggers: lanes.fires.length,
           })}
         </span>
@@ -284,36 +262,22 @@ export function RotaPanel({
           {t('panel.revision', { head: lanes.head, revision: lanes.revision })}
         </span>
       </header>
-      {!trajectoryId && (
-        <RotaChipFilter
-          chipSet={chips.chipSet}
-          counts={chipCounts}
-          onClickChip={chips.clickChip}
-          onReset={chips.reset}
-          offCount={chips.chipsOff.length}
-        />
-      )}
+      <RotaChipFilter
+        chipSet={chips.chipSet}
+        counts={chipCounts}
+        onClickChip={chips.clickChip}
+        onReset={chips.reset}
+        offCount={chips.chipsOff.length}
+      />
       <div className="flex min-h-0 flex-1">
         <div ref={hostRef} className="min-w-0 flex-1 overflow-auto">
-          {layout.rows.length === 0 && !trajectoryId ? (
+          {layout.rows.length === 0 ? (
             <EmptyState
               icon={Waypoints}
               title={loading ? t('panel.loadingLanes') : t('panel.noLanes')}
             >
               <InfoPopover text={t('panel.emptyHint')} />
             </EmptyState>
-          ) : trajectoryId ? (
-            <RotaTrajectoryView
-              trajectoryId={trajectoryId}
-              width={width}
-              selected={selected}
-              onSelect={setSelected}
-              onOpenSession={onOpenSession}
-              onBack={() => {
-                setSelected(null)
-                onTrajectory(null)
-              }}
-            />
           ) : (
             <RotaCanvas
               layout={layout}
@@ -324,10 +288,6 @@ export function RotaPanel({
               collapseGaps={collapseGaps}
               normalizeBars={normalizeBars}
               zoom={zoom}
-              onOpenTrajectory={(id) => {
-                setSelected(null)
-                onTrajectory(id)
-              }}
             />
           )}
         </div>
@@ -376,27 +336,10 @@ export function RotaPanel({
                   <X size={13} />
                 </button>
               </div>
-              {selectedTrajectory && selectedTrajectory.trajectoryId !== trajectoryId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(null)
-                    onTrajectory(selectedTrajectory.trajectoryId)
-                  }}
-                  className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-1.5 text-left text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
-                  title={`${selectedTrajectory.trajectoryId} · rev ${selectedTrajectory.revision}`}
-                >
-                  ◈ {t('panel.openTrajectory')} ·{' '}
-                  {selectedTrajectory.templateRef || t('common.unplanned')} ·{' '}
-                  {t(`status.${selectedTrajectory.status}`, {
-                    defaultValue: selectedTrajectory.status,
-                  })}
-                </button>
-              )}
-              <RotaActivity lanes={lanes} onOpenTrajectory={onTrajectory} />
+              <RotaActivity lanes={lanes} />
             </div>
           ) : (
-            <RotaActivity lanes={lanes} onOpenTrajectory={onTrajectory} />
+            <RotaActivity lanes={lanes} />
           )}
         </aside>
       </div>

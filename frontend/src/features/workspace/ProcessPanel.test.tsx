@@ -138,7 +138,7 @@ describe('ProcessPanel', () => {
 
     expect(apiMock.getSessionsByIds).toHaveBeenCalledWith(['ses_0', 'ses_1', 'ses_gone'])
 
-    // Row 0: both the session and the coordinator that spawned it are live.
+    // Row 0: both the session and the session that spawned it are live.
     const links = rows()[0].querySelectorAll<HTMLButtonElement>(
       '[data-testid="process-session-link"]',
     )
@@ -162,7 +162,7 @@ describe('ProcessPanel', () => {
     await render()
     expect(apiMock.listProcesses).toHaveBeenCalledTimes(1) // initial load
 
-    // Three frames inside one debounce window (a fan-out of workers starting).
+    // Three frames inside one debounce window (several processes starting).
     act(() => {
       onProcessEvent()
       onProcessEvent()

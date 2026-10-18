@@ -10,8 +10,8 @@ import (
 // internal/db (IsWritableSessionKind / IsImmutableSessionKind) so the API, the
 // runtime and the frontend cannot drift apart:
 //
-//  1. NOT WRITABLE — no new USER TURN may be started. Task, flow, automation,
-//     flow-coordinator and worker transcripts are orchestrator-owned run logs:
+//  1. NOT WRITABLE — no new USER TURN may be started. Task, flow and automation
+//     transcripts are orchestrator-owned run logs:
 //     fully readable, but a fresh user turn has no run to attach to. This mirrors
 //     what the UI already does by hiding the composer.
 //
@@ -38,8 +38,8 @@ import (
 // weaker NOT-WRITABLE guard (rejectReadOnlySession).
 //
 // Scope: these guards sit on HTTP entry points only. In-process producers
-// (the send_message tool in internal/agent/agentmsg.go, automation delivery,
-// coordinator→worker messages) write through the store/runtime directly and are
+// (automation delivery, spawn
+// opening prompts) write through the store/runtime directly and are
 // intentionally NOT gated here — they are the system driving its own sessions.
 
 // rejectNonWritableSession refuses a request that would start a NEW user turn in

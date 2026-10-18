@@ -11,8 +11,6 @@ import type {
   ScheduleSessionMode,
   Task,
   TaskPatch,
-  TrajEndStatus,
-  TrajEvent,
 } from '@/types'
 import { req } from './client'
 
@@ -107,11 +105,6 @@ export const taskApi = {
   createAutomation: (data: {
     name?: string
     triggerKind?: AutomationTriggerKind
-    // Rota (F2) trigger filters — see types/task.ts.
-    trajPhase?: string
-    trajRecipe?: string
-    trajEvent?: TrajEvent
-    trajStatus?: TrajEndStatus
     triggerTag?: string
     boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
     boardFromState?: string
@@ -138,11 +131,6 @@ export const taskApi = {
     data: {
       name?: string
       triggerKind?: AutomationTriggerKind
-      // Rota (F2) trigger filters — see types/task.ts.
-      trajPhase?: string
-      trajRecipe?: string
-      trajEvent?: TrajEvent
-      trajStatus?: TrajEndStatus
       triggerTag?: string
       boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
       boardFromState?: string

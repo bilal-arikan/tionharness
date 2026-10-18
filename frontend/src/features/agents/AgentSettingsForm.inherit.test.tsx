@@ -15,9 +15,6 @@ vi.mock('@/shared/components/agents/ProviderInstanceModelSelect', () => ({
 vi.mock('./AgentToolsSection', () => ({ AgentToolsSection: () => null }))
 vi.mock('./AgentSkillsSection', () => ({ AgentSkillsSection: () => null }))
 vi.mock('./AgentContextModal', () => ({ AgentContextModal: () => null }))
-vi.mock('@/shared/components/CoordinatorWorkflowPicker', () => ({
-  CoordinatorWorkflowPicker: () => null,
-}))
 vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [],
   thinkingOptionsForModel: (available: unknown) => available,

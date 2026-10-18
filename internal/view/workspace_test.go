@@ -22,7 +22,7 @@ func workspaceFixture(now time.Time) WorkspaceInput {
 			{ID: "SES2", AgentID: "AG1", UpdatedAt: fresh, StuckTurns: 2, Title: "takılan iş"},
 			{ID: "SES3", AgentID: "AG2", UpdatedAt: old},                      // idle
 			{ID: "SES4", AgentID: "AG2", UpdatedAt: fresh, State: "archived"}, // excluded
-			{ID: "SES5", AgentID: "AG1", UpdatedAt: fresh, CoordinatorMode: true},
+			{ID: "SES5", AgentID: "AG1", UpdatedAt: fresh},
 		},
 		Tasks: []db.Task{
 			{ID: "T1", BoardState: db.BoardTodo, UpdatedAt: fresh},
@@ -83,7 +83,6 @@ func TestWorkspaceSurfacesEverySignal(t *testing.T) {
 		"1 zamanlama son çalışmada hata verdi", // the disabled one must not count
 		"1 başarısız kart: T3",
 		"hareketsiz: T2",
-		"1 koordinatör oturumu",
 	} {
 		if !strings.Contains(txt, want) {
 			t.Errorf("missing %q in:\n%s", want, txt)

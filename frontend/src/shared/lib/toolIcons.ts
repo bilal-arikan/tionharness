@@ -26,7 +26,6 @@ import {
   Users,
   Bot,
   MessageSquarePlus,
-  Send,
   ArrowLeftRight,
   Inbox,
   FolderCog,
@@ -131,7 +130,6 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   list_agents: Users,
   run_subagent: Bot,
   spawn_session: MessageSquarePlus,
-  send_message: Send,
   handoff_session: ArrowLeftRight,
 
   // artifacts

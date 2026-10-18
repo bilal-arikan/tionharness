@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale } from '@/i18n'
-import { BOARD_OPS, DEFAULT_PROMPT, STUCK_TEMPLATE, TRAJ_PROMPT_VARS } from './automationMeta'
+import { BOARD_OPS, DEFAULT_PROMPT, FLOW_PROMPT_VARS, STUCK_TEMPLATE } from './automationMeta'
 import { PRESET_GROUPS } from './cronPresets'
 import { SKIP_REASON_LABEL } from './fireMeta'
 
@@ -13,7 +13,7 @@ describe('schedule localization metadata', () => {
     await setLocale('en')
     expect(BOARD_OPS.find((item) => item.value === 'move')?.label).toBe('Moved (column changed)')
     expect(PRESET_GROUPS[0].items[1].expr).toBe('*/5 * * * *')
-    expect(TRAJ_PROMPT_VARS[0].name).toBe('{{trajectoryId}}')
+    expect(FLOW_PROMPT_VARS[0].name).toBe('{{result}}')
     expect(STUCK_TEMPLATE.name).toBe('Stuck session repairer')
 
     await setLocale('tr')

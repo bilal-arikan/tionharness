@@ -168,9 +168,8 @@ func buildAgentDynamicPrompt(ctx context.Context, wsp *workspace.Workspace, agen
 // never learned about the capability block, so the preview under-reported the
 // prefix and quoted text the agent no longer receives.
 //
-// The zero session is not a fudge — it is exactly a session with no coordinator
-// role and no working directory, which is what buildStaticPrefix reads off it
-// (IsCoordinator, WorkingDir). A real session without an explicit cwd produces
+// The zero session is not a fudge — it is exactly a session with no working
+// directory, which is what buildStaticPrefix reads off it (WorkingDir). A real session without an explicit cwd produces
 // the same prefix. multiAgent is false: a fresh session has no other authors yet.
 func (s *Server) buildAgentStaticPrompt(ctx context.Context, wsp *workspace.Workspace, agent db.Agent) string {
 	return s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)

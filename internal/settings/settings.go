@@ -252,21 +252,21 @@ type Settings struct {
 	DelegationMaxDepth int `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
 	DelegationMaxCalls int `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
 
-	// Spawn guards — the detached background surface: coordinator workers
-	// (spawn_worker), the bridged spawn_session (claude-cli) + the UI spawn button.
-	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`     // max concurrent spawned sessions (0 = default 16)
-	SpawnQueueMax          int `json:"spawnQueueMax"`          // max queued spawned sessions (0 = default 16)
+	// Spawn guards — the detached background surface: spawn_session + the UI
+	// spawn button.
+	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`     // max concurrent spawned sessions (0 = default 4)
+	SpawnQueueMax          int `json:"spawnQueueMax"`          // max queued spawned sessions (0 = default 8)
 	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`        // max spawns per agent turn (0 = default 4)
-	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
+	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn inactivity watchdog in minutes (0 = default 10); cancels a turn that emits no step for this long
 	FlowRunRetention       int `json:"flowRunRetention"`       // finished flow run TREES kept per flow (0 = unlimited); older ones are pruned every 10 min (_Docs/77 R8)
-	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled; default 3); reclaims a turn whose provider stream stalled
+	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled; default 10); reclaims a turn whose provider stream stalled
 	// CodexStdoutIdleSec is the codex-cli stdout-silence watchdog, in SECONDS: a
 	// codex subprocess that has started streaming and then emits NOTHING for this
 	// long is killed (whole process tree) and reported as a wedge instead of an
 	// empty answer. It must stay BELOW the chat/turn idle watchdogs (whose default
-	// is 3 minutes) so the specific, actionable codex diagnosis wins the race
+	// is 10 minutes) so the specific, actionable codex diagnosis wins the race
 	// against the generic turn cancel. Seconds, not minutes: minute granularity is
-	// too coarse to fit under a 3-minute ceiling with any margin
+	// too coarse to tune against the minute-granular turn watchdogs
 	// (0 = disabled, no stdout-silence watchdog).
 	CodexStdoutIdleSec int `json:"codexStdoutIdleSec"`
 	IdleResumeMax      int `json:"idleResumeMax"` // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
@@ -277,47 +277,9 @@ type Settings struct {
 	TurnIdleWatchdogMin int `json:"turnIdleWatchdogMin"`
 
 	// Tool execution guards (process-global tool behaviour).
-	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 30); per-call timeout_sec still overrides
-	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`     // hard-max Bash/PowerShell timeout in seconds (0 = default 120)
-	MaxToolOutputKB        int `json:"maxToolOutputKB"`        // backstop cap on a tool's output in KB before truncation (0 = default 100)
-	// AgentMessageMaxKB caps a single agent→agent (send_message) or coordinator→
-	// worker (send_to_worker) message body. Over the cap the call fails with an
-	// explicit message_too_large error; the one-way worker notification path is
-	// capped with a visible marker instead (0 = default 64). _Docs/47.
-	AgentMessageMaxKB int `json:"agentMessageMaxKB"`
-
-	// Coordinator/worker guards (M2, _Docs/47).
-	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"` // max active workers per coordinator (0 = default 8)
-	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`   // max auto-triggered coordinator turns per session (0 = default 50, -1 = unlimited)
-	// CoordinatorMaxDepth bounds how deep a coordinator TREE may nest (root = 0);
-	// -1 = unlimited nesting. CoordinatorMaxSubtreeSessions bounds the TOTAL worker
-	// sessions in one tree across every level; -1 = unlimited. The per-coordinator
-	// worker cap above cannot do that job: it is enforced per node, so depth
-	// multiplies it instead of adding to it.
-	CoordinatorMaxDepth           int `json:"coordinatorMaxDepth"`
-	CoordinatorMaxSubtreeSessions int `json:"coordinatorMaxSubtreeSessions"`
-	// CoordinatorSettleGraceSec is how long the upward-report backstop waits after
-	// a sub-coordinator's branch goes quiet before auto-reporting for it. Tune it to
-	// the model behind the coordinators: too short and a slow synthesis turn loses
-	// the race, so the parent gets a needless "incomplete"; too long and a genuinely
-	// stalled branch keeps its coordinator waiting.
-	CoordinatorSettleGraceSec int `json:"coordinatorSettleGraceSec"`
-
-	// Coordinator stall/hallucination protection (see internal/agent/coordination_stall.go).
-	// CoordinatorStallGuard is the master switch for the judge-based turn-end guard +
-	// staleness sweeper that catch a coordinator narrating a spawn it never issued
-	// (default true). CoordinatorStallSweepMin is the staleness window in minutes
-	// (0 = default 5; negative disables the sweeper while leaving the turn-end guard
-	// on). CoordinatorStallMaxNudges caps consecutive corrective nudges (0 = default 2).
-	CoordinatorStallGuard     bool `json:"coordinatorStallGuard"`
-	CoordinatorStallSweepMin  int  `json:"coordinatorStallSweepMin"`
-	CoordinatorStallMaxNudges int  `json:"coordinatorStallMaxNudges"`
-	// CoordinatorStallNoteVisible controls whether the injected
-	// <coordination-guard> corrective note is RENDERED in the transcript. It is a
-	// display choice only: the note is always recorded and always reaches the
-	// coordinator's next turn — hiding it just keeps a runtime self-correction out
-	// of the reader's chat. Default false (hidden).
-	CoordinatorStallNoteVisible bool `json:"coordinatorStallNoteVisible"`
+	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 120); per-call timeout_sec still overrides
+	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`     // hard-max Bash/PowerShell timeout in seconds (0 = default 600)
+	MaxToolOutputKB        int `json:"maxToolOutputKB"`        // backstop cap on a tool's output in KB before truncation (0 = default 50)
 
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
@@ -353,7 +315,11 @@ func Default() Settings {
 		CodexCLIPath:          "",
 		CodexConfigDir:        defaultCodexConfigDir(),
 
-		MaxContextTokens: 800000,
+		// MaxContextTokens is a FLOOR under the derived budget (see EffectiveBudget):
+		// 800K used to override the ceil/fraction below for every known model, so the
+		// context-rot-aware design never applied (2026-10-18). 64K only rescues tiny
+		// windows; the per-family share and the ceil decide everything else.
+		MaxContextTokens: 64000,
 		KeepRecentMsgs:   8,
 		// Context-rot-aware default (2026-06-25, _Docs/17 §12): ceil 256K keeps the
 		// live window in the gradient's high-precision zone; fraction 0 = "auto"
@@ -361,8 +327,10 @@ func Default() Settings {
 		// (memory / conversation_search / core blocks), not from a huge raw window.
 		ContextBudgetCeil:     262144,
 		ContextBudgetFraction: 0,
-		// Rolling keeps the pre-existing fold on upgrade; native/auto are opt-in.
-		AutoCompactMode: AutoCompactRolling,
+		// Auto: a live warm CLI session compacts natively (the CLI keeps its own
+		// cache/summary coherent, one compaction layer instead of two); a cold or
+		// non-native path falls back to the rolling fold (2026-10-18).
+		AutoCompactMode: AutoCompactAuto,
 
 		// Context reset / handoff: off by default; the manual /handoff command and the
 		// handoff_session tool work regardless. Defaults match agent.DefaultHandoff*.
@@ -444,34 +412,30 @@ func Default() Settings {
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
 
-		SpawnMaxConcurrent:     16,
-		SpawnQueueMax:          16,
+		// Each spawn is a full CLI process; 4 concurrent keeps a laptop responsive and
+		// the queue absorbs bursts (2026-10-18; was 16/16).
+		SpawnMaxConcurrent:     4,
+		SpawnQueueMax:          8,
 		SpawnMaxPerTurn:        4,
-		SpawnIdleTimeoutMin:    5,
+		SpawnIdleTimeoutMin:    10,
 		FlowRunRetention:       0,
-		ChatTurnIdleTimeoutMin: 3,
-		// 90 seconds: longer than a normal quiet gap inside a codex turn (a tool call
-		// that prints nothing while it works), yet comfortably under the 3-minute
-		// chat/turn idle watchdogs — so a wedged codex subprocess is diagnosed and
-		// killed HERE, with its stdout tail, instead of being swallowed by the
-		// generic turn cancel that would otherwise always fire first.
-		CodexStdoutIdleSec:  90,
+		ChatTurnIdleTimeoutMin: 10,
+		// 300 seconds: `codex exec --json` emits NOTHING while the model reasons
+		// (measured 2026-10-18: no reasoning items even with reasoning summaries on),
+		// so high-effort reasoning is indistinguishable from a wedge until it ends.
+		// Five minutes covers long reasoning yet stays under the 10-minute chat/spawn
+		// idle watchdogs, so a truly wedged codex subprocess is still diagnosed and
+		// killed HERE, with its stdout tail, before the generic turn cancel fires.
+		CodexStdoutIdleSec:  300,
 		IdleResumeMax:       1,
 		TurnIdleWatchdogMin: 20,
 
-		ShellDefaultTimeoutSec: 30,
-		ShellMaxTimeoutSec:     120,
-		MaxToolOutputKB:        100,
-		AgentMessageMaxKB:      64,
-
-		CoordinatorMaxWorkers:         8,
-		CoordinatorMaxTurns:           -1, // unlimited (not user-configurable; see normalize)
-		CoordinatorMaxDepth:           5,
-		CoordinatorMaxSubtreeSessions: -1, // unlimited (not user-configurable; see normalize)
-		CoordinatorSettleGraceSec:     30,
-		CoordinatorStallGuard:         true,
-		CoordinatorStallSweepMin:      5,
-		CoordinatorStallMaxNudges:     2,
+		// Same as Claude Code's documented Bash defaults (2 min default, 10 min max):
+		// builds and test suites routinely exceed 30 s.
+		ShellDefaultTimeoutSec: 120,
+		ShellMaxTimeoutSec:     600,
+		// ~12K tokens; larger output is offloaded to a file with head+tail kept.
+		MaxToolOutputKB: 50,
 
 		// Autonomous turns confine fs/shell by default (safety brake).
 		AutonomousConfine: true,
@@ -586,17 +550,6 @@ type DTO struct {
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
 	MaxToolOutputKB        int `json:"maxToolOutputKB"`
-	AgentMessageMaxKB      int `json:"agentMessageMaxKB"`
-
-	CoordinatorMaxWorkers         int  `json:"coordinatorMaxWorkers"`
-	CoordinatorMaxTurns           int  `json:"coordinatorMaxTurns"`
-	CoordinatorMaxDepth           int  `json:"coordinatorMaxDepth"`
-	CoordinatorMaxSubtreeSessions int  `json:"coordinatorMaxSubtreeSessions"`
-	CoordinatorSettleGraceSec     int  `json:"coordinatorSettleGraceSec"`
-	CoordinatorStallGuard         bool `json:"coordinatorStallGuard"`
-	CoordinatorStallSweepMin      int  `json:"coordinatorStallSweepMin"`
-	CoordinatorStallMaxNudges     int  `json:"coordinatorStallMaxNudges"`
-	CoordinatorStallNoteVisible   bool `json:"coordinatorStallNoteVisible"`
 
 	AutonomousConfine bool `json:"autonomousConfine"`
 	AutonomousBootSeq bool `json:"autonomousBootSeq"`
@@ -694,17 +647,6 @@ func (s Settings) ToDTO() DTO {
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
 		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
 		MaxToolOutputKB:        s.MaxToolOutputKB,
-		AgentMessageMaxKB:      s.AgentMessageMaxKB,
-
-		CoordinatorMaxWorkers:         s.CoordinatorMaxWorkers,
-		CoordinatorMaxTurns:           s.CoordinatorMaxTurns,
-		CoordinatorMaxDepth:           s.CoordinatorMaxDepth,
-		CoordinatorMaxSubtreeSessions: s.CoordinatorMaxSubtreeSessions,
-		CoordinatorSettleGraceSec:     s.CoordinatorSettleGraceSec,
-		CoordinatorStallGuard:         s.CoordinatorStallGuard,
-		CoordinatorStallSweepMin:      s.CoordinatorStallSweepMin,
-		CoordinatorStallMaxNudges:     s.CoordinatorStallMaxNudges,
-		CoordinatorStallNoteVisible:   s.CoordinatorStallNoteVisible,
 
 		AutonomousConfine: s.AutonomousConfine,
 		AutonomousBootSeq: s.AutonomousBootSeq,
@@ -804,17 +746,6 @@ type Patch struct {
 	ShellDefaultTimeoutSec *int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     *int `json:"shellMaxTimeoutSec"`
 	MaxToolOutputKB        *int `json:"maxToolOutputKB"`
-	AgentMessageMaxKB      *int `json:"agentMessageMaxKB"`
-
-	CoordinatorMaxWorkers         *int  `json:"coordinatorMaxWorkers"`
-	CoordinatorMaxTurns           *int  `json:"coordinatorMaxTurns"`
-	CoordinatorMaxDepth           *int  `json:"coordinatorMaxDepth"`
-	CoordinatorMaxSubtreeSessions *int  `json:"coordinatorMaxSubtreeSessions"`
-	CoordinatorSettleGraceSec     *int  `json:"coordinatorSettleGraceSec"`
-	CoordinatorStallGuard         *bool `json:"coordinatorStallGuard"`
-	CoordinatorStallSweepMin      *int  `json:"coordinatorStallSweepMin"`
-	CoordinatorStallMaxNudges     *int  `json:"coordinatorStallMaxNudges"`
-	CoordinatorStallNoteVisible   *bool `json:"coordinatorStallNoteVisible"`
 
 	AutonomousConfine *bool `json:"autonomousConfine"`
 	AutonomousBootSeq *bool `json:"autonomousBootSeq"`

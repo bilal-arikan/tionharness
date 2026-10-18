@@ -282,37 +282,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// concurrency guards on every call.
 	builtins = append(builtins, tools.NewRunSubagentTool())
 
-	// Coordinator/worker tools (M2, _Docs/47). withCoordination installs the runner
-	// on every session's turn, but populates only the capabilities that session
-	// actually has, and each tool is registered from the presence of ITS function —
-	// so the three surfaces stay independent:
-	//   - the worker-driving tools: coordinator mode is on (root OR a mid-level node
-	//     of a deep tree; the old "workers never get these" rule is what capped the
-	//     tree at one level, and the depth/subtree budgets replaced it);
-	//   - report_to_coordinator: this session has a coordinator ABOVE it;
-	//   - set_coordinator_mode: always, otherwise a plain session could never turn
-	//     the capability on for itself.
-	if cf := tools.CoordinationFrom(ctx); cf != nil {
-		if cf.Spawn != nil {
-			builtins = append(builtins,
-				tools.NewSpawnWorkerTool(),
-				tools.NewSendToWorkerTool(),
-				tools.NewStopWorkerTool(),
-				tools.NewListWorkersTool(),
-			)
-		}
-		if cf.Report != nil {
-			builtins = append(builtins, tools.NewReportToCoordinatorTool())
-		}
-		if cf.SetMode != nil {
-			builtins = append(builtins, tools.NewSetCoordinatorModeTool())
-		}
-		// trajectory (Rota, F1): a coordinator reads / declares its tree's plan.
-		if cf.Trajectory != nil {
-			builtins = append(builtins, tools.NewTrajectoryTool())
-		}
-	}
-
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed
 	// context block). Always on, like the other pull tools.
 	builtins = append(builtins, tools.NewListSessionsTool(r.db))
@@ -534,7 +503,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// tools.DefaultTiers() — see internal/tools/tierdefaults.go for the table and
 	// the rationale of each row (including which tools are deliberately kept eager).
 	// Applied AFTER the self-manage hidden loop above, so the table's authoritative
-	// entry for a promoted name (handoff_session, send_message → name-only) wins;
+	// entry for a promoted name (handoff_session → name-only) wins;
 	// their MarkSelfManaged stamp survives, which the claude-cli bridge needs.
 	defaults := tools.DefaultTiers()
 	reg.ApplyToolDefaults(defaults)
@@ -856,21 +825,6 @@ func (r *Runtime) workspaceDisabledSet(ctx context.Context) map[string]bool {
 // AND permitted by the agent's allowlist. The denylist is the user-facing model
 // (empty = all tools); the allowlist is the legacy subagent-profile restriction
 // (empty = all). Both empty + no workspace denylist => nil (offer everything).
-//
-// The COORDINATION tools are exempt from the ALLOWLIST (only — the workspace
-// switch and the explicit denylist still apply). The allowlist describes which
-// WORK tools a profile persona may use; whether a session may drive workers or
-// owes a report upward is a property of the SESSION, gated precisely by
-// CoordinationFuncs, and the two must not be conflated.
-//
-// Found live: a coordinator spawning a profile target as a sub-coordinator
-// (spawn_worker with a profile + coordinator:true) produced a session with
-// coordinator mode ON and the coordinator manual in its prompt, while the
-// profile's read-only allowlist stripped every coordination tool — including
-// report_to_coordinator. It could neither delegate nor report, so it silently did
-// the work itself (CLI-native Read/Edit/Bash do not pass through this filter, so
-// nothing visibly failed). That is exactly the "asked for delegation, got a worker
-// that cannot delegate and never says so" failure SpawnWorker refuses elsewhere.
 func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) bool {
 	disabled := r.workspaceDisabledSet(ctx)
 	agentAllow, allowErr := allowFunc(agent) // nil => agent allows all
@@ -905,15 +859,11 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 		if agentBlock != nil && agentBlock(name) {
 			return false
 		}
-		if tools.IsCoordinationTool(name) {
-			return true // session-gated, not allowlist-gated (see above)
-		}
 		if tools.IsSkillTool(name) {
-			// Same class of prompt/permission mismatch as the coordination surface:
-			// the system prompt renders "# Available Skills" for EVERY agent and tells
+			// A prompt/permission mismatch otherwise: the system prompt renders "# Available Skills" for EVERY agent and tells
 			// it to load a matching skill (and to discover hidden ones with
 			// skill_search) before acting, while no profile allowlist names those
-			// tools — so an allowlist-only worker is instructed to call a tool it
+			// tools — so an allowlist-only profile is instructed to call a tool it
 			// cannot see and silently skips skills instead. Loading a skill is
 			// read-only, hence safe for every profile including the read-only ones.
 			return true

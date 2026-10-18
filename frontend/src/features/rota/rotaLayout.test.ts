@@ -31,13 +31,13 @@ function ev(
 
 function fixture() {
   let s = seedSessions(emptyLanes(), [
-    header({ id: 'ROOT', coordinatorMode: true, createdAt: NOW - 900, updatedAt: NOW - 10 }),
+    header({ id: 'ROOT', createdAt: NOW - 900, updatedAt: NOW - 10 }),
     header({
       id: 'W1',
-      kind: 'worker',
+      kind: 'subagent',
       runState: 'completed',
       origin: {
-        kind: 'coordinator',
+        kind: 'subagent',
         triggerSessionId: 'ROOT',
         rootSessionId: 'ROOT',
         at: NOW - 800,
@@ -47,9 +47,9 @@ function fixture() {
     }),
     header({
       id: 'W2',
-      kind: 'worker',
+      kind: 'subagent',
       origin: {
-        kind: 'coordinator',
+        kind: 'subagent',
         triggerSessionId: 'ROOT',
         rootSessionId: 'ROOT',
         at: NOW - 700,
@@ -103,15 +103,6 @@ function fixture() {
     ev(4, 'schedule_armed', { scheduleId: 'SCH1', name: 'nightly', fireAt: NOW + 120 }),
   )
   s = applyLaneEvent(s, ev(5, 'schedule_armed', { scheduleId: 'SCH2', fireAt: NOW + 99_999 }))
-  s = applyLaneEvent(
-    s,
-    ev(
-      6,
-      'coordination',
-      { coordinatorId: 'ROOT', reason: 'no progress', at: NOW - 40 },
-      { phase: 'stall_halt' },
-    ),
-  )
   return s
 }
 
@@ -140,12 +131,9 @@ describe('layoutRota', () => {
     expect(bar('bar:W1')).toMatchObject({ live: false, end: NOW - 300, state: 'completed' })
   })
 
-  it('marks fires on the trigger lane, drops unknown lanes, adds stall marks', () => {
+  it('marks fires on the trigger lane and drops unknown lanes', () => {
     const l = layoutRota(fixture(), { now: NOW })
-    expect(l.marks.map((m) => [m.rowId, m.kind])).toEqual([
-      ['W1', 'fired'],
-      ['ROOT', 'stall'],
-    ])
+    expect(l.marks.map((m) => [m.rowId, m.kind])).toEqual([['W1', 'fired']])
     expect(l.marks[0].label).toBe('pano')
   })
 

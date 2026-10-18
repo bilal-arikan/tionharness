@@ -133,11 +133,7 @@ var settingsPatchGoldenFields = []string{
 	"spawnMaxConcurrent", "spawnQueueMax", "spawnMaxPerTurn", "spawnIdleTimeoutMin",
 	"chatTurnIdleTimeoutMin", "codexStdoutIdleSec",
 	"idleResumeMax", "turnIdleWatchdogMin",
-	"shellDefaultTimeoutSec", "shellMaxTimeoutSec", "maxToolOutputKB", "agentMessageMaxKB",
-	"coordinatorMaxWorkers", "coordinatorMaxTurns", "coordinatorMaxDepth",
-	"coordinatorMaxSubtreeSessions", "coordinatorSettleGraceSec",
-	"coordinatorStallGuard", "coordinatorStallSweepMin", "coordinatorStallMaxNudges",
-	"coordinatorStallNoteVisible",
+	"shellDefaultTimeoutSec", "shellMaxTimeoutSec", "maxToolOutputKB",
 	"autonomousConfine", "autonomousBootSeq",
 	"backupEnabled", "backupIntervalHours", "backupRetain", "backupDir",
 }

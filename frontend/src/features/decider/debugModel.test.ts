@@ -7,7 +7,7 @@ const event = (traceId: string, stage: string, at = 10, role = 'primary'): Decid
   traceId,
   stage,
   role,
-  authority: 'stall-judge',
+  authority: 'tool-risk',
   mode: 'shadow',
   threshold: 0.7,
 })

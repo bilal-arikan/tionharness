@@ -10,7 +10,7 @@ import (
 // instead of silently misparsed.
 const tokenPrefix = "treepin1"
 
-// String renders the pin as one line a coordinator can paste into a validator
+// String renders the pin as one line an agent can paste into a validator
 // brief: treepin1 head=<sha> files=<n> digest=<sha256> scope=<p1>,<p2>
 // Scope goes last so it may contain spaces; commas separate pathspecs.
 func (p Pin) String() string {

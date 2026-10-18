@@ -42,8 +42,8 @@ type Graph struct {
 }
 
 // Graph walks the structural tree from the workspace root once, breadth first,
-// against a single store snapshot (structuralCache). Sessions parent worker
-// sessions and coordinators can point at each other, so this is a graph, not a
+// against a single store snapshot (structuralCache). Sessions and their child
+// sessions can point at each other, so this is a graph, not a
 // tree: a visited set keyed by Ref terminates cycles and self-loops, and an edge
 // set de-duplicates a relationship discovered through two paths. Node and edge
 // order is deterministic (sorted by Ref.String) so two calls over the same store
@@ -140,26 +140,11 @@ func (p *Projector) GraphStructure(ctx context.Context) ([]Handle, []GraphEdge, 
 	return out.Nodes, out.Edges, nil
 }
 
-// graphChildren is the uncapped child list the whole-map walk follows. It is
-// structuralCache.children plus the two trajectory edges Children knows about
-// (session -> its Rota, Rota -> the entities bound under its nodes), so the map
-// shows exactly the graph an agent's expand tool walks.
+// graphChildren is the uncapped child list the whole-map walk follows: exactly
+// structuralCache.children, so the map shows the graph an agent's expand tool
+// walks.
 func (p *Projector) graphChildren(ctx context.Context, cache *structuralCache, ref Ref) ([]Handle, error) {
-	switch ref.Kind {
-	case KindSession:
-		workers, err := cache.children(ctx, ref)
-		if err != nil {
-			return nil, err
-		}
-		if h := p.trajectoryHandleFor(ctx, ref.ID); h != nil {
-			workers = append([]Handle{*h}, workers...)
-		}
-		return workers, nil
-	case KindTrajectory:
-		return p.trajectoryChildren(ctx, ref.ID)
-	default:
-		return cache.children(ctx, ref)
-	}
+	return cache.children(ctx, ref)
 }
 
 // optionalSourceMissing reports whether a failing node is one of the categories

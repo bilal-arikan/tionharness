@@ -18,11 +18,7 @@ func TestSessionGroupClassification(t *testing.T) {
 		{"spawn_session child", db.Session{Kind: "chat", Category: db.CategoryChat, ExecutionType: db.ExecutionInteractive,
 			Origin: &db.SessionOrigin{Kind: db.OriginSpawn, TriggerSessionID: "SES1"}}, sessionGroupMain},
 		{"legacy spawned kind", db.Session{Kind: "spawned"}, sessionGroupMain},
-		{"agent message inbox", db.Session{Kind: "chat", SourceID: "agent-messages:AGT1",
-			Origin: &db.SessionOrigin{Kind: db.OriginUser}}, sessionGroupOther},
 		{"handoff continuation", db.Session{Kind: "spawned", ParentSessionID: "SES1"}, sessionGroupMain},
-		{"coordinator worker", db.Session{Kind: "worker", Category: db.CategoryWorker, CoordinatorSessionID: "SES1"}, sessionGroupOther},
-		{"worker shaped as chat", db.Session{Kind: "chat", CoordinatorSessionID: "SES1"}, sessionGroupOther},
 		{"subagent", db.Session{Kind: "subagent", Category: db.CategorySubagent, ExecutionType: db.ExecutionSubagent,
 			Visibility: db.VisibilityInternal}, sessionGroupOther},
 		{"task", db.Session{Kind: "task"}, sessionGroupOther},
@@ -51,14 +47,14 @@ func TestListSessionsGroupFilter(t *testing.T) {
 		{Title: "chat a"},
 		{Title: "chat b"},
 		{Title: "spawned chat", Kind: "chat", Origin: &db.SessionOrigin{Kind: db.OriginSpawn, TriggerSessionID: "SES1"}},
-		{Title: "worker", Kind: "worker", Category: db.CategoryWorker, CoordinatorSessionID: "SES1"},
+		{Title: "subagent", Kind: "subagent", Category: db.CategorySubagent, ExecutionType: db.ExecutionSubagent},
 		{Title: "task", Kind: "task"},
 	} {
 		if _, err := wsp.DB.CreateSession(ctx, s); err != nil {
 			t.Fatalf("create session: %v", err)
 		}
 	}
-	all := "chips=chat,task,spawned,subagent,automation,insight,inbox,other,running,awaiting-workers,worker"
+	all := "chips=chat,task,spawned,subagent,automation,insight,other,running"
 
 	main := listSessionsPage(t, server, wsp.DB, all+"&group=main&limit=50")
 	if main.Total != 3 {
@@ -67,8 +63,8 @@ func TestListSessionsGroupFilter(t *testing.T) {
 	if main.GroupCounts["main"] != 3 || main.GroupCounts["other"] != 2 {
 		t.Fatalf("groupCounts = %v, want main 3 / other 2", main.GroupCounts)
 	}
-	if got := main.ChipCounts["worker"]; got != 0 {
-		t.Fatalf("main tab chipCounts[worker] = %d, want 0 (chip badges describe the tab)", got)
+	if got := main.ChipCounts[chipSubagent]; got != 0 {
+		t.Fatalf("main tab chipCounts[subagent] = %d, want 0 (chip badges describe the tab)", got)
 	}
 
 	other := listSessionsPage(t, server, wsp.DB, all+"&group=other&limit=50")
@@ -77,9 +73,9 @@ func TestListSessionsGroupFilter(t *testing.T) {
 	}
 
 	// Unticking a chip shrinks the tab badge too.
-	noWorker := listSessionsPage(t, server, wsp.DB, "chips=chat,task,spawned&group=main&limit=50")
-	if noWorker.GroupCounts["other"] != 1 {
-		t.Fatalf("groupCounts[other] without worker chip = %d, want 1", noWorker.GroupCounts["other"])
+	noSubagent := listSessionsPage(t, server, wsp.DB, "chips=chat,task,spawned&group=main&limit=50")
+	if noSubagent.GroupCounts["other"] != 1 {
+		t.Fatalf("groupCounts[other] without subagent chip = %d, want 1", noSubagent.GroupCounts["other"])
 	}
 
 	if got := listSessionsPage(t, server, wsp.DB, "limit=50").GroupCounts; got != nil {

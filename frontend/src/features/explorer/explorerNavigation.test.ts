@@ -15,7 +15,6 @@ describe('screenForRef', () => {
     expect(screenForRef(ref('artifact', 'ART1'))).toMatchObject({ view: 'artifacts', id: 'ART1' })
     expect(screenForRef(ref('automation', 'AUT1'))).toMatchObject({ view: 'schedules', id: 'AUT1' })
     expect(screenForRef(ref('schedule', 'SCH1'))).toMatchObject({ view: 'schedules', id: 'SCH1' })
-    expect(screenForRef(ref('trajectory', 'RTA1'))).toMatchObject({ view: 'rota', id: 'RTA1' })
     expect(screenForRef(ref('note', 'NOTE1'))).toMatchObject({ view: 'notes', id: 'NOTE1' })
   })
 

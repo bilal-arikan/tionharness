@@ -28,7 +28,6 @@ export interface AppNavigationParams {
   insightTab: string | null
   explorerNode: string | null
   flowsTab: string | null
-  rotaTrajectory: string | null
   boardTarget: string | null
   toolsGroup: string | null
   pendingRouteRef: MutableRefObject<Route | null>
@@ -43,7 +42,6 @@ export interface AppNavigationParams {
   setInsightTab: (id: string | null) => void
   setExplorerNode: (id: string | null) => void
   setFlowsTab: (id: string | null) => void
-  setRotaTrajectory: (id: string | null) => void
   setBoardTarget: (id: string | null) => void
   setToolsGroup: (id: string | null) => void
 }
@@ -63,7 +61,6 @@ export function useAppNavigation(p: AppNavigationParams) {
     setInsightTab,
     setExplorerNode,
     setFlowsTab,
-    setRotaTrajectory,
     setBoardTarget,
     setToolsGroup,
   } = p
@@ -100,8 +97,6 @@ export function useAppNavigation(p: AppNavigationParams) {
         setExplorerNode(r.id)
       } else if (r.view === 'flows') {
         setFlowsTab(r.id)
-      } else if (r.view === 'rota') {
-        setRotaTrajectory(r.id)
       } else if (r.view === 'board') {
         setBoardTarget(r.id)
       } else if (r.view === 'tools') {
@@ -122,7 +117,6 @@ export function useAppNavigation(p: AppNavigationParams) {
       setInsightTab,
       setExplorerNode,
       setFlowsTab,
-      setRotaTrajectory,
       setBoardTarget,
       setToolsGroup,
     ],
@@ -143,7 +137,6 @@ export function useAppNavigation(p: AppNavigationParams) {
       insightTab: p.insightTab,
       flowsTab: p.flowsTab,
       explorerNode: p.explorerNode,
-      rotaTrajectory: p.rotaTrajectory,
       boardTask: p.boardTarget,
       toolsGroup: p.toolsGroup,
     }),

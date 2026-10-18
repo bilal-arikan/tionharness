@@ -15,14 +15,12 @@ import (
 // folds, most active first:
 //
 //   - turn admission slots (turnqueue): every turn entry path claims one —
-//     chat, slash command, coordinator drain, worker, wake, peer, spawn,
+//     chat, slash command, wake, spawn,
 //     automation — so this is the central Running source, with kind + since.
 //   - tracked autonomous invokes (trackSession): flow runs and background turns
 //     that may run session-less of a slot for a moment.
 //   - the api's streamed chat runs (extActive): belt-and-braces for the window
 //     between a request arriving and its slot claim.
-//   - coordinator slots: an owed drain turn (Queued) and live workers under an
-//     otherwise idle coordinator (AwaitingWorkers).
 //   - durable asks: a turn parked on a question (WaitingAsk).
 //   - waiting flow runs: a run suspended at await-input (WaitingInput).
 //
@@ -53,28 +51,6 @@ func (r *Runtime) Liveness(ctx context.Context) liveness.Snapshot {
 			b.Add(liveness.Entry{SessionID: sid, State: liveness.Running, Reason: "turn:chat"})
 		}
 	}
-
-	// Coordinator slots: a drain owed by a pending worker note is admitted work
-	// that has not started (Queued); live workers under an idle coordinator make
-	// it AwaitingWorkers (the previous runningSessionIDs promoted such a
-	// coordinator into the live scope; RunningSet keeps that contract).
-	r.coordSlots.Range(func(key, value any) bool {
-		coordID, _ := key.(string)
-		slot, _ := value.(*coordSlot)
-		if coordID == "" || slot == nil {
-			return true
-		}
-		slot.mu.Lock()
-		pending := slot.pending || slot.workerPending
-		slot.mu.Unlock()
-		if pending {
-			b.Add(liveness.Entry{SessionID: coordID, State: liveness.Queued, Reason: "coord:drain-pending"})
-		}
-		if n := slot.workers.Load(); n > 0 {
-			b.Add(liveness.Entry{SessionID: coordID, State: liveness.AwaitingWorkers, Reason: "workers:" + strconv.FormatInt(n, 10)})
-		}
-		return true
-	})
 
 	if r.db != nil {
 		if asks, err := r.db.ListWaitingSessionAsks(ctx); err == nil {

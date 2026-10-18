@@ -17,6 +17,8 @@ vi.mock('@/api', () => ({
   },
 }))
 vi.mock('@/api/system', () => ({ systemApi: {} }))
+vi.mock('@/api/decider', () => ({ deciderApi: {} }))
+vi.mock('@/api/insights', () => ({ insightApi: {} }))
 
 const { CBM_TOOL, NOOP_NAV, RULES, runRules } = await import('./recommendations')
 type RecContext = Parameters<typeof runRules>[0]
@@ -456,5 +458,33 @@ describe('card ordering', () => {
     )
     expect(keys[0]).toBe('no-agents')
     expect(keys.indexOf('no-agents')).toBeLessThan(keys.indexOf('backup-off'))
+  })
+})
+
+describe('runRules — health', () => {
+  it('flags an enabled decider that cannot answer, quoting its problem', () => {
+    const ctx = healthyCtx({ decider: { enabled: true, ready: false, problem: 'no model' } })
+    const card = runRules(ctx).find((r) => r.key === 'decider-not-ready')
+    expect(card?.variant).toBe('warning')
+    expect(card?.desc).toContain('no model')
+  })
+
+  it('stays silent for a ready or disabled decider and for a failed probe', () => {
+    for (const decider of [
+      { enabled: true, ready: true },
+      { enabled: false, ready: false },
+      null,
+      undefined,
+    ]) {
+      expect(keysOf(healthyCtx({ decider }))).not.toContain('decider-not-ready')
+    }
+  })
+
+  it('flags a manual-only insight scan but not a scheduled one or a failed probe', () => {
+    expect(keysOf(healthyCtx({ insight: {} }))).toContain('insight-scan-off')
+    expect(keysOf(healthyCtx({ insight: { autoScanCron: '0 3 * * *' } }))).not.toContain(
+      'insight-scan-off',
+    )
+    expect(keysOf(healthyCtx({ insight: null }))).not.toContain('insight-scan-off')
   })
 })

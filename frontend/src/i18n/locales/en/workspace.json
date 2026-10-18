@@ -38,8 +38,6 @@
       "agentCount_one": "{{count}} agent",
       "agentCount_other": "{{count}} agents",
       "flow": "flow",
-      "coordinatorCount_one": "{{count}} coordinator",
-      "coordinatorCount_other": "{{count}} coordinators",
       "automationCount_one": "{{count}} automation",
       "automationCount_other": "{{count}} automations"
     },
@@ -359,6 +357,19 @@
         "desc": "Add an MCP server to connect external data or tools, either from the market or by importing .mcp.json.",
         "action": "Open Market"
       },
+      "decider-not-ready": {
+        "title": "Decision model is not ready",
+        "summary": "The decider is on but cannot answer, so every authority falls back to its default.",
+        "desc": "The decision model is enabled but not answering ({{problem}}). Authorities silently fall back to their defaults until it is fixed.",
+        "action": "Decider settings",
+        "unknown": "no reason reported"
+      },
+      "insight-scan-off": {
+        "title": "Insight scan is manual",
+        "summary": "No automatic schedule runs the retrospective insight scan.",
+        "desc": "The insight scan only runs when started by hand. Set an auto-scan schedule so recurring problems surface on their own.",
+        "action": "Open insights"
+      },
       "backup-off": {
         "title": "Backups are off",
         "summary": "Periodic zip backups are disabled across the app.",
@@ -385,10 +396,10 @@
   "agents": {
     "intro": "Choose which system agent runs each worker profile and system role in this workspace. Only our system agents can be picked — the built-in or a customisation you derived from it in Settings ▸ Agent library; ordinary agents never run these jobs. Changes save immediately.",
     "groupHints": {
-      "workers": "The system agent that runs when a coordinator spawns a profile such as `explore` or `coder`. The profile's tool list always applies.",
+      "workers": "The system agent that runs when run_subagent delegates to a profile such as `explore` or `coder`. The profile's tool list always applies.",
       "helpers": "Background helpers for every conversation: titles, context compaction and overview summaries.",
       "analysis": "Used by insight scans and lesson extraction. Also editable from Insight.",
-      "optimizers": "Flow observer (also in Flows ▸ Evolution), recipe optimizer (also in Insight ▸ Settings) and the coordinator stall judge."
+      "optimizers": "Flow observer (also in Flows ▸ Evolution)."
     }
   }
 }

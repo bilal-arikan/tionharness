@@ -71,7 +71,6 @@ describe('viewIdForType', () => {
   })
 
   it('returns null for app-global types that carry no badge', () => {
-    expect(viewIdForType('coordination')).toBeNull()
     expect(viewIdForType('automation')).toBeNull()
     expect(viewIdForType('agent')).toBeNull()
     expect(viewIdForType('anomaly')).toBeNull()

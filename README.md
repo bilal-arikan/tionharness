@@ -100,12 +100,9 @@ dokümantasyon sitesi, Astro — Go modülünün dışındadır).
 - **Otomasyon (automation)** — olay tetikli kurallar (etiketli oturumun bitmesi, kart durumu
   değişmesi gibi) bir ajanı veya akışı çalıştırır. Zamanlamalarla birlikte "Otomasyon"
   ekranında yönetilir.
-- **Rota (trajectory)** — bir koordinatör ağacının ilan edilen planı (reçetenin `phases:`
-  bloğu ya da ajanın `trajectory` aracı) ile gözlenen gerçeklerin (worker'lar, akış koşuları,
-  otomasyon ateşlemeleri, insan kapıları) tek grafta buluşması. Rota hiçbir şeyi çalıştırmaz;
-  runtime yazar, "Rota" ekranı ve ajan okur. Faz kapıları (artifact / verdict / human), faz
-  bitişi ve rota sonu tetikli otomasyonlar, koşu özeti, LLM'siz haftalık küratör ve yalnız
-  öneri üreten reçete optimizer'ı bunun üstüne kuruludur.
+- **Rota** — oturumların zaman ekseninde şerit görünümü: hangi oturum ne zaman çalıştı,
+  ne kadar sürdü. Yalnız okur; hiçbir şeyi çalıştırmaz. LLM'siz haftalık küratör bitmiş
+  otomasyon ve zamanlamaları arşivler.
 - **Skill** — ajanın talep üzerine yüklediği yeniden kullanılabilir talimat paketi; bağlamı
   şişirmemek için tam metin yalnız gerektiğinde okunur.
 - **Araçlar & MCP** — yerleşik araçlar (dosya oku/yaz/düzenle, glob/grep, shell [opsiyonel],

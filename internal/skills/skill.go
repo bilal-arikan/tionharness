@@ -11,9 +11,6 @@
 package skills
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/seed"
 )
@@ -37,34 +34,6 @@ const (
 	VisibilityHidden = "hidden"
 )
 
-// KindCoordinatorWorkflow marks a skill as a saved coordinator recipe (M5): a
-// reusable orchestration pattern rather than plain instructions. Match it
-// case-insensitively via IsCoordinatorWorkflow.
-const KindCoordinatorWorkflow = "coordinator-workflow"
-
-// PatternValues are the orchestration strategies a coordinator-workflow recipe
-// may encode (see _Docs/47 §4). "custom" is the escape hatch for a recipe whose
-// body defines its own combination.
-var PatternValues = []string{
-	"fanout",          // Fanout-And-Synthesize
-	"adversarial",     // Adversarial Verification
-	"loop",            // Loop Until Done
-	"classify",        // Classify-And-Act
-	"generate-filter", // Generate-And-Filter
-	"tournament",      // Tournament
-	"custom",          // recipe-defined combination
-}
-
-// KnownPattern reports whether p is one of PatternValues (case-insensitive).
-func KnownPattern(p string) bool {
-	for _, v := range PatternValues {
-		if strings.EqualFold(strings.TrimSpace(p), v) {
-			return true
-		}
-	}
-	return false
-}
-
 // UsableErr reports why the skill may not be loaded or applied, or nil when it
 // may. Today the only such state is Archived; the error wraps archive.ErrArchived.
 func (s Skill) UsableErr() error {
@@ -72,56 +41,6 @@ func (s Skill) UsableErr() error {
 		return archive.Error("skill", s.Slug, s.Name)
 	}
 	return nil
-}
-
-// IsCoordinatorWorkflow reports whether this skill is a saved coordinator recipe.
-func (s Skill) IsCoordinatorWorkflow() bool {
-	return strings.EqualFold(strings.TrimSpace(s.Kind), KindCoordinatorWorkflow)
-}
-
-// ResolveCoordinatorWorkflow validates a coordinator recipe slug and returns the
-// max-turns override it carries (0 = keep the caller's default). An empty slug
-// clears the selection. A non-empty slug that does not resolve to a
-// coordinator-workflow skill, or carries an unknown pattern, is a hard error — a
-// bad selection is surfaced, never silently ignored.
-//
-// Lives here (a leaf package) rather than beside the HTTP handler so both entry
-// points can share it: the session-role API and a flow's coordinator node.
-func ResolveCoordinatorWorkflow(store *Store, slug string) (maxTurns int, err error) {
-	sk, err := ResolveRecipe(store, slug)
-	if err != nil || sk == nil {
-		return 0, err
-	}
-	return sk.MaxTurns, nil
-}
-
-// ResolveRecipe is ResolveCoordinatorWorkflow returning the whole skill. ref may
-// be a bare slug or "slug@version" (RecipeRef); the version part is informational
-// — the CURRENT file is what resolves, and a mismatch is not an error (the
-// trajectory records the version it was seeded from, the session runs the
-// recipe as it is now). A nil skill with a nil error means an empty ref.
-func ResolveRecipe(store *Store, ref string) (*Skill, error) {
-	slug, _ := ParseRecipeRef(ref)
-	if slug == "" {
-		return nil, nil
-	}
-	if store == nil {
-		return nil, fmt.Errorf("skills store unavailable")
-	}
-	sk, ok := store.Get(slug)
-	if !ok {
-		return nil, fmt.Errorf("workflow %q not found", slug)
-	}
-	if !sk.IsCoordinatorWorkflow() {
-		return nil, fmt.Errorf("skill %q is not a coordinator-workflow", slug)
-	}
-	if err := sk.UsableErr(); err != nil {
-		return nil, err
-	}
-	if sk.Pattern != "" && !KnownPattern(sk.Pattern) {
-		return nil, fmt.Errorf("workflow %q has unknown pattern %q (want one of %v)", slug, sk.Pattern, PatternValues)
-	}
-	return &sk, nil
 }
 
 // Source identifies which tier a skill was resolved from. The workspace tier
@@ -206,33 +125,9 @@ type Skill struct {
 	// can progressively load deeper instructions on demand (e.g. an overview skill
 	// pointing at a detailed per-feature skill). Set from frontmatter `subskills:`.
 	SubSkills []string `json:"subSkills,omitempty"`
-	// Kind classifies a non-standard skill. Empty is a normal instructional skill;
-	// "coordinator-workflow" marks a saved coordinator recipe (M5) — a reusable
-	// orchestration pattern selectable in the coordinator composer. Set from
-	// frontmatter `kind`. UI lists coordinator-workflow skills in a separate picker.
+	// Kind classifies a non-standard skill. Empty is a normal instructional
+	// skill. Set from frontmatter `kind`.
 	Kind string `json:"kind,omitempty"`
-	// Pattern is the orchestration strategy a coordinator-workflow recipe encodes
-	// (one of PatternValues). Only meaningful when Kind=="coordinator-workflow".
-	// Set from frontmatter `pattern`. Validated at apply time (KnownPattern).
-	Pattern string `json:"pattern,omitempty"`
-	// WorkerTargets are the DEFAULT fan-out targets (agent names or profiles like
-	// explore/coder/reviewer) a coordinator-workflow suggests. Advisory — the
-	// coordinator may override them. Set from frontmatter `worker_targets`.
-	WorkerTargets []string `json:"workerTargets,omitempty"`
-	// StopCondition is a human-readable done-criteria for loop-style recipes
-	// (e.g. "no new findings in 2 rounds"). Injected into the coordinator prompt.
-	// Set from frontmatter `stop_condition`.
-	StopCondition string `json:"stopCondition,omitempty"`
-	// MaxTurns optionally overrides CoordinatorMaxTurns for this recipe (0 = keep
-	// the workspace default). Set from frontmatter `max_turns`.
-	MaxTurns int `json:"maxTurns,omitempty"`
-	// Recipe is the STRUCTURED part of a coordinator-workflow recipe (phases,
-	// watchers, optimizer — see recipe.go), parsed and validated at load. nil for
-	// a prose-only recipe and for a non-recipe skill. When the block is present
-	// but invalid, Recipe stays nil and RecipeError says why — the skill still
-	// loads and works as prose, but no trajectory is seeded from it.
-	Recipe      *RecipeSpec `json:"recipe,omitempty"`
-	RecipeError string      `json:"recipeError,omitempty"`
 	// Source is the tier this skill was resolved from.
 	Source Source `json:"source"`
 	// ModifiedAt is the SKILL.md file's last-modified time (Unix seconds), surfaced
@@ -250,7 +145,7 @@ type Skill struct {
 	// `archived: true`, written by Store.SetArchived). The file stays on disk and
 	// the Skills screen lists it under its archive view, but the skill is out of
 	// every agent-facing surface: never advertised in "# Available Skills", never
-	// returned by skill_search, and use_skill / recipe resolution refuse it with
+	// returned by skill_search, and use_skill resolution refuses it with
 	// an explicit ErrArchived error. Unarchiving drops the marker.
 	Archived bool `json:"archived,omitempty"`
 	// Path is the absolute path of the backing SKILL.md (not serialised; the

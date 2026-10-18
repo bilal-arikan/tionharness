@@ -296,7 +296,7 @@ func (d *DB) AddMessageWithCLIState(ctx context.Context, m Message, state CLIRep
 	}
 	if state.UpdateResume && state.ResumeInputMsgCount > 0 && len(msgs) > state.ResumeInputMsgCount {
 		// The CLI already knows its answer, but not these concurrent notes. Replay
-		// the answer on the next delta rather than skipping an unseen worker note.
+		// the answer on the next delta rather than skipping an unseen note.
 		state.ResumeSentMsgCount = state.ResumeInputMsgCount
 	}
 	applyCLIReplyState(&target, state)

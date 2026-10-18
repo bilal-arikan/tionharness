@@ -50,20 +50,15 @@ func TestSessionHookEmitsLifecycleEvents(t *testing.T) {
 	rt.wsID = "WS-test"
 	drain := collectWS(t, rt)
 	rt.db.SetSessionHook(rt.OnSessionChange)
-	rt.db.SetTrajectoryHook(rt.OnTrajectoryChange)
 	ctx := context.Background()
 
 	a, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic", Model: "m"})
-	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Title: "T", CoordinatorMode: true})
+	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Title: "T"})
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	if err := rt.db.SetSessionState(ctx, sess.ID, "archived"); err != nil {
 		t.Fatalf("archive: %v", err)
-	}
-	tr, err := rt.db.CreateTrajectory(ctx, db.Trajectory{RootSessionID: sess.ID, TemplateRef: "r@1"})
-	if err != nil {
-		t.Fatalf("create trajectory: %v", err)
 	}
 	if err := rt.db.DeleteSession(ctx, sess.ID); err != nil {
 		t.Fatalf("delete: %v", err)
@@ -71,19 +66,15 @@ func TestSessionHookEmitsLifecycleEvents(t *testing.T) {
 
 	got := drain()
 	var lifecycle []SessionLifecyclePayload
-	var traj []TrajectoryPayload
 	for _, e := range got {
 		if e.WorkspaceID != "WS-test" {
 			t.Fatalf("event %s not stamped with the workspace: %q", e.Type, e.WorkspaceID)
 		}
-		switch e.Type {
-		case events.TypeWSSessionLifecycle:
+		if e.Type == events.TypeWSSessionLifecycle {
 			p := decodeData[SessionLifecyclePayload](t, e)
 			if p.SessionID == sess.ID {
 				lifecycle = append(lifecycle, p)
 			}
-		case events.TypeWSTrajectory:
-			traj = append(traj, decodeData[TrajectoryPayload](t, e))
 		}
 	}
 	wantOps := []string{db.SessionOpCreate, db.SessionOpState, db.SessionOpDelete}
@@ -95,15 +86,11 @@ func TestSessionHookEmitsLifecycleEvents(t *testing.T) {
 			t.Fatalf("lifecycle[%d].Op = %q, want %q", i, lifecycle[i].Op, op)
 		}
 	}
-	if lifecycle[0].Origin.Kind != db.OriginUser || !lifecycle[0].Coordinator || lifecycle[0].RootSessionID != sess.ID {
-		t.Fatalf("create payload = %+v, want user origin, coordinator, self root", lifecycle[0])
+	if lifecycle[0].Origin.Kind != db.OriginUser || lifecycle[0].RootSessionID != sess.ID {
+		t.Fatalf("create payload = %+v, want user origin, self root", lifecycle[0])
 	}
 	if lifecycle[1].PrevState != "active" || lifecycle[1].State != "archived" {
 		t.Fatalf("state payload = %+v, want active→archived", lifecycle[1])
-	}
-	// Trajectory: create, then the root delete drops it.
-	if len(traj) != 2 || traj[0].Op != db.TrajectoryOpCreate || traj[0].TrajectoryID != tr.ID || traj[0].Revision != 1 || traj[1].Op != db.TrajectoryOpDelete {
-		t.Fatalf("trajectory events = %+v, want create(rev 1) then delete", traj)
 	}
 }
 

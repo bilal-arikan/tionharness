@@ -1,9 +1,9 @@
 # 82 — Ajan Kalıtımı ve Kilitli Yerleşik Ajanlar
 
-> **Özet (2026-09-03):** Ajanlar artık başka bir ajandan **kalıtım** alabilir
+> **Özet (2026-10-18):** Ajanlar artık başka bir ajandan **kalıtım** alabilir
 > (`parentId`): override edilmeyen her alan ebeveynin etkin değerinden okunur, `overrides`
 > listesi hangi alanların bu ajana özel olduğunu söyler. Uygulamanın kendi işleri için
-> kullandığı sistem ajanları (titler, compaction, worker profilleri…) her workspace'te
+> kullandığı sistem ajanları (titler, compaction, "Worker: X" alt-ajan profilleri…) her workspace'te
 > **kilitli** (`locked`) yerleşik satırlar olarak tutulur: düzenlenemez, silinemez, her
 > açılışta koddan yeniden dayatılır. Özelleştirmek için "Özelleştir" ile rolü devralan bir
 > çocuk türetilir; çocuk etkinken rol ondan, değilse yerleşikten çözülür. UI'da ajan
@@ -11,7 +11,7 @@
 > "devralındı / override" durumunu ve tek tıkla "devral" (sıfırlama) eylemini gösterir.
 > Durum: **uygulandı**. Dayandığı dosyalar: `internal/db/agent_inherit.go`,
 > `internal/db/store_agent_system.go`, `internal/db/store_agent_derive.go`,
-> `internal/api/agent_inherit.go`, `frontend/src/features/agents/*`.
+> `internal/api/agent_inherit.go`, `frontend/src/features/agents/*`. `coordinator*` alanları kalıtım birimlerinden çıkarıldı.
 
 ## 1. Neden
 
@@ -38,7 +38,7 @@ Kalıtım birimleri (`internal/db/agent_inherit.go`, `inheritableFields` tablosu
 `soul`, `identity`, `provider` (kind + instance birlikte), `model`, `thinkingLevel`,
 `nativeWebSearch`, `permissionMode`, `inboundPolicy`, `avatar`, `color`, `tools`
 (`mcpEnabled` + `toolOverrides` + türetilmiş `blockedTools` birlikte), `allowedTools`,
-`skills`, `coordinatorMode`, `coordinatorWorkflow`, `coordinatorPrompt`.
+`skills`. (`coordinatorMode`, `coordinatorWorkflow`, `coordinatorPrompt` 2026-10-18'de koordinatör modu ile birlikte kalıtım listesinden çıkarıldı.)
 
 **Devralınmayan** kimlik alanları: `id`, `name`, `system`/`systemKey`, `disabled`,
 `locked`, `parentId`, `overrides`, `createdBy`, `deleted`, zaman damgaları.
@@ -50,8 +50,8 @@ Diskteki satır ham değerleri tutar; override edilmemiş bir alanın ham değer
 her mutatorun döndürdüğü değer `resolveAgentLocked` ile katlanmış **etkin** ajandır: zincir
 kökten başlayarak katman katman uygulanır (`applyInheritance`). Eksik ebeveyn veya elle
 yazılmış döngü okumayı asla kırmaz — yürüyüş bulunabilen son satırda durur
-(`maxInheritanceDepth = 32`). Oturum oluşturma (`CreateSession`) model anlık görüntüsünü ve
-koordinatör varsayılanını da etkin satırdan alır.
+(`maxInheritanceDepth = 32`). Oturum oluşturma (`CreateSession`) model anlık görüntüsünü
+etkin satırdan alır.
 
 ### Yazma kuralları (`UpdateAgent`)
 
@@ -94,7 +94,7 @@ tanımdan ID'siz ajan kurma yolu yalnız tohumlanmamış depolar için kaldı.
 ### Göç (eski tek satırlı model → kilitli + çocuk)
 
 Her tanım için, kilitli satır yoksa **en eski** eski satır **yerinde** kilitli yerleşiğe
-çevrilir: ID'si korunur (worker oturumları ona bağlıdır), değerleri kanonik olana döner —
+çevrilir: ID'si korunur (oturumlar ona bağlıdır), değerleri kanonik olana döner —
 taşıdığı eski düzenlemeler **atılır**, çünkü bu modelde rol yalnız türetilmiş çocukla
 özelleştirilir. Aynı anahtarın diğer kilitsiz satırları (devre dışı bırakılmış
 `worker:<profil>` kopyaları) yerleşiğin altına bağlanır. `compactor → overview-summarizer`
@@ -144,7 +144,7 @@ değerleri dondurulmuş bağımsız bir kök, çocuğun klonu aynı ebeveyn + ay
   Rozetler (`SystemAgentStatusBadge`): 🔒 *yerleşik* / *rolü sağlıyor* / *yerleşik tanım
   etkin* (devre dışı özelleştirme).
 - **Yeni Ajan formu:** "Kalıtım (ebeveyn ajan)" seçimi. Ebeveyn seçilince
-  sağlayıcı/model/koordinatör alanları gizlenir (devralınır), yalnız ad + isteğe bağlı soul
+  sağlayıcı/model alanları gizlenir (devralınır), yalnız ad + isteğe bağlı soul
   girilir.
 - **Ayar formu (`AgentSettingsForm`):**
   - Başlıkta `AgentLineageChips`: "Kalıtım: Titler › Türkçe Titler › (bu ajan)" — atalara

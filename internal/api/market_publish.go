@@ -186,12 +186,6 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			MCPEnabled: a.MCPEnabled, AllowedTools: a.AllowedTools, BlockedTools: a.BlockedTools,
 			ToolOverrides: a.ToolOverrides,
 			Skills:        a.Skills,
-			// Without these a published team loses its orchestration shape: the agents
-			// come back as plain chat agents and the user has to rediscover which one
-			// was the coordinator.
-			CoordinatorMode:     a.CoordinatorMode,
-			CoordinatorWorkflow: a.CoordinatorWorkflow,
-			CoordinatorPrompt:   a.CoordinatorPrompt,
 		})
 	}
 

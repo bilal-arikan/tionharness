@@ -53,10 +53,9 @@ type Server struct {
 	bus           *events.Bus       // autonomous notifications streamed to the UI over SSE
 	hub           *sessionhub.Hub   // per-session ordered event log (cursor-based, all windows subscribe)
 	interactions  *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
-	inbox         *inboxStore       // per-session durable command queue (serial worker → turns)
+	inbox         *inboxStore       // per-session durable command queue (serial dispatcher → turns)
 	runs          *chatRuns         // in-flight streaming turns (stop/steer control)
 	teardownLocks sessionTeardownLocks
-	stopWorker    func(context.Context, *workspace.Workspace, string) error
 	deleteSession func(context.Context, *workspace.Workspace, string) error // test seam for delete-lock ordering
 	grants        *permGrantStore                                           // per-session "Always allow" permission grants
 	skillLedgers  *skillLedgerStore                                         // per-session use_skill dedupe (body sent once per fold epoch)
@@ -246,9 +245,8 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 	go s.bridgeBusToHub()
 	// Re-dispatch any durably-queued messages left by a crash/restart (Faz 3).
 	go s.recoverInboxes()
-	// Reclaim autonomous background turns (worker/spawn/coordinator) orphaned by a
-	// crash/restart: mark them interrupted + notify the coordinator so it resumes
-	// instead of waiting forever on a worker that will never report.
+	// Reclaim detached spawn turns orphaned by a crash/restart: mark them
+	// interrupted so they read as finished instead of hanging.
 	go s.recoverAutonomousTurns()
 	// Decision-model layer (internal/decider): one hub per process, reached by
 	// every workspace runtime through the shared tunables.
@@ -327,11 +325,6 @@ func (s *Server) applySettings() {
 	s.tun.SetTurnIdleWatchdogMinutes(cur.TurnIdleWatchdogMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
-	s.tun.SetAgentMessageMaxBytes(cur.AgentMessageMaxKB * 1024)
-	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns,
-		cur.CoordinatorMaxDepth, cur.CoordinatorMaxSubtreeSessions)
-	s.tun.SetCoordinatorSettleGrace(cur.CoordinatorSettleGraceSec)
-	s.tun.SetCoordinatorStallGuard(cur.CoordinatorStallGuard, cur.CoordinatorStallSweepMin, cur.CoordinatorStallMaxNudges)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.AutonomousBootSeq)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)
 	s.tun.SetProviderRetryMax(cur.MaxProviderRetries)
@@ -456,7 +449,7 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	// Cross-workspace live-run flags (switcher pulse for non-active workspaces).
 	mux.HandleFunc("GET /api/workspaces/activity", s.handleWorkspacesActivity)
 	// Ordered, replayable per-workspace lifecycle stream (sessions, flow runs,
-	// schedules, automations, trajectories) — the workspace-level twin of
+	// schedules, automations) — the workspace-level twin of
 	// /api/sessions/{id}/stream (_Docs/77 R3).
 	mux.HandleFunc("GET /api/workspace/stream", s.handleWorkspaceStream)
 	// The composed "what is running right now" snapshot + spawn capacity (_Docs/77 R2).
@@ -464,21 +457,6 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	// The native processes agents spawned, running + recent history (internal/procwatch).
 	mux.HandleFunc("GET /api/workspace/processes", s.handleListProcesses)
 	mux.HandleFunc("POST /api/workspace/processes/{id}/stop", s.handleStopProcess)
-	// Trajectory ("Rota") reads: index rows + one full graph (_Docs/77 R4, F0).
-	mux.HandleFunc("GET /api/trajectories", s.handleListTrajectories)
-	// Rota F3: per-recipe rollup of the index (registered before the {id}
-	// route so "recipes" is never read as an id), on-demand summary, curator.
-	mux.HandleFunc("GET /api/trajectories/recipes", s.handleRecipeStats)
-	mux.HandleFunc("GET /api/trajectories/by-node", s.handleTrajectoryByNode)
-	mux.HandleFunc("GET /api/trajectories/{id}", s.handleGetTrajectory)
-	mux.HandleFunc("POST /api/trajectories/{id}/summarize", s.handleSummarizeTrajectory)
-	// Rota F5: canvas actions (CAS on expectedRev) + fork-here.
-	mux.HandleFunc("POST /api/trajectories/{id}/plan", s.handlePlanTrajectory)
-	mux.HandleFunc("POST /api/trajectories/{id}/phase", s.handleSetTrajectoryPhase)
-	mux.HandleFunc("POST /api/trajectories/{id}/finish", s.handleFinishTrajectory)
-	mux.HandleFunc("POST /api/sessions/{id}/workers", s.handleSpawnWorker)
-	mux.HandleFunc("GET /api/recipes/{slug}/optimizer", s.handleRecipeOptimizerState)
-	mux.HandleFunc("POST /api/recipes/{slug}/optimize", s.handleOptimizeRecipe)
 	mux.HandleFunc("GET /api/curator/report", s.handleCuratorReport)
 	mux.HandleFunc("POST /api/curator/run", s.handleCuratorRun)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
@@ -589,14 +567,6 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sessions/{id}/tags", s.handleSetSessionTags)
 	mux.HandleFunc("PUT /api/sessions/{id}/messages/{msgId}/feedback", s.handleSetMessageFeedback)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)
-	mux.HandleFunc("PUT /api/sessions/{id}/role", s.handleSetSessionRole)
-	mux.HandleFunc("POST /api/sessions/{id}/coordinator/resume", s.handleResumeCoordinator)
-	mux.HandleFunc("PUT /api/sessions/{id}/workflow", s.handleSetSessionWorkflow)
-	mux.HandleFunc("GET /api/sessions/{id}/workers", s.handleListWorkers)
-	// Coordinator TREE navigation: /tree takes any member id and returns the whole
-	// tree from its root; /ancestors is the upward breadcrumb from a worker.
-	mux.HandleFunc("GET /api/sessions/{id}/coordinator-tree", s.handleSessionCoordinatorTree)
-	mux.HandleFunc("GET /api/sessions/{id}/coordinator-ancestors", s.handleSessionCoordinatorAncestors)
 	mux.HandleFunc("GET /api/sessions/{id}/workdir", s.handleGetSessionWorkdir)
 	mux.HandleFunc("PUT /api/sessions/{id}/workdir", s.handleSetSessionWorkdir)
 	mux.HandleFunc("GET /api/fs/browse", s.handleBrowseDirs)

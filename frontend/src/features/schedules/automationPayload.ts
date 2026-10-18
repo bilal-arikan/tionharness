@@ -4,8 +4,6 @@ import type {
   BoardOp,
   FlowRuleStatus,
   SessionMode,
-  TrajEndStatus,
-  TrajEvent,
 } from '@/types'
 import { DEFAULT_MAX_ITERATIONS } from './automationMeta'
 import { localInputToUnix } from './timeUtils'
@@ -21,10 +19,6 @@ export interface AutomationPayloadInput {
   boardExclusive: boolean
   boardAction: BoardAction
   boardMoveToState: string
-  trajPhase: string
-  trajRecipe: string
-  trajEvent: TrajEvent
-  trajStatus: TrajEndStatus
   flowAgentId: string
   flowStatus: FlowRuleStatus
   flowMaxGrade: number
@@ -50,21 +44,13 @@ export function buildAutomationPayload(input: AutomationPayloadInput) {
         boardAction: input.boardAction,
         boardMoveToState: input.boardMoveToState,
       }
-    : input.kind === 'phase'
+    : input.kind === 'flow'
       ? {
-          trajPhase: input.trajPhase.trim(),
-          trajRecipe: input.trajRecipe.trim(),
-          trajEvent: input.trajEvent,
+          flowAgentId: input.flowAgentId.trim(),
+          flowStatus: input.flowStatus,
+          flowMaxGrade: input.flowMaxGrade,
         }
-      : input.kind === 'trajectory_end'
-        ? { trajRecipe: input.trajRecipe.trim(), trajStatus: input.trajStatus }
-        : input.kind === 'flow'
-          ? {
-              flowAgentId: input.flowAgentId.trim(),
-              flowStatus: input.flowStatus,
-              flowMaxGrade: input.flowMaxGrade,
-            }
-          : { triggerTag: input.triggerTag.trim() }
+      : { triggerTag: input.triggerTag.trim() }
   const target = isTargetlessAction ? { targetAgentId: '' } : { targetAgentId: input.targetAgentId }
 
   return {

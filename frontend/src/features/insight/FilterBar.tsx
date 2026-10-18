@@ -46,7 +46,6 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         <option value="">{t('filters.allChannels')}</option>
         <option value="app-fix">{t('channel.appFix')}</option>
         <option value="workspace-opt">{t('channel.workspaceOpt')}</option>
-        <option value="recipe-opt">{t('channel.recipeOpt')}</option>
       </select>
 
       <select

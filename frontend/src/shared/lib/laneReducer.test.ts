@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Session } from '@/types/session'
 import type { WorkspaceHubEvent } from '@/api/workspaceEvents'
-import { emptyLanes, laneMembers, rootLanes, trajectoryForRoot } from './laneModel'
+import { emptyLanes, laneMembers, rootLanes } from './laneModel'
 import {
   applyLaneEvent,
   markConnection,
   markStale,
   seedLiveness,
   seedSessions,
-  seedTrajectories,
 } from './laneReducer'
 
 function header(partial: Partial<Session> & { id: string }): Session {
@@ -36,17 +35,15 @@ function ev(
 describe('lane reducer', () => {
   it('seeds sessions and groups them into root lanes', () => {
     const s = seedSessions(emptyLanes(), [
-      header({ id: 'ROOT', coordinatorMode: true, updatedAt: 5 }),
+      header({ id: 'ROOT', updatedAt: 5 }),
       header({
         id: 'W1',
-        kind: 'worker',
-        origin: { kind: 'coordinator', triggerSessionId: 'ROOT', rootSessionId: 'ROOT', at: 1 },
+        origin: { kind: 'spawn', triggerSessionId: 'ROOT', rootSessionId: 'ROOT', at: 1 },
         updatedAt: 6,
       }),
       header({
         id: 'W2',
-        kind: 'worker',
-        origin: { kind: 'coordinator', triggerSessionId: 'ROOT', rootSessionId: 'ROOT', at: 1 },
+        origin: { kind: 'spawn', triggerSessionId: 'ROOT', rootSessionId: 'ROOT', at: 1 },
         updatedAt: 3,
       }),
       header({ id: 'SOLO', updatedAt: 9 }),
@@ -108,43 +105,6 @@ describe('lane reducer', () => {
     expect(gone.sessions.has('A')).toBe(false)
   })
 
-  it('keeps the highest trajectory revision', () => {
-    const base = emptyLanes()
-    const r2 = applyLaneEvent(
-      base,
-      ev(1, 'trajectory', {
-        trajectoryId: 'RTA1',
-        rootSessionId: 'ROOT',
-        op: 'update',
-        revision: 2,
-        nodeCount: 3,
-      }),
-    )
-    const r1 = applyLaneEvent(
-      r2,
-      ev(2, 'trajectory', {
-        trajectoryId: 'RTA1',
-        rootSessionId: 'ROOT',
-        op: 'update',
-        revision: 1,
-        nodeCount: 1,
-      }),
-    )
-    expect(r1).toBe(r2)
-    expect(trajectoryForRoot(r2, 'ROOT')?.nodeCount).toBe(3)
-    const del = applyLaneEvent(
-      r2,
-      ev(3, 'trajectory', {
-        trajectoryId: 'RTA1',
-        rootSessionId: 'ROOT',
-        op: 'delete',
-        revision: 0,
-        nodeCount: 0,
-      }),
-    )
-    expect(del.trajectories.size).toBe(0)
-  })
-
   it('tracks liveness from the snapshot and from events', () => {
     let s = seedSessions(emptyLanes(), [header({ id: 'A' }), header({ id: 'B' })])
     s = seedLiveness(s, {
@@ -175,65 +135,17 @@ describe('lane reducer', () => {
     ).toBe(queued)
   })
 
-  it('rings fires and activity, ignores unknown kinds', () => {
+  it('rings fires, ignores unknown kinds', () => {
     let s = emptyLanes()
     s = applyLaneEvent(
       s,
       ev(1, 'automation_fire', { automationId: 'AUT1', triggerKind: 'tag', outcome: 'fired' }),
     )
-    s = applyLaneEvent(
-      s,
-      ev(2, 'spawn', {
-        coordinatorId: 'C',
-        workerId: 'W',
-        rootId: 'C',
-        depth: 1,
-        agentRef: 'x',
-        at: 50,
-      }),
-    )
-    s = applyLaneEvent(
-      s,
-      ev(
-        3,
-        'coordination',
-        { coordinatorId: 'C', reason: 'no progress', at: 60 },
-        { phase: 'stall_halt' },
-      ),
-    )
     expect(s.fires).toHaveLength(1)
     expect(s.fires[0]).toMatchObject({ automationId: 'AUT1', seq: 1, at: 1001 })
-    expect(s.activity.map((a) => a.kind)).toEqual(['spawn', 'coordination'])
-    expect(s.activity[1].phase).toBe('stall_halt')
-    expect(s.head).toBe(3)
-    expect(applyLaneEvent(s, ev(4, 'something_else', {}))).toBe(s)
-  })
-
-  it('seeds trajectories from index rows without rolling back a newer revision', () => {
-    let s = applyLaneEvent(
-      emptyLanes(),
-      ev(1, 'trajectory', {
-        trajectoryId: 'RTA1',
-        rootSessionId: 'ROOT',
-        op: 'update',
-        revision: 5,
-        nodeCount: 4,
-      }),
-    )
-    const row = {
-      id: 'RTA1',
-      rootSessionId: 'ROOT',
-      status: 'running' as const,
-      revision: 3,
-      nodeCount: 2,
-      createdAt: 1,
-      updatedAt: 2,
-    }
-    expect(seedTrajectories(s, [row])).toBe(s)
-    s = seedTrajectories(s, [{ ...row, id: 'RTA2', rootSessionId: 'OTHER', revision: 1 }])
-    expect(s.trajectories.size).toBe(2)
-    expect(trajectoryForRoot(s, 'OTHER')?.nodeCount).toBe(2)
-    expect(trajectoryForRoot(s, 'ROOT')?.revision).toBe(5)
+    expect(s.head).toBe(1)
+    expect(applyLaneEvent(s, ev(2, 'spawn', { coordinatorId: 'C', workerId: 'W' }))).toBe(s)
+    expect(applyLaneEvent(s, ev(3, 'something_else', {}))).toBe(s)
   })
 
   it('lifecycle events carry createdAt, falling back to the origin stamp', () => {

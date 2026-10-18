@@ -116,18 +116,6 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if sh := wsp.Runtime.ShellToolsContextBlock(ctx, agentRow, false); sh != "" {
 		lead = append(lead, pin("shell", sh))
 	}
-	// Coordination scratchpad (M2/M3): a shared folder the coordinator and ALL its
-	// workers can read/write, injected for both so they converge on the SAME path.
-	if sb := coordinationScratchpadBlock(wsp, session); sb != "" {
-		lead = append(lead, pin("scratchpad", sb))
-	}
-	// Coordinator situation snapshot: live fleet state, the spawnable agent roster
-	// with each agent's write capability, and the board — authoritative and
-	// refreshed every turn, so the coordinator never re-reads it with tool calls.
-	if cb := wsp.Runtime.CoordinatorSituationBlock(ctx, session); cb != "" {
-		lead = append(lead, awareness.Section{Key: "situation", Text: cb, Priority: 1, Volatile: true,
-			Pointer: "## Coordinator situation\nThe fleet/board snapshot was omitted to fit the context budget; list_workers and get_view board carry it."})
-	}
 	// Prompt-epoch drift notice: the frozen snapshot is holding back a live
 	// change. A compact diff of WHAT changed on the volatile side, so telling the
 	// agent about the drift never causes the very cache bust the snapshot exists
@@ -161,9 +149,9 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 // compactionLeadStep builds the head-of-turn step that surfaces an auto-compaction
 // fold on screen (same 🗜 framing as the manual /compact report). fold comes from
 // conversation.Prepared.Fold. Shared by the interactive (chat_stream) and
-// autonomous (wake/coordinator/worker via wake_turn) turn paths so a budgeted fold
+// autonomous (wake via wake_turn) turn paths so a budgeted fold
 // renders identically no matter which kind of turn triggered it — the fix for
-// "compaction ran on a spawned/coordinator turn but I can't see it".
+// "compaction ran on a spawned turn but I can't see it".
 //
 // The step carries the fold's figures as structured fields so the UI can render a
 // typed compaction card; Text keeps the original human-readable line so a client
@@ -244,7 +232,7 @@ func consumeCacheBreakLead(rt *agent.Runtime, sessionID string) []agent.TurnStep
 }
 
 // buildStaticPrefix composes the STATIC system prefix for one chat turn from
-// LIVE state: persona, coordinator manual, agent-name note, multi-agent history
+// LIVE state: persona, agent-name note, multi-agent history
 // note, user context, workspace instructions, artifact guidance, and the skills/
 // lazy-tools/capability catalog blocks. It is the single source the prompt epoch
 // freezes (EpochStaticSystem) — MUST stay pure (no side effects) and cheap: on a
@@ -252,21 +240,6 @@ func consumeCacheBreakLead(rt *agent.Runtime, sessionID string) []agent.TurnStep
 // detection, not shipped.
 func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, multiAgent bool) string {
 	system := buildSystemPrompt(agentRow)
-	// Coordinator sessions (M2, _Docs/47) lead with the coordinator operating manual
-	// so the agent drives workers, synthesizes their notifications itself, and runs
-	// the research→synthesis→implementation→verification loop. Role is stable, so
-	// this sits in the cached static prefix. Only a coordinator session gets it (and
-	// only a coordinator session gets the spawn_worker/send_to_worker/... tools).
-	// Includes a MID-LEVEL node of a coordinator tree (a worker with coordinator
-	// mode on): it needs the manual for its own workers plus the upward-reporting
-	// rules for its parent.
-	if session.IsCoordinator() {
-		// Registry prompt "coordinator" (workspace override → embedded default).
-		manual := agent.WorkspacePrompt(wsp.DataDir, "coordinator")
-		lead := coordinatorLeadBlock(manual, agentRow.CoordinatorPrompt,
-			coordinatorRecipeBlock(wsp, session), coordinatorSubordinateBlock(session))
-		system = strings.TrimSpace(lead + "\n\n" + system)
-	}
 	// Tell the agent its own name and how "@name" references work. The message is
 	// addressed to THIS agent (chosen from the UI dropdown). An "@name" inside the
 	// message is just a NAME REFERENCE — the user pointing at who they mean — NOT a

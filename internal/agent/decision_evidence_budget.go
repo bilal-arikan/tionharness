@@ -36,7 +36,7 @@ func (r *Runtime) fitDecisionEvidence(authority string, req decider.Request) dec
 			}
 			state["sessionContext"] = e
 		}
-		for _, key := range []string{"task", "summary", "workerResult"} {
+		for _, key := range []string{"task", "summary"} {
 			if text, ok := state[key].(string); ok {
 				state[key] = shrink(text)
 			}

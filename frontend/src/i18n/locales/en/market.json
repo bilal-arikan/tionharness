@@ -154,8 +154,6 @@
       "instructions": "Instructions",
       "agents_one": "Agents ({{count}})",
       "agents_other": "Agents ({{count}})",
-      "coordinator": "coordinator",
-      "coordinatorTitle": "New chats opened by this agent start as coordinators and can manage workers",
       "providerUnspecified": "provider not specified",
       "toolOverrides": "tool overrides",
       "flows_one": "Flows ({{count}})",

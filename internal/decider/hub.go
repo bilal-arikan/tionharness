@@ -201,13 +201,13 @@ func WithBackground(run func(func())) CallOption {
 	return func(o *callOptions) { o.background = run }
 }
 
-// WithRef tags ledger records with a session, run or trajectory id.
+// WithRef tags ledger records with a session or run id.
 func WithRef(ref string) CallOption {
 	return func(o *callOptions) { o.ref = ref }
 }
 
 // WithOutcome renders a response in the authority's own vocabulary for the
-// challenger comparison ("stalled"/"ok" rather than "yes"/"no"). Default:
+// challenger comparison ("ask"/"pass" rather than "yes"/"no"). Default:
 // Verdict at the authority's threshold.
 func WithOutcome(fn func(*Response) (string, float64)) CallOption {
 	return func(o *callOptions) { o.outcome = fn }

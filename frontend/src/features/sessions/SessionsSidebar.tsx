@@ -18,7 +18,6 @@ import {
   Archive,
   ArchiveRestore,
   Pin,
-  Users,
   PencilLine,
 } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '@/types'
@@ -47,16 +46,13 @@ import {
   SESSION_LIST_CHIPS,
   sessionMatchesChips,
   sessionLiveScope,
-  WORKER_CHIP,
   SUBAGENT_CHIP,
   sessionChipKey,
 } from './sessionKindMeta'
 import { RunStateBadge, StatusPill } from './sessionKindBadges'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
-import { isWorkerSession } from '@/shared/lib/coordination'
 import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 import { sessionMatchesQuery } from './sessionSearch'
-import { countLiveDescendantWorkers } from './liveWorkerCounts'
 import { sessionListModel } from './sessionListModel'
 import { SESSION_GROUPS, sessionGroupOf, type SessionGroup } from './sessionGroup'
 import { useTranslation } from 'react-i18next'
@@ -99,11 +95,11 @@ interface Props {
   showArchived: boolean
   onToggleArchived: () => void
   // chipKey → count within the selected archive side from the list response.
-  // The two live chips stay counted over loaded rows because liveness is
-  // client state.
+  // The live chip stays counted over loaded rows because liveness is client
+  // state.
   chipCountsFromServer?: Record<string, number>
   // The selected tab: the conversations a person started ('main') or every
-  // worker / subagent / task / automation / insight run ('other'). Owned above
+  // subagent / task / automation / insight run ('other'). Owned above
   // the sidebar because the list request carries it; without onChangeGroup the
   // tab strip is hidden and every row shows.
   group?: SessionGroup
@@ -166,7 +162,7 @@ export function SessionsSidebar({
   onQueryChange,
 }: Props) {
   const { t } = useTranslation('sessions')
-  // One flat list filtered by multi-select kind, worker and live chips. The
+  // One flat list filtered by multi-select kind and live chips. The
   // archive view is selected separately. The chip selection lives above this
   // component because the session list request carries it — the server pages
   // the filtered set, so paging and the chips have to share one source of truth.
@@ -197,14 +193,6 @@ export function SessionsSidebar({
   // Sessions holding an unsent composer draft (localStorage, active workspace).
   const draftIds = useDraftSessionIds()
 
-  // coordinatorSessionId → how many workers anywhere below it have a live turn.
-  // The executions feed carries the complete workspace lineage, so a deep worker
-  // remains visible at the root even when worker rows are filtered or not paged in.
-  const liveWorkerCounts = useMemo(
-    () => countLiveDescendantWorkers(sessions, runtimeById, streamingSessionIds),
-    [sessions, streamingSessionIds, runtimeById],
-  )
-
   // chipShapeOf builds the one shape both the chip counters and the visible-list
   // filter classify a session with, so a chip's badge count can never disagree
   // with how many rows that chip actually keeps.
@@ -213,19 +201,17 @@ export function SessionsSidebar({
       kind: s.kind,
       category: s.category,
       executionType: s.executionType,
-      isWorker: isWorkerSession(s),
       isArchived: s.state === 'archived',
       isRunning:
         (streamingSessionIds?.has(s.id) ?? false) || (runtimeById?.get(s.id)?.running ?? false),
-      liveWorkerCount: liveWorkerCounts.get(s.id) ?? 0,
     }),
-    [streamingSessionIds, runtimeById, liveWorkerCounts],
+    [streamingSessionIds, runtimeById],
   )
 
   // Chip badges. The server counts every chip it can classify over the WHOLE
   // archive side (before the chips filter), which is the only source that still
   // knows what an unticked chip hides now that its rows never reach this list.
-  // The two live chips are client state, so they stay counted over loaded rows.
+  // The live chip is client state, so it stays counted over loaded rows.
   const chipCounts = useMemo(() => {
     const counts = new Map<string, number>()
     for (const [key, n] of Object.entries(chipCountsFromServer ?? {})) counts.set(key, n)
@@ -237,15 +223,13 @@ export function SessionsSidebar({
   }, [sessions, chipShapeOf, chipCountsFromServer])
 
   // Group the (already newest-first) sessions into recency buckets, preserving
-  // order. The chip selection narrows first, then a title/session ID search. The worker
-  // check uses the lineage helper, not `role === 'worker'`: a mid-level node of
-  // a nested coordinator tree is a worker too.
+  // order. The chip selection narrows first, then a title/session ID search.
   const groups = useMemo(() => {
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
       if ((s.state === 'archived') !== showArchived) continue
       // The server already pages the tab; this keeps a row merged in behind the
-      // filter (the open worker, say) off the conversations tab.
+      // filter (the open subagent run, say) off the conversations tab.
       if (group && sessionGroupOf(s) !== group) continue
       if (!sessionMatchesChips(chipShapeOf(s), chipSet)) continue
       if (!sessionMatchesQuery(s, query)) continue
@@ -458,7 +442,7 @@ export function SessionsSidebar({
         )}
       </div>
 
-      {/* Multi-select chips: every session kind plus the Worker and live scopes.
+      {/* Multi-select chips: every session kind plus the live scope.
           All start selected — unticking a chip hides that slice. The strip folds
           behind its toggle; the badge keeps unticked chips visible when folded. */}
       <div className="px-3 pb-1">
@@ -474,7 +458,7 @@ export function SessionsSidebar({
         <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
           {SESSION_LIST_CHIPS.map((f) => {
             const on = chipSet.has(f.key)
-            const Icon = f.key === WORKER_CHIP ? Users : f.key === SUBAGENT_CHIP ? Sparkles : null
+            const Icon = f.key === SUBAGENT_CHIP ? Sparkles : null
             return (
               <button
                 key={f.key}
@@ -527,8 +511,6 @@ export function SessionsSidebar({
                 // autonomous task/flow/schedule turns this window never streamed).
                 const isStreaming =
                   (streamingSessionIds?.has(s.id) ?? false) || (runtime?.running ?? false)
-                // Its own turn is idle, but workers below it are running.
-                const liveWorkers = liveWorkerCounts.get(s.id) ?? 0
                 const hasDraft = draftIds.has(s.id)
                 const meta = kindMeta(sessionChipKey(s))
                 const KindIcon = meta.icon
@@ -570,18 +552,6 @@ export function SessionsSidebar({
                             >
                               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
                               <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
-                            </span>
-                          ) : liveWorkers > 0 ? (
-                            // Idle itself, but its branch is working: same pulse
-                            // in the coordination accent so a delegating row is
-                            // not read as finished. Takes precedence over the
-                            // unread dot for the same reason a live turn does.
-                            <span
-                              className="relative flex h-2 w-2 shrink-0"
-                              title={t('sidebar.workersRunning', { count: liveWorkers })}
-                            >
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-warning)] opacity-75" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-warning)]" />
                             </span>
                           ) : (
                             s.unread && (
@@ -631,7 +601,7 @@ export function SessionsSidebar({
                           {!isStreaming && runtime?.lastStatus && (
                             <StatusPill status={runtime.lastStatus} />
                           )}
-                          {/* How the last BACKGROUND turn ended (worker/spawn/
+                          {/* How the last BACKGROUND turn ended (spawn/
                               schedule runs). Independent of the archive filter:
                               this is the run outcome, `state` is visibility.
                               Hidden while a turn is live — the pulsing dot and

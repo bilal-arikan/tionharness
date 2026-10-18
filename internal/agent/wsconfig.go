@@ -92,7 +92,7 @@ func (r *Runtime) readPrompt(key string) string {
 
 // WorkspacePrompt resolves a registry prompt for a workspace data dir — the
 // same override→default resolution readPrompt applies, exported for callers
-// outside a Runtime (the api layer's coordinator prefix, for one).
+// outside a Runtime (the api layer, for one).
 func WorkspacePrompt(wsDir, key string) string {
 	if wsDir == "" {
 		return prompts.Default(key)
@@ -112,7 +112,7 @@ değiştirebilir.
   runtime promptunu bu workspace için geçersiz kılar. Anahtar listesi ve her
   promptun açıklaması Ayarlar → Promptlar & Dosyalar ekranındadır (summary,
   title, compact, handoff, continuation, lesson, insight-analyzer,
-  auto-continue, coordinator, subagent-*).
+  auto-continue, subagent-*).
 - ` + "`instructions.md`" + ` — bu workspace'teki tüm ajanlara eklenen yönergeler
 
 Bir prompt dosyası yoksa/boşsa uygulama **gömülü varsayılanı** kullanır. Bazı

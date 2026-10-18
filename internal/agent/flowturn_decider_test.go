@@ -298,6 +298,7 @@ func TestFlowObserverSkipsHealthyWindow(t *testing.T) {
 	ctx := context.Background()
 	f, _ := rt.db.EnsureAgentFlow(ctx, a.ID)
 	pol := db.DefaultFlowPolicy()
+	pol.Mode = db.FlowPolicyPropose // a new flow's observer is off by default
 	pol.EveryRuns = 2
 	if _, err := rt.db.UpdateFlowMeta(ctx, f.ID, nil, nil, &pol); err != nil {
 		t.Fatal(err)

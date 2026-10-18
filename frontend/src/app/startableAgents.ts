@@ -6,7 +6,7 @@ import type { Agent } from '@/types'
  * roles (titler, compaction, insight, …) serve the runtime and the backend
  * refuses to make one the default agent (workspace.ErrDefaultAgentSystem), and
  * worker profiles (systemKey "subagent-*", "Worker: Coder" etc.) are what
- * run_subagent / spawn_worker delegate to — background executors, not
+ * run_subagent delegates to — background executors, not
  * conversation partners. Archived agents are never startable.
  */
 export function isStartableAgent(agent: Agent): boolean {
@@ -16,7 +16,7 @@ export function isStartableAgent(agent: Agent): boolean {
 }
 
 /** The composer's agent dropdown: the startable roster, plus the session's
- * current agent when it is not in it (a worker or system session opened from
+ * current agent when it is not in it (a subagent or system session opened from
  * the background tab), so the picker can still show who answers there. */
 export function selectableChatAgents(
   startable: Agent[],

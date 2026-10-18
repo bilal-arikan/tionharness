@@ -226,10 +226,10 @@ func TestCreateAgentValidatesInheritance(t *testing.T) {
 }
 
 // TestSessionSeedsFromEffectiveAgent: session creation reads the RESOLVED
-// agent (model snapshot, coordinator default), not the child's raw cache.
+// agent (model snapshot), not the child's raw cache.
 func TestSessionSeedsFromEffectiveAgent(t *testing.T) {
 	d, ctx := openInheritDB(t)
-	parent, _ := d.CreateAgent(ctx, Agent{Name: "Base", Model: "opus", CoordinatorMode: true, CoordinatorWorkflow: "wf"})
+	parent, _ := d.CreateAgent(ctx, Agent{Name: "Base", Model: "opus"})
 	child, _ := d.DeriveAgent(ctx, parent.ID, DeriveAgentOptions{})
 	if _, err := d.UpdateAgent(ctx, parent.ID, AgentProfilePatch{Model: new("sonnet")}); err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ func TestSessionSeedsFromEffectiveAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Model != "sonnet" || !s.CoordinatorMode || s.CoordinatorWorkflow != "wf" {
-		t.Fatalf("session seeded from raw row: model=%q coordinator=%v wf=%q", s.Model, s.CoordinatorMode, s.CoordinatorWorkflow)
+	if s.Model != "sonnet" {
+		t.Fatalf("session seeded from raw row: model=%q", s.Model)
 	}
 }

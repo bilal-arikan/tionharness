@@ -59,9 +59,9 @@ func TestWorkspaceSubscribeReceivesLive(t *testing.T) {
 	if head != 1 {
 		t.Fatalf("head at subscribe = %d, want 1", head)
 	}
-	h.PublishWorkspace("WS1", KindWSTrajectory, raw("live"))
+	h.PublishWorkspace("WS1", KindWSFlowRun, raw("live"))
 	ev := <-ch
-	if ev.Seq != 2 || ev.Kind != KindWSTrajectory {
+	if ev.Seq != 2 || ev.Kind != KindWSFlowRun {
 		t.Fatalf("live event = %+v, want seq 2 trajectory", ev)
 	}
 	h.UnsubscribeWorkspace("WS1", id)

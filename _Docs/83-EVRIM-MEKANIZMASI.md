@@ -3,7 +3,11 @@
 > **Tarihsel belge (2026-09-29):** Hedefler ekranı, Goal varlığı, fitness hesabı,
 > konfigürasyon snapshot'ı ve workspace-evolver işlevi kaldırıldı. Aşağıdaki
 > uygulandı işaretleri kaldırılmadan önceki durumu anlatır; güncel kod için
-> kaynak değildir.
+> kaynak değildir. **2026-10-18:** Rota grafiğiyle birlikte `recipe-optimizer`, reçete
+> istatistikleri (`internal/trajectory/recipestats.go`), `recipe-opt` içgörü kanalı,
+> küratörün reçete kuralları, `/api/recipes*` ve koordinatör alanları
+> (`coordinatorMode/Workflow/Prompt`) da kaldırıldı; aşağıdaki "zaten var" tabloları ve reçete
+> metrikleri bu yüzden de güncel değildir.
 
 > **Özet (2026-09-22):** Araştırma + beyin fırtınası dokümanı; **E0–E2 uygulandı**, sürüm kırılımı 2026-09-22'de sağlamlaştırıldı (§8.1d: yetersiz-veri kapısı, medyan/kırpılmış ortalama, ajan filtresi, araç çağrısı başına maliyet, sağlayıcı/auth hatalarının hata oranından ayrılması) (Goal varlığı — 2026-09-14'te sadeleştirildi, §4.1 notu: doğrudan oluşturma + yalnız okunan alanlar; `goal-writer` sistem ajanı, Hedefler ekranı; konfigürasyon snapshot'ı + oturum atfı + LLM'siz fitness; `workspace-evolver` yalnız-öneri geçişi + kodda kural katmanı — §8), E3+ tasarım. Amaç:
 > workspace için kaydedilip düzenlenebilen **Hedefler (Goals)** tanımlamak ve ajan
@@ -56,16 +60,16 @@ Kod haritası (2026-09-04). Depo dosya tabanlı: "tablo" = `store/` altında diz
 
 | Mekanizma | Dosya | Ne yapar | Bu özelliğe katkısı |
 |---|---|---|---|
-| **Reçete optimizer** (Rota F4) | `internal/agent/recipe_optimizer.go`, `internal/db/store_optimizer.go` | ≥3 yeni koşu / failed / elle tetik; LLM 9 eylemden öneri üretir; kanıt/sayı yoksa **kodda atılır**; büyüme bütçesi; `AutoPrune` ile budama sınıfı otomatik uygulanır (`skills.ApplyRecipeProposal`, sürüm artar, yeniden ayrıştırıp doğrular) | Doğrudan şablon. Genel optimizer bunun çok-yüzeyli hali |
+| ~~**Reçete optimizer** (Rota F4)~~ — **kaldırıldı 2026-10-18** | `internal/agent/recipe_optimizer.go`, `internal/db/store_optimizer.go` | ≥3 yeni koşu / failed / elle tetik; LLM 9 eylemden öneri üretir; kanıt/sayı yoksa **kodda atılır**; büyüme bütçesi; `AutoPrune` ile budama sınıfı otomatik uygulanır (`skills.ApplyRecipeProposal`, sürüm artar, yeniden ayrıştırıp doğrular) | Doğrudan şablon. Genel optimizer bunun çok-yüzeyli hali |
 | **İçgörü taraması** (`_Docs/60`) | `internal/insight/*`, `internal/agent/insightscan.go` | Lens dosyaları, inkremental ledger, üç kanal (`app-fix`, `workspace-opt`, `recipe-opt`), `Finding` yaşam döngüsü, **`Regressed`** (kapanan bulgu geri gelirse işaret), **`ErrAppliedNeedsEvidence`** (applied için `AppliedEntity` zorunlu) | Öneri kuyruğu + yaşam döngüsü + regresyon tespiti hazır. `workspace-tuning` lensi zaten skill > agent > tools-config > hook/automation > insight > CLAUDE.md öncelik sırasıyla öneri üretiyor |
-| **Küratör** (Rota F3) | `internal/db/store_curator.go` | LLM'siz haftalık geçiş; `CuratorAction{Kind, Entity, Reason, Evidence, Applied}` | Deterministik, kanıtlı, provenance'lı eylem kaydı deseni |
-| **Ajan kalıtımı** (`_Docs/82`) | `internal/db/agent_inherit.go:50-115` | 16 kalıtılabilir alan (`soul, identity, provider, model, thinkingLevel, nativeWebSearch, permissionMode, inboundPolicy, avatar, color, tools, allowedTools, skills, coordinatorMode, coordinatorWorkflow, coordinatorPrompt`), `derive`, `restore-default` | **Hazır genom şeması + varyant sistemi.** Türet → 1-2 alanı override et → ölç → geri al. Ajan için ayrı sürümleme tablosu gerekmez |
+| **Küratör** (Rota F3; reçete kuralları kaldırıldı 2026-10-18) | `internal/db/store_curator.go` | LLM'siz haftalık geçiş; `CuratorAction{Kind, Entity, Reason, Evidence, Applied}` | Deterministik, kanıtlı, provenance'lı eylem kaydı deseni |
+| **Ajan kalıtımı** (`_Docs/82`) | `internal/db/agent_inherit.go:50-115` | 16 kalıtılabilir alan (`soul, identity, provider, model, thinkingLevel, nativeWebSearch, permissionMode, inboundPolicy, avatar, color, tools, allowedTools, skills` — koordinatör alanları 2026-10-18'de çıkarıldı), `derive`, `restore-default` | **Hazır genom şeması + varyant sistemi.** Türet → 1-2 alanı override et → ölç → geri al. Ajan için ayrı sürümleme tablosu gerekmez |
 
 ### 2.2 Fitness sinyali olarak kullanılabilir telemetri (hepsi LLM'siz)
 
 | Sinyal | Kaynak | Alanlar |
 |---|---|---|
-| Reçete istatistikleri | `internal/trajectory/recipestats.go:17` | `Runs, Done, Failed, Abandoned, AvgDurationSec, AvgTokens, AvgCostUSD, AvgSessions, GateWaitSec, UnfiredWatchers, GhostPhases` — **sürüm başına** |
+| ~~Reçete istatistikleri~~ (kaldırıldı 2026-10-18) | `internal/trajectory/recipestats.go:17` | `Runs, Done, Failed, Abandoned, AvgDurationSec, AvgTokens, AvgCostUSD, AvgSessions, GateWaitSec, UnfiredWatchers, GhostPhases` — **sürüm başına** |
 | Kullanım / maliyet | `internal/db/store_usage.go` | cache read/write ayrımı, `ByKind`, `ByModel`, `CoolingWasteUSD` |
 | Pano sonuçları | `internal/api/dashboard_outcomes.go` | `VelocityByDay, CardsDoneWindow, CycleTimeAvgSec, RunSuccessRate` |
 | Otomasyon sayaçları | `Automation.IterationCount/LastError`, `automation-fires/` | tetik verimi, hata oranı |

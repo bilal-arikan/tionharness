@@ -18,8 +18,8 @@ interface Props {
 // this is a ceiling rather than a page size — there is no pagination here.
 const LIST_LIMIT = 300
 
-// The `process` SSE frame fires per state change, so starting a fan-out of
-// workers emits a burst. Coalesce a burst into a single refetch.
+// The `process` SSE frame fires per state change, so starting several
+// processes at once emits a burst. Coalesce a burst into a single refetch.
 const REFETCH_DEBOUNCE_MS = 300
 
 const STATUS_LABEL_KEY: Record<ProcessStatus, string> = {

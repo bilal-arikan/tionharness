@@ -11,8 +11,9 @@ import (
 
 const autoAcceptProposal = `{"noChange":false,"reason":"add a critic","expected":"fewer errors","confidence":0.9,"ops":[{"op":"insert_between","from":"respond","to":"output","node":{"id":"critic","type":"llm","context":"fresh","tools":"none","prompt":"Review: {{node.respond}}"}}]}`
 
-// autoAcceptFixture is an agent with one run on its default flow and an
-// observer that always answers with the proposal returned by reply.
+// autoAcceptFixture is an agent with one run on its default flow (policy
+// "propose" — a new flow's observer is off by default) and an observer that
+// always answers with the proposal returned by reply.
 func autoAcceptFixture(t *testing.T, rt *Runtime, reply func() string) (db.Agent, db.Flow) {
 	t.Helper()
 	installFlowTestProvider(t, rt, okProvider(func(u string) string {
@@ -26,19 +27,22 @@ func autoAcceptFixture(t *testing.T, rt *Runtime, reply func() string) (db.Agent
 	if err != nil {
 		t.Fatal(err)
 	}
+	f = setFlowMode(t, rt, f.ID, db.FlowPolicyPropose)
 	if _, _, err := runTurn(t, rt, a, "hello"); err != nil {
 		t.Fatal(err)
 	}
 	return a, f
 }
 
-func setFlowMode(t *testing.T, rt *Runtime, flowID, mode string) {
+func setFlowMode(t *testing.T, rt *Runtime, flowID, mode string) db.Flow {
 	t.Helper()
 	pol := db.DefaultFlowPolicy()
 	pol.Mode = mode
-	if _, err := rt.db.UpdateFlowMeta(context.Background(), flowID, nil, nil, &pol); err != nil {
+	f, err := rt.db.UpdateFlowMeta(context.Background(), flowID, nil, nil, &pol)
+	if err != nil {
 		t.Fatal(err)
 	}
+	return f
 }
 
 // TestFlowAutoAcceptWorkspaceSwitch: with the workspace switch on, a propose

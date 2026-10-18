@@ -16,7 +16,6 @@ import { groupSystemAgents, isBuiltinSystemAgent } from './agentRoster'
 import { api, getActiveWorkspace } from '@/api'
 import { useReferencedAgents } from '@/shared/hooks/useReferencedAgents'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import {
   Button,
   PromptEditor,
@@ -52,9 +51,6 @@ interface Props {
     soul: string,
     provider: string,
     model: string,
-    /** Coordinator defaults for the sessions the new agent opens. Optional so
-     * callers that never expose the toggle keep the plain four-arg shape. */
-    coordinator?: { mode: boolean; workflow: string; prompt: string },
     /** Create as a CHILD of this agent (inherits provider/model/… from it). */
     parentId?: string,
   ) => void
@@ -176,14 +172,8 @@ export function AgentsView({
   // valid pick: the catalog's "… oturum modeli" entry, which leaves the model
   // decision to the CLI session.
   const [model, setModel] = useState<string | null>(null)
-  // Coordinator defaults on the create form, mirroring AgentSettingsForm: the
-  // recipe and the prompt only appear once the mode is on, and are sent empty
-  // when it is off so a non-coordinator carries no orchestration leftovers.
-  const [coordinatorMode, setCoordinatorMode] = useState(false)
-  const [coordinatorWorkflow, setCoordinatorWorkflow] = useState('')
-  const [coordinatorPrompt, setCoordinatorPrompt] = useState('')
   // "" = start from scratch; otherwise the new agent inherits from this one and
-  // the provider/model/coordinator inputs are hidden (they come from the parent).
+  // the provider/model inputs are hidden (they come from the parent).
   const [createParentId, setCreateParentId] = useState('')
 
   // Selection is controlled by the parent (deep-link aware) when provided,
@@ -280,21 +270,14 @@ export function AgentsView({
   const submit = () => {
     if (!canSubmit) return
     if (createParentId) {
-      onCreateAgent(name.trim(), soul.trim(), '', '', undefined, createParentId)
+      onCreateAgent(name.trim(), soul.trim(), '', '', createParentId)
     } else {
       if (model === null) return
-      onCreateAgent(name.trim(), soul.trim(), provider, model, {
-        mode: coordinatorMode,
-        workflow: coordinatorMode ? coordinatorWorkflow : '',
-        prompt: coordinatorMode ? coordinatorPrompt : '',
-      })
+      onCreateAgent(name.trim(), soul.trim(), provider, model)
     }
     setName('')
     setSoul('')
     setModel(null)
-    setCoordinatorMode(false)
-    setCoordinatorWorkflow('')
-    setCoordinatorPrompt('')
     setCreateParentId('')
     setShowForm(false)
   }
@@ -354,15 +337,6 @@ export function AgentsView({
                     </span>
                   )}
                   <SystemAgentStatusBadge agent={a} />
-                  {a.coordinatorMode && (
-                    <span
-                      data-testid="agent-coordinator-badge"
-                      className="ml-1.5 shrink-0 text-[11px]"
-                      title={t('view.coordinatorTitle')}
-                    >
-                      🕸
-                    </span>
-                  )}
                   <span
                     className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
                     title={t('view.idTitle')}
@@ -495,47 +469,16 @@ export function AgentsView({
               data-testid="agent-create-soul-textarea"
             />
             {!createParentId && (
-              <>
-                <div data-testid="agent-create-provider-wrap" className="contents">
-                  <ProviderInstanceModelSelect
-                    providerInstanceId={provider}
-                    model={model}
-                    onChange={(_kindId, instanceId, m) => {
-                      setProvider(instanceId)
-                      setModel(m)
-                    }}
-                  />
-                </div>
-                <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--color-text)]">
-                  <input
-                    type="checkbox"
-                    data-testid="agent-create-coordinator-mode"
-                    checked={coordinatorMode}
-                    onChange={(e) => setCoordinatorMode(e.target.checked)}
-                    className="mt-0.5 accent-[var(--color-accent)]"
-                  />
-                  <span className="flex items-center gap-1">
-                    {t('view.coordinatorCreate')}
-                    {coordinatorMode && <InfoPopover text={t('view.coordinatorPromptHelp')} />}
-                  </span>
-                </label>
-                {coordinatorMode && (
-                  <>
-                    <CoordinatorWorkflowPicker
-                      value={coordinatorWorkflow}
-                      onChange={setCoordinatorWorkflow}
-                      groupName="agent-create-recipe"
-                    />
-                    <PromptEditor
-                      data-testid="agent-create-coordinator-prompt-textarea"
-                      value={coordinatorPrompt}
-                      onChange={setCoordinatorPrompt}
-                      placeholder={t('view.coordinatorPrompt')}
-                      rows={3}
-                    />
-                  </>
-                )}
-              </>
+              <div data-testid="agent-create-provider-wrap" className="contents">
+                <ProviderInstanceModelSelect
+                  providerInstanceId={provider}
+                  model={model}
+                  onChange={(_kindId, instanceId, m) => {
+                    setProvider(instanceId)
+                    setModel(m)
+                  }}
+                />
+              </div>
             )}
             <Button
               onClick={submit}

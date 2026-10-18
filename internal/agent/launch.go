@@ -17,9 +17,6 @@ const (
 	TriggerSchedule        RunTrigger = "schedule"
 	TriggerAutomationTag   RunTrigger = "automation:tag"
 	TriggerAutomationBoard RunTrigger = "automation:board"
-	// Rota (F2): a declared phase finished / was entered, a trajectory ended.
-	TriggerAutomationPhase         RunTrigger = "automation:phase"
-	TriggerAutomationTrajectoryEnd RunTrigger = "automation:trajectory_end"
 	// Flows (_Docs/93): a flow run finished (flow-kind automation), or a
 	// trigger node inside a run fired an automation of any kind.
 	TriggerAutomationFlow RunTrigger = "automation:flow"

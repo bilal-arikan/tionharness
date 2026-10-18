@@ -12,13 +12,12 @@ import (
 )
 
 // Sidecar is a typed JSON file that lives NEXT TO an entity rather than inside
-// the entity store proper — a per-session queue, a crash-recovery snapshot, a
-// trajectory. Every sidecar in this package shares three needs that used to be
+// the entity store proper — a per-session queue or a crash-recovery snapshot.
+// Every sidecar in this package shares three needs that used to be
 // re-implemented per file (inbox.json, inflight.json, prompt_epoch.json,
 // progress/): an atomic tmp→rename write, an "absent is not an error" read, and
 // a loud-but-safe answer to a file that no longer parses. Sidecar is that shared
-// implementation; the trajectory store is its first client and the older files
-// migrate to it opportunistically.
+// implementation; the older files migrate to it opportunistically.
 //
 // Locking is the CALLER's: a Sidecar takes no store lock. Whoever owns the
 // entity serialises its own writers (a per-key mutex, like transcriptLock) and

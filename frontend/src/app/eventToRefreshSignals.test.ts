@@ -19,7 +19,6 @@ describe('explorer refresh routing', () => {
   it('sends turn and digest events to the live layer only', () => {
     for (const e of [
       event('chat'),
-      event('worker'),
       event('task'),
       event('awareness_digest'),
       event('interaction', { op: 'open', sessionId: 'SES1' }),

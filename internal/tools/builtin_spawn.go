@@ -17,12 +17,6 @@ type SpawnResult struct {
 	AgentName     string
 	Queued        bool
 	QueuePosition int
-	// TreeBudgetUsed / TreeBudgetTotal carry the coordinator tree's LIVE-worker
-	// occupancy after a spawn_worker call so the tool can surface remaining quota
-	// (and 75%/90% warnings) to the coordinator. Total 0 means no ceiling / not a
-	// worker spawn — the tool then omits the budget line.
-	TreeBudgetUsed  int
-	TreeBudgetTotal int
 }
 
 // SpawnFunc opens a new independent session, records the prompt, and runs the
@@ -40,7 +34,7 @@ type spawnSessionInput struct {
 }
 
 // SpawnSessionTool lets an agent launch a brand-new, independent session for
-// another agent and walk away — a fire-and-forget parallel worker. Unlike
+// another agent and walk away — a fire-and-forget parallel session. Unlike
 // run_subagent (always synchronous: same turn, returns the reply), spawn opens a
 // FRESH session and runs the turn in the background; the spawner does not wait.
 // It is the detached counterpart of run_subagent and the building block for
@@ -72,7 +66,7 @@ func (*SpawnSessionTool) Def() providers.ToolDef {
 			"conversation — it lands in that new session's transcript (visible in the activity " +
 			"feed). So do NOT promise to relay its answer here. When you instead need an answer " +
 			"back NOW, in this turn, use run_subagent (if available). Use spawn_session to fan " +
-			"work out to parallel autonomous workers. Returns the new session id.",
+			"work out to parallel autonomous sessions. Returns the new session id.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

@@ -16,59 +16,21 @@ const (
 	DefaultStuckTurnThreshold = 3 // consecutive bad turns before a session is tagged "stuck" (autonomy refused)
 )
 
-// DefaultCoordinatorStallHaltTotal is the CUMULATIVE stall-nudge count at which a
-// coordinator is hard-halted regardless of its in-memory streak. Same shape as
-// DefaultStuckTurnThreshold, and deliberately the same number: three strikes of the
-// same failure is where "the model is having a bad turn" becomes "the model is
-// wedged". The two counters answer different questions and this tier reads the
-// PERSISTENT one — see Session.StallNudges vs coordSlot.spawnHallucStreak:
-//
-//   - spawnHallucStreak is CONSECUTIVE and in-memory: a clean coordination call zeroes
-//     it and a process restart erases it. It bounds the corrective nudges (max-nudges)
-//     within one wedged stretch.
-//   - Session.StallNudges is CUMULATIVE and persisted: it survives restarts, so a
-//     coordinator that stalls, is nudged into one real call, then stalls again — over
-//     and over, each stretch staying under the nudge cap — is still caught here.
-//
-// A genuinely clean coordinator turn resets the persistent counter too, so the
-// threshold only ever fires on a coordinator that keeps relapsing without recovering.
-// 0 disables this tier (the nudge-budget escalation still runs); <0 → this default.
-const DefaultCoordinatorStallHaltTotal = 3
-
-// DefaultCoordinatorWorkerNoteGrace is how long a freshly delivered worker result
-// exempts the coordinator from phantom-spawn judging. Five minutes covers several
-// ordinary digest/decision turns after a result batch without masking a genuinely
-// abandoned coordinator for long; the independent staleness sweeper remains active.
-const DefaultCoordinatorWorkerNoteGrace = 5 * time.Minute
-
-// DefaultCoordinatorWorkerBatchWindow is the fixed coalescing window opened by
-// the first worker note in a batch. It is deliberately separate from the
-// five-minute stall-guard grace period above.
-const DefaultCoordinatorWorkerBatchWindow = 5 * time.Second
-
 // Default spawn guards. They bound the fire-and-forget spawn_session surface so a
 // burst of spawns can neither pin unbounded goroutines nor fan a single turn out
 // into a spawn storm.
 const (
-	DefaultSpawnMaxConcurrent = 16 // max simultaneously-running spawned sessions
-	DefaultSpawnQueueMax      = 16 // max waiting spawned sessions
-	DefaultSpawnMaxPerTurn    = 4  // max spawns one agent turn may launch
+	DefaultSpawnMaxConcurrent = 4 // max simultaneously-running spawned sessions
+	DefaultSpawnQueueMax      = 8 // max waiting spawned sessions
+	DefaultSpawnMaxPerTurn    = 4 // max spawns one agent turn may launch
 )
 
-// DefaultAgentMessageMaxBytes bounds a single agent→agent / coordinator→worker
-// message body. An oversized message is refused with an explicit
-// message_too_large error rather than being silently truncated or dropped; the
-// one exception is the one-way worker notification path, which has no sender to
-// return an error to and is therefore capped with a visible marker instead.
-// Settings-driven (AgentMessageMaxKB) via applySettings; 0 selects this default.
-const DefaultAgentMessageMaxBytes = 64 * 1024
-
-// DefaultSpawnIdleTimeoutMinutes bounds INACTIVITY inside a background spawn/worker
+// DefaultSpawnIdleTimeoutMinutes bounds INACTIVITY inside a background spawn
 // work turn: the idle watchdog cancels a turn that emits no step (tool/thinking/
 // token) for this long, so a truly hung turn is reclaimed fast while a long-but-
 // productive one (heavy exploration streaming tool calls) runs on. Settings-driven (SpawnIdleTimeoutMin) via applySettings;
 // 0 selects this default.
-const DefaultSpawnIdleTimeoutMinutes = 5
+const DefaultSpawnIdleTimeoutMinutes = 10
 
 // Interactive chat turn bounds. The legacy hard ceiling defaults disabled; the
 // semantic idle window reclaims a
@@ -96,42 +58,6 @@ const DefaultIdleResumeMax = 1
 // Settings-driven (TurnIdleWatchdogMin); 0 selects this default.
 const DefaultTurnIdleWatchdogMinutes = 20
 
-// Default coordinator/worker guards (see internal/agent/coordination.go). They
-// bound the M2 coordination loop so a coordinator can neither fan out unbounded
-// workers nor spin forever on worker → notify → new-turn feedback.
-const (
-	DefaultCoordinatorMaxWorkers = 8  // max active workers a single coordinator may run at once
-	DefaultCoordinatorMaxTurns   = 50 // max auto-triggered coordinator turns per session (notify-loop cap)
-
-	// UnlimitedCoordinatorTurns is the effective ceiling returned when the notify
-	// loop is configured unlimited (settings value -1). It is a finite sentinel, not
-	// a real infinity: the drain loop compares turns >= cap, so any value it can
-	// never reach disables the cap while keeping the comparison total-order safe.
-	UnlimitedCoordinatorTurns = 1 << 30
-
-	// DefaultCoordinatorMaxDepth bounds how deep a coordinator TREE may nest: the
-	// root coordinator is depth 0, its workers depth 1, and a worker may only be
-	// spawned with coordinator mode on while its own children would still fit.
-	//
-	// A depth cap is not optional decoration. Worker count is per-coordinator, so
-	// depth multiplies rather than adds: with the default 8 workers per node, depth
-	// 5 already permits tens of thousands of sessions. 0 means unlimited, which is
-	// supported but deliberately not the default — combine it with the subtree
-	// budget below or a single runaway plan can spawn until the disk fills.
-	DefaultCoordinatorMaxDepth = 5
-
-	// DefaultCoordinatorSettleGraceSec — see agent.DefaultCoordinatorSettleGraceSec
-	// in coordination_tree.go, which owns the rationale. Mirrored here so every
-	// coordinator default reads from one block.
-
-	// DefaultCoordinatorMaxSubtreeSessions bounds the TOTAL number of worker
-	// sessions in one coordinator tree, across every level. The per-coordinator
-	// worker cap cannot do this job: it is enforced per node, so N nodes each
-	// legitimately under their own cap still add up without limit. This is the
-	// budget that actually stops exponential fan-out. 0 means unlimited.
-	DefaultCoordinatorMaxSubtreeSessions = 64
-)
-
 // Tunables holds process-wide, settings-driven knobs that cut across every
 // workspace runtime: an optional model override for auto-title generation and
 // context/journal/memory controls. (Autonomy pausing is per-workspace — see
@@ -157,36 +83,14 @@ type Tunables struct {
 	delegMaxDepth      int // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls      int // 0 → DefaultMaxDelegationCalls
 
-	agentMsgMaxBytes    int // 0 → DefaultAgentMessageMaxBytes (per-message body cap)
 	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
 	spawnQueueMax       int // 0 → DefaultSpawnQueueMax
 	flowRunRetention    int // finished root runs kept per flow; 0 → unlimited
 	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
-	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
+	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn inactivity watchdog, in minutes)
 	chatTurnIdleMin     int // 0 = disabled (interactive chat turn inactivity window, in minutes)
 	idleResumeMax       int // <0 → DefaultIdleResumeMax; 0 = disabled; N = N single-shot idle-timeout resumes
 	turnIdleWatchdogMin int // 0 → DefaultTurnIdleWatchdogMinutes (queued-turn inactivity window, in minutes)
-	coordMaxWorkers     int // 0 → DefaultCoordinatorMaxWorkers
-	coordMaxTurns       int // 0 → DefaultCoordinatorMaxTurns
-	coordMaxDepth       int // 0 → DefaultCoordinatorMaxDepth (-1 = unlimited nesting)
-	coordMaxSubtree     int // 0 → DefaultCoordinatorMaxSubtreeSessions (-1 = unlimited)
-	coordSettleGrace    int // 0 → DefaultCoordinatorSettleGraceSec (upward-report backstop delay)
-
-	// Coordinator stall/hallucination protection (see coordination_stall.go). The
-	// master toggle gates the judge-based turn-end guard AND the staleness sweeper
-	// that together catch a coordinator narrating a spawn it never issued (the SES1
-	// freeze). coordStallSweepMin bounds the staleness window; <0 disables the
-	// sweeper while leaving the turn-end guard on. coordStallMaxNudges caps the
-	// consecutive corrective nudges before deferring to the sweeper / turn cap.
-	coordStallGuard     bool          // master switch (default on)
-	coordStallSweepMin  int           // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
-	coordStallMaxNudges int           // 0 → DefaultCoordinatorStallMaxNudges
-	coordWorkerBatch    time.Duration // 0 → DefaultCoordinatorWorkerBatchWindow; <0 disables batching
-	// coordStallHaltTotal is the CUMULATIVE (persisted) stall count that hard-halts a
-	// coordinator even when its in-memory streak keeps being reset. <0 →
-	// DefaultCoordinatorStallHaltTotal; 0 disables this tier.
-	coordStallHaltTotal int
-
 	// Turn recovery (A1) — structural handling of output-token cutoffs and
 	// context overflow inside the native agentic tool loop.
 	reactiveCompact    bool // fold older in-flight history + retry on context overflow
@@ -339,15 +243,6 @@ func NewTunables() *Tunables {
 		// Auto-tagging on by default (production overrides from settings via
 		// SetAutoTagSessions); test runtimes that skip applySettings still auto-tag.
 		autoTagSessions: true,
-		// Coordinator stall protection on by default (production overrides from
-		// settings via SetCoordinatorStallGuard): it only acts on an idle coordinator
-		// that made no coordination tool call, and the judge call is gated behind that
-		// rare condition.
-		coordStallGuard: true,
-		// Cumulative-count halt tier on by default at the built-in threshold: it only
-		// fires on a coordinator that has relapsed into phantom-spawning this many times
-		// across its whole life, which no healthy coordinator ever reaches.
-		coordStallHaltTotal: DefaultCoordinatorStallHaltTotal,
 	}
 }
 
@@ -508,24 +403,6 @@ func (t *Tunables) FlowRunRetention() int {
 	return t.flowRunRetention
 }
 
-// SetAgentMessageMaxBytes sets the per-message body cap for agent messaging.
-// A value of 0 selects the built-in default.
-func (t *Tunables) SetAgentMessageMaxBytes(n int) {
-	t.mu.Lock()
-	t.agentMsgMaxBytes = n
-	t.mu.Unlock()
-}
-
-// AgentMessageMaxBytes returns the per-message body cap (default when unset).
-func (t *Tunables) AgentMessageMaxBytes() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.agentMsgMaxBytes <= 0 {
-		return DefaultAgentMessageMaxBytes
-	}
-	return t.agentMsgMaxBytes
-}
-
 // SpawnQueueMax returns the cap on queued spawned sessions (default when unset).
 func (t *Tunables) SpawnQueueMax() int {
 	t.mu.RLock()
@@ -559,7 +436,7 @@ func (t *Tunables) SpawnMaxPerTurn() int {
 }
 
 // SetSpawnIdleTimeoutMinutes sets the inactivity window (in minutes) after which
-// the idle watchdog cancels a background spawn/worker turn that has emitted no
+// the idle watchdog cancels a background spawn turn that has emitted no
 // step. 0 selects the built-in default.
 func (t *Tunables) SetSpawnIdleTimeoutMinutes(minutes int) {
 	t.mu.Lock()
@@ -567,7 +444,7 @@ func (t *Tunables) SetSpawnIdleTimeoutMinutes(minutes int) {
 	t.mu.Unlock()
 }
 
-// SpawnIdleTimeout returns the spawn/worker inactivity window as a duration
+// SpawnIdleTimeout returns the spawn inactivity window as a duration
 // (default when unset).
 func (t *Tunables) SpawnIdleTimeout() time.Duration {
 	t.mu.RLock()
@@ -629,176 +506,6 @@ func (t *Tunables) TurnIdleWatchdog() time.Duration {
 		m = DefaultTurnIdleWatchdogMinutes
 	}
 	return time.Duration(m) * time.Minute
-}
-
-// SetCoordinatorLimits sets the coordinator/worker guards: the max number of
-// active workers a single coordinator may run at once, the max auto-triggered
-// coordinator turns per session (the notify-loop cap), how deep a coordinator
-// TREE may nest, and how many worker sessions one whole tree may hold. A value of
-// 0 selects the built-in default; -1 disables the depth/subtree bound entirely.
-func (t *Tunables) SetCoordinatorLimits(maxWorkers, maxTurns, maxDepth, maxSubtree int) {
-	t.mu.Lock()
-	t.coordMaxWorkers = maxWorkers
-	t.coordMaxTurns = maxTurns
-	t.coordMaxDepth = maxDepth
-	t.coordMaxSubtree = maxSubtree
-	t.mu.Unlock()
-}
-
-// SetCoordinatorSettleGrace sets how long (seconds) the upward-report backstop
-// waits after a sub-coordinator's branch goes quiet before auto-reporting for it.
-// 0 selects the built-in default.
-func (t *Tunables) SetCoordinatorSettleGrace(sec int) {
-	t.mu.Lock()
-	t.coordSettleGrace = sec
-	t.mu.Unlock()
-}
-
-// CoordinatorSettleGrace returns the upward-report backstop delay. Tune it to the
-// model behind the coordinators: too short and a slow synthesis turn loses the
-// race, so the parent gets a needless "incomplete"; too long and a genuinely
-// stalled branch keeps its coordinator waiting.
-func (t *Tunables) CoordinatorSettleGrace() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	sec := t.coordSettleGrace
-	if sec <= 0 {
-		sec = DefaultCoordinatorSettleGraceSec
-	}
-	return time.Duration(sec) * time.Second
-}
-
-// SetCoordinatorStallGuard configures the coordinator stall/hallucination
-// protection: the master toggle, the staleness sweeper window (minutes; 0 →
-// default, <0 disables the sweeper), and the max consecutive nudges (0 → default).
-func (t *Tunables) SetCoordinatorStallGuard(enabled bool, sweepMin, maxNudges int) {
-	t.mu.Lock()
-	t.coordStallGuard = enabled
-	t.coordStallSweepMin = sweepMin
-	t.coordStallMaxNudges = maxNudges
-	t.mu.Unlock()
-}
-
-// CoordinatorStallGuard reports whether the judge-based stall protection is on.
-func (t *Tunables) CoordinatorStallGuard() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.coordStallGuard
-}
-
-// CoordinatorStallSweep returns the staleness watchdog window as a duration, and
-// whether the sweeper is enabled at all. A negative setting disables the sweeper
-// (the turn-end guard still runs); 0 selects the built-in default.
-func (t *Tunables) CoordinatorStallSweep() (window time.Duration, enabled bool) {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.coordStallSweepMin < 0 {
-		return 0, false
-	}
-	m := t.coordStallSweepMin
-	if m == 0 {
-		m = DefaultCoordinatorStallSweepMin
-	}
-	return time.Duration(m) * time.Minute, true
-}
-
-// CoordinatorStallMaxNudges returns the cap on consecutive corrective nudges
-// (default when unset).
-func (t *Tunables) CoordinatorStallMaxNudges() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.coordStallMaxNudges <= 0 {
-		return DefaultCoordinatorStallMaxNudges
-	}
-	return t.coordStallMaxNudges
-}
-
-// CoordinatorWorkerNoteGrace returns the recent-worker-note exemption window.
-func (*Tunables) CoordinatorWorkerNoteGrace() time.Duration { return DefaultCoordinatorWorkerNoteGrace }
-
-// CoordinatorWorkerBatchWindow returns the first-note batching window.
-func (t *Tunables) CoordinatorWorkerBatchWindow() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.coordWorkerBatch == 0 {
-		return DefaultCoordinatorWorkerBatchWindow
-	}
-	if t.coordWorkerBatch < 0 {
-		return 0
-	}
-	return t.coordWorkerBatch
-}
-
-// CoordinatorStallHaltTotal returns the cumulative stall threshold that hard-halts a
-// coordinator. A returned 0 means the tier is disabled, which is a valid setting.
-func (t *Tunables) CoordinatorStallHaltTotal() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.coordStallHaltTotal < 0 {
-		return DefaultCoordinatorStallHaltTotal
-	}
-	return t.coordStallHaltTotal
-}
-
-// CoordinatorMaxDepth returns how deep a coordinator tree may nest (root = depth
-// 0), or 0 for unlimited nesting. Settings pass -1 to mean unlimited; 0 there
-// means "use the default", so the two are mapped apart here — a caller only ever
-// has to check for 0.
-func (t *Tunables) CoordinatorMaxDepth() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	switch {
-	case t.coordMaxDepth < 0:
-		return 0 // explicitly unlimited
-	case t.coordMaxDepth == 0:
-		return DefaultCoordinatorMaxDepth
-	default:
-		return t.coordMaxDepth
-	}
-}
-
-// CoordinatorMaxSubtreeSessions returns the cap on the total number of worker
-// sessions in ONE coordinator tree (all levels combined), or 0 for unlimited.
-// Same 0-vs--1 mapping as CoordinatorMaxDepth.
-func (t *Tunables) CoordinatorMaxSubtreeSessions() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	switch {
-	case t.coordMaxSubtree < 0:
-		return 0 // explicitly unlimited
-	case t.coordMaxSubtree == 0:
-		return DefaultCoordinatorMaxSubtreeSessions
-	default:
-		return t.coordMaxSubtree
-	}
-}
-
-// CoordinatorMaxWorkers returns the cap on active workers per coordinator session
-// (default when unset).
-func (t *Tunables) CoordinatorMaxWorkers() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.coordMaxWorkers <= 0 {
-		return DefaultCoordinatorMaxWorkers
-	}
-	return t.coordMaxWorkers
-}
-
-// CoordinatorMaxTurns returns the cap on auto-triggered coordinator turns per
-// session. 0 in settings means "use default"; -1 means unlimited (returns the
-// UnlimitedCoordinatorTurns sentinel, which the drain loop can never reach); any
-// positive value is a hard ceiling. Same 0-vs--1 mapping as the subtree budget.
-func (t *Tunables) CoordinatorMaxTurns() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	switch {
-	case t.coordMaxTurns < 0:
-		return UnlimitedCoordinatorTurns
-	case t.coordMaxTurns == 0:
-		return DefaultCoordinatorMaxTurns
-	default:
-		return t.coordMaxTurns
-	}
 }
 
 // SetRecoveryLimits configures the A1 turn-recovery knobs: whether reactive

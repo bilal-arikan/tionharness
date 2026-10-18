@@ -59,16 +59,4 @@ func applyInheritablePatch(a *Agent, p AgentProfilePatch, mark func(key string))
 		a.Skills = *p.Skills
 		mark("skills")
 	}
-	if p.CoordinatorMode != nil {
-		a.CoordinatorMode = *p.CoordinatorMode
-		mark("coordinatorMode")
-	}
-	if p.CoordinatorWorkflow != nil {
-		a.CoordinatorWorkflow = *p.CoordinatorWorkflow
-		mark("coordinatorWorkflow")
-	}
-	if p.CoordinatorPrompt != nil {
-		a.CoordinatorPrompt = *p.CoordinatorPrompt
-		mark("coordinatorPrompt")
-	}
 }

@@ -4,7 +4,7 @@
 > tamamlandı, `go build`/`go vet`/`go test ./...` + frontend `tsc -b` yeşil.
 > Erken notlarda `12-SUBAGENT-ISOLATION.md` adıyla anılmıştı; kalıcı numara **25**.
 >
-> **Özet (2026-09-22):** `run_subagent` tek generic alt-ajan primitifidir: izole ya
+> **Özet (2026-10-18):** `run_subagent` tek generic alt-ajan primitifidir: izole ya
 > da miras bağlam, yerleşik profil ya da mevcut ajan, bloklayan çağrı, geri dönen
 > yalnız final sonuç + artifact **referansları**. Tek çağrıdan **fan-out/fan-in**
 > (`tasks[]` + `strategy` + `max_concurrency`) destekler; stratejiler iki ailedir:
@@ -25,7 +25,7 @@
 > deny, derinlik 1). Stream parser alt-ajanın `parent_tool_use_id`'li olaylarını
 > ana çağrının `SubSteps`'ine katlar ve aynı `StepSubagent` kartı olarak gösterir;
 > yazan / belirli TionHarness ajanına giden delegasyon `run_subagent`'ta kalır.
-> Codex'in `spawn_agent`'ı `codex exec`'te sonuç döndüremediği için kapalı.
+> Codex'in `spawn_agent`'ı `codex exec`'te sonuç döndüremediği için kapalı. koordinatör modu/`spawn_worker`/`stop_worker`/peer mesajları kaldırıldı; arka plan iş için `spawn_session` kullanılır.
 
 ## Amaç
 
@@ -85,8 +85,8 @@ bitene kadar bloklar ve final metnini döndürür; detached/arka plan modu yoktu
 Geçiş dönemi boyunca no-op olarak kabul edilen `wait` alanı **2026-09-06'da
 şemadan tamamen kaldırıldı** (TSK747); araç girdisinde böyle bir eksen yoktur.
 Turdan uzun sürecek iş için ya görev kendi içinde
-tamamlanan birkaç küçük `run_subagent` çağrısına bölünür ya da koordinatör moduna
-geçilip (`set_coordinator_mode`) `spawn_worker` ile arka plan işçisi başlatılır.
+tamamlanan birkaç küçük `run_subagent` çağrısına bölünür ya da detached `spawn_session` ile arka plan oturumu başlatılır
+(koordinatör modu ve `spawn_worker` 2026-10-18'de kaldırıldı).
 
 > **Hedef çözümleme sırası (2026-07-03, fix):** `resolveSubagentTarget` **önce
 > mevcut workspace ajanına** bakar, bulamazsa built-in profile (`explore`/`coder`/
@@ -101,8 +101,8 @@ Eski primitifler artık bu eksenlerin birer kombinasyonu:
 |------|------------------------|
 | **Alt-ajan (Task)** | `target:profile, context:isolated, session:ephemeral` |
 | `call_agent` | `target:agent, context:inherited` |
-| ~~`spawn_session`~~ | (native yüzeyden silindi — arka plan için `spawn_worker`) |
-| ~~`send_agent_message`~~ | (silindi — arka plan için `spawn_worker`) |
+| ~~`spawn_session`~~ | (native yüzeyden silindi; sonradan detached araç olarak geri geldi — arka plan için `spawn_session`) |
+| ~~`send_agent_message`~~ | (silindi — arka plan için `spawn_session`) |
 
 ## Tek araç yüzeyi: `run_subagent`
 
@@ -216,7 +216,7 @@ sebebi, sistem promptunun "# Available Skills" bloğunu her ajana basıp skill
 yüklemesini söylemesi; allowlist'li bir profil aracı göremeyince skill'i sessizce
 atlıyordu. Muafiyet yalnız allowlist'i atlar — workspace düzeyinde kapatılmış veya
 ajanın denylist'inde olan bir skill aracı hâlâ engellidir. Katman sırası ve gerekçe:
-`_Docs/47-KOORDINATOR-COKLU-AJAN.md` §15.5–15.7.
+`_Docs/arsiv/47-KOORDINATOR-COKLU-AJAN.md` §15.5–15.7 (arşiv; özellik kaldırıldı).
 
 ## Guard'lar (yeniden kullanım)
 
@@ -225,7 +225,7 @@ ajanın denylist'inde olan bir skill aracı hâlâ engellidir. Katman sırası v
 - **tur-başı bütçe** (`DefaultMaxDelegationCalls=8`) — fan-out freni (atomik sayaç)
 - **visited-set** — cycle/self koruması (yalnız `target:agent` için anlamlı)
 - **eşzamanlılık slotu** (`acquireSpawnSlot`/`SpawnMaxConcurrent`) — detached spawn
-  yüzeyi (`spawn_worker`, köprülenen `spawn_session`, flow/otomasyon) için
+  yüzeyi (`spawn_session`, flow/otomasyon) için
 
 ## Trace + UI: `subagent` StepKind
 
@@ -339,16 +339,14 @@ Gerekçe: durdurulabilir bir alt-ajan koşusunun tek üreticisi async daldı. Se
 çağıran, çocuğu koşarken araç çağrısının içinde bloklu bekler; o turda ikinci bir
 araç çağrısı — dolayısıyla bir iptal çağrısı — yayınlayamaz. Async gidince
 `stop_subagent`'ın hedefleyebileceği erişilebilir bir koşu kalmadı; araç dar
-değil, ölü hale geldi. (Koordinatör işçileri `Kind="worker"` taşır ve ayrı bir
-araçla — `stop_worker` — durdurulur; bu kaldırmadan etkilenmez.)
+değil, ölü hale geldi. (Koordinatör işçileri ve `stop_worker` sonradan, 2026-10-18'de, tümüyle kaldırıldı.)
 
 Turdan uzun sürebilecek iş için doğru yanıt artık ikiden biridir: işi kendi
-içinde tamamlanan birkaç küçük `run_subagent` çağrısına böl, ya da koordinatör
-moduna geç (`set_coordinator_mode`) ve
-`spawn_worker` ile arka planda koştur. Spawn guard'ları (`SpawnMaxConcurrent`,
+içinde tamamlanan birkaç küçük `run_subagent` çağrısına böl, ya da
+`spawn_session` ile arka planda koştur. Spawn guard'ları (`SpawnMaxConcurrent`,
 `SpawnQueueMax`, `SpawnMaxPerTurn`, `SpawnTimeoutMin`) ve `launchSpawn`'ın iptal
-kaydı **yerinde kalır** — hâlâ `spawn_worker`'a, köprülenen `spawn_session`'a,
-peer mesajlarına, otomasyonlara ve flow'lara hizmet ederler.
+kaydı **yerinde kalır** — hâlâ `spawn_session`'a, otomasyonlara ve flow'lara hizmet ederler
+(`spawn_worker` ve peer mesajları 2026-10-18'de kaldırıldı).
 
 ## Yeniden deneme (TSK597, 2026-08-31)
 

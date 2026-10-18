@@ -203,13 +203,13 @@ func TestLegacySessionMetadataFallbackPreservesKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.mu.Lock()
-	d.sessions["legacy"] = Session{ID: "legacy", Kind: "worker"}
+	d.sessions["legacy"] = Session{ID: "legacy", Kind: "schedule"}
 	d.mu.Unlock()
 	got, err := d.GetSession(context.Background(), "legacy")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Kind != "worker" || got.ExecutionType != ExecutionWorker || got.Category != CategoryWorker || got.Visibility != VisibilityUser {
+	if got.Kind != "schedule" || got.ExecutionType != ExecutionSchedule || got.Category != CategoryChat || got.Visibility != VisibilityUser {
 		t.Fatalf("legacy fallback = %+v", got)
 	}
 }

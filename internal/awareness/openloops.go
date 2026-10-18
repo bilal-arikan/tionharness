@@ -19,7 +19,7 @@ type OpenLoops struct {
 	WaitingAsks []string
 	// Stuck sessions: StuckTurns > 0 or tagged "stuck".
 	Stuck []string
-	// Blocked coordinators: tagged "blocked".
+	// Blocked sessions: tagged "blocked".
 	Blocked []string
 	// FailedRuns are flow runs that failed inside the last 24h.
 	FailedRuns []string
@@ -109,7 +109,7 @@ func renderOpenLoops(o OpenLoops, staleDays int) (lines []string, counts string)
 		parts = append(parts, fmt.Sprintf("%d stuck", n))
 	}
 	if n := len(o.Blocked); n > 0 {
-		lines = append(lines, fmt.Sprintf("%d blocked coordinator(s): %s", n, joinCapped(o.Blocked, shown)))
+		lines = append(lines, fmt.Sprintf("%d blocked session(s): %s", n, joinCapped(o.Blocked, shown)))
 		parts = append(parts, fmt.Sprintf("%d blocked", n))
 	}
 	if n := len(o.FailedRuns); n > 0 {

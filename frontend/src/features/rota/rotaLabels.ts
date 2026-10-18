@@ -15,9 +15,7 @@ export function laneLiveLabel(live?: LaneLive): string {
 
 // laneOriginGlyph marks how a session came to be, from its origin kind.
 export function laneOriginGlyph(s: LaneSession): string {
-  if (s.coordinator) return '◎'
   switch (s.origin?.kind) {
-    case 'coordinator':
     case 'subagent':
       return '↳'
     case 'schedule':

@@ -153,43 +153,6 @@ type Agent struct {
 	// (global/workspace/project tiers) — never agent-owned.
 	Skills []string `json:"skills"`
 
-	// CoordinatorMode makes this agent a coordinator BY DEFAULT: every new session
-	// opened for it starts with Session.CoordinatorMode on, so the agent arrives
-	// with the coordinator manual and the spawn_worker/send_to_worker/stop_worker/
-	// list_workers tools instead of needing a per-session toggle. This is what lets
-	// a workspace template ship a ready-to-run PM/CTO team.
-	//
-	// It is a DEFAULT, not the live state: the session keeps its own flag, which is
-	// what every gate actually reads (Session.IsCoordinator). An agent may still
-	// turn its own session's mode off with set_coordinator_mode when it drops back
-	// to single-threaded work, exactly as before — same shape as Model, which is
-	// also configured on the agent and snapshotted per session.
-	//
-	// Seeding is skipped for sessions created INSIDE a coordinator tree: there the
-	// spawner decides (see Runtime.SpawnWorker), because that is the only place
-	// that knows the depth budget and can degrade to a plain worker.
-	CoordinatorMode bool `json:"coordinatorMode,omitempty"`
-
-	// CoordinatorPrompt is free-text orchestration guidance injected into the
-	// system context ONLY while the session is actually coordinating
-	// (Session.IsCoordinator), right after the shared coordinator manual. It is
-	// where per-agent delegation direction belongs — "which workers to spawn",
-	// "how to split this team's work" — instead of the Soul, which is injected
-	// unconditionally and therefore costs tokens (and misleads) on a session that
-	// has no delegation tools at all.
-	//
-	// Optional: an empty value injects NOTHING — no header, no blank block — so an
-	// agent that never coordinates pays zero tokens for it. Agents persisted
-	// before this field existed load with the zero value; no migration needed.
-	CoordinatorPrompt string `json:"coordinatorPrompt,omitempty"`
-
-	// CoordinatorWorkflow optionally pins a coordinator recipe (a skill with
-	// kind=coordinator-workflow) on the sessions this agent opens. Only meaningful
-	// together with CoordinatorMode. An unresolvable slug degrades to free
-	// coordination rather than failing the session (see api/coordinator_prompt.go),
-	// so a template whose recipe skill failed to install still runs.
-	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
-
 	// CreatedBy records the ID of the agent that created this agent through a
 	// self-management tool. Empty means it was created by the user (UI/API).
 	// Agents may only edit/delete entities that were created by an agent.
@@ -280,14 +243,12 @@ const SessionSchemaVersion = 4
 const (
 	ExecutionInteractive = "interactive"
 	ExecutionSubagent    = "subagent"
-	ExecutionWorker      = "worker"
 	ExecutionSchedule    = "schedule"
 	ExecutionAutomation  = "automation"
 	ExecutionSystem      = "system"
 
 	CategoryChat       = "chat"
 	CategorySubagent   = "subagent"
-	CategoryWorker     = "worker"
 	CategoryAutomation = "automation"
 	CategorySystem     = "system"
 
@@ -342,23 +303,8 @@ func MachineTranscriptKinds() []string {
 // writableSessionKindList is the set of Session.Kind values into which a NEW
 // USER TURN may be started. Manual chats ("" / "chat") plus "spawned" sessions
 // (spawn tool and handoff children) are linear transcripts a human is meant to
-// keep talking to. Every other kind — task, flow, automation, flow-coordinator,
-// insight — is an orchestrator-owned transcript: a new user turn there has
+// keep talking to. Every other kind — task, flow, automation, insight — is an orchestrator-owned transcript: a new user turn there has
 // no run to attach to.
-//
-// "worker" is writable (TSK507). A worker session is not a finished run log but a
-// live single-agent conversation the coordinator is already talking INTO —
-// SendToWorker injects user-role turns into it while it runs. The human watching
-// that transcript must be able to do the same: answer a question the worker
-// asked, correct its course, or add missing context, instead of being limited to
-// reading. Interleaving is bounded the same way "schedule" is: a human turn and a
-// coordinator-injected turn claim the session's single turn slot (turnqueue), so
-// they serialize.
-//
-// Peer messages between agents no longer have a kind of their own: send_message
-// delivers into the recipient's standing "chat" thread (see
-// internal/agent/agentmsg.go), which is writable by virtue of being a chat, so
-// the human can join that conversation too.
 //
 // "schedule" is writable too, and is the one deliberate exception to that rule. A
 // schedule session is not a per-run log: it is the agent's single long-lived cron
@@ -382,7 +328,7 @@ func MachineTranscriptKinds() []string {
 // This list is the single source of truth for the whole product; the frontend's
 // isWritableSessionKind (frontend/src/shared/lib/sessionKind.ts) mirrors it and the
 // two must be changed together.
-var writableSessionKindList = []string{"", "chat", "spawned", "schedule", "automation-run", "schedule-run", "worker"}
+var writableSessionKindList = []string{"", "chat", "spawned", "schedule", "automation-run", "schedule-run"}
 
 // IsWritableSessionKind reports whether a new user turn may be started in a
 // session of this kind (see writableSessionKindList).
@@ -498,13 +444,6 @@ type Session struct {
 	// process-restart-surviving sibling of the per-turn loop guards.
 	StuckTurns int `json:"stuckTurns,omitempty"`
 
-	// StallNudges counts how many times the coordinator stall guard has caught this
-	// session claiming a spawn it never made (see internal/agent/coordination_stall.go).
-	// The in-memory slot streak resets on a clean coordination call and dies with the
-	// process; this is the cumulative, restart-surviving tally a later escalation tier
-	// (or a forensic pass over session.json) can act on.
-	StallNudges int `json:"stallNudges,omitempty"`
-
 	// RunState records how this session's LAST background work turn ended, using the
 	// turn-outcome vocabulary (completed / failed / killed / timeout / incomplete).
 	// DISTINCT from State, which is the two-valued visibility field (active/archived).
@@ -537,11 +476,11 @@ type Session struct {
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
 
-	// Origin records WHO started this session and from where (user, coordinator,
+	// Origin records WHO started this session and from where (user,
 	// flow run + node, automation, schedule, handoff, subagent, insight). It is the
 	// single lineage source every graph/projection consumer reads via Lineage();
 	// the older per-path fields above and below (ParentSessionID,
-	// CoordinatorSessionID, Kind+SourceID, RetryOfSessionID) are kept for their
+	// Kind+SourceID, RetryOfSessionID) are kept for their
 	// existing consumers and are what Lineage() derives from when Origin is nil
 	// (a header written before schema version 4). Stamped once at creation.
 	Origin *SessionOrigin `json:"origin,omitempty"`
@@ -554,68 +493,6 @@ type Session struct {
 	// full set the UI offers to route a message to. Empty on legacy sessions →
 	// treat as [AgentID] via SessionParticipants.
 	Participants []string `json:"participants,omitempty"`
-
-	// Multi-agent coordination (see internal/agent/coordination.go, _Docs/47).
-	//
-	// Since the unlimited-depth rework these are TWO ORTHOGONAL axes, because a
-	// mid-level node in a coordinator tree is BOTH a worker (it reports up) and a
-	// coordinator (it drives its own workers):
-	//
-	//   - Role is LINEAGE only: "worker" (this session was spawned by a
-	//     coordinator) or "" (top-level / ordinary). The legacy value
-	//     "coordinator" is still accepted on old sessions and read as
-	//     CoordinatorMode=true — always test with Session.IsCoordinator(), never
-	//     with Role == "coordinator".
-	//   - CoordinatorMode is the CAPABILITY: this session may spawn/drive workers
-	//     (gets the coordinator system prompt + the spawn_worker/send_to_worker/
-	//     stop_worker/list_workers tools). It is seeded at creation from the
-	//     agent's own default (Agent.CoordinatorMode) and stays the live value
-	//     from then on — set_coordinator_mode and the UI toggle move THIS field,
-	//     never the agent's.
-	//
-	// CoordinatorSessionID is the worker's back-link to the coordinator session
-	// that spawned it, so a finished worker turn can inject its
-	// <task-notification> into the right coordinator. Empty on a root coordinator
-	// or an ordinary session. Distinct from ParentSessionID, which is the handoff
-	// "continues-from" lineage — a worker is spawned-by, not a reset of.
-	Role                 string `json:"role,omitempty"`
-	CoordinatorMode      bool   `json:"coordinatorMode,omitempty"`
-	CoordinatorSessionID string `json:"coordinatorSessionId,omitempty"`
-
-	// RootCoordinatorSessionID / CoordinatorDepth address this session inside its
-	// coordinator TREE, mirroring FlowRun.RootRunID/ParentRunID (see _Docs/62):
-	// the root is reachable in O(1) instead of by walking CoordinatorSessionID
-	// hop by hop, and the depth backs the CoordinatorMaxDepth guard. Root is ""
-	// on the tree's own root (it is its own root — see RootCoordinator()); depth
-	// is 0 there and +1 per level below.
-	RootCoordinatorSessionID string `json:"rootCoordinatorSessionId,omitempty"`
-	CoordinatorDepth         int    `json:"coordinatorDepth,omitempty"`
-
-	// CoordinatorWorkflow is the slug of the selected coordinator recipe (M5) —
-	// a saved orchestration pattern (skill with kind=coordinator-workflow) whose
-	// body is injected into this coordinator session's system prompt. Empty means
-	// the free (recipe-less) coordinator. Only meaningful on a coordinator.
-	// NOT inherited by child coordinators: a recursive recipe (e.g. tournament)
-	// would otherwise repeat itself forever down the tree.
-	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
-	// Optional task-specific file contract. Presence is not functional acceptance.
-	ExpectedDeliverables []string `json:"expectedDeliverables,omitempty"`
-	// CoordinatorReportPending marks a MID-LEVEL node whose finished turn was NOT
-	// reported to its coordinator, because its own workers were still running at
-	// the time (see agent/coordination_tree.go). It therefore still owes an upward
-	// report, delivered by report_to_coordinator or the settle backstop.
-	//
-	// Persisted rather than kept in memory: the gap it covers is precisely a
-	// restart. A mid-level node in this state looks perfectly healthy on disk — its
-	// last message is its own assistant reply — so orphan recovery does not touch
-	// it, and without this flag its coordinator would wait forever for a report
-	// nothing remembers is owed.
-	CoordinatorReportPending bool `json:"coordinatorReportPending,omitempty"`
-
-	// CoordinatorMaxTurns optionally overrides the workspace CoordinatorMaxTurns
-	// notify-loop cap for THIS coordinator session (0 = use the workspace default).
-	// Resolved from the selected recipe's max_turns when the workflow is set.
-	CoordinatorMaxTurns int `json:"coordinatorMaxTurns,omitempty"`
 
 	// claude-cli session resume (opt-in, ClaudeResume setting). CLISessionID is the
 	// CLI's server-side session to --resume on the next turn (rotates each turn);
@@ -651,55 +528,6 @@ type Session struct {
 	UpdatedAt int64 `json:"updatedAt"`
 }
 
-// SessionRoleCoordinator is the LEGACY Role value written before coordinator mode
-// became its own field. It is still honoured on read (IsCoordinator) so sessions
-// created by older builds keep working without a migration, but nothing writes it
-// any more — new coordinators set CoordinatorMode instead.
-const SessionRoleCoordinator = "coordinator"
-
-// SessionRoleWorker marks a session that was spawned BY a coordinator. It says
-// nothing about whether this session itself drives workers (see CoordinatorMode):
-// a mid-level node in a coordinator tree carries Role=="worker" AND
-// CoordinatorMode==true.
-const SessionRoleWorker = "worker"
-
-// IsCoordinator reports whether this session may spawn and drive workers. Use this
-// everywhere instead of comparing Role to "coordinator": since the unlimited-depth
-// rework a worker can ALSO be a coordinator, and Role no longer carries the
-// capability. The legacy Role value is still accepted so pre-existing coordinator
-// sessions keep their tools and prompt.
-func (s Session) IsCoordinator() bool {
-	return s.CoordinatorMode || s.Role == SessionRoleCoordinator
-}
-
-// IsWorker reports whether this session reports UP to a coordinator, i.e. it has a
-// parent in a coordinator tree. Derived from the back-link rather than Role so it
-// stays true for a mid-level node (which is a worker and a coordinator at once).
-func (s Session) IsWorker() bool {
-	return s.CoordinatorSessionID != "" || s.Role == SessionRoleWorker
-}
-
-// RootCoordinator returns the id of the root of this session's coordinator tree.
-// A root is its own root (RootCoordinatorSessionID is stored empty there), so this
-// normalizes the "" case to the session's own id — callers can then key tree-wide
-// budgets on the result without a special case. Returns "" only for a session that
-// is neither a coordinator nor a worker.
-func (s Session) RootCoordinator() string {
-	if s.RootCoordinatorSessionID != "" {
-		return s.RootCoordinatorSessionID
-	}
-	// Legacy worker (spawned before the root was stamped): every pre-rework tree was
-	// exactly one level deep, so its parent IS the root.
-	if s.CoordinatorSessionID != "" {
-		return s.CoordinatorSessionID
-	}
-	if s.IsCoordinator() {
-		return s.ID
-	}
-	return ""
-}
-
-// Message is a single turn within a session.
 type Message struct {
 	ID        string `json:"id"`
 	SessionID string `json:"sessionId"`

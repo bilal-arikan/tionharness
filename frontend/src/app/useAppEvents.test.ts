@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppEventDeps } from './useAppEvents'
-import {
-  chatTurnLeavesWorkersRunning,
-  handleAutonomousCompletion,
-  workerBusKeys,
-} from './useAppEvents'
-import type { AppEvent } from '@/types'
+import { handleAutonomousCompletion } from './useAppEvents'
 
 vi.mock('@/api', () => ({
   api: { listMessages: vi.fn() },
@@ -33,50 +28,5 @@ describe('handleAutonomousCompletion', () => {
 
     expect(clearPending).toHaveBeenCalledOnce()
     expect(clearPending).toHaveBeenCalledWith('SES1')
-  })
-})
-
-describe('workerBusKeys', () => {
-  const workerEvent = (target: Record<string, string>): AppEvent => ({
-    type: 'worker',
-    level: 'success',
-    workspaceId: 'WS1',
-    title: 'worker done',
-    body: '',
-    target,
-    time: 1,
-  })
-
-  it('notifies the root coordinator too when the worker is nested', () => {
-    const keys = workerBusKeys(
-      workerEvent({ sessionId: 'SES3', coordinatorId: 'SES2', rootCoordinatorId: 'SES1' }),
-    )
-    expect(keys).toEqual(['SES2', 'SES1'])
-  })
-
-  it('yields a single key when the coordinator is the root', () => {
-    expect(workerBusKeys(workerEvent({ sessionId: 'SES2', coordinatorId: 'SES1' }))).toEqual([
-      'SES1',
-    ])
-  })
-
-  it('yields nothing when the event carries no coordinator', () => {
-    expect(workerBusKeys(workerEvent({ sessionId: 'SES2' }))).toEqual([])
-  })
-})
-
-describe('chatTurnLeavesWorkersRunning', () => {
-  it('holds the chime while workers are outstanding', () => {
-    expect(chatTurnLeavesWorkersRunning({ target: { sessionId: 'S1', liveWorkers: '2' } })).toBe(
-      true,
-    )
-  })
-
-  it('lets the chime play when nothing is outstanding', () => {
-    expect(chatTurnLeavesWorkersRunning({ target: { sessionId: 'S1' } })).toBe(false)
-    expect(chatTurnLeavesWorkersRunning({ target: { sessionId: 'S1', liveWorkers: '0' } })).toBe(
-      false,
-    )
-    expect(chatTurnLeavesWorkersRunning({})).toBe(false)
   })
 })

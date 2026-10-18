@@ -206,7 +206,7 @@ func (h *Hub) Unsubscribe(wsID, sessionID string, id int) {
 // Drop discards a session's state entirely: its seq counter, its ring buffer and
 // its subscriber set. Without it the states map only ever grows — every session
 // that ever published or was watched keeps a ring (up to ringCap events) for the
-// life of the process, including the short-lived schedule/spawn/worker sessions
+// life of the process, including the short-lived schedule/spawn sessions
 // an autonomous workspace creates and discards constantly.
 //
 // Live subscriber channels are closed, which is the right signal for a session

@@ -153,36 +153,6 @@
     "add": "Add tag…",
     "remove": "Remove {{tag}} tag"
   },
-  "workflow": {
-    "advanced": "Advanced / optional",
-    "details": {
-      "invalidPhases": "⚠ Invalid phase block: {{error}}",
-      "maxTurns": "Turn limit: {{maxTurns}}",
-      "pattern": "Pattern: {{pattern}}",
-      "phases": "Phases: {{phases}}",
-      "skill": "Skill: {{slug}}",
-      "skillVersion": "Skill: {{slug}} (v{{version}})",
-      "stopCondition": "Stop condition: {{condition}}",
-      "workers": "Recommended workers: {{workers}}"
-    },
-    "emptyAfter": "Add a skill from the Skills screen.",
-    "emptyBefore": "No saved recipes. To create one, use",
-    "free": "Free-form (no recipe)",
-    "help": "A saved orchestration recipe that is layered onto the coordinator prompt. It describes the order in which workers start and how their results are combined.\n\nEach recipe is a skill file (kind: coordinator-workflow). Open its contents with the book button in its row. With Free-form selected, the coordinator decides how to proceed.",
-    "label": "Workflow",
-    "loading": "Loading recipes…",
-    "openInSkills": "Open \"{{name}}\" in the Skills screen",
-    "openSkill": "Open {{name}} skill",
-    "patterns": {
-      "adversarial": "Adversarial validation — one worker produces and another tries to disprove it",
-      "classify": "Classify and route — label the input first, then send it to the relevant profile",
-      "fanout": "Fan-out and synthesis — workers run in parallel and the coordinator combines the results",
-      "generateFilter": "Generate and filter — produce many candidates, then eliminate them",
-      "loop": "Loop until complete — repeat rounds until the stop condition is met",
-      "tournament": "Tournament — eliminate candidates through pairwise comparisons"
-    },
-    "whatDoesItDo": "What does {{name}} do?"
-  },
   "systemRoles": {
     "title": "Agent assignments",
     "hint": "Which system agent runs each role in this workspace. Only the role's own system agents are offered: the built-in, or a customisation derived from it in Settings ▸ Agent library. Empty = built-in.",
@@ -192,12 +162,12 @@
       "workers": "Workers",
       "helpers": "Conversation helpers",
       "analysis": "Analysis",
-      "optimizers": "Observers and judges"
+      "optimizers": "Observers"
     },
     "roles": {
       "subagent-explore": {
         "label": "Explore worker",
-        "hint": "Read-only codebase exploration when a coordinator spawns `explore`."
+        "hint": "Read-only codebase exploration behind `explore`."
       },
       "subagent-planner": {
         "label": "Planner worker",
@@ -242,14 +212,6 @@
       "flow-optimizer": {
         "label": "Flow observer",
         "hint": "Watches recent flow runs and proposes measured changes to an agent's main flow."
-      },
-      "recipe-optimizer": {
-        "label": "Recipe optimizer",
-        "hint": "Proposes changes to coordinator recipes from their trajectory statistics."
-      },
-      "stall-judge": {
-        "label": "Stall judge",
-        "hint": "Checks whether a coordinator described a worker spawn it never made."
       }
     }
   }

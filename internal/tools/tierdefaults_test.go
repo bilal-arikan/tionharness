@@ -17,7 +17,7 @@ var wantNameOnlyDefaults = []string{
 	"get_session_info", "handoff_session", "insight_apply_finding",
 	"insight_list_findings", "insight_scan", "list_sessions", "mermaid_validate",
 	"monitor", "note_correct", "note_expand", "notify", "read_decider_debug", "read_session_debug", "render_template",
-	"run_adhoc_flow", "send_message", "shell_manage", "skill_validate", "update_artifact",
+	"run_adhoc_flow", "shell_manage", "skill_validate", "update_artifact",
 	"update_session", "update_user_preferences", "wait_for_mcp_servers",
 }
 
@@ -146,11 +146,11 @@ func TestApplyToolDefaultsStampsUnregisteredNames(t *testing.T) {
 
 func TestApplyToolDefaultsKeepsSelfManagedStamp(t *testing.T) {
 	reg := NewRegistry()
-	reg.MarkHidden("send_message", "handoff_session")
-	reg.MarkSelfManaged("send_message", "handoff_session")
+	reg.MarkHidden("handoff_session")
+	reg.MarkSelfManaged("handoff_session")
 	reg.ApplyToolDefaults(DefaultTiers())
 
-	for _, name := range []string{"send_message", "handoff_session"} {
+	for _, name := range []string{"handoff_session"} {
 		if got := reg.VisibilityOf(name); got != VisibilityNameOnly {
 			t.Errorf("VisibilityOf(%s) = %q, want %q", name, got, VisibilityNameOnly)
 		}

@@ -11,7 +11,7 @@ import (
 // runs as (user decision 2026-10-07): the role's own system agent — assignment →
 // enabled customisation → locked built-in row. Its session, usage and billing
 // land on that agent, never on an ordinary agent the user did not set up for the
-// job (the insight scan, the recipe optimizer and ownerless titles used to borrow
+// job (the insight scan and ownerless titles used to borrow
 // the default or newest agent).
 //
 // Only the TRANSPORT may be borrowed: when the system agent's provider cannot be

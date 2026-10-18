@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
-import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Workflow } from 'lucide-react'
+import { Brush, Clock, LayoutGrid, Repeat, Workflow } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_AUTOMATIONS, SIGNAL_SCHEDULES } from '@/app/eventToRefreshSignals'
@@ -279,22 +279,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       addLabel: t('lanes.board.add'),
       emptyLabel: t('lanes.board.empty'),
     },
-    phase: {
-      title: t('lanes.phase.title'),
-      icon: Waypoints,
-      accent: COLUMN_ACCENT.phase,
-      description: t('lanes.phase.description'),
-      addLabel: t('lanes.phase.add'),
-      emptyLabel: t('lanes.phase.empty'),
-    },
-    trajectory_end: {
-      title: t('lanes.trajectoryEnd.title'),
-      icon: Flag,
-      accent: COLUMN_ACCENT.trajectory_end,
-      description: t('lanes.trajectoryEnd.description'),
-      addLabel: t('lanes.trajectoryEnd.add'),
-      emptyLabel: t('lanes.trajectoryEnd.empty'),
-    },
     flow: {
       title: t('lanes.flow.title'),
       icon: Workflow,
@@ -451,8 +435,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
 
         {renderAutomationLane('tag')}
         {renderAutomationLane('board')}
-        {renderAutomationLane('phase')}
-        {renderAutomationLane('trajectory_end')}
         {renderAutomationLane('flow')}
       </div>
 

@@ -16,35 +16,29 @@ import (
 //
 // The hook sits on the turn-admission choke point (claimTurnSlot) because that is
 // the ONE place every inbound command/message passes through: chat, the queued
-// inbox, a peer send_message, a send_to_worker task and a spawn's opening turn
+// inbox and a spawn's opening turn
 // all claim the slot first. Just as importantly, nothing that merely READS a
 // session claims one — opening it, attaching to its stream, generating a title or
 // summary, or an insight scan run outside the queue — so admission is the exact
 // line between "someone is talking to this session" and "someone is looking at it".
 
 // reactivatingKinds are the turn kinds where a human or an agent explicitly
-// ADDRESSES this session: a chat/inbox message, a peer send_message, a worker
-// task handed over by send_to_worker (the terminal worker session a coordinator
-// archived at coordination.go's report path is exactly the case this card is
-// about), and a spawn's opening turn.
+// ADDRESSES this session: a chat message and a spawn's opening turn.
 //
 // An allowlist, not a denylist, so a turn kind added later stays inert until
 // somebody decides it should revive a session. What is deliberately absent:
 //
 //   - KindCommand — /compact and /handoff are maintenance run ON a transcript,
 //     not a new instruction TO the agent.
-//   - KindCoordinator, KindWake, KindAutomation — automatic re-entries (a drain
-//     from a worker notification, a scheduler wake, an automation trigger). For
-//     these, archiving is the documented HARD STOP that breaks a runaway loop
-//     (see enqueueCoordinatorWake); reviving on them would restart precisely the
+//   - KindWake, KindAutomation — automatic re-entries (a scheduler wake, an
+//     automation trigger). For these, archiving is the documented HARD STOP that
+//     breaks a runaway loop; reviving on them would restart precisely the
 //     work the user archived to kill, and a scheduled session could never stay
 //     archived at all. The notes they carry stay durably recorded either way, so
 //     restoring the session by hand replays them.
 var reactivatingKinds = map[turnqueue.Kind]bool{
-	turnqueue.KindUser:   true,
-	turnqueue.KindPeer:   true,
-	turnqueue.KindWorker: true,
-	turnqueue.KindSpawn:  true,
+	turnqueue.KindUser:  true,
+	turnqueue.KindSpawn: true,
 }
 
 // reactivateArchivedSession flips an archived session back to "active" when a

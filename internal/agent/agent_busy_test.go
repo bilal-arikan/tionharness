@@ -35,7 +35,7 @@ func TestAgentBusy_IdleIsNotBusy(t *testing.T) {
 }
 
 // TestAgentBusy_OwnAutonomousSession: the runtime's own tracking (schedule wake,
-// spawn, inbox delivery, flow nodes) must count.
+// spawn, flow nodes) must count.
 func TestAgentBusy_OwnAutonomousSession(t *testing.T) {
 	rt, agent, sess := busyFixture(t)
 	rt.trackSession(sess.ID, func() {})

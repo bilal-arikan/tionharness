@@ -22,7 +22,6 @@ func TestSSEEventNameSkipsWorkspaceStream(t *testing.T) {
 		events.TypeLog:                {"log", false},
 		events.TypeWSSessionLifecycle: {"", true},
 		events.TypeWSFlowRun:          {"", true},
-		events.TypeWSTrajectory:       {"", true},
 		events.TypeWSBoard:            {"", true},
 	}
 	for typ, want := range cases {

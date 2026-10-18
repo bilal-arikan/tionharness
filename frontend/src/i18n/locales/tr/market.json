@@ -154,8 +154,6 @@
       "instructions": "Yönergeler",
       "agents_one": "Ajanlar ({{count}})",
       "agents_other": "Ajanlar ({{count}})",
-      "coordinator": "koordinatör",
-      "coordinatorTitle": "Açtığı yeni oturumlar koordinatör başlar ve worker yönetebilir",
       "providerUnspecified": "sağlayıcı belirtilmemiş",
       "toolOverrides": "araç override'ları",
       "flows_one": "Akışlar ({{count}})",

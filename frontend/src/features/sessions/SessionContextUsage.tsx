@@ -9,7 +9,6 @@ const FILLER_LABEL_KEYS: Record<string, string> = {
   assistant: 'contextUsage.filler.assistant',
   tool: 'contextUsage.filler.tool',
   system: 'contextUsage.filler.systemPrompt',
-  'worker-note': 'contextUsage.filler.workerResults',
   'auto-prompt': 'contextUsage.filler.autoPrompt',
   'tool-history': 'contextUsage.filler.toolHistory',
   skills: 'contextUsage.filler.skillsCatalog',

@@ -1,5 +1,7 @@
 # 17 — Araç Çıktısı Token Optimizasyonu
 
+> **Not (2026-10-18):** Varsayılanlar değişti: `maxContextTokens` tabanı 800000→64000, gpt/codex bütçe payı 0.35→0.6, `autoCompactMode` rolling→auto, `maxToolOutputKB` 100→50; stall yargıcı kaldırıldı.
+
 > Ajan araç çıktılarının (shell, dosya, MCP) LLM context'ine girmeden önce küçültülmesi.
 >
 > **Not (2026-09-10):** claude-cli `--tools` allowlist'i artık `TodoWrite`'ı daima
@@ -685,7 +687,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 
 - Built-in araç-çıktısı **sıkıştırması** yoktur; tek built-in müdahale, boyut için bir
   **backstop kırpması**dır (`internal/tools/registry.go`): eşik `maxToolOutputBytes`
-  (varsayılan 100 KB; ayar `maxToolOutputKB`, `applySettings` → `SetMaxToolOutputBytes` ile
+  (varsayılan **50 KB** — 2026-10-18'de 100 KB'tan düşürüldü; ayar `maxToolOutputKB`, `applySettings` → `SetMaxToolOutputBytes` ile
   process-global itilir). Eşiğin altındaki çıktı **hiç dokunulmadan** geçer, yani kullanıcı
   modele giden `ToolResult` ile UI'da gösterilen/persist edilen `TurnStep.Output`'u birebir
   aynı görür (harici hook uygulanmışsa her ikisi de hook'tan geçmiş haliyle gösterilir).
@@ -1082,13 +1084,14 @@ daha yüksek pay alır, küçük/bilinmeyen modeller muhafazakâr kalır:
 | Opus 4.8 / Sonnet 4.6 / Fable 5 | 1M | 0.45 | 450K → **256K** (tavan) |
 | Haiku 4.5 | 200K | 0.40 | **80K** |
 | MiniMax / DeepSeek / Gemini | 1M | 0.35 | 350K → **256K** (tavan) |
+| GPT / Codex | ~272K | **0.6** (2026-10-18; önce 0.35 idi, ~95K'da sık katlama yapıyordu) | ~**163K** (codex'in kendi ~%90 auto-compact eşiğinin altında) |
 | Genel Claude (bilinmeyen katman) | 200K | 0.40 | **80K** |
 | Bilinmeyen | 0 → **128K varsayılır** | — | `min(MaxContextTokens, 102400)` + tek seferlik uyarı log'u |
 
 **Pencere tavanı (2026-08-28, TSK341).** Her sonuç — tabanın yükselttiği değer dahil —
 modelin **gerçek penceresinin %80'i** (`budgetWindowShare`) ile sınırlanır. Öncesinde taban
-fizikten üstündü: sevk edilen varsayılan `MaxContextTokens = 800000` ile 200K'lık bir modele
-"800K transcript tut" deniyordu; sıkıştırma API isteği reddedilmeden önce hiç tetiklenemiyor,
+fizikten üstündü: o dönemin sevk edilen varsayılanı `MaxContextTokens = 800000` ile 200K'lık bir modele
+"800K transcript tut" deniyordu (**2026-10-18:** varsayılan taban 64000'e indirildi; 800K tabanı 256K tavanını ve aile payını her modelde eziyordu); sıkıştırma API isteği reddedilmeden önce hiç tetiklenemiyor,
 her uzun tur temiz bir fold yerine bağlam-taşması kurtarma yoluna düşüyordu. Bütçe mesajlar
 **artı** sabit tur yükü ile karşılaştırıldığından kalan %20 yanıt ve tahmin hata payı içindir.
 Aynı sebeple **bilinmeyen aile** artık tabanı olduğu gibi miras almaz: `ContextWindowFor` 0
@@ -1099,7 +1102,7 @@ sessizce yutulmaz. **1M ↔ 200K anahtarı ayrıca gerekmez:** `ContextBudgetCei
 işler hale getirir.
 
 **Semantik & geriye-uyumluluk.** `ContextBudgetFraction = 0` artık **"otomatik/adaptif"** anlamına gelir
-(negatif → 0'a clamp'lenir; pozitif → manuel sabit pay). `MaxContextTokens` (configured) **taban** olarak
+(negatif → 0'a clamp'lenir; pozitif → manuel sabit pay). `MaxContextTokens` (configured, varsayılan **64000** — 2026-10-18; önce 800000) **taban** olarak
 korunur → kimse mevcut tabanının altına düşmez (ama yukarıda anlatılan pencere tavanının üstüne de
 çıkamaz). `EffectiveBudget(provider, model, configured, fraction,
 ceil)`: `fraction<=0` ise `AdaptiveBudgetFraction`, o da 0 ise paket fallback (0.4). `SetBudgetShape`
@@ -1109,9 +1112,8 @@ her iki durumda da **ceil 256K** rot getirisini sağlar. Büyük ham pencere ist
 `ContextBudgetCeil`/`ContextBudgetFraction`'ı yükseltebilir; varsayılan artık **rot-bilinçli**.
 
 **`autoCompactMode` ayarı (2026-08-31).** Otomatik sıkıştırma tetiklendiğinde *ne* yapılacağı artık
-Ayarlar ▸ Bağlam'dan seçilir: `rolling` (varsayılan — yukarıda anlatılan TionHarness fold'u, yükseltmede
-davranış değişmez), `native` (CLI sağlayıcısının kendi compaction'ı — **bedeli:** warm CLI oturumunu
-düşürür, sonraki tur cold start olur) veya `auto` (sağlayıcı destekliyor + warm oturum canlıysa native,
+Ayarlar ▸ Bağlam'dan seçilir: `rolling` (yukarıda anlatılan TionHarness fold'u; 2026-10-18'e kadar varsayılandı), `native` (CLI sağlayıcısının kendi compaction'ı — **bedeli:** warm CLI oturumunu
+düşürür, sonraki tur cold start olur) veya `auto` (**varsayılan, 2026-10-18'den beri**: sağlayıcı destekliyor + warm oturum canlıysa native,
 aksi halde rolling).
 
 **Hibrit kapı (2026-08-31).** `Prepare` artık modu okuyup dallanır: bütçe aşıldığında `native`/`auto`
@@ -1308,10 +1310,9 @@ Uygulanan kaldıraçlar (hepsi ayarlanabilir, varsayılan açık):
    `Runtime.FoldContext` → `conversation.WithFoldTarget` (aynı sağlayıcı + ucuz
    model: yalnız ajan kopyası; farklı sağlayıcı: provider nesnesi de).
    Ayrıntı: [74-SISTEM-AJANLARI.md](74-SISTEM-AJANLARI.md).
-4. **Stall yargıcı** artık `stall-judge` sistem ajanı (haiku) + koordinatör
-   başına metin-hash memo'su: sweeper aynı sessiz mesajı her dakika yeniden
-   yargılamıyor (bir sessizlik penceresinde 4 özdeş transkript gözlenmişti).
-   [47-KOORDINATOR-COKLU-AJAN.md](47-KOORDINATOR-COKLU-AJAN.md).
+4. ~~**Stall yargıcı**~~ (`stall-judge` sistem ajanı + koordinatör başına metin-hash memo'su) —
+   koordinatör modu ile birlikte **kaldırıldı (2026-10-18)**; tarihsel kayıt:
+   [arsiv/47-KOORDINATOR-COKLU-AJAN.md](arsiv/47-KOORDINATOR-COKLU-AJAN.md).
 
 Kullanıcı kurulumunda ayrıca `claudePersistentSession` (settings.json'da eski
 `false` değeri kalmıştı) `true` yapıldı; varsayılan zaten `true` idi.
@@ -1390,7 +1391,7 @@ hayali ~150k ek yük gösterirdi. Artık ölçüm **son `kind=="chat"` `llm_call
 eşleştiriliyor (`ReadDebugEvents` yalnız `Type` filtreler → tümü okunup geriden ilk chat
 seçilir), böylece raporlanan ek yük gerçek CLI tax'e iner. Worker-state bloğu chat
 turuna girmediği (yalnız `autonomousDynamicSuffix`) ve küçük (worker listesi) olduğu için
-tahmine katılmaz.
+tahmine katılmaz (blok 2026-10-18'de kaldırıldı).
 
 **Chat/worker gerçek bağlam ayrımı (TSK503, 2026-08-31):** Context preview artık
 debug journal'ı geriye doğru tek geçişte tarayıp en yeni `kind=="chat"` ile en yeni

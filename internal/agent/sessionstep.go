@@ -32,7 +32,7 @@ func busForwardable(st TurnStep) bool {
 
 // emitSessionStep broadcasts one turn step to the process-wide event bus tagged
 // with its session id, so any window live-viewing that session — or an autonomous
-// turn (scheduler/spawn/worker/wake) that has no per-request SSE — can render the
+// turn (scheduler/spawn/wake) that has no per-request SSE — can render the
 // activity as it happens. Best-effort: the authoritative trace is always
 // persisted on the finished assistant message, so a dropped step is only a
 // missed live frame, never lost history.
@@ -86,7 +86,7 @@ func (r *Runtime) EmitSessionStep(sessionID string, st TurnStep) {
 // steps to the session bus, or nil when the turn carries no session id (so the
 // caller keeps the plain non-streaming path). Autonomous turn helpers
 // (invokeTraced / the wake-turn runner) pass this to CompleteWithToolsStream so
-// scheduler/spawn/worker/wake/peer turns get the same live activity feed an
+// scheduler/spawn/wake turns get the same live activity feed an
 // interactive chat turn has.
 func (r *Runtime) SessionStepEmitter(ctx context.Context) func(TurnStep) {
 	sid := SessionIDFrom(ctx)

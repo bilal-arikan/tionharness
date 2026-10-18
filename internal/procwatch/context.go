@@ -11,7 +11,7 @@ type ownerKey struct{}
 //
 // Stamp it where the identity is known — at the turn's entry point in the agent
 // runtime — and let it flow. A deeper stamp overrides a shallower one only for
-// the fields it sets (see mergeOwner), so a worker turn can narrow the session
+// the fields it sets (see mergeOwner), so a subagent turn can narrow the session
 // without losing the workspace.
 func WithOwner(ctx context.Context, o Owner) context.Context {
 	return context.WithValue(ctx, ownerKey{}, mergeOwner(OwnerFrom(ctx), o))

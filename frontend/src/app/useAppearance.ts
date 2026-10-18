@@ -8,7 +8,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { api } from '@/api'
 import { applyAppearance, resolveAppearance, type Appearance } from '@/shared/lib/theme'
 import { applyKeepAwake, ensureNotificationPermission } from '@/shared/lib/clientPrefs'
-import { setGuardNoteVisible } from '@/shared/lib/coordinationGuardNote'
 import { resolveUILocale, setLocale } from '@/i18n'
 
 export interface ClientPrefs {
@@ -20,9 +19,6 @@ export interface ClientPrefs {
   // language as the user switches workspaces.
   uiLanguage: string
   language: string
-  // Display-only: render the runtime's <coordination-guard> notes in the
-  // transcript. Off by default; the note is recorded either way.
-  coordinatorStallNoteVisible: boolean
 }
 
 export function useAppearance(activeWorkspaceId: string | null, setError: (msg: string) => void) {
@@ -54,7 +50,6 @@ export function useAppearance(activeWorkspaceId: string | null, setError: (msg: 
       applyKeepAwake(s.keepAwake)
       globalNotifyRef.current = s.desktopNotifications
       applyResolvedNotify()
-      setGuardNoteVisible(s.coordinatorStallNoteVisible)
     },
     [applyResolvedTheme, applyResolvedNotify],
   )

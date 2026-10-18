@@ -22,8 +22,6 @@ export type ViewKind =
   | 'skill'
   | 'insight'
   | 'logs'
-  // Trajectory ("Rota"): reached from a root session's children (_Docs/77 R9).
-  | 'trajectory'
   // Workspace memory note, a category-member leaf under category:notes (_Docs/94).
   | 'note'
 
@@ -93,10 +91,9 @@ interface ViewGraphEdge {
 // ViewGraphResult is the entire structural map of the workspace
 // (GET /api/views/graph): every node reachable from the root plus every edge,
 // uncapped. The Explorer screen lays it out as one force-directed network.
-// ViewGraphLive is one session executing right now: running, or a coordinator
-// idle while one of its direct workers runs. The map glows these and hangs the
-// driving agent's avatar off them; the entry (and the glow) is gone once the
-// session stops.
+// ViewGraphLive is one session executing right now. The map glows these and
+// hangs the driving agent's avatar off them; the entry (and the glow) is gone
+// once the session stops.
 interface ViewGraphLiveAgent {
   id: string
   name: string
@@ -105,7 +102,7 @@ interface ViewGraphLiveAgent {
 }
 export interface ViewGraphLive {
   session: ViewRef
-  state: 'running' | 'awaiting-workers'
+  state: 'running'
   agent: ViewGraphLiveAgent
 }
 
@@ -195,7 +192,6 @@ const VIEW_KINDS: ViewKind[] = [
   'artifact',
   'automation',
   'skill',
-  'trajectory',
   'insight',
   'logs',
   'note',

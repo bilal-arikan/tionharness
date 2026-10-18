@@ -45,19 +45,6 @@ export function originLabel(o?: SessionOrigin | null): OriginLabel | null {
         }),
         entityId: o.entityId,
       }
-    case 'coordinator':
-      return {
-        text: sharedText('sessionOrigin.coordinator.text', { id: trigger || '' }).replace(
-          '  ',
-          ' ',
-        ),
-        title: sharedText('sessionOrigin.coordinator.title', {
-          root: o.rootSessionId
-            ? sharedText('sessionOrigin.coordinator.root', { id: o.rootSessionId })
-            : '',
-        }),
-        sessionId: trigger,
-      }
     case 'subagent':
       return {
         text: sharedText('sessionOrigin.subagent.text', {

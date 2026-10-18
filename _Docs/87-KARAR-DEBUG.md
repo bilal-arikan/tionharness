@@ -151,9 +151,8 @@ olduğunu hatırlatır. Daha büyük örneklem de aynı hatalı baseline ile eş
 yanlış kararları doğru yapmaz.
 
 Her merci için bağımsız etiketli olumlu, olumsuz ve belirsiz örnekler gerekir.
-`tool-risk` için riskli komutu kaçırma/gereksiz onay; `stall-judge` için
-gerçek takılmayı kaçırma/yanlış nudge; `flow-judge` için doğru dal/emin değil
-oranı; `phase-gate` için yanlış geçiş/kanıt eksikliğini yakalama ölçülmeli.
+`tool-risk` için riskli komutu kaçırma/gereksiz onay; `flow-judge` için doğru dal/emin değil
+oranı ölçülmeli (`stall-judge` ve `phase-gate` mercileri 2026-10-18'de kaldırıldı).
 P50/P95, timeout, HTTP tekrarları, yedek/rakip maliyeti ayrıca izlenmeli.
 
 Debug verileri işletim kanıtı sağlar. Kalibrasyon için Brier/ECE gibi ölçüler

@@ -48,17 +48,10 @@ var builtinCategory = map[string]string{
 	"delete_agent": CategoryAgents, "list_agents": CategoryAgents,
 	"run_subagent":    CategoryAgents,
 	"spawn_session":   CategoryAgents,
-	"handoff_session": CategoryAgents, "send_message": CategoryAgents,
-	"list_sessions": CategoryAgents, "update_session": CategoryAgents,
+	"handoff_session": CategoryAgents,
+	"list_sessions":   CategoryAgents, "update_session": CategoryAgents,
 	"archive_sessions": CategoryAgents,
 	"focus_view":       CategoryAgents, "get_session_info": CategoryAgents,
-	// Coordinator/worker delegation (a coordinator drives background workers;
-	// a worker reports back) — same family as run_subagent/spawn_session.
-	"spawn_worker": CategoryAgents, "send_to_worker": CategoryAgents,
-	"stop_worker": CategoryAgents, "list_workers": CategoryAgents,
-	"report_to_coordinator": CategoryAgents, "set_coordinator_mode": CategoryAgents,
-	// trajectory (Rota): a coordinator reads / declares its tree's plan.
-	"trajectory": CategoryAgents,
 
 	// User profile (Settings ▸ Profile) — grouped with settings/config.
 	"update_user_preferences": CategoryConfig,

@@ -76,7 +76,7 @@ export function performHandoff(ctx: HandoffContext): void {
   api
     .handoffSession(sid)
     .then((res) => {
-      // Blocked (coordinator with running workers): no fresh session was spawned and
+      // Blocked (the server refused the reset): no fresh session was spawned and
       // the session stays put. The hub already rendered the "/handoff" bubble + the
       // ⚠️ notice on this (still active) session, so just refresh the list — do NOT
       // switch sessions or raise an error.

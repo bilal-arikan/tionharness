@@ -1,5 +1,7 @@
 # 48 — VPS Uzak Sunucu + Mobil İnce İstemci
 
+> **Not (2026-10-18):** VPS gerekçesinden coordinator/worker (`47`) çıkarıldı; 7/24 çalışan parçalar scheduler, wake, otomasyon ve spawn/handoff'tur.
+
 > **Durum:** FİZİBİLİTE / TASARIM 📐 (2026-07-04) — **kısmen uygulandı**: Tailscale erişimi
 > (`scripts/tailscale-serve.ps1`) ve mobil UI cilası (F4 → [49-MOBIL-RESPONSIVE-UI.md](49-MOBIL-RESPONSIVE-UI.md))
 > yapıldı; dosya indirme endpoint'i ve PWA/APK istemci hâlâ açık.
@@ -64,7 +66,7 @@ YOK — dosyalar zaten orada yaşar, ajanlar bugünkü gibi fs araçlarıyla edi
 | `transform_data` (py/node/bun) | ❌ runtime yok | ✅ |
 | stdio MCP (subprocess) | ❌ spawn kısıtı | ✅ |
 | HTTP MCP | ✅ | ✅ |
-| Scheduler / cron / otonomi / coordinator | ⚠️ Doze öldürür | ✅ **güvenilir 7/24** |
+| Scheduler / cron / otonomi | ⚠️ Doze öldürür | ✅ **güvenilir 7/24** |
 | Workspace depolama | scoped storage'a hapis | ✅ normal Linux FS |
 | API provider (anthropic/openrouter/…) | ✅ (tek çalışan) | ✅ |
 | Yeniden mimari yükü | Yüksek | **Neredeyse yok** |
@@ -163,7 +165,7 @@ dosyası ve editlenebilir prompt'ları düzenleme.** İyi haber: büyük kısmı
 ## 6. Bonus: otonomi bu modelde gerçek olur
 
 VPS 7/24 ayakta → `robfig/cron` scheduler, `schedule_wake`, etiket-tetikli
-otomasyon döngüleri (`46-ETIKET-OTOMASYON`), coordinator/worker (`47`) **güvenilir**
+otomasyon döngüleri (`46-ETIKET-OTOMASYON`), spawn_session/handoff **güvenilir**
 çalışır (Android Doze derdi yok). Senaryo: "telefonu kapatsam da ajanlarım VPS'te
 işi sürdürür, sabah bildirimle sonucu görürüm." Masaüstü bildirimleri push/e-posta
 kanalına maplenebilir (gelecek iş).

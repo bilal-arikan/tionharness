@@ -133,8 +133,8 @@ func patternTargetsServer(pattern, serverKey string) bool {
 // both paths (toolFilter for native, mcpServerGate for the CLI providers).
 //
 // Rationale, and the precedent it follows: toolFilter already exempts the
-// coordination tools from the allowlist, because the allowlist describes which
-// WORK tools a persona may use, and whether a session can drive workers is a
+// skill tools from the allowlist, because the allowlist describes which
+// WORK tools a persona may use, and whether a session can load skills is a
 // property of the session, not the persona. The code graph is the same kind of
 // thing one level down — it is how an agent READS the repository, the same role
 // Read/Glob/Grep play, and those are in every profile's allowlist already. A

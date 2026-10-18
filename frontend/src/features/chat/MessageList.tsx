@@ -13,8 +13,6 @@ import { MessageTime, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
 import { WorkingDots } from './WorkingDots'
 import { AutoPromptNote } from './AutoPromptNote'
-import { TaskNotificationNote } from './TaskNotificationNote'
-import { laterNotificationStatuses, parseTaskNotification } from './parseTaskNotification'
 import { UserTurn } from './UserTurn'
 import { UserBubble } from './UserBubble'
 import { PeerTurn } from './PeerTurn'
@@ -53,7 +51,6 @@ interface Props {
   onHighlightConsumed?: () => void
   onOpenFile?: (path: string) => void
   onOpenArtifact?: (id: string) => void
-  onSelectSession?: (id: string) => void
   // Delete a single message (prune a mistaken/test one). Shown on row hover.
   onDeleteMessage?: (id: string) => void
   // Rewind the conversation to a user message (remove it + everything after).
@@ -95,7 +92,6 @@ export function MessageList({
   onHighlightConsumed,
   onOpenFile: onOpenFileProp,
   onOpenArtifact: onOpenArtifactProp,
-  onSelectSession: onSelectSessionProp,
   onDeleteMessage: onDeleteMessageProp,
   onRewind: onRewindProp,
   onRetry: onRetryProp,
@@ -110,7 +106,6 @@ export function MessageList({
   // on every streaming delta and the memo would buy nothing.
   const onOpenFile = useStableCallback(onOpenFileProp)
   const onOpenArtifact = useStableCallback(onOpenArtifactProp)
-  const onSelectSession = useStableCallback(onSelectSessionProp)
   const onDeleteMessage = useStableCallback(onDeleteMessageProp)
   const onRewind = useStableCallback(onRewindProp)
   const onRetry = useStableCallback(onRetryProp)
@@ -118,7 +113,6 @@ export function MessageList({
   const onOpenAgent = useStableCallback(onOpenAgentProp)
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtual = useTranscriptWindow(messages, scrollRef)
-  const laterReports = useMemo(() => laterNotificationStatuses(messages), [messages])
   const paging = transcriptPaging
     ? {
         ...transcriptPaging,
@@ -165,22 +159,22 @@ export function MessageList({
     const ids = new Set<string>(transcriptPaging?.participants)
     for (const m of messages) {
       if (m.role === 'assistant' && m.agentId) ids.add(m.agentId)
-      // A peer message (agent-authored, stored role "user") contributes its SENDER
-      // — otherwise an inbox thread (owner + one sender) would read as 1:1 and hide
-      // the direction cue.
+      // An agent-authored message (stored role "user") contributes its SENDER
+      // — otherwise a thread (owner + one sender) would read as 1:1 and hide the
+      // direction cue.
       if (m.authorKind === 'agent' && m.authorId) ids.add(m.authorId)
       if (m.recipientId && m.recipientId !== '*') ids.add(m.recipientId)
       if (ids.size > 1) return true
     }
     return false
   }, [messages, transcriptPaging?.participants])
-  // A message authored by ANOTHER agent but stored with role "user" (a peer/inbox
-  // delivery). It renders as an incoming LEFT bubble (PeerTurn), not the human's
+  // A message authored by ANOTHER agent but stored with role "user" (an
+  // agent-authored delivery). It renders as an incoming LEFT bubble (PeerTurn), not the human's
   // own right-aligned turn.
   const isPeer = (m: Message): boolean =>
     m.role === 'user' && m.authorKind === 'agent' && !!m.authorId
   // Resolve a peer message's addressee label unconditionally (not gated by the
-  // multiParticipant heuristic): an inbox delivery always states whom it reached.
+  // multiParticipant heuristic): an agent delivery always states whom it reached.
   const peerRecipient = (m: Message): string | undefined => {
     const rid = m.recipientId
     if (!rid) return undefined
@@ -333,7 +327,7 @@ export function MessageList({
     prevFirstId.current = firstId
     // A newly-appended human turn (we just sent a message) always re-pins to the
     // bottom, even if the user had scrolled up — so the sent message is visible.
-    // Peer/inbox deliveries (agent-authored role "user") and streaming assistant
+    // Agent-authored deliveries (role "user") and streaming assistant
     // deltas don't force this; they respect the existing pin state.
     const lastMsg = messages[messages.length - 1]
     if (lastMsg && lastMsg.id !== prevLastId.current) {
@@ -509,10 +503,10 @@ export function MessageList({
             // for external automation to detect turn completion without polling.
             const rowLive = m.role !== 'user' && !!streaming && i === messages.length - 1
             // A real (typed) user message — the only rows eligible to pin at top.
-            // Peer/inbox deliveries share role "user" but are incoming, not typed.
+            // Agent-authored deliveries share role "user" but are incoming, not typed.
             const isTypedUser = m.role === 'user' && !m.origin && !isPeer(m)
             if (m.role === 'user') {
-              // Peer/inbox delivery (another agent authored it): render as an
+              // Agent-authored delivery (another agent authored it): render as an
               // incoming LEFT bubble with the sender's identity — not our own turn.
               row = isPeer(m) ? (
                 <PeerTurn
@@ -522,19 +516,8 @@ export function MessageList({
                   onDelete={onDeleteMessage}
                   onOpenAgent={onOpenAgent}
                 />
-              ) : // Worker <task-notification> injections get their own collapsible
-              // card (raw XML is unreadable as a plain note); other origins keep
-              // the generic auto-continuation note.
-              m.origin === 'worker-note' ? (
-                <TaskNotificationNote
-                  message={m}
-                  agent={agentById(parseTaskNotification(m.text)?.agentId)}
-                  laterStatus={laterReports.get(m.id)}
-                  onSelectSession={onSelectSession}
-                  onOpenFile={onOpenFile}
-                  onDelete={onDeleteMessage}
-                />
-              ) : m.origin ? (
+              ) : // Injected prompts (any origin) keep the generic auto-continuation note.
+              m.origin ? (
                 <AutoPromptNote message={m} onDelete={onDeleteMessage} />
               ) : (
                 <UserTurn

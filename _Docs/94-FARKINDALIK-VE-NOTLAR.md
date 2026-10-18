@@ -1,6 +1,6 @@
 # 94 — Workspace Farkındalığı ve Hafıza Notları
 
-> **Özet (2026-10-04):** **Uygulandı.** Ajanın oturum başında, her turda ve tur sonunda
+> **Özet (2026-10-18):** **Uygulandı.** Ajanın oturum başında, her turda ve tur sonunda
 > workspace'i nasıl gördüğünü tek bir sözleşmeye bağlayan katman (`internal/awareness`)
 > ve bunun yazılabilir hafızası (`internal/notes`). Üç an: **brifing** (oturumun ilk
 > turunda derlenir, prompt epoch'un donmuş öneğine girer, compaction'da yenilenir),
@@ -18,7 +18,7 @@
 > Dayandığı dosyalar: `internal/notes/*`, `internal/awareness/*`,
 > `internal/agent/{awareness,awareness_preview,decide_awareness,lessons}.go`,
 > `internal/tools/builtin_notes.go`, `internal/view/note.go`, `internal/api/{notes,chat_turn}.go`,
-> `frontend/src/features/notes/*`.
+> `frontend/src/features/notes/*`. farkındalık turu bölümlerinden koordinatör durumu kaldırıldı.
 
 ## 1. Neden
 
@@ -100,14 +100,14 @@ brifinge girmeye kalkarsa reddedilir.
 **Tur (`MomentTurn`).** API yolu (`composeTurnRequest`) ve headless yol
 (`autonomousDynamicSuffix`) kendi bölümlerini verir: hook bağlamı, saat, oturum kimliği,
 araç özeti (p7, işaretçili), geri bildirim (p6), çalışma dizini, ortam, kabuk, scratchpad
-(hepsi p0), koordinatör durumu (p1, işaretçili), epoch notu (p0). Katman ekler: yapılacak
+(hepsi p0), epoch notu (p0) (koordinatör durumu bölümü 2026-10-18'de kaldırıldı). Katman ekler: yapılacak
 listesi (p0), oturum artifact'leri (p6), nabız (p2). Nabız içerik hash'i önceki turla
 aynıysa basılmaz; acil (bekleyen/stuck/failed ya da `pulse-urgency` kararı) ise
 sabitlenir ve dikkat satırı eklenir. Varsayılan bütçe 16 KB.
 
 **Kapanış (`MomentWrap`).** `BuildDigest` oturum başlığı + son 200 mesajın araç
 histogramı (çağrı/hata), yapılacak listesi, artifact'ler, bu oturumun yazdığı notlar,
-çocuk oturumlar (koordinatör/handoff), bekleyen soru, son hata, açık döngüler ve
+çocuk oturumlar (handoff/spawn/subagent), bekleyen soru, son hata, açık döngüler ve
 `SuggestNote` (kural: ≥2 araç hatası ya da stuck ya da düşen çocuk ve hiç not yok).
 `AutoTagTurn` kanalında her tur sonunda çağrılır; hash değişmediyse yazılmaz. Dosyalar:
 `sessions/<id>/digest.json`, `sessions/<id>/awareness.json` (brifing/son tur/nabız

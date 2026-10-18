@@ -230,7 +230,7 @@ describe('status and grouping', () => {
   it('groups authorities in the server order and drops empty groups', () => {
     const flow = { ...authority, id: 'flow-judge', group: 'flows' }
     const odd = { ...authority, id: 'custom', group: 'lab' }
-    const groups = groupAuthorities([flow, authority, odd], ['safety', 'coordination', 'flows'])
+    const groups = groupAuthorities([flow, authority, odd], ['safety', 'context', 'flows'])
     expect(groups.map((g) => g.group)).toEqual(['safety', 'flows', 'lab'])
     expect(groups[1].items).toEqual([flow])
   })

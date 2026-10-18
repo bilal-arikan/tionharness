@@ -92,10 +92,6 @@ func cloneFindings(items []Finding) []Finding {
 			v := *f.AppliedEntity
 			f.AppliedEntity = &v
 		}
-		if f.Proposal != nil {
-			v := *f.Proposal
-			f.Proposal = &v
-		}
 		out[i] = f
 	}
 	return out

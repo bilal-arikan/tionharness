@@ -151,7 +151,6 @@ type wsStats struct {
 	ArchivedSessions int
 	OpenCards        int
 	StuckSessions    []db.Session
-	CoordinatorRuns  int
 	RunsRunning      int
 	RunsFailed       int
 	RunsRecent       int
@@ -176,9 +175,6 @@ func workspaceStats(in WorkspaceInput, now time.Time) wsStats {
 		}
 		if s.StuckTurns > 0 {
 			st.StuckSessions = append(st.StuckSessions, s)
-		}
-		if s.IsCoordinator() {
-			st.CoordinatorRuns++
 		}
 	}
 
@@ -252,9 +248,6 @@ func workspaceSignals(in WorkspaceInput, st wsStats, now time.Time) []string {
 	if n := len(st.StaleCards); n > 0 {
 		out = append(out, fmt.Sprintf("⚠ %d kart >%dg çalışan sütunda hareketsiz: %s",
 			n, boardStaleDays, namesOf(st.StaleCards, wsSignalNames)))
-	}
-	if st.CoordinatorRuns > 0 {
-		out = append(out, fmt.Sprintf("⇵ %d koordinatör oturumu", st.CoordinatorRuns))
 	}
 	return out
 }

@@ -138,23 +138,6 @@ func TestSessionKindInHeader(t *testing.T) {
 	}
 }
 
-func TestSessionCoordinatorLineageInHeader(t *testing.T) {
-	in := sessionFixture(time.Now())
-	in.Session.CoordinatorMode = true
-	in.Session.CoordinatorSessionID = "SESroot"
-	in.Session.CoordinatorDepth = 2
-
-	v, err := ProjectSession(in, LevelCard)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	// A mid-level node is BOTH worker and coordinator; the header must say so,
-	// because it changes how every other line should be read.
-	if !strings.Contains(v.Header, "mid-level coordinator") {
-		t.Errorf("coordination lineage missing: %q", v.Header)
-	}
-}
-
 func TestSessionTinyIsHeaderOnly(t *testing.T) {
 	v, err := ProjectSession(sessionFixture(time.Now()), LevelTiny)
 	if err != nil {

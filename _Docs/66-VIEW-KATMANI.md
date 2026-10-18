@@ -1,5 +1,7 @@
 # 66 — View (Projeksiyon) Katmanı: büyük durumun bağlam-ucuz özeti
 
+> **Not (2026-10-18):** coordinator worker-state bloğu (`ProjectWorkers`/`KindWorkers`) ve ajan kartındaki `koordinatör` satırı/oturum sayacı kaldırıldı.
+
 > **Faz 1-4 + 6 CANLI** (flowrun + session + board + workspace projeksiyonları,
 > `ViewPanel` UI, `get_view` aracı, **Panel ekranı**); faz 5 (L2 fold) tasarım.
 > Büyük veri yüzeylerinin (uzun session,
@@ -16,7 +18,7 @@ Bugün "büyük durumu küçült" işi en az dört yerde **birbirinden habersiz*
 |-----|-----------|--------|
 | `conversation.Manager` | rolling-summary ile eski turları katlar | [35](35-CONTEXT-RESET-HANDOFF.md) |
 | handoff artifact | oturumu yeni oturuma devreder | [35](35-CONTEXT-RESET-HANDOFF.md) |
-| coordinator worker-state bloğu | canlı worker roster'ını her tura enjekte eder | [47](47-KOORDINATOR-COKLU-AJAN.md) |
+| ~~coordinator worker-state bloğu~~ | canlı worker roster'ını her tura enjekte ederdi — **kaldırıldı (2026-10-18)**, koordinatör modu yok | [47](arsiv/47-KOORDINATOR-COKLU-AJAN.md) (arşiv) |
 | insight `buildSlice` | oturumu analyzer LLM'ine kompakt kanıt metnine indirger | [60](60-RETROSPEKTIF-TARAMA.md) |
 
 > **Düzeltme (2026-08-04):** bu satır önce "insight prefilter" yazıyordu — **yanlış
@@ -34,7 +36,7 @@ eskilerin durması = başarısızlık.
 
 **Durum: 2/4 göç etti** (2026-08-04)
 
-- **1/4 — coordinator worker-state bloğu.**
+- **1/4 — coordinator worker-state bloğu** *(kaldırıldı 2026-10-18; `view.ProjectWorkers` / `KindWorkers` silindi, göç tarihseldir)*.
   `Runtime.coordinatorWorkerStatusBlock`'un 36 satırlık render mantığı **silindi**;
   geriye 16 satırlık veri toplama + `view.ProjectWorkers` çağrısı kaldı.
 - **2/4 — handoff.** Ölü `HandoffEnv.Todos` alanı `view.LatestTodos` ile
@@ -232,10 +234,9 @@ ayrı bloklardır: önce L1 sinyalleri, sonra kimlik/konfigürasyon satırları.
 ```
 AGENT:AG1 "builder" · anthropic/claude · 4 oturum (3 aktif) · son etkinlik 2sa önce
 ⚠ 1 oturum takılmış (StuckTurns>0): takılan
-⇵ 1 koordinatör oturumu
 düşünme: high
 izin: read-only
-devre dışı · koordinatör · varsayılan
+devre dışı · varsayılan
 yasaklı araçlar (6): shell, write_file, edit_file, delete_file, git_push … +1
 ruh: Sen titiz bir derleyici mühendisisin…          (yalnız LevelFull)
 kimlik: Her değişikliği testle doğrula…             (yalnız LevelFull)
@@ -247,7 +248,6 @@ kimlik: Her değişikliği testle doğrula…             (yalnız LevelFull)
 | `düşünme:` | `db.Agent.ThinkingLevel` (`""`/`off` → satır yazılmaz) | Card+ |
 | `izin:` | `db.Agent.PermissionMode` — `""`/`auto` **yazılmaz** (varsayılanı tekrar eden satır her kartta gürültüdür) | Card+ |
 | `devre dışı` | `db.Agent.Disabled` — ajan hiç çalışmaz; kartın geri kalanını yeniden çerçeveler | Card+ |
-| `koordinatör` | `db.Agent.CoordinatorMode` (ajan varsayılanı; oturumun canlı bayrağı değil) | Card+ |
 | `varsayılan` | `AgentInput.IsDefault` — workspace ayarı `DefaultAgentId` | Card+ |
 | `yasaklı araçlar (N):` | `db.Agent.BlockedTools` (JSON dizi), ilk 5 ad + `… +N` | Card+ |
 | `ruh:` | `db.Agent.Soul`, `clip(…, 120)` | Full |
@@ -282,7 +282,6 @@ koşular: 1 çalışıyor · 1 bekliyor · 1 başarısız (son 24s: 3)
 ⏰ 1 zamanlama son çalışmada hata verdi
 ✗ 1 başarısız kart: T3
 ⚠ 1 kart >3g çalışan sütunda hareketsiz: T2
-⇵ 1 koordinatör oturumu
 ```
 
 Tamamı **bellek-içi store okumaları** — geçmiş ne kadar büyürse büyüsün disk I/O
@@ -433,7 +432,10 @@ satırları da saymak, gövdenin arkasında duramayacağı bir tarama vaat ederd
 Mesajlar `compactPaths`'ten geçer — bir log satırı, açamadığı dosyayı alıntılayan
 düz metindir ve `clip` tam da o kuyruğu keser.
 
-## Göç 1: coordinator worker-state bloğu (push projeksiyonu)
+## Göç 1: coordinator worker-state bloğu (push projeksiyonu) — KALDIRILDI (2026-10-18)
+
+> **Tarihsel:** koordinatör modu ve worker'lar kaldırıldığından `internal/view/workers.go`
+> (`ProjectWorkers`), `KindWorkers` ve bu blok yoktur. Aşağıdaki bölüm yalnız tasarım kaydıdır.
 
 Katmanın ilk **müşterisi**, yeni bir yüzey değil. `internal/view/workers.go`
 (`ProjectWorkers`) koordinatörün canlı worker filosunu render eder; `agent` yalnız
@@ -453,7 +455,7 @@ Katmanın ilk **müşterisi**, yeni bir yüzey değil. `internal/view/workers.go
 
 **Korunan davranış:** "trust THIS over the notifications in history" çerçevesi,
 `DELEGATING` durumunun açık ifadesi ve filo boşaldığında verilen kapanış dürtüsü —
-üçü de coalesced-notification stall'ını ([47](47-KOORDINATOR-COKLU-AJAN.md))
+üçü de coalesced-notification stall'ını ([47](arsiv/47-KOORDINATOR-COKLU-AJAN.md))
 engellediği için **kelimesi kelimesine** taşındı ve teste bağlandı.
 
 **Bilinçli istisna — dil:** bu projeksiyon paketteki tek **İngilizce** olanı.
@@ -530,7 +532,7 @@ push etmek **prompt cache'i her turda kırar** → [57](57-PROMPT-EPOCH.md) çal
 | Kanal | Ne | Nereye | Kural |
 |-------|-----|--------|-------|
 | **Pull** *(varsayılan)* | `get_view(ref, level)` aracı | tool sonucu | Cache-nötr, her zaman güvenli |
-| **Push** | yalnız `tiny`, yalnız ilgili oturuma | **volatile dinamik suffix** | Coordinator worker-state bloğu gibi; **asla statik prefix'e** |
+| **Push** | yalnız `tiny`, yalnız ilgili oturuma | **volatile dinamik suffix** | (Eski) coordinator worker-state bloğu gibi; **asla statik prefix'e** |
 | **Handle** | büyük tool çıktısı yerine `view://SES9a1@seq214` | tool sonucu | 64KB cap'e çarpan yerlerde otomatik daraltma |
 
 Kural: push edilen şey **küçük ve stabil** olmalı. Değişkenlik varsa pull'a düşür.
@@ -760,7 +762,7 @@ kalan cümle bütçeye göre kesilir. `clipPath` zaten `shortPath`'ten geçtiği
 oraya **ikinci kez uygulanmaz**.
 
 Şu an `compactPaths` uygulanan satırlar: `session.go` (`özet:`, `✗ son hata:`,
-`şu an:`, son turların mesaj gövdeleri), `workers.go` (worker özeti),
+`şu an:`, son turların mesaj gövdeleri), `workers.go` (worker özeti; 2026-10-18'de silindi),
 `workspace.go` (`failed run` ve `sched` hata satırları), `flowrun.go`
 (`⚠ hata:` ve LevelFull detay satırındaki node çıktısı). **Uygulanmayanlar**
 bilinçlidir: ajan/oturum başlıkları, handle etiketleri, skill adları ve ID'ler —
@@ -861,8 +863,8 @@ boş pano, coordination soyağacı, boş girdi reddi) ve `internal/api/views_tes
 ad-hoc bloğunu `awareness.Section` listesine çevirdi: ortak bütçe, öncelik sırasıyla
 işaretçiye düşürme ve her turun sonunda sayaç. Workspace kartı artık oturum başı
 brifingin bir bölümü olarak `view.ProjectWorkspace` üzerinden gidiyor (aynı bayt,
-Panel ile birebir). "Göç sırası" sorusu böylece kapandı: coordinator worker-state bloğu
-bir bölüm (p1, işaretçili), handoff ve insight kendi yerlerinde.
+Panel ile birebir). "Göç sırası" sorusu böylece kapandı: (eski) coordinator worker-state bloğu
+bir bölüm (p1, işaretçili; 2026-10-18'de kaldırıldı), handoff ve insight kendi yerlerinde.
 
 ## Açık sorular (kalanlar)
 
@@ -884,6 +886,6 @@ bir bölüm (p1, işaretçili), handoff ve insight kendi yerlerinde.
 [08](08-DEPOLAMA.md) depolama · [93](93-EVRILEN-AKISLAR.md) evrilen akışlar ·
 [35](35-CONTEXT-RESET-HANDOFF.md) compaction/handoff ·
 [46](46-ETIKET-OTOMASYON.md) board olayları ·
-[47](47-KOORDINATOR-COKLU-AJAN.md) worker-state bloğu ·
+[47](arsiv/47-KOORDINATOR-COKLU-AJAN.md) worker-state bloğu (arşiv) ·
 [57](57-PROMPT-EPOCH.md) cache güvenliği ·
 [60](60-RETROSPEKTIF-TARAMA.md) insight prefilter

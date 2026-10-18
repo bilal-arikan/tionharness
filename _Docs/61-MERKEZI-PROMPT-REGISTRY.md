@@ -1,6 +1,6 @@
 # 61 — Merkezi Prompt Registry
 
-> **Özet (2026-10-05):** Uygulamaya dağınık gömülü LLM promptları tek kayıt
+> **Özet (2026-10-18):** Uygulamaya dağınık gömülü LLM promptları tek kayıt
 > defterinde (`internal/prompts`) toplandı: embed edilmiş `.md` default'lar,
 > workspace override + `{{yerTutucu}}` doğrulaması + default'a fallback, epoch
 > rozeti ve `debug.jsonl` prompt izi. Durum: **tamamlandı** (çekirdek 2026-07-15).
@@ -10,13 +10,13 @@
 > promptlar kaldı (2026-10-05'te btw yan sohbetiyle birlikte `btw-system` /
 > `btw-preamble` silindi; 5 serbest anahtar). Soul editörüne `GET /api/agents/{id}/builtin-prompt` ile beslenen
 > "Koddaki prompta dön" düğmesi eklendi. Sahip paketler: `internal/prompts`,
-> `internal/api`, `frontend/src/features/{settings,agents}`.
+> `internal/api`, `frontend/src/features/{settings,agents}`. `coordinator` prompt anahtarı (koordinatör el kitabı) ve `prompts/defaults/coordinator.md` kaldırıldı.
 
 ## Sorun
 
 Prompt metinleri kod tabanına dağılmış Go sabitleriydi (summarizer, titler,
 lessons, insight-analyzer, auto-continue, subagent profilleri, handoff/continuation,
-compaction, koordinatör el kitabı). Yalnızca 3'ü (`summary`/`title`/`compact`)
+compaction, koordinatör el kitabı — sonuncusu 2026-10-18'de kaldırıldı). Yalnızca 3'ü (`summary`/`title`/`compact`)
 workspace `config/prompts/*.md` mekanizmasına bağlıydı; gerisi düzenlenemiyordu ve
 tek tip bir doğrulama/fallback disiplini yoktu.
 
@@ -56,7 +56,7 @@ conversation ve api çevrim olmadan bağımlı olabilir).
 | `lesson` | hata→ders reflection (lessons.go) | — | — |
 | `insight-analyzer` | retrospektif tarama analizörü (insightanalyzer.go) | — | — |
 | `auto-continue` | otonom devam dürtmesi (autocontinue.go) | — | — |
-| `coordinator` | koordinatör el kitabı (api/chat_turn.go statik prefix) | — | ✅ |
+| ~~`coordinator`~~ | koordinatör el kitabı — **kaldırıldı 2026-10-18** (koordinatör modu yok) | — | — |
 | `subagent-explore/coder/reviewer/config` | run_subagent profilleri (subagent.go) — allowlist'ler kodda kaldı (güvenlik sözleşmesi) | — | ✅ |
 | `terse` | terse (caveman) yanıt stili — yalnız `WSSettings.TerseMode` açıkken statik prefix'e eklenir (`agent/tersemode.go`) | — | ✅ |
 
@@ -112,8 +112,8 @@ gömülü promptu (`prompts.Default`) döner; sistem rolü yoksa 404. Soul edit�
 düzenleme** olarak yerleştirir — Kaydet'e basılana kadar uygulanmaz, ve
 özelleştirmenin model/araç seçimleri korunur (satırı silmek gerekmez).
 
-Kalan serbest 5 anahtar: `handoff`, `continuation`,
-`auto-continue`, `coordinator`, `terse`.
+Kalan serbest anahtarlar: `handoff`, `continuation`,
+`auto-continue`, `terse` (`coordinator` 2026-10-18'de kaldırıldı).
 
 ## Drift koruması
 
@@ -130,8 +130,8 @@ Yeni prompt eklemek = 1 Spec girdisi + 1 `.md` dosyası.
   autocontinue/subagent/coordination/handoff rewiring
 - `internal/conversation/manager.go` (compact Render + ctx validasyonu),
   `handoff.go` (BuildHandoff `promptTmpl` parametresi)
-- `internal/api/chat_turn.go` (coordinator `WorkspacePrompt`),
-  `coordinator_prompt.go` (sabit silindi), `workspace_config.go` (promptMeta)
+- `internal/api/chat_turn.go`, `workspace_config.go` (promptMeta); coordinator `WorkspacePrompt` ve
+  `coordinator_prompt.go` 2026-10-18'de kaldırıldı
 - `internal/db/debug_journal.go` (`promptKey`/`promptHash`)
 - frontend: `types/workspace.ts`, `types/settings.ts`,
   `features/settings/WorkspaceFilesPanel.tsx`

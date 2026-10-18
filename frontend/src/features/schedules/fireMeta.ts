@@ -36,10 +36,6 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   get empty_prompt() {
     return reason('emptyPrompt')
   },
-  // Rota watcher that names no automation (agent/automation_trajectory.go).
-  get not_found() {
-    return reason('notFound')
-  },
 }
 
 export function fireGlyph(outcome: AutomationFireRecord['outcome']): string {

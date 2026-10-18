@@ -75,17 +75,6 @@ func needsAutoContinue(steps []TurnStep) bool {
 	return false
 }
 
-// shouldAutoContinue suppresses the generic unfinished-work nudge while a
-// coordinator still has live workers. Their completion notifications are the
-// continuation trigger; nudging now would make the coordinator race ahead and
-// show a misleading unfinished-turn message while it waits for delegated work.
-func (r *Runtime) shouldAutoContinue(sessionID string, steps []TurnStep) bool {
-	if r.coordSlotFor(sessionID).workers.Load() > 0 {
-		return false
-	}
-	return needsAutoContinue(steps)
-}
-
 // deadlineExpired reports whether a finished context ended because its BUDGET ran
 // out (the schedule/spawn deadline, or a watchdog cut recorded as the cancellation
 // cause) rather than because someone cancelled it. A plain cancellation is the human
@@ -127,7 +116,7 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 	max := r.tun.AutoContinueMax()
 	steps := lastSteps
 	for i := range max {
-		if !r.shouldAutoContinue(sessionID, steps) {
+		if !needsAutoContinue(steps) {
 			return
 		}
 		// The run was stopped by hand ("Durdur"): the human ended it on purpose, so a

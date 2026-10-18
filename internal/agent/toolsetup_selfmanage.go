@@ -35,18 +35,8 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		// instances (to pick one for create_agent/update_agent's `provider`),
 		// but creating/editing/deleting them stays in the Settings screen.
 		tools.NewListProvidersTool(r.providers.ListInstances),
-		// Note: agent→agent work is unified under run_subagent (above), which always
-		// runs synchronously; background work goes through coordinator mode
-		// (spawn_worker). The old call_agent / spawn_session / send_agent_message
-		// tools were removed.
-		// send_message is the "peer DM" complement: an addressed, sender-tagged
-		// message into another agent's persistent inbox (Claude Code mailbox model).
-		tools.NewSendMessageTool(agent.ID, func(ctx context.Context, to, summary, message string) (string, error) {
-			if out, routed := r.messageOwnCoordinator(ctx, agent.ID, to, summary, message); routed {
-				return out, nil
-			}
-			return r.DeliverAgentMessage(ctx, agent.ID, to, summary, message)
-		}),
+		// Note: agent→agent work is run_subagent (synchronous) or spawn_session
+		// (detached, fire-and-forget).
 		// Context reset: let the agent hand off to a fresh session when it nears
 		// the context limit (Anthropic "context reset" pattern) — operates on the
 		// CURRENT session (resolved from the context) and the running agent.

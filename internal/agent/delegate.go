@@ -71,8 +71,8 @@ func (s delegState) refund() {
 // resolveAgent finds a workspace agent by id first, then by case-insensitive
 // display name. It tolerates the wrappers a model tends to add: surrounding
 // whitespace, a leading "@" (the chat mention form), and the value wrapped in
-// quotes (e.g. `"Ada"` passed verbatim) — so send_message accepts a plain NAME
-// or an id equally. Shared by the subagent runner and the spawn path.
+// quotes (e.g. `"Ada"` passed verbatim) — so a plain NAME is accepted
+// as readily as an id. Shared by the subagent runner and the spawn path.
 func (r *Runtime) resolveAgent(ctx context.Context, ref string) (db.Agent, error) {
 	ref = strings.TrimSpace(ref)
 	ref = strings.TrimSpace(strings.Trim(ref, `"'`))

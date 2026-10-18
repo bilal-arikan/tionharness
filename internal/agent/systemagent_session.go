@@ -15,7 +15,7 @@ import (
 // and CONTINUE the conversation there (the session is a plain writable chat and
 // the agent keeps its soul).
 //
-// High-frequency background roles (titler, compaction, stall judge, lesson
+// High-frequency background roles (titler, compaction, lesson
 // extractor) are deliberately NOT recorded: they would flood the session list.
 
 // SystemSessionTagPrefix tags a recorded exchange with its role (for example, "system:insight").

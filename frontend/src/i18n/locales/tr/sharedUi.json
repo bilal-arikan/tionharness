@@ -153,36 +153,6 @@
     "add": "Etiket ekle…",
     "remove": "{{tag}} etiketini kaldır"
   },
-  "workflow": {
-    "advanced": "Gelişmiş / opsiyonel",
-    "details": {
-      "invalidPhases": "⚠ Faz bloğu geçersiz: {{error}}",
-      "maxTurns": "Tur üst sınırı: {{maxTurns}}",
-      "pattern": "Desen: {{pattern}}",
-      "phases": "Fazlar: {{phases}}",
-      "skill": "Skill: {{slug}}",
-      "skillVersion": "Skill: {{slug}} (v{{version}})",
-      "stopCondition": "Durma koşulu: {{condition}}",
-      "workers": "Önerilen worker'lar: {{workers}}"
-    },
-    "emptyAfter": "Skills ekranından bir skill ekleyin.",
-    "emptyBefore": "Kayıtlı reçete yok. Oluşturmak için",
-    "free": "Serbest (recipe yok)",
-    "help": "Kayıtlı bir orkestrasyon reçetesi: koordinatör prompt'unun üzerine bindirilir, worker'ların hangi sırayla başlayıp sonuçlarının nasıl birleşeceğini tarif eder.\n\nHer reçete bir skill dosyasıdır (kind: coordinator-workflow). Satırdaki kitap düğmesiyle içeriğini açabilirsiniz. Serbest seçilirse koordinatör kendi kararıyla ilerler.",
-    "label": "Workflow",
-    "loading": "Reçeteler yükleniyor…",
-    "openInSkills": "\"{{name}}\" skill'ini Skills ekranında aç",
-    "openSkill": "{{name}} skill'ini aç",
-    "patterns": {
-      "adversarial": "Karşıt doğrulama — bir üretici, bir de onu çürütmeye çalışan worker",
-      "classify": "Sınıflandır ve yönlendir — girdi önce etiketlenir, sonra ilgili profile gider",
-      "fanout": "Fan-out ve sentez — paralel worker'lar, sonuçları koordinatör birleştirir",
-      "generateFilter": "Üret ve süz — çok sayıda aday üretilir, sonra elenir",
-      "loop": "Bitene kadar döngü — durma koşulu sağlanana dek tur tekrarlanır",
-      "tournament": "Turnuva — adaylar ikişerli karşılaştırılarak eleme yapılır"
-    },
-    "whatDoesItDo": "{{name}} — ne yapar?"
-  },
   "systemRoles": {
     "title": "Ajan atamaları",
     "hint": "Bu workspace'te her rolü hangi sistem ajanının çalıştıracağı. Yalnız rolün kendi sistem ajanları sunulur: yerleşik ajan ya da Ayarlar ▸ Ajan kütüphanesi'nde ondan türetilen özelleştirme. Boş = yerleşik.",
@@ -192,12 +162,12 @@
       "workers": "Worker'lar",
       "helpers": "Sohbet yardımcıları",
       "analysis": "Analiz",
-      "optimizers": "Gözlemciler ve hakemler"
+      "optimizers": "Gözlemciler"
     },
     "roles": {
       "subagent-explore": {
         "label": "Keşif worker'ı",
-        "hint": "Koordinatör `explore` başlattığında kod tabanını salt-okunur inceler."
+        "hint": "`explore` arkasında kod tabanını salt-okunur inceler."
       },
       "subagent-planner": {
         "label": "Planlayıcı worker",
@@ -242,14 +212,6 @@
       "flow-optimizer": {
         "label": "Akış gözlemcisi",
         "hint": "Son akış koşularına bakıp ajanın ana akışı için ölçülü değişiklik önerir."
-      },
-      "recipe-optimizer": {
-        "label": "Reçete iyileştirici",
-        "hint": "Koordinatör reçeteleri için rota istatistiklerinden değişiklik önerir."
-      },
-      "stall-judge": {
-        "label": "Takılma hakemi",
-        "hint": "Koordinatörün yapmadığı bir worker başlatmayı anlatıp anlatmadığını denetler."
       }
     }
   }

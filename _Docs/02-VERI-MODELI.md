@@ -1,6 +1,6 @@
 # TionHarness — Veri Modeli
 
-> **Özet (2026-09-22):** Entity modelini (agents, sessions, session_messages, tasks, schedules, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz ve zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaz, arşivli skill ajanlara sunulmaz; ajanlar tek `set_archived` aracıyla arşivleyip geri alabilir — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
+> **Özet (2026-10-18):** Entity modelini (agents, sessions, session_messages, tasks, schedules, flows, flow_runs, artifacts vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz ve zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaz, arşivli skill ajanlara sunulmaz; ajanlar tek `set_archived` aracıyla arşivleyip geri alabilir — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`. 2026-10-18: koordinatör/worker oturumları, peer oturumları, `stall_nudges` ve Rota grafiği (`trajectories`) kaldırıldı; oturum kökeni `coordinator` artık yok.
 
 Entity modeli başta SQLite tabloları olarak tasarlandı, sonra dosya-store'a taşındı
 (diske yazım biçimi, dizin yapısı ve eşzamanlılık: `08-DEPOLAMA.md`). Skill'ler tablo değil
@@ -148,7 +148,7 @@ erDiagram
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
 | `artifacts` | Ajanın ürettiği kalıcı içerik. **Sürümlenmez** — `update` içeriği yerinde ezer (revizyon geçmişi yok). `kind` ∈ metin kindleri (`markdown`/`code`/`html`/`text`/`svg`/`mermaid`) **veya** medya/dosya kindleri (`image`/`video`/`audio`/`file`) + `language` (kod için). Metin kindlerinde gövde diskte `artifacts/<session>/<id><ext>` altında tutulur, JSON `content_file` ile referanslar (yükte `content`'e okunur). Medya/dosya kindlerinde bytes diskte yaşar, `source_path` (workspace-göreli) ile referanslanır — `create_artifact sourcePath` ile verilen workspace-dışı dosyalar `artifacts/`'a kopyalanır. `origin` ∈ `chat`/`manual`/`tool` (+ tarihsel `agent` — otomatik yakalama kaldırıldı, yeni artifact üretmez); köken `session_id`/`agent_id`. **Otomatik yakalama YOK:** artifact yalnız araçla (`create_artifact`/`update_artifact`) veya API/UI ile bilerek oluşturulur; dosya yazmak artifact üretmez. Workspace-scoped — TionHarness'in Claude.ai artifact karşılığı |
-| `trajectories` | **Rota** (2026-09-02, `_Docs/77` R4): kök oturum başına bir yörünge grafiği — ilan edilen fazlar (`declared`) + runtime'ın gözlediği oturum/otomasyon/flow-run düğümleri (`observed`), kenarlar (`next`/`spawned`/`reported`/`fired`/`feeds`/`blocked_by`/`forked_from`), `status` (planned/running/waiting/done/failed/abandoned) ve her yazımda artan `revision`. **Depolama iki parçalı:** grafik kök oturumun dizininde `trajectory.json` sidecar'ıdır (oturumla yaşar, yedeklenir, silinir); `trajectories/index.json` yalnız listeleme özetidir (id, kök, şablon, durum, revizyon, düğüm sayısı) ve boot'ta yüklenir, bozuksa karantinaya alınıp sidecar'lardan yeniden kurulur. Yazımlar kök başına kilitle serileşir; `UpdateTrajectory(id, expectedRev, fn)` — UI/ajan düzenlemesi gördüğü revizyonu geçirir, uyuşmazsa `ErrConflict` (409); yalnız gözlem ekleyen runtime çağrıları 0 geçer. Rota **hiçbir şey çalıştırmaz**; pano gibi yansıtır. Id ön eki `RTA` |
+| ~~`trajectories`~~ | **Kaldırıldı (2026-10-18):** Rota grafiği (kök oturum başına `trajectory.json` sidecar'ı + `trajectories/index.json`, `UpdateTrajectory`, `RTA` ön ekli id'ler) ve `/api/trajectories*` yoktur; Rota ekranı yalnız oturum şeritlerinin zaman çizelgesidir (`78-ROTA-EKRANI.md`). Eski diskteki `trajectory.json` / `trajectories/` dosyaları yok sayılır. Tarihsel tasarım: `arsiv/77-ROTA-ALTYAPI-PLANI.md` |
 
 > **`state` (görünürlük) ve `run_state` (koşu sonucu) AYRI alanlardır.**
 >
@@ -159,19 +159,17 @@ erDiagram
 >   **Otomatik canlanma (2026-09-06):** arşivli bir oturuma **gerçek bir tur**
 >   düşerse `state` kendiliğinden `active` olur ve `archived` etiketi silinir
 >   (`Runtime.reactivateArchivedSession`, `internal/agent/sessionreactivate.go`;
->   tek çağrı noktası `claimTurnSlot`). Bu yalnız `KindUser`/`KindPeer`/
->   `KindWorker`/`KindSpawn` turları için geçerlidir — salt-okuma yolları slot
+>   tek çağrı noktası `claimTurnSlot`). Bu yalnız `KindUser`/`KindSpawn`
+>   turları için geçerlidir — salt-okuma yolları slot
 >   almadığı için oturuma **bakmak** onu canlandırmaz, `KindCommand` (transkript
->   bakımı) ve `KindCoordinator`/`KindWake`/`KindAutomation` (otomatik yeniden
->   giriş) de bilerek dışarıdadır: arşiv, kaçak bir koordinatör ağacının
->   kill-switch'i olarak kalmalıdır (bkz. `_Docs/47`).
+>   bakımı) ve `KindWake`/`KindAutomation` (otomatik yeniden giriş) de bilerek
+>   dışarıdadır: arşiv, kaçak otomatik işlerin kill-switch'i olarak kalmalıdır.
 >   **Arşivleme bir DURDURMA jestidir (2026-09-22):** bir oturum arşivlenince ona
 >   bağlı zamanlamalar **pasifleştirilir** (`Enabled=false`) —
 >   `Runtime.onSessionArchivedDisableSchedules`
 >   (`internal/agent/schedulearchive.go`), `OnSessionChange` üzerinden bağlıdır,
 >   yani `db.SetSessionState`'ten geçen **tüm** arşiv yolları (HTTP uç noktası,
->   `update_session`, `archive_sessions` toplu süpürmesi, koordinatörün terminal
->   worker arşivi, içgörü süpürücüsü) kapsanır. Bağlanma iki biçimdedir:
+>   `update_session`, `archive_sessions` toplu süpürmesi, içgörü süpürücüsü) kapsanır. Bağlanma iki biçimdedir:
 >   `SessionID` dolu tek-seferlik uyandırmalar ve ajanın ortak `schedule`
 >   thread'ine yazan `reuse` modlu cron zamanlamaları; `spawn` modlu zamanlamalar
 >   her ateşlemede yeni oturum açtığı için **bağlı sayılmaz**. Pasifleştirme
@@ -184,15 +182,15 @@ erDiagram
 >   (`refuseWakeOnArchivedSession` → `ErrSessionArchived`, `claimTurnSlot`'un ilk
 >   adımı) ve `Warn` ile loglanır — sessizce yutulmaz. Reddedilir, **diriltilmez**:
 >   `KindWake` yukarıdaki allowlist'in dışında kalmaya devam eder.
-> - **`run_state`** oturumun **son arka plan (worker) turunun nasıl bittiğini**
+> - **`run_state`** oturumun **son arka plan (spawn) turunun nasıl bittiğini**
 >   saklar; değerler `turnoutcome.go`'daki sabitlerdir: `completed` | `failed` |
 >   `killed` | `timeout` | `incomplete`. Yanında `run_state_at` (unix saniye)
->   damgası bulunur. `internal/agent/coordination.go` içinde, tur sonucu
+>   damgası bulunur. `internal/agent` içinde, tur sonucu
 >   sınıflandırıldıktan **sonra** ve **her dal için** yazılır — sağlayıcı hatasıyla
 >   ölen ya da iptal edilen bir koşu da `failed`/`killed` olarak kaydedilir.
 >
-> Amaç kalıcılık: transkript mesajı, `worker` olayı ve etiketler yalnız o an
-> yayınlanan sinyallerdir; yeniden başlatmadan sonra **bitmiş bir worker'ı canlı
+> Amaç kalıcılık: transkript mesajı, olaylar ve etiketler yalnız o an
+> yayınlanan sinyallerdir; yeniden başlatmadan sonra **bitmiş bir arka plan oturumunu canlı
 > olanından ayırt eden tek şey** `run_state`'tir. **Runtime'a aittir, salt-okunur**
 > olarak sunulur — API'nin oturum güncelleme uçları bu alanı girdi olarak kabul
 > etmez. `omitempty`: alanı taşımayan eski `session.json` dosyaları **olduğu gibi
@@ -214,21 +212,16 @@ erDiagram
 > `runStateMeta.test.ts`. (`Execution` tipi bu alanı taşımaz; onu kullanan toplu
 > genel bakış tablosu 2026-08-21'de kaldırıldı.)
 >
-> **`stall_nudges`** koordinatör "hayalet spawn" sayacıdır (bkz. `_Docs/47`):
-> bellekteki ardışık seri (`slot.spawnHallucStreak`) temiz bir koordinasyon
-> çağrısında sıfırlanır ve süreçle birlikte kaybolur; bu alan ise **kümülatif** ve
-> yeniden başlatmaya dayanıklıdır. Artık yalnız gözlem değil, **karar alanıdır**:
-> `CoordinatorStallHaltTotal` (vars. 3) eşiğine ulaşınca koordinatör sert-halt
-> edilir. Gerçekten koordinasyon aracı çağıran temiz bir tur alanı **0'a çeker**
-> (`SetSessionStallNudges`), dolayısıyla eşik "toplam ömür" değil **toparlanmadan
-> nüks** ölçer — `stuck_turns` ile aynı ardışık-sıfırlama deseni.
+> **`stall_nudges`** (kaldırıldı, 2026-10-18): koordinatör "hayalet spawn" sayacı ve
+> `CoordinatorStallHaltTotal` sert-halt eşiği koordinatör modu ile birlikte silindi; alan
+> artık yazılmaz, eski `session.json` dosyalarındaki değer yok sayılır.
 
 > **`origin` — oturum kökeni (2026-09-02, `_Docs/77` R1).** Oturumu **kimin,
 > nereden** başlattığının tek kaynağı (`db.SessionOrigin`, `models_session_origin.go`):
-> `kind` ∈ `user` · `spawn` · `coordinator` · `subagent` · `flow` · `schedule` ·
-> `automation` · `handoff` · `insight`; `entityId` (AUT/SCH/FLW), `runId` (flow ya da
-> insight koşusu), `nodeId` (flow düğümü), `triggerSessionId` (worker için koordinatör,
-> subagent için ebeveyn tur, handoff için devredilen oturum, tag tetiklemesi için
+> `kind` ∈ `user` · `spawn` · `subagent` · `schedule` · `automation` ·
+> `handoff` · `insight` (`coordinator` 2026-10-18'de, `flow` daha önce emekliye ayrıldı; eski
+> satırlar ham string'i taşır); `entityId` (AUT/SCH/FLW), `runId` (flow ya da
+> insight koşusu), `nodeId` (flow düğümü), `triggerSessionId` (subagent için ebeveyn tur, handoff için devredilen oturum, tag tetiklemesi için
 > etiketli oturum), `rootSessionId` (ağaç kökü; **boş = kendisi**), `at`. **Tek damgalama
 > noktası `createSessionLocked`**: çağıran açık köken vermezse eski alanlardan
 > (`coordinator_session_id`, `execution_type`, `kind`+`source_id`, `parent_session_id`)
@@ -241,7 +234,7 @@ erDiagram
 > Oturum yaşam döngüsü için `SetSessionHook` (`store_session_hook.go`): `create` /
 > `state` / `runstate` / `origin` / `delete` op'ları, kilitler bırakıldıktan sonra
 > ateşlenir (`SetBoardHook` sözleşmesi); R3 workspace olay günlüğünün ve Rota
-> projeksiyonunun besleme noktasıdır.
+> zaman çizelgesi projeksiyonunun besleme noktasıdır.
 
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,
@@ -269,8 +262,8 @@ kurallar tek bir yaprak pakette: `internal/archive` (`Filter` = `Active`/`Only`/
 
 | Varlık | Alan | Arşivli iken davranış |
 |---|---|---|
-| Ajan | `Agent.Archived` + `ArchivedAt` (`SetAgentArchived`) | **Çalıştırılamaz**: `resolveAgent` (spawn/`run_subagent`/`send_message`/`spawn_worker`), tool-loop hunisi (`completeTracedInner` — sohbet, zamanlama, otomasyon, flow, worker dahil tüm turlar) ve `POST /api/sessions` açık `ErrArchived` döner (REST'te 409). Sistem ajanları arşivlenemez (`ErrSystemAgentArchive`, 409). Kalıtılmaz; silinmiş ajan arşivlenemez. `ListAgents` arşivlileri **döndürmeye devam eder** (bütçe/geçmiş), seçici ve Harita filtreler. |
-| Skill | SKILL.md frontmatter `archived: true` (`Store.SetArchived`) | "# Available Skills" kataloğunda, `skill_search`'te ve sub-skill altbilgisinde **yok**; `use_skill` ve reçete çözümü (`ResolveRecipe`) açık `ErrArchived` döner; `always_allow` izinleri verilmez. Dosya diskte kalır, detay görünümü okunabilir; işaret frontmatter'da olduğu için shipped-default yeniden seed'i onu korur. |
+| Ajan | `Agent.Archived` + `ArchivedAt` (`SetAgentArchived`) | **Çalıştırılamaz**: `resolveAgent` (`spawn_session`/`run_subagent`), tool-loop hunisi (`completeTracedInner` — sohbet, zamanlama, otomasyon, flow dahil tüm turlar) ve `POST /api/sessions` açık `ErrArchived` döner (REST'te 409). Sistem ajanları arşivlenemez (`ErrSystemAgentArchive`, 409). Kalıtılmaz; silinmiş ajan arşivlenemez. `ListAgents` arşivlileri **döndürmeye devam eder** (bütçe/geçmiş), seçici ve Harita filtreler. |
+| Skill | SKILL.md frontmatter `archived: true` (`Store.SetArchived`) | "# Available Skills" kataloğunda, `skill_search`'te ve sub-skill altbilgisinde **yok**; `use_skill` açık `ErrArchived` döner (reçete çözümü `ResolveRecipe` 2026-10-18'de kaldırıldı); `always_allow` izinleri verilmez. Dosya diskte kalır, detay görünümü okunabilir; işaret frontmatter'da olduğu için shipped-default yeniden seed'i onu korur. |
 | Artifact | `Artifact.Archived` (mevcuttu) | Varsayılan araç listesinde yok, Harita'da yok. |
 | Otomasyon | `Automation.Archived` (mevcuttu) | Ateşlenmez; defterde `archived` atlama nedeni. **Yeni:** hedef ajanı arşivli bir kural `agent_archived` nedeniyle atlanır (LLM'siz pano eylemleri `archive`/`move` hariç). |
 

@@ -1,5 +1,7 @@
 # 21 — Uygulama İçi Market Sistemi (Marketplace)
 
+> **Not (2026-10-18):** koordinatör alanları (`coordinatorMode/Workflow/Prompt`) paket şemasından kaldırıldı.
+
 > **Durum:** Tasarım + **yedi türde de kurulum çalışır** (skill/agent/provider/flow/
 > **workspace/mcp/hook** install). workspace/mcp 2026-06-24'te, `hook` (yabancı plugin
 > hook'ları, ingest ile) sonradan eklendi. (Board türü kısa süre denendi, 2026-06-24'te
@@ -225,9 +227,6 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
   "skills":  [{ "slug": "...", "body": "---\n...", "files": {} }],
   "agents":  [{ "key": "execute", "name": "...", "soul": "...",
                 "permissionMode": "auto", "toolOverrides": "{...}",
-                "coordinatorMode": true,               // ajanın açtığı oturumlar koordinatör doğar
-                "coordinatorWorkflow": "coordinator-wf-plan-dev-test",  // opsiyonel reçete
-                "coordinatorPrompt": "Önce planla, sonra iki worker aç.", // koordinatör-özel prompt
                 "skills": ["..."] }],
   "flows":   [{ "name": "...", "steps": [...] }],   // veya "graph": "{...}" (agentId = "tmpl:<key>")
   "schedules": [{ "agentKey": "...", "cronExpr": "0 8 * * *", "prompt": "...",
@@ -250,16 +249,14 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
 > taşımasında ateşleyip başarısız olurdu). Publish tarafı simetriktir; `Seed != ""` olan
 > gömülü default kurallar dışa aktarılmaz (her workspace kendi kopyasını açılışta üretir).
 >
-> **`coordinatorMode`** ajan tanımına yazılır, oturuma **doğuşta** kopyalanır (bkz.
-> `_Docs/47` §15). Pinlenmiş `coordinatorWorkflow` kurulumda çözülemezse **düşürülür** —
-> ajan serbest koordinasyonla çalışır, kurulum patlamaz. `coordinatorPrompt` serbest
-> metindir, çözülecek bir referansı yoktur: **olduğu gibi** taşınır ve kurulur; boşsa
-> hiç yazılmaz (`omitempty`). Aynı üç alan **agent** paketinde de taşınır.
+> **Kaldırıldı (2026-10-18):** `coordinatorMode` / `coordinatorWorkflow` / `coordinatorPrompt`
+> alanları koordinatör modu ile birlikte silindi; paketlerde taşınmaz, eski paketlerdeki bu
+> alanlar yok sayılır.
 
 ### Blank workspace başlangıç kontrol döngüsü
 
 Gömülü `workspace-blank` paketi tek `Asistan` yerine iki ajan kurar: yalnız gözlem,
-mesajlaşma ve delegasyon yapan **CEO** ile tam araç erişimli yürütücü **PM**. CEO'nun
+mesajlaşma ve delegasyon (`spawn_session`) yapan **CEO** ile tam araç erişimli yürütücü **PM**. CEO'nun
 etkin `*/20 * * * *` schedule'ı kalıcı `kind="schedule"` oturumunda board'u okur;
 duran, başarısız veya ilerlemeyen işte PM'i dürter ve kendisi uygulama işi yapmaz.
 `failed` ve `review` durumlarına kart taşıma olaylarını izleyen iki etkin pano

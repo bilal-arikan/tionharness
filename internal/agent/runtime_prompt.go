@@ -265,7 +265,7 @@ func DateTimeContextBlock() string {
 // cannot be derived from the session id alone.
 func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) string {
 	// The turn's own agent (resolved via the stamped session) selects the
-	// coordinator-only sections; the session itself feeds the awareness layer.
+	// role-specific sections; the session itself feeds the awareness layer.
 	var sess db.Session
 	sid := SessionIDFrom(ctx)
 	if sid != "" {
@@ -300,18 +300,6 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) s
 	if sid != "" {
 		if note := r.PromptEpochContextNote(sid, agent.ID); note != "" {
 			lead = append(lead, awareness.Section{Key: "epoch", Text: note, Priority: awareness.PriorityPinned, Volatile: true})
-		}
-	}
-	// Coordinator turns get an authoritative live SITUATION block — fleet state,
-	// the agent roster with write capability, and the board — so the model can
-	// never believe a finished worker is still running (the coalesced-notification
-	// stall) and does not spend two or three tool calls a turn re-reading state
-	// that is already here. Coordinator-only, reusing the session loaded above —
-	// which includes a mid-level node, whose block also reports its own subtree.
-	if sid != "" && sess.IsCoordinator() {
-		if wb := r.coordinatorSituationBlock(ctx, sid); wb != "" {
-			lead = append(lead, awareness.Section{Key: "situation", Text: wb, Priority: 1, Volatile: true,
-				Pointer: "## Coordinator situation\nThe fleet/board snapshot was omitted to fit the context budget; list_workers and get_view board carry it."})
 		}
 	}
 	// The awareness layer appends the checklist, the session's artifacts and the

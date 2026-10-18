@@ -4,26 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
-
-	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-// TestGraphWalksWholeTreeOnceAndTerminatesCycles pins the whole-map contract:
-// root + ten buckets + every member, agent -> session edges, coordinator
-// cycles and self-loops do not recurse, and a session reached through two
+// TestGraphWalksWholeTreeOnce pins the whole-map contract: root + the buckets
+// + every member, agent -> session edges, and a session reached through two
 // parents appears once with both edges.
-func TestGraphWalksWholeTreeOnceAndTerminatesCycles(t *testing.T) {
+func TestGraphWalksWholeTreeOnce(t *testing.T) {
 	ctx := context.Background()
 	p := childrenFixture()
-	// Cycle + self-loop on top of the shared fixture.
-	store := p.store.(*fakeStore)
-	now := time.Now().Unix()
-	store.sessions = append(store.sessions,
-		db.Session{ID: "CYC-A", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "CYC-B"},
-		db.Session{ID: "CYC-B", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "CYC-A"},
-		db.Session{ID: "SELF", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "SELF"},
-	)
 
 	g, err := p.Graph(ctx)
 	if err != nil {
@@ -42,20 +30,22 @@ func TestGraphWalksWholeTreeOnceAndTerminatesCycles(t *testing.T) {
 	sessions := Ref{Kind: KindCategory, ID: CategorySessions}
 	kindGroup := Ref{Kind: KindCategory, ID: "skind:other"}
 	agent := Ref{Kind: KindAgent, ID: "AG1"}
-	cycA := Ref{Kind: KindSession, ID: "CYC-A"}
-	cycB := Ref{Kind: KindSession, ID: "CYC-B"}
-	self := Ref{Kind: KindSession, ID: "SELF"}
+	s0 := Ref{Kind: KindSession, ID: "S0"}
 	for _, want := range []GraphEdge{
-		{sessions, kindGroup}, {kindGroup, cycA}, {agent, cycA}, // bucket -> kind group -> session; multi-parent
-		{cycA, cycB}, {cycB, cycA}, // cycle
-		{self, self}, // self-loop
+		{sessions, kindGroup}, {kindGroup, s0}, {agent, s0}, // bucket -> kind group -> session; multi-parent
 	} {
 		if !hasEdge(g.Edges, want.Source, want.Target) {
 			t.Errorf("edge %s -> %s missing", want.Source, want.Target)
 		}
 	}
-	if n := countNodes(g.Nodes, cycA); n != 1 {
-		t.Errorf("CYC-A appears %d times, want once", n)
+	if n := countNodes(g.Nodes, s0); n != 1 {
+		t.Errorf("S0 appears %d times, want once", n)
+	}
+	// Sessions are leaves: no edge leaves a session node.
+	for _, e := range g.Edges {
+		if e.Source.Kind == KindSession {
+			t.Errorf("session must be a leaf, got edge %s -> %s", e.Source, e.Target)
+		}
 	}
 
 	// Deterministic order: nodes and edges sorted by Ref.String.
@@ -98,50 +88,6 @@ func TestGraphWalksWholeTreeOnceAndTerminatesCycles(t *testing.T) {
 	}
 	if len(decoded.Nodes) != len(g.Nodes) || len(decoded.Edges) != len(g.Edges) {
 		t.Fatalf("json roundtrip lost entries: %s", raw)
-	}
-}
-
-// TestGraphIncludesTrajectoryEdges: a root session drills into its Rota and the
-// Rota into the entities its nodes bind, exactly as Children does.
-func TestGraphIncludesTrajectoryEdges(t *testing.T) {
-	ctx := context.Background()
-	now := time.Now().Unix()
-	p := NewProjector(&fakeStore{
-		agents: []db.Agent{{ID: "AG1", Name: "builder"}},
-		sessions: []db.Session{
-			{ID: "COORD", AgentID: "AG1", UpdatedAt: now, CoordinatorMode: true},
-			{ID: "W1", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "COORD"},
-		},
-		trajectories: []db.Trajectory{sampleTrajectory()},
-	})
-	g, err := p.Graph(ctx)
-	if err != nil {
-		t.Fatalf("graph: %v", err)
-	}
-	var traj *Handle
-	for i := range g.Nodes {
-		if g.Nodes[i].Ref.Kind == KindTrajectory {
-			traj = &g.Nodes[i]
-			break
-		}
-	}
-	if traj == nil {
-		t.Fatalf("trajectory node missing: %+v", g.Nodes)
-	}
-	parents, children := 0, 0
-	for _, e := range g.Edges {
-		if e.Target == traj.Ref && e.Source.Kind == KindSession {
-			parents++
-		}
-		if e.Source == traj.Ref {
-			children++
-		}
-	}
-	if parents == 0 {
-		t.Errorf("no session -> trajectory edge: %+v", g.Edges)
-	}
-	if children == 0 {
-		t.Errorf("no trajectory -> bound entity edge: %+v", g.Edges)
 	}
 }
 

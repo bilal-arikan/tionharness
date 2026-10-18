@@ -68,21 +68,10 @@ const (
 	// KindLogs projects the recent process log stream (the global ring buffer) as
 	// a leaf node: the tail renders inline, exactly like budget/tools.
 	KindLogs Kind = "logs"
-	// KindTrajectory projects one trajectory ("Rota", db.Trajectory): the
-	// declared phases and what actually happened under them. Reached from its
-	// root session's children; its own children are the bound sessions / flow
-	// runs / automations (_Docs/77 R9).
-	KindTrajectory Kind = "trajectory"
 	// KindNote projects one memory note (internal/notes): claim, confidence,
 	// reach and correction state. Map leaf for the Notlar category; its children
 	// are the notes it links to and its correction (_Docs/94).
 	KindNote Kind = "note"
-	// KindWorkers is a coordinator's live fleet. Unlike the others it is not
-	// resolvable through Projector: its input is runtime state, not store state,
-	// so the caller builds WorkersInput and calls ProjectWorkers directly. It is
-	// also not offered by get_view — coordinators already receive it in their
-	// prompt every turn, and list_workers covers the on-demand case.
-	KindWorkers Kind = "workers"
 )
 
 // Ref addresses one projection target. Sub is an optional drill-down selector
@@ -160,7 +149,7 @@ type View struct {
 	// very different things to whoever reads the view. Empty renders as "öğe".
 	ElidedUnit string `json:"elidedUnit,omitempty"`
 	// ElidedNote overrides the rendered elision sentence. It exists for the one
-	// projection that is not a UI surface: the coordinator worker block is an
+	// projection that is not a UI surface: an
 	// English prompt fragment, and the default Turkish sentence would drop a
 	// stray language switch into the middle of it. The structured Elided count
 	// is still set either way, so "no silent truncation" holds regardless.

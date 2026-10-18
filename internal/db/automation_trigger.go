@@ -10,8 +10,7 @@ import (
 //
 // Each automation trigger kind registers ONE TriggerSpec: the kind-specific
 // validation of a merged automation and a human label. ValidateAutomationShape
-// looks the kind up here instead of switching on it, so a new kind — the
-// trajectory phase / trajectory_end triggers the Rota work adds — is a new
+// looks the kind up here instead of switching on it, so a new kind is a new
 // file that calls RegisterTrigger, not another branch in three places. The
 // matching/dispatch side stays with the engine (internal/agent/automation*.go),
 // which already has one entry point per kind; this registry only owns what the

@@ -4,12 +4,11 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { modKeyLabel } from '@/shared/lib/platform'
-import { Archive, Sparkles, Users } from 'lucide-react'
+import { Archive, Sparkles } from 'lucide-react'
 import {
   ARCHIVED_CHIP,
   SESSION_CHIPS,
   SUBAGENT_CHIP,
-  WORKER_CHIP,
   type ChipClickMode,
 } from '@/features/sessions/sessionKindMeta'
 import { FilterToggle, useFilterDisclosure } from '@/shared/components'
@@ -45,14 +44,7 @@ export function RotaChipFilter({ chipSet, counts, onClickChip, onReset, offCount
       {open &&
         SESSION_CHIPS.map((f) => {
           const on = chipSet.has(f.key)
-          const Icon =
-            f.key === WORKER_CHIP
-              ? Users
-              : f.key === ARCHIVED_CHIP
-                ? Archive
-                : f.key === SUBAGENT_CHIP
-                  ? Sparkles
-                  : null
+          const Icon = f.key === ARCHIVED_CHIP ? Archive : f.key === SUBAGENT_CHIP ? Sparkles : null
           return (
             <button
               key={f.key}

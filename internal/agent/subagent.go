@@ -49,11 +49,11 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 	"planner":  {ID: "planner", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"}},
 	"coder":    {ID: "coder", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash"}},
 	"reviewer": {ID: "reviewer", AllowedTools: []string{"Read", "LS", "Glob", "Grep"}},
-	// "validator" proves another worker's change actually works: it may run the
+	// "validator" proves another agent's change actually works: it may run the
 	// codebase (tests, typecheck, build, git), but it does NOT edit source — its
 	// verdict must reflect the code as written, not a fix it quietly slipped in.
 	// Its prompt (subagent-validator) enforces a compact PASS/FAIL verdict so the
-	// coordinator reads a decision, not raw logs.
+	// caller reads a decision, not raw logs.
 	//
 	// It has NO browser: driving one needs the playwright MCP server, and no
 	// profile allowlist names a browser tool (the codebase-memory graph and zvec-grep

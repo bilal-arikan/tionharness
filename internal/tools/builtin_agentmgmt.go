@@ -142,8 +142,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"thinkingLevel":{"type":"string","enum":"__THINKING_LEVELS__","description":"Extended-reasoning tier. Must be supported by the chosen model. Omit to get the tier the provider historically behaved as: high for the CLI providers, off for everything else."},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
 				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
-				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionHarness skill set; unknown slugs are skipped."},
-				"coordinatorPrompt":{"type":"string","description":"Orchestration guidance injected ONLY while the agent's session is in coordinator mode (right after the shared coordinator manual). Put delegation direction here instead of in the soul, so it costs nothing when the agent is not coordinating."}
+				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionHarness skill set; unknown slugs are skipped."}
 			},
 			"required":["name"],
 			"additionalProperties":false
@@ -170,8 +169,6 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Avatar        string   `json:"avatar"`
 		Color         string   `json:"color"`
 		Skills        []string `json:"skills"`
-		// CoordinatorPrompt is injected only while the agent coordinates.
-		CoordinatorPrompt string `json:"coordinatorPrompt"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -182,7 +179,6 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	in.Soul = repairMojibake(in.Soul)
 	in.Identity = repairMojibake(in.Identity)
 	in.Avatar = repairMojibake(in.Avatar)
-	in.CoordinatorPrompt = repairMojibake(in.CoordinatorPrompt)
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
@@ -190,8 +186,8 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	// Default the provider so the agent is runnable: an empty provider produced
 	// agents (e.g. flow nodes) whose turns relied on implicit fallback and were
 	// hard to diagnose. When the caller omits the provider, inherit it — as a
-	// matched provider+model pair — from the creating agent: a coordinator running
-	// on e.g. deepseek that spawns sub-agents gets them on the same provider/model
+	// matched provider+model pair — from the creating agent: an agent running
+	// on e.g. deepseek that creates sub-agents gets them on the same provider/model
 	// instead of forcing every new agent back to claude-cli (the app has no
 	// abstract per-workspace default; provider/model is agent-based). The model is
 	// inherited ONLY when the caller gave neither provider nor model, so an
@@ -258,8 +254,6 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Skills:             skills,
 		MCPEnabled:         true,
 		CreatedBy:          t.d.actorID,
-
-		CoordinatorPrompt: in.CoordinatorPrompt,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create agent: %w", err)
@@ -326,8 +320,7 @@ func (UpdateAgentTool) Def() providers.ToolDef {
 				"model":{"type":"string"},
 				"thinkingLevel":{"type":"string","enum":"__THINKING_LEVELS__","description":"Extended-reasoning tier. Must be supported by the model this patch lands on. Omit to keep the agent's current tier; \"\" is not a valid value."},
 				"avatar":{"type":"string"},
-				"color":{"type":"string"},
-				"coordinatorPrompt":{"type":"string","description":"Orchestration guidance injected ONLY while the agent's session is in coordinator mode (right after the shared coordinator manual). Pass \"\" to clear it."}
+				"color":{"type":"string"}
 			},
 			"required":["id"],
 			"additionalProperties":false
@@ -348,8 +341,6 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		ThinkingLevel *string `json:"thinkingLevel"`
 		Avatar        *string `json:"avatar"`
 		Color         *string `json:"color"`
-		// CoordinatorPrompt: omitted leaves it alone, "" clears it.
-		CoordinatorPrompt *string `json:"coordinatorPrompt"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -363,7 +354,7 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		return "", err
 	}
 	// Repair any UTF-8→Latin-1 mojibake from the CLI/MCP transport before saving.
-	for _, p := range []*string{in.Name, in.Soul, in.Identity, in.Avatar, in.CoordinatorPrompt} {
+	for _, p := range []*string{in.Name, in.Soul, in.Identity, in.Avatar} {
 		if p != nil {
 			*p = repairMojibake(*p)
 		}
@@ -406,8 +397,6 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		ThinkingLevel: in.ThinkingLevel,
 		Avatar:        in.Avatar,
 		Color:         in.Color,
-
-		CoordinatorPrompt: in.CoordinatorPrompt,
 	}
 	// in.Provider is accepted as a provider INSTANCE id (_Docs/71 §5); resolved
 	// via the injected resolver so a non-default instance (e.g. "PRV3") works,

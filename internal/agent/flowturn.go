@@ -134,7 +134,7 @@ func (t *turnFlowRunner) RunLLM(ctx context.Context, node flow.Node, prompt stri
 			}
 			req.Messages[n-1] = last
 		case prompt != t.input:
-			// A real stage prompt after a non-user tail (a peer agent's reply
+			// A real stage prompt after a non-user tail (another agent's reply
 			// in a multi-agent session) becomes the new user turn.
 			req.Messages = append(req.Messages, providers.Message{Role: providers.RoleUser, Text: prompt})
 		default:

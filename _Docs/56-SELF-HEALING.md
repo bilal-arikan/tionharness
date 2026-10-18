@@ -1,5 +1,7 @@
 # 56 — Kendi Kendini Onaran Oturum Akışları (Self-Healing)
 
+> **Not (2026-10-18):** worker/koordinatör kurtarma yolları kaldırıldı; varsayılanlar: `chatTurnIdleTimeoutMin` 3→10, `codexStdoutIdleSec` 90→300, `spawnIdleTimeoutMin` 5→10.
+
 > Durum: **Tamamlandı** (2026-07-07). İlham: external-context-agent projesinin
 > `error_classifier` / `tool_guardrails` / `message_sanitization` / stuck-loop
 > desenleri, TionHarness'in mevcut saf-`decideRecovery` mimarisine uyarlandı.
@@ -105,7 +107,7 @@
 > böylece detached goroutine/bellek büyümesi sınırlıdır. Detached operasyon sayacı,
 > kullanıcı cancel akışı ve 30 sn watchdog detach grace korunur.
 >
-> Spawn/worker/coordinator/peer/automation ile schedule/wake yolları da aynı
+> Spawn/automation ile schedule/wake yolları (worker/coordinator/peer yolları 2026-10-18'de kaldırıldı) da aynı
 > semantic idle tracker'ı kullanır; `SpawnTimeout`, `ScheduleTimeout`,
 > `ChatTurnTimeout` ve `TurnWatchdog` normal yürütmede deadline/elapsed hard-stop
 > üretmez. Deprecated alanların varsayılanı ve kapalı değeri 0'dır.
@@ -148,7 +150,7 @@
   (`internal/api/chat_stream.go`) turu `agent.WithChatActivityTimeout` ile sarar —
   arka-plan turuyla AYNI sarmalayıcı, yani hem sert tavan (`ChatTurnTimeout`,
   varsayılan 120 dk) hem boşta penceresi (`ChatTurnIdleTimeout`, varsayılan **3 dk
-  = 180 sn**) hem de **heartbeat aralığı** kurulur. Aralık kurulmazsa
+  = 180 sn**; 2026-10-18'de 10 dk oldu) hem de **heartbeat aralığı** kurulur. Aralık kurulmazsa
   `startActivityHeartbeat` sessizce no-op'a düşer ve meşru uzun-ama-adımsız bir
   işlem (streaming olmayan tamamlama, tek uzun araç çağrısı) dar pencerede kesilirdi;
   bu yüzden sohbet yolu artık çıplak `WithActivityTimeout`'u KULLANMAZ. Adım akışı
@@ -168,10 +170,9 @@
   `ErrTurnHardTimeout`) + loop terminal işaretlerini okuyup "iş BİTMİŞ DEĞİL" notu
   üretir. `reconcileTurnOutcome` bu notu kurtarılan kısmi metnin başına ekler, iz'e
   işaret bırakır ve turu temiz kapatır; kesilmiş tur `FireTurnFinished`/başarı
-  sinyali tetiklemez (fragmanla otomasyon zincirlenmez). Spawn/worker'a ek olarak
-  wake/schedule/inbox **ve koordinatör** turları da bu kurtarmayı kullanır;
-  koordinatörde kesilmiş tur ayrıca spawn-narration stall kontrolünü atlar (yarıda
-  kesilen tur bu heuristikle yargılanmaz).
+  sinyali tetiklemez (fragmanla otomasyon zincirlenmez). Spawn'a ek olarak
+  wake/schedule/inbox turları da bu kurtarmayı kullanır (koordinatör turu ve spawn-narration
+  stall kontrolü 2026-10-18'de kaldırıldı).
 - **Ayarlanabilir boşta-resume** (`runTurnWithIdleResume`, bütçe
   `Tunables.IdleResumeMax` = ayar `idleResumeMax`, varsayılan `DefaultIdleResumeMax=1`,
   FND-708844f8): boşta gözcüsü döngü DIŞINDA tetiklendiğinden döngü-içi kurtarma
@@ -182,14 +183,9 @@
   önceki denemenin kurtarılan fragmanını `resumeContinuationPrompt` ile alır (baştan
   başlamaz, kaldığı yerden sürer). **Sert tavan (`ErrTurnHardTimeout`) resume EDİLMEZ**
   — tekrar aynı tavana çarpar. Bütçe tükenince tur yine "timeout"/unfinished olarak
-  raporlanır (Faz E) ve üst koordinatör onu yeniden görevlendirir (ÇİFT kurtarma değil:
-  resume, koordinatör re-task'ından ÖNCEKİ yerinde ilk savunma). Worker yolunda
-  `workerCtl` her denemede `setCancel` ile güncellenir, böylece koordinatörün
-  `stop_worker`'ı daima uçuştaki denemeyi keser. **Bağlı yollar: spawn / worker /
-  inbox / wake / schedule VE koordinatör drain turu** — koordinatörde resume,
-  drain/stall makinesine şeffaftır (`lastTurnUnix` tur sonrası damgalanır,
-  `guardCoordinatorStall` yalnız temiz turda koşar; resume-sonrası-idle tur truncated
-  kalıp atlanır). `idleResumeMax=0` özelliği tümüyle kapatır (Ayarlar ▸ Araçlar ▸
+  raporlanır (Faz E) (eskiden üst koordinatör onu yeniden görevlendirirdi; koordinatör/worker/`stop_worker`/
+  `guardCoordinatorStall` yolları 2026-10-18'de kaldırıldı). **Bağlı yollar: spawn /
+  inbox / wake / schedule.** `idleResumeMax=0` özelliği tümüyle kapatır (Ayarlar ▸ Araçlar ▸
   "Boşta yeniden başlatma", 0–5).
 
 ## Gözlemlenebilirlik
@@ -210,14 +206,14 @@ tutabilir; bu durumda `cmd.Wait` hiç dönmez ve tur "boş cevap" gibi görünü
 - **Ayrı hata metinleri**: startup hang → "likely MCP startup hang (**retryable**)";
   idle hang → "killed after the idle output timeout (**non-retryable**)" + stdout
   kuyruğu. Hiçbiri normal boş cevap olarak raporlanmaz.
-- **Ayarlanabilir pencere**: `codexStdoutIdleSec` ayarı (varsayılan **90 sn**,
+- **Ayarlanabilir pencere**: `codexStdoutIdleSec` ayarı (varsayılan **300 sn** — 2026-10-18'de 90'dan çıkarıldı: codex exec muhakeme boyunca sessiz kalır;
   0 = kapalı, Ayarlar ▸ Araçlar ▸ "Codex stdout sessizlik penceresi").
   `applySettings` → `providers.SetCodexIdleOutputTimeout`. Birim saniyedir çünkü
-  pencere, sohbet/tur boşta gözcüsünün (varsayılan **3 dk**, TSK440) ALTINDA
+  pencere, sohbet/tur boşta gözcüsünün (TSK440; varsayılan 2026-10-18'de 3→10 dk) ALTINDA
   kalmalı — aksi halde jenerik tur iptali her zaman önce ateşler ve stdout
   kuyruklu spesifik teşhis hiç üretilmez; dakika granülaritesi bu tavanın altına
-  makul bir payla sığmaz. 90 sn, çıktı üretmeden çalışan normal bir araç
-  çağrısının sessiz aralığından uzun, 3 dk'lık tavandan belirgin şekilde kısadır.
+  makul bir payla sığmaz. Pencere çıktı üretmeden çalışan normal bir araç
+  çağrısının sessiz aralığından uzun, tur-boşta tavanından kısa tutulmalıdır (tarihsel gerekçe: 90 sn < 3 dk).
   Pencere tur başlangıcında bir kez okunur; ayar değişimi uçuştaki turu kaydırmaz.
 - **debug.jsonl kaydı**: gözcü öldürdüğünde sağlayıcı `Request.OnWatchdog`
   (`internal/providers/watchdog.go`, `WatchdogKill`) ile bildirir; `internal/agent`
@@ -411,7 +407,7 @@ adımlarının yanında), yani her workspace açılışında bir kez.
 Ölçüm (WS19'un gerçek dosyasının kopyası, canlı dosyaya dokunulmadı):
 **66 → 50 kayıt** (16 birleşme), ikinci geçiş 50 → 50. Görev tanımındaki dört
 küme (PowerShell/bash zincirleme, CRLF shebang, `ask_user` timeout,
-`send_to_worker` kuyruğu) tamamen birleşti; `wsl-hcs-…` dersi ayrı kaldı.
+eski `send_to_worker` kuyruğu) tamamen birleşti; `wsl-hcs-…` dersi ayrı kaldı.
 
 Testler: `internal/db/store_lessons_dedupe_test.go` — dört kümenin gerçek
 imzalarıyla yazma-anı birleşme, alakasız/araç-farklı/reflector imzalarının
