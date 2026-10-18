@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -787,14 +788,12 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// headroom so sync delegation completes in-band. Only fill defaults the parent
 	// env didn't already provide, so a user override still wins. Values are ms.
 	//
-	// 10 minutes still timed out in practice — a delegated agent that edits several
-	// files, runs `go test ./...` and reports back routinely runs longer. Raising
-	// the ceiling is cheap: the caller's ctx (user stop, turn cancellation) still
-	// bounds the call, so this only decides when a LIVE call is killed for being
-	// slow. 15 minutes, matching askTimeout (internal/api/mcp_interaction.go) so a
-	// turn that blocks on ask_user and one that blocks on a slow subagent give up
-	// on the same clock.
-	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TOOL_TIMEOUT", "900000")
+	// A sync run_subagent waits for a whole delegated run; 15 minutes cut live
+	// delegations measured at 17-22 minutes (2026-10-18) and lost their results.
+	// claude-cli has one global MCP tool timeout, so it follows the Interaction
+	// server's ceiling (InteractionToolTimeoutSec). The caller's ctx (user stop,
+	// turn cancellation) still bounds every call.
+	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TOOL_TIMEOUT", strconv.Itoa(InteractionToolTimeoutSec*1000))
 	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TIMEOUT", "60000")
 	// Thinking parity: "Kapalı" turns extended thinking fully off in the CLI
 	// (MAX_THINKING_TOKENS=0). Also restores parallel tool batching on claude-code

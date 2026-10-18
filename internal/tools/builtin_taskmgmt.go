@@ -352,13 +352,9 @@ func NewUpdateTaskTool(database *db.DB, actorID string) UpdateTaskTool {
 	return UpdateTaskTool{d: taskDeps{db: database, actorID: actorID}}
 }
 
-func (UpdateTaskTool) Def() providers.ToolDef {
-	return providers.ToolDef{
-		Name:        "update_task",
-		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, boardState, dependencies, priority, tags, artifactIds). Use artifactIds to attach workspace artifacts to the card (e.g. link a plan artifact so a later stage reads it by id instead of matching on title). To change only the column, prefer move_task. Allowed on any task.",
-		InputSchema: json.RawMessage(`{
-			"type":"object",
-			"properties":{
+// taskPatchProperties is the per-card field set update_task accepts, shared by
+// the single form and each entry of the bulk "updates" array.
+const taskPatchProperties = `
 				"id":{"type":"string","description":"The task id (see list_tasks)"},
 				"title":{"type":"string"},
 				"prompt":{"type":"string"},
@@ -368,9 +364,20 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 				"dependencies":{"type":"string","description":"JSON array of task IDs this task depends on, e.g. [\"id1\",\"id2\"]. Pass [] to clear."},
 				"priority":{"type":"string","enum":["critical","high","medium","low",""],"description":"Priority ('' clears it)"},
 				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (replaces the set; [] clears)"},
-				"artifactIds":{"type":"array","items":{"type":"string"},"description":"Workspace artifact ids attached to this card (replaces the set; [] clears). Read one with read_artifact."}
+				"artifactIds":{"type":"array","items":{"type":"string"},"description":"Workspace artifact ids attached to this card (replaces the set; [] clears). Read one with read_artifact."}`
+
+// maxBulkTasks caps one bulk update/archive call.
+const maxBulkTasks = 100
+
+func (UpdateTaskTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "update_task",
+		Description: "Edit tasks on the board. Single card: pass id and the fields to change (title, prompt, description, ownerAgentId, boardState, dependencies, priority, tags, artifactIds). Several cards in ONE call: pass updates, a list of such patches (each with its own id and fields, up to 100) — prefer it over repeated calls when reconciling the board. Use artifactIds to attach workspace artifacts to a card. To change only the column, prefer move_task. Allowed on any task.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{` + taskPatchProperties + `,
+				"updates":{"type":"array","maxItems":100,"description":"Bulk form: one patch per card. Do not combine with a top-level id.","items":{"type":"object","properties":{` + taskPatchProperties + `},"required":["id"],"additionalProperties":false}}
 			},
-			"required":["id"],
 			"additionalProperties":false
 		}`),
 		Examples: []json.RawMessage{
@@ -378,33 +385,76 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 			json.RawMessage(`{"id":"tsk_77","boardState":"in_progress"}`),
 			// Set dependencies: a JSON ARRAY STRING of task ids ([] clears).
 			json.RawMessage(`{"id":"tsk_77","dependencies":"[\"tsk_12\",\"tsk_34\"]"}`),
+			// Bulk: several cards, each with its own fields.
+			json.RawMessage(`{"updates":[{"id":"tsk_12","boardState":"done"},{"id":"tsk_13","prompt":"Next: wire the API"}]}`),
 		},
 	}
 }
 
+// taskPatch is one card's update_task fields; nil leaves a field unchanged.
+type taskPatch struct {
+	ID           string    `json:"id"`
+	Title        *string   `json:"title"`
+	Prompt       *string   `json:"prompt"`
+	Description  *string   `json:"description"`
+	OwnerAgentID *string   `json:"ownerAgentId"`
+	BoardState   *string   `json:"boardState"`
+	Dependencies *string   `json:"dependencies"`
+	Priority     *string   `json:"priority"`
+	Tags         *[]string `json:"tags"`
+	ArtifactIDs  *[]string `json:"artifactIds"`
+}
+
+// bulkItemResult is one card's outcome in a bulk call.
+type bulkItemResult struct {
+	ID    string `json:"id"`
+	Error string `json:"error,omitempty"`
+}
+
 func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		ID           string    `json:"id"`
-		Title        *string   `json:"title"`
-		Prompt       *string   `json:"prompt"`
-		Description  *string   `json:"description"`
-		OwnerAgentID *string   `json:"ownerAgentId"`
-		BoardState   *string   `json:"boardState"`
-		Dependencies *string   `json:"dependencies"`
-		Priority     *string   `json:"priority"`
-		Tags         *[]string `json:"tags"`
-		ArtifactIDs  *[]string `json:"artifactIds"`
+		taskPatch
+		Updates []taskPatch `json:"updates"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
 	}
+	if len(in.Updates) == 0 {
+		if err := t.apply(ctx, in.taskPatch); err != nil {
+			return "", err
+		}
+		b, _ := json.Marshal(map[string]string{"id": strings.TrimSpace(in.ID), "action": "updated"})
+		return string(b), nil
+	}
+	if strings.TrimSpace(in.ID) != "" {
+		return "", fmt.Errorf("pass either id with fields, or updates — not both")
+	}
+	if len(in.Updates) > maxBulkTasks {
+		return "", fmt.Errorf("updates holds %d cards; at most %d per call", len(in.Updates), maxBulkTasks)
+	}
+	results := make([]bulkItemResult, 0, len(in.Updates))
+	failed := 0
+	for _, p := range in.Updates {
+		r := bulkItemResult{ID: strings.TrimSpace(p.ID)}
+		if err := t.apply(ctx, p); err != nil {
+			r.Error = err.Error()
+			failed++
+		}
+		results = append(results, r)
+	}
+	b, _ := json.Marshal(map[string]any{"action": "updated", "updated": len(results) - failed, "failed": failed, "results": results})
+	return string(b), nil
+}
+
+// apply validates and writes one card's patch, then publishes the board change.
+func (t UpdateTaskTool) apply(ctx context.Context, in taskPatch) error {
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
-		return "", fmt.Errorf("id is required")
+		return fmt.Errorf("id is required")
 	}
 	cur, err := t.d.db.GetTask(ctx, in.ID)
 	if err != nil {
-		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
+		return fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
 	}
 	oldBoard := cur.BoardState
 	oldTitle := cur.Title
@@ -414,7 +464,7 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.Title != nil {
 		newTitle := strings.TrimSpace(*in.Title)
 		if newTitle == "" {
-			return "", fmt.Errorf("title cannot be empty")
+			return fmt.Errorf("title cannot be empty")
 		}
 		cur.Title = newTitle
 	}
@@ -428,17 +478,17 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		if *in.OwnerAgentID != "" {
 			ag, err := t.d.db.GetAgent(ctx, *in.OwnerAgentID)
 			if err != nil {
-				return "", fmt.Errorf("no agent with id %q", *in.OwnerAgentID)
+				return fmt.Errorf("no agent with id %q", *in.OwnerAgentID)
 			}
 			if err := ag.AssignableErr(oldOwner); err != nil {
-				return "", err
+				return err
 			}
 		}
 		cur.OwnerAgentID = *in.OwnerAgentID
 	}
 	if in.BoardState != nil {
 		if !db.IsValidBoardKey(*in.BoardState) {
-			return "", enumErr("boardState", *in.BoardState, "pbi", "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
+			return enumErr("boardState", *in.BoardState, "pbi", "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
 		}
 		cur.BoardState = *in.BoardState
 	}
@@ -447,7 +497,7 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if in.Priority != nil {
 		if !db.ValidPriority(*in.Priority) {
-			return "", enumErr("priority", *in.Priority, "critical", "high", "medium", "low")
+			return enumErr("priority", *in.Priority, "critical", "high", "medium", "low")
 		}
 		cur.Priority = *in.Priority
 	}
@@ -458,15 +508,14 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		cur.ArtifactIDs = *in.ArtifactIDs
 	}
 	if err := t.d.db.UpdateTask(ctx, cur); err != nil {
-		return "", fmt.Errorf("update task: %w", err)
+		return fmt.Errorf("update task: %w", err)
 	}
 	if cur.BoardState != oldBoard {
 		notifyBoardChanged(t.d.db, BoardChange{Title: "Görev taşındı: " + cur.Title, Body: cur.BoardState, TaskID: cur.ID, Op: "move"})
 	} else if cur.Title != oldTitle || cur.OwnerAgentID != oldOwner || cur.Priority != oldPriority || !sameStrings(cur.Tags, oldTags) {
 		notifyBoardChanged(t.d.db, BoardChange{Title: "Görev güncellendi: " + cur.Title, Body: cur.BoardState, TaskID: cur.ID, Op: "update"})
 	}
-	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "updated"})
-	return string(b), nil
+	return nil
 }
 
 // ---- move_task ----
@@ -548,14 +597,15 @@ func NewSetArchivedTaskTool(database *db.DB, actorID string) SetArchivedTaskTool
 func (SetArchivedTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "set_archived_task",
-		Description: "Archive or restore a task. archived=true hides it from the active board; archived=false restores it. Reversible, unlike delete_task.",
+		Description: "Archive or restore tasks. archived=true hides them from the active board; archived=false restores them. Pass id for one card or ids (up to 100) to do several in ONE call. Reversible, unlike delete_task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"id":{"type":"string","description":"The task id"},
+				"ids":{"type":"array","items":{"type":"string"},"maxItems":100,"description":"Several task ids at once (instead of id)"},
 				"archived":{"type":"boolean","description":"true to archive, false to restore"}
 			},
-			"required":["id","archived"],
+			"required":["archived"],
 			"additionalProperties":false
 		}`),
 	}
@@ -563,28 +613,60 @@ func (SetArchivedTaskTool) Def() providers.ToolDef {
 
 func (t SetArchivedTaskTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		ID       string `json:"id"`
-		Archived *bool  `json:"archived"`
+		ID       string   `json:"id"`
+		IDs      []string `json:"ids"`
+		Archived *bool    `json:"archived"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
 	}
-	in.ID = strings.TrimSpace(in.ID)
-	if in.ID == "" {
-		return "", fmt.Errorf("id is required")
-	}
 	if in.Archived == nil {
 		return "", fmt.Errorf("archived is required")
 	}
-	if _, err := t.d.db.GetTask(ctx, in.ID); err != nil {
-		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
+	in.ID = strings.TrimSpace(in.ID)
+	if len(in.IDs) == 0 {
+		if in.ID == "" {
+			return "", fmt.Errorf("id or ids is required")
+		}
+		if err := t.apply(ctx, in.ID, *in.Archived); err != nil {
+			return "", err
+		}
+		b, _ := json.Marshal(map[string]any{"id": in.ID, "archived": *in.Archived})
+		return string(b), nil
 	}
-	if err := t.d.db.SetTaskArchived(ctx, in.ID, *in.Archived); err != nil {
-		return "", fmt.Errorf("set task archived: %w", err)
+	if in.ID != "" {
+		return "", fmt.Errorf("pass either id or ids — not both")
 	}
-	notifyBoardChanged(t.d.db, BoardChange{Title: "Görev arşiv durumu güncellendi", TaskID: in.ID, Op: "update"})
-	b, _ := json.Marshal(map[string]any{"id": in.ID, "archived": *in.Archived})
+	if len(in.IDs) > maxBulkTasks {
+		return "", fmt.Errorf("ids holds %d cards; at most %d per call", len(in.IDs), maxBulkTasks)
+	}
+	results := make([]bulkItemResult, 0, len(in.IDs))
+	failed := 0
+	for _, id := range in.IDs {
+		r := bulkItemResult{ID: strings.TrimSpace(id)}
+		if err := t.apply(ctx, r.ID, *in.Archived); err != nil {
+			r.Error = err.Error()
+			failed++
+		}
+		results = append(results, r)
+	}
+	b, _ := json.Marshal(map[string]any{"archived": *in.Archived, "done": len(results) - failed, "failed": failed, "results": results})
 	return string(b), nil
+}
+
+// apply archives or restores one card and publishes the board change.
+func (t SetArchivedTaskTool) apply(ctx context.Context, id string, archived bool) error {
+	if id == "" {
+		return fmt.Errorf("id is required")
+	}
+	if _, err := t.d.db.GetTask(ctx, id); err != nil {
+		return fmt.Errorf("no task with id %q (use list_tasks)", id)
+	}
+	if err := t.d.db.SetTaskArchived(ctx, id, archived); err != nil {
+		return fmt.Errorf("set task archived: %w", err)
+	}
+	notifyBoardChanged(t.d.db, BoardChange{Title: "Görev arşiv durumu güncellendi", TaskID: id, Op: "update"})
+	return nil
 }
 
 // ---- delete_task ----

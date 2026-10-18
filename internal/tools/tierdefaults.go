@@ -128,6 +128,18 @@ var defaultToolTiers = map[string]string{
 	// their MarkSelfManaged stamp is a separate, stable membership mark and MUST
 	// still be applied, or the claude-cli bridge drops them entirely.
 	"handoff_session": VisibilityNameOnly,
+	// The board core, promoted out of the hidden self-management group
+	// (2026-10-18): a board-managing agent calls these dozens of times a turn, and
+	// hidden meant a tool_search + call_tool detour per tool on codex-cli (which
+	// cannot activate tools) — 94 call_tool round trips in one WS3 PM turn.
+	// Name-only keeps the native/claude prompt cost to a name while codex gets the
+	// schemas directly. delete_task stays hidden (destructive, rare).
+	"list_tasks":        VisibilityNameOnly,
+	"get_task":          VisibilityNameOnly,
+	"create_task":       VisibilityNameOnly,
+	"update_task":       VisibilityNameOnly,
+	"move_task":         VisibilityNameOnly,
+	"set_archived_task": VisibilityNameOnly,
 
 	// Admin-rare tools fold into the HIDDEN tier (not enumerated per turn —
 	// surfaced via the tionharness-self-management skill / tool_search). These are

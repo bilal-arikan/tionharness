@@ -18,10 +18,10 @@ import (
 
 // Timeouts applied to every MCP server block. Codex defaults are far too tight
 // for a bridge that starts an in-process HTTP endpoint and can run long tools.
-// A long sync run_subagent call (a delegated agent that edits files, runs the
-// test suite and reports back) routinely outlives 10 minutes, so the tool
-// timeout matches claude-cli's 15 minutes. The caller's ctx still bounds the
-// call, so a high ceiling only decides when a LIVE call is killed for slowness.
+// codexMCPToolTimeoutSec is the default for external servers; TionHarness's own
+// Interaction server overrides it (CLIMCPServer.ToolTimeoutSec) because a sync
+// run_subagent waits for a whole delegated run. The caller's ctx still bounds
+// the call, so a high ceiling only decides when a LIVE call is killed.
 const (
 	codexMCPStartupTimeoutSec = 30
 	codexMCPToolTimeoutSec    = 900
@@ -257,7 +257,11 @@ func renderCodexServer(key string, s CLIMCPServer) string {
 	}
 
 	fmt.Fprintf(&b, "startup_timeout_sec = %d\n", codexMCPStartupTimeoutSec)
-	fmt.Fprintf(&b, "tool_timeout_sec = %d\n", codexMCPToolTimeoutSec)
+	toolTimeout := codexMCPToolTimeoutSec
+	if s.ToolTimeoutSec > 0 {
+		toolTimeout = s.ToolTimeoutSec
+	}
+	fmt.Fprintf(&b, "tool_timeout_sec = %d\n", toolTimeout)
 	// MANDATORY on every server block. Without it EVERY MCP tool call fails with
 	// "user cancelled MCP tool call" and the whole TionHarness bridge is dead.
 	// "auto" is NOT sufficient — codex only auto-approves unconditionally for

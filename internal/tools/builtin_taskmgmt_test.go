@@ -185,3 +185,65 @@ func TestDeleteTaskAny(t *testing.T) {
 		t.Fatal("expected error deleting a non-existent task")
 	}
 }
+
+// TestUpdateTaskBulkAppliesEachPatch: the bulk form edits several cards in one
+// call, each with its own fields, and reports a bad id without dropping the
+// rest (a board reconcile used to cost one model round trip per card).
+func TestUpdateTaskBulkAppliesEachPatch(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	a, _ := d.CreateTask(ctx, db.Task{Title: "A", Prompt: "a"})
+	b, _ := d.CreateTask(ctx, db.Task{Title: "B", Prompt: "b"})
+	upd := NewUpdateTaskTool(d, "pm")
+	out, err := upd.Call(ctx, json.RawMessage(`{"updates":[{"id":"`+a.ID+`","boardState":"done"},{"id":"`+b.ID+`","prompt":"next"},{"id":"TSK-missing","prompt":"x"}]}`))
+	if err != nil {
+		t.Fatalf("bulk update: %v", err)
+	}
+	var res struct {
+		Updated, Failed int
+		Results         []bulkItemResult
+	}
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Updated != 2 || res.Failed != 1 || res.Results[2].Error == "" {
+		t.Fatalf("result = %s", out)
+	}
+	if got, _ := d.GetTask(ctx, a.ID); got.BoardState != db.BoardDone {
+		t.Errorf("A board = %q", got.BoardState)
+	}
+	if got, _ := d.GetTask(ctx, b.ID); got.Prompt != "next" {
+		t.Errorf("B prompt = %q", got.Prompt)
+	}
+	if _, err := upd.Call(ctx, json.RawMessage(`{"id":"`+a.ID+`","updates":[{"id":"`+b.ID+`"}]}`)); err == nil {
+		t.Error("id together with updates must be rejected")
+	}
+	// The single form is unchanged.
+	if _, err := upd.Call(ctx, json.RawMessage(`{"id":"`+a.ID+`","priority":"high"}`)); err != nil {
+		t.Fatalf("single update: %v", err)
+	}
+}
+
+// TestSetArchivedTaskBulk archives several cards in one call.
+func TestSetArchivedTaskBulk(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	a, _ := d.CreateTask(ctx, db.Task{Title: "A", Prompt: "a"})
+	b, _ := d.CreateTask(ctx, db.Task{Title: "B", Prompt: "b"})
+	arch := NewSetArchivedTaskTool(d, "pm")
+	out, err := arch.Call(ctx, json.RawMessage(`{"ids":["`+a.ID+`","`+b.ID+`","TSK-missing"],"archived":true}`))
+	if err != nil {
+		t.Fatalf("bulk archive: %v", err)
+	}
+	if !strings.Contains(out, `"done":2`) || !strings.Contains(out, `"failed":1`) {
+		t.Fatalf("result = %s", out)
+	}
+	for _, id := range []string{a.ID, b.ID} {
+		if got, _ := d.GetTask(ctx, id); !got.Archived {
+			t.Errorf("%s not archived", id)
+		}
+	}
+	if _, err := arch.Call(ctx, json.RawMessage(`{"archived":true}`)); err == nil {
+		t.Error("missing id and ids must be rejected")
+	}
+}

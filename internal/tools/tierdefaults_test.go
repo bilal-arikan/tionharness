@@ -13,12 +13,12 @@ import (
 // independently of it.
 var wantNameOnlyDefaults = []string{
 	"apply_patch", "archive_sessions", "config_validate", "conversation_search",
-	"deactivate_tools", "expand", "focus_view",
-	"get_session_info", "handoff_session", "insight_apply_finding",
-	"insight_list_findings", "insight_scan", "list_sessions", "mermaid_validate",
-	"monitor", "note_correct", "note_expand", "notify", "read_decider_debug", "read_session_debug", "render_template",
-	"run_adhoc_flow", "shell_manage", "skill_validate", "update_artifact",
-	"update_session", "update_user_preferences", "wait_for_mcp_servers",
+	"create_task", "deactivate_tools", "expand", "focus_view",
+	"get_session_info", "get_task", "handoff_session", "insight_apply_finding",
+	"insight_list_findings", "insight_scan", "list_sessions", "list_tasks", "mermaid_validate",
+	"monitor", "move_task", "note_correct", "note_expand", "notify", "read_decider_debug", "read_session_debug", "render_template",
+	"run_adhoc_flow", "set_archived_task", "shell_manage", "skill_validate", "update_artifact",
+	"update_session", "update_task", "update_user_preferences", "wait_for_mcp_servers",
 }
 
 var wantHiddenDefaults = []string{"announce_release", "list_config", "read_config", "secret", "write_config"}

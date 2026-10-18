@@ -592,7 +592,14 @@ disabled_tools = ["delete_workspace"]
 `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` env'lerinin karşılığı. Uzun `run_subagent`
 çağrıları için **mutlaka yükseltilmeli** (varsayılan düşük). TionHarness'in yazdığı
 değerler: `startup_timeout_sec = 30`, `tool_timeout_sec = 900` (15 dk, claude-cli
-tarafındaki `MCP_TOOL_TIMEOUT=900000` ile aynı) — `codexcli_config.go`.
+tarafındaki `MCP_TOOL_TIMEOUT=900000` ile aynı) — `codexcli_config.go`. **(2026-10-19):** TionHarness'in kendi
+Interaction sunucusu (`run_subagent` dahil) sunucu başına `tool_timeout_sec = 10800`
+(3 saat, `providers.InteractionToolTimeoutSec`) alır; harici MCP sunucuları 900'de kalır.
+claude-cli'de `MCP_TOOL_TIMEOUT` tek ve geneldir, o da 3 saate çıktı. Neden: WS3'te iki
+senkron `run_subagent` (17 ve 22 dk) 900 sn'de kesildi, sonuçları kayboldu ve aynı iş
+yeniden başlatıldı. Aynı gün codex turlarına sandbox'lı `Read`/`LS`/`Glob`/`Grep`/`Write`/
+`Edit` de köprülendi (`BridgeTools`, `codexBridgedFSTools`): native shell kapalı olduğundan
+salt-okur profil alt-ajanları (explore/planner/reviewer) hiç araçsız kalıyordu.
 
 ### codebase-memory-mcp prefill guard codex yolunda YOK (Q4 notu)
 

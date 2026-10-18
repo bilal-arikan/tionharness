@@ -1,6 +1,7 @@
 # 19 — Lazy Tool Loading (Tasarım + Uygulama)
 
 > **Not (2026-10-18):** Otonom yol artık `run_subagent` / `spawn_session`; `spawn_worker` (koordinatör modu) 2026-10-18'de kaldırıldı.
+> **Not (2026-10-19):** Pano çekirdeği (`list_tasks`, `get_task`, `create_task`, `update_task`, `move_task`, `set_archived_task`) gizli öz-yönetim grubundan **name-only**'ye alındı (`tierdefaults.go`): codex etkinleştirme yapamadığı için gizli araçlara her seferinde `tool_search` + `call_tool` ile ulaşıyordu (WS3'te bir PM turunda 94 `call_tool`). `update_task` artık `updates` (kart başına yama listesi), `set_archived_task` `ids` alır.
 
 > Durum: **UYGULANDI** (2026-06-18) — 3 fazın tamamı. Skill sisteminin
 > "progressive disclosure" yaklaşımı built-in + MCP araçlarına taşındı.

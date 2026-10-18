@@ -489,7 +489,19 @@ type CLIMCPServer struct {
 	// path (its tools are loaded up front). codex-cli has no such mechanism and
 	// ignores this field.
 	AlwaysLoad bool
+	// ToolTimeoutSec overrides codex's per-server tool_timeout_sec (0 = the
+	// default for external servers). TionHarness's own Interaction server sets
+	// InteractionToolTimeoutSec because run_subagent blocks for a whole
+	// delegated run.
+	ToolTimeoutSec int
 }
+
+// InteractionToolTimeoutSec bounds one call into TionHarness's own Interaction
+// MCP server. A synchronous run_subagent waits for an entire delegated run
+// (edits, test suites, reviews) and was measured at 17-22 minutes on
+// 2026-10-18, so the old 15-minute ceiling cut live delegations and threw their
+// results away. A hung subagent is still reclaimed by its own turn idle watchdog.
+const InteractionToolTimeoutSec = 3 * 60 * 60
 
 // CLIMCPSpec is one turn's MCP delegation, transport-agnostic. It is the union
 // of what the two CLI dialects need: the claude path consumes the pre-rendered

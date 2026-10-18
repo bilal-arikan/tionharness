@@ -1065,6 +1065,13 @@ func workspaceLedgerDir(workDir string) string {
 // and the same per-agent allowlist. Returns an empty catalog when self-management
 // is off (no lazy built-ins are registered). The dispatcher runs any built-in by
 // name (the catalog is the gate); unknown/foreign names return an error.
+// codexBridgedFSTools are the eager sandboxed file tools BridgeTools advertises
+// to a codex-cli agent (see the comment there). apply_patch is lazy and already
+// bridged for every CLI through BridgeableDefsFiltered.
+var codexBridgedFSTools = map[string]bool{
+	"Read": true, "LS": true, "Glob": true, "Grep": true, "Write": true, "Edit": true,
+}
+
 func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent, autonomous ...bool) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
 	// Bridge installation precedes turn composition. Bind filesystem tools to
 	// the session now, just as the shell runner does at each call.
@@ -1111,8 +1118,15 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent, autonomous ..
 	//     in tools.bridgeExcluded), so they are advertised here explicitly and
 	//     dispatched by name through reg.Call below, exactly like the other extras.
 	//     claude-cli is deliberately untouched — it keeps using its own natives.
+	//   - Read / LS / Glob / Grep / Write / Edit : codex-cli ONLY. TionHarness turns
+	//     codex's native shell off and bridges its own Bash instead, so without these
+	//     a codex agent reads files through `cat` and a read-only profile subagent
+	//     (explore / planner / reviewer, whose allowlist names exactly these tools)
+	//     had NO way to look at the repo at all (measured 2026-10-18 in WS3). They
+	//     are the registry's own sandboxed fs tools, dispatched by name below.
 	if r.agentProviderKind(agent) == providerKindCodexCLI {
 		extra = append(extra, tools.NewWebFetchTool().Def(), tools.NewWebSearchTool(r.vault).Def())
+		extra = append(extra, reg.BuiltinDefs(func(name string) bool { return codexBridgedFSTools[name] })...)
 	}
 	for _, d := range extra {
 		if allow == nil || allow(d.Name) {

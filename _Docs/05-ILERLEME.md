@@ -9,6 +9,31 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## WS3 verim incelemesi: alt-ajan zaman aşımı, codex dosya araçları, toplu pano işlemleri (2026-10-19)
+
+WS3 PM turu (SES681, codex gpt-6.1-sol) 82 dk sürdü: 254 araç çağrısı, 46,2M cache-read token;
+sürenin %82'si (4.024 sn) senkron `run_subagent` beklemesiydi. Bulgular ve düzeltmeler:
+
+1. **900 sn MCP tool zaman aşımı** iki alt-ajanı (SES686 Validator 1.045 sn, SES688 coder
+   1.340 sn) kesti; alt-ajanlar bitirdi ama sonuç PM'e ulaşmadı ve aynı doğrulama ikinci kez
+   koştu. Interaction sunucusu artık codex'te `tool_timeout_sec = 10800`
+   (`providers.InteractionToolTimeoutSec`, `CLIMCPServer.ToolTimeoutSec`); claude-cli
+   `MCP_TOOL_TIMEOUT` da 3 saat. Harici MCP sunucuları 900 sn'de kalır.
+2. **Codex profil alt-ajanları araçsızdı:** native shell kapalı, köprüde yalnız `Bash` vardı;
+   `explore`/`reviewer` (izinli liste Read/LS/Glob/Grep) hiçbir araç görmedi, `coder` her şeyi
+   `Bash` ile yaptı. `BridgeTools` codex için sandbox'lı `Read/LS/Glob/Grep/Write/Edit`'i köprüler.
+3. **Pano araçları gizliydi:** codex her kullanımda `tool_search` + `call_tool` yapıyordu
+   (94 `call_tool`, tekrar eden aramalar). Pano çekirdeği varsayılan **name-only**.
+4. **Toplu işlem yoktu:** 33 arşiv + 38 güncelleme ayrı model turlarıydı. `update_task`
+   `updates`, `set_archived_task` `ids` alır (çağrı başına ≤100, kart başına sonuç).
+5. **Talimat:** uzun işler için `spawn_session`, dosyaları pencereyle okuma, çıktıyı kırpma,
+   toplu pano çağrıları (`default-instructions.md` "Context economy").
+
+Ayrıca: workspace talimatlarının doğruluk kaynağı `config/instructions.md` olduğundan
+2026-10-18'de `ws-settings.json`'a yazılan güncel talimatlar açılışta eski dosyayla
+eziliyordu; dört workspace'in talimatı API üzerinden (dosyayı da güncelleyerek) yeniden
+yazıldı, eski dosyalar scratchpad'e yedeklendi.
+
 ## Otomasyon sadeleştirmesi: flow türü, tohumlama ve gereksiz kurallar kaldırıldı (2026-10-18)
 
 Otomasyon türleri yalnız **tag** ve **board**: `flow` türü (`automation_trigger_flow.go`,

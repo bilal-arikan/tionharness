@@ -197,17 +197,19 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 	authHeader := map[string]string{"Authorization": "Bearer " + inter.Token}
 	return map[string]providers.CLIMCPServer{
 		climcp.InteractionCoreKey: {
-			EnabledTools: append([]string{}, inter.CoreToolNames...),
-			Transport:    db.MCPTransportHTTP,
-			URL:          base + "/core?full=1",
-			Headers:      authHeader,
-			AlwaysLoad:   true,
+			EnabledTools:   append([]string{}, inter.CoreToolNames...),
+			Transport:      db.MCPTransportHTTP,
+			URL:            base + "/core?full=1",
+			Headers:        authHeader,
+			AlwaysLoad:     true,
+			ToolTimeoutSec: providers.InteractionToolTimeoutSec,
 		},
 		climcp.InteractionExtendedKey: {
-			EnabledTools: append([]string{}, inter.ExtendedToolNames...),
-			Transport:    db.MCPTransportHTTP,
-			URL:          base + "/extended?full=1",
-			Headers:      authHeader,
+			EnabledTools:   append([]string{}, inter.ExtendedToolNames...),
+			Transport:      db.MCPTransportHTTP,
+			URL:            base + "/extended?full=1",
+			Headers:        authHeader,
+			ToolTimeoutSec: providers.InteractionToolTimeoutSec,
 		},
 	}
 }

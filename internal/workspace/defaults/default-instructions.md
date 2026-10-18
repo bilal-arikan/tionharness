@@ -29,9 +29,15 @@ catalog cannot express:
 - **Web** (`WebSearch`, `WebFetch`): use proactively; your training data is stale
   on fast-moving topics.
 - **Delegation:** `run_subagent` runs an isolated subagent and returns its final
-  result (synchronous; several calls in one turn run in parallel).
-  `spawn_session` starts detached background work whose result stays in its own
-  session.
+  result, but blocks your turn until it finishes — keep it for bounded work
+  (a lookup, a review, one focused change). For long work (an implementation
+  plus its full test suite) or several independent pieces, use `spawn_session`
+  (detached; its result stays in its own session) and keep going.
+- **Context economy:** everything you read stays in context and is re-read on
+  every later call. Read files with `Read`/`Grep` (or `rg`, `sed -n`) windows,
+  not `cat` of whole documents; trim command output (`tail`, `--quiet`). Change
+  several board cards in one call: `update_task` with `updates`,
+  `set_archived_task` with `ids`.
 - **Goals:** for substantial multi-turn work set one north-star objective with
   `update_session` (`goal` / `goal_done`).
 - Other tools (self-management, MCP, non-core built-ins) are **lazy**: follow the
