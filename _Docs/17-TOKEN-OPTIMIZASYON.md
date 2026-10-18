@@ -1071,7 +1071,7 @@ uçurum değil → ne aşırı büyük (rot) ne aşırı küçük (gereksiz sık
 
 | Knob | Eski | Yeni | Gerekçe |
 |---|---|---|---|
-| `ContextBudgetCeil` | 512K | **256K** (`262144`) | `n²` yükü ~¼; gradyanın yüksek-hassasiyet bölgesi |
+| `ContextBudgetCeil` | 512K → 256K | **400K** (`400000`, 2026-10-18) | 256K, 800K taban hatası düzelince uzun oturumları fazla sık katlıyordu; 400K hâlâ 1M pencerenin %40'ı |
 | `ContextBudgetFraction` | 0.6 (sabit) | **0 = otomatik** → adaptif 0.35–0.45 | aile-bazlı rot toleransı |
 | ~~`memoryPressureWarn`~~ | ~~0.75~~ | ~~**0.70**~~ | **KALDIRILDI (2026-07-05):** memory alt sistemiyle birlikte çıkarıldı |
 
@@ -1079,12 +1079,12 @@ uçurum değil → ne aşırı büyük (rot) ne aşırı küçük (gereksiz sık
 yeniden kullanır → yeni model ailesi eklenince tek yerde güncellenir. Uzun-bağlam-güvenilir aileler
 daha yüksek pay alır, küçük/bilinmeyen modeller muhafazakâr kalır:
 
-| Aile | Pencere | Fraction | Etkin (ceil 256K) |
+| Aile | Pencere | Fraction | Etkin (ceil 400K) |
 |---|---|---|---|
-| Opus 4.8 / Sonnet 4.6 / Fable 5 | 1M | 0.45 | 450K → **256K** (tavan) |
+| Opus 4.8 / Sonnet 4.6 / Fable 5 | 1M | 0.45 | 450K → **400K** (tavan) |
 | Haiku 4.5 | 200K | 0.40 | **80K** |
-| MiniMax / DeepSeek / Gemini | 1M | 0.35 | 350K → **256K** (tavan) |
-| GPT / Codex | ~272K (gpt-6.1-sol: 500K) | **0.6** (2026-10-18; önce 0.35 idi, ~95K'da sık katlama yapıyordu) | ~**163K**; gpt-6.1-sol 256K tavanında (~**262K**) — ikisi de codex'in %95 auto-compact eşiğinin altında |
+| MiniMax / DeepSeek / Gemini | 1M | 0.35 | **350K** |
+| GPT / Codex | ~272K (gpt-6.1-sol: 500K) | **0.6** (2026-10-18; önce 0.35 idi, ~95K'da sık katlama yapıyordu) | ~**163K**; gpt-6.1-sol **300K** (0,6 × 500K) — ikisi de codex'in %95 auto-compact eşiğinin altında; 300K, 272K uzun-bağlam fiyat eşiğini aşar (abonelikte daha fazla kota) |
 | Genel Claude (bilinmeyen katman) | 200K | 0.40 | **80K** |
 | Bilinmeyen | 0 → **128K varsayılır** | — | `min(MaxContextTokens, 102400)` + tek seferlik uyarı log'u |
 
@@ -1108,7 +1108,7 @@ korunur → kimse mevcut tabanının altına düşmez (ama yukarıda anlatılan 
 ceil)`: `fraction<=0` ise `AdaptiveBudgetFraction`, o da 0 ise paket fallback (0.4). `SetBudgetShape`
 artık fraction 0'ı (auto) saklar (eskiden yok sayardı). Eski `settings.json`'larda kalan açık `0.6` değeri
 **manuel sabit** olarak yaşamaya devam eder (kullanıcı sıfırlayana dek); yeni kurulumlar adaptif başlar —
-her iki durumda da **ceil 256K** rot getirisini sağlar. Büyük ham pencere isteyen kullanıcı Ayarlar'dan
+her iki durumda da tavan (2026-10-18'den beri **400K**) rot getirisini sağlar. Büyük ham pencere isteyen kullanıcı Ayarlar'dan
 `ContextBudgetCeil`/`ContextBudgetFraction`'ı yükseltebilir; varsayılan artık **rot-bilinçli**.
 
 **`autoCompactMode` ayarı (2026-08-31).** Otomatik sıkıştırma tetiklendiğinde *ne* yapılacağı artık

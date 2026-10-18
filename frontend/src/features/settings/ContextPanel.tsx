@@ -12,7 +12,7 @@ import type { PanelProps } from './settingsPanelShared'
 // Package defaults mirrored from the backend so the live preview matches the
 // engine exactly: internal/conversation.defaultMaxTokens / defaultBudgetAutoCeil.
 const DEFAULT_MAX_TOKENS = 12000
-const DEFAULT_CEIL = 262144
+const DEFAULT_CEIL = 400000
 
 // effectiveBudget mirrors internal/conversation.EffectiveBudget (budget.go):
 // clamp(window × fraction, floor, ceil). It also reports which bound is ACTIVE so

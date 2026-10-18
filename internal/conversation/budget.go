@@ -26,11 +26,12 @@ const (
 	// model can't silently run runaway-expensive turns. For 1M models this ceiling
 	// is the operative number (window*fraction exceeds it), so it is the main knob
 	// for "how much of a big window we actually use". Lowered 512K→256K (2026-06-25,
-	// _Docs/17 §12): 256K keeps the live window in the gradient's high-precision zone
-	// (~¼ of 512K's n² attention surface) while the retrieval layer carries durability
-	// of folded detail. Users who want more raise it from Settings (or
+	// _Docs/17 §12) for the gradient's high-precision zone, raised to 400K
+	// (2026-10-18) once the 800K floor bug was gone and 256K proved to fold long
+	// sessions too often; the retrieval layer still carries durability of folded
+	// detail. Users who want more raise it from Settings (or
 	// TIONHARNESS_CONTEXT_BUDGET_CEIL); MaxContextTokens is the floor.
-	defaultBudgetAutoCeil = 262144
+	defaultBudgetAutoCeil = 400000
 	// budgetWindowShare caps EVERY budget — including one lifted by the configured
 	// floor — at this share of the model's real context window. Without it the floor
 	// silently outranks physics: with the shipped default (MaxContextTokens =

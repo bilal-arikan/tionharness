@@ -321,11 +321,12 @@ func Default() Settings {
 		// windows; the per-family share and the ceil decide everything else.
 		MaxContextTokens: 64000,
 		KeepRecentMsgs:   8,
-		// Context-rot-aware default (2026-06-25, _Docs/17 §12): ceil 256K keeps the
-		// live window in the gradient's high-precision zone; fraction 0 = "auto"
-		// (per-family adaptive). Durability of folded detail comes from retrieval
-		// (memory / conversation_search / core blocks), not from a huge raw window.
-		ContextBudgetCeil:     262144,
+		// Context-rot-aware default (_Docs/17 §12); fraction 0 = "auto" (per-family
+		// adaptive). Raised 256K→400K (2026-10-18): 1M Claude models keep 400K and
+		// gpt-6.1-sol (500K in Codex) 300K before the first fold; 272K Codex models
+		// stay window-bound at ~163K. Durability of folded detail still comes from
+		// retrieval (memory / conversation_search / core blocks).
+		ContextBudgetCeil:     400000,
 		ContextBudgetFraction: 0,
 		// Auto: a live warm CLI session compacts natively (the CLI keeps its own
 		// cache/summary coherent, one compaction layer instead of two); a cold or
@@ -523,9 +524,7 @@ type DTO struct {
 	// reuse + no per-turn startup. Supersedes --resume when on. Default on. _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
 	// ClaudeCLIToolAllowlist: `--tools` allowlist of claude-cli built-ins per turn
-	// (prompt-size lever, default on). AuxNativeRouting: auxiliary system-agent
-	// calls prefer a configured anthropic API instance over the caller's CLI
-	// (default on, no-op without a key). _Docs/17, _Docs/74.
+	// (prompt-size lever, default on). _Docs/17.
 	ClaudeCLIToolAllowlist bool `json:"claudeCliToolAllowlist"`
 	// ClaudeCLINativeSubagents: claude-cli's native Explore/Plan subagents stay on
 	// the menu (default on; transcript folded into the trace).

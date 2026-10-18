@@ -9,6 +9,17 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Bağlam bütçe tavanı 256K → 400K (2026-10-18)
+
+`ContextBudgetCeil` varsayılanı ve canlı ayar 262144 → 400000 (`internal/settings/settings.go`,
+`store.go` normalizasyonu, `internal/conversation/budget.go`, `ContextPanel.tsx` önizlemesi).
+800K taban hatası düzelince 256K tavan uzun oturumları gereğinden sık katlıyordu. Etkin bütçeler:
+Opus/Sonnet/Fable 400K, MiniMax/DeepSeek/Gemini 350K, gpt-6.1-sol 300K, 272K'lık Codex
+modelleri ~163K (pencere sınırlı, değişmedi). Ayar denetimi: frontend ve backend ayar alanları
+birebir eşleşiyor, diskte bayat anahtar yok; `ClaudeCLIToolAllowlist` yorumundaki kaldırılmış
+`AuxNativeRouting` atfı silindi; `agent.DefaultChatTurnIdleTimeoutMinutes` 3 → 10 (ayar varsayılanıyla
+eşitlendi, ayarlar uygulanmadan önceki boot penceresinde de codex turu kesilmesin). `_Docs/17` §12 tablosu güncellendi.
+
 ## Codex CLI bağlam pencereleri Codex kataloğuna eşitlendi (2026-10-18)
 
 Codex 0.163.0'ın kendi kataloğu `gpt-6.1-sol`'u 500K ile sunuyor, TionHarness ise bütün

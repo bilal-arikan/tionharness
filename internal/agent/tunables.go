@@ -36,12 +36,13 @@ const DefaultSpawnIdleTimeoutMinutes = 10
 // semantic idle window reclaims a
 // turn whose PROVIDER STREAM died silently — the socket stays half-open, the CLI
 // subprocess never exits, and without this the session hangs forever and its
-// queued inbox messages are never delivered. 3 minutes (180s) of complete
-// silence is far longer than any real inter-step gap on a streaming provider,
-// and a long-but-step-less operation (non-streaming completion, one big tool
-// call) is bounded by a separate operation lease derived from the same window.
+// queued inbox messages are never delivered. 10 minutes matches the settings
+// default (2026-10-18; was 3): codex exec emits nothing while it reasons, so a
+// short window cut live turns. A long-but-step-less operation (non-streaming
+// completion, one big tool call) is bounded by a separate operation lease
+// derived from the same window.
 const (
-	DefaultChatTurnIdleTimeoutMinutes = 3
+	DefaultChatTurnIdleTimeoutMinutes = 10
 )
 
 // DefaultIdleResumeMax is the single-shot budget for the OUT-OF-LOOP idle-timeout

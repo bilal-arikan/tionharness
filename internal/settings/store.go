@@ -317,7 +317,7 @@ func normalize(v Settings) Settings {
 	// must not disable big-window budgeting); clamp to a sane band. Fraction is a
 	// window share in [0,1]: 0 = "auto" (per-family adaptive, preserved), >0 = fixed.
 	if v.ContextBudgetCeil <= 0 {
-		v.ContextBudgetCeil = 262144
+		v.ContextBudgetCeil = 400000
 	}
 	if v.ContextBudgetCeil < 8000 {
 		v.ContextBudgetCeil = 8000

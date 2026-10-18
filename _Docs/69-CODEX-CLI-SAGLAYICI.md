@@ -1449,8 +1449,8 @@ slug'ları (GPT-6 Astra/Sol/Luna, GPT-5.6 Sol/Terra/Luna, `codex-auto-review`)
 `codexCLIContextWindow` (`internal/providers/codex_gpt6.go`) üzerinden döndürüyor.
 Bu, ters yöndeki bir hatayı da kapattı: codex-cli üzerindeki `gpt-5.6-sol`/`terra`
 API'nin 1.048.576 penceresiyle bütçeleniyordu, CLI ise 272.000 sunuyor. Sol 6.1 ile
-bağlam bütçesi 0,6 × 500K = 300K yerine 256K tavanına (262.144) oturur; bu,
-yukarıdaki 272K uzun-bağlam fiyat eşiğinin hemen altında kalır.
+bağlam bütçesi 0,6 × 500K = **300K** olur (tavan aynı gün 400K'ya çıkarıldı); bu,
+yukarıdaki 272K uzun-bağlam fiyat eşiğini aşar — abonelikte daha fazla kota demektir.
 
 PATH'teki Node 24.21.0 kurulumu ile TionHarness sağlayıcısında `cliPath` üzerinden
 seçilmiş Node 24.18.1 kurulumu **Codex CLI 0.159.1** sürümüne güncellendi.

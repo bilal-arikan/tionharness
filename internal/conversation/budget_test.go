@@ -2,7 +2,7 @@ package conversation
 
 import "testing"
 
-// c is the package default ceil (262144). Explicit-fraction tests pass 0.6 so the
+// c is the package default ceil (400000). Explicit-fraction tests pass 0.6 so the
 // "fixed manual share" path is exercised; the adaptive (fraction<=0) path is tested
 // separately in TestEffectiveBudgetAdaptive.
 const c = defaultBudgetAutoCeil
@@ -58,14 +58,14 @@ func TestEffectiveBudgetAdaptive(t *testing.T) {
 		t.Fatalf("haiku adaptive: got %d, want %d", got, want)
 	}
 
-	// Opus adaptive 0.45 × 1M = 450000 → clamped to the ceil (262144).
+	// Opus adaptive 0.45 × 1M = 450000 → clamped to the ceil (400000).
 	if got := EffectiveBudget("anthropic", "claude-opus-4-8", 12000, 0, 0); got != defaultBudgetAutoCeil {
 		t.Fatalf("opus adaptive: got %d, want ceil %d", got, defaultBudgetAutoCeil)
 	}
 
-	// MiniMax adaptive 0.35 × 1M = 350000 → clamped to the ceil.
-	if got := EffectiveBudget("minimax", "MiniMax-M3", 12000, 0, 0); got != defaultBudgetAutoCeil {
-		t.Fatalf("minimax adaptive: got %d, want ceil %d", got, defaultBudgetAutoCeil)
+	// MiniMax adaptive 0.35 × 1M = 350000 → under the ceil.
+	if got, want := EffectiveBudget("minimax", "MiniMax-M3", 12000, 0, 0), 350000; got != want {
+		t.Fatalf("minimax adaptive: got %d, want %d", got, want)
 	}
 
 	// Unknown family with auto fraction: window is unknown (0) → configured floor,

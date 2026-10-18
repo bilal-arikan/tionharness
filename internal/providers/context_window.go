@@ -213,7 +213,7 @@ func AdaptiveBudgetFraction(provider, model string) float64 {
 	case gptFamily(m):
 		// Codex windows (272K, 500K for gpt-6.1-sol) are far smaller than the 1M
 		// families, so 0.35 folded at ~95K — every few turns on a tool-heavy run. 0.6
-		// (~163K on 272K; 500K hits the 256K ceiling) stays well under codex's own
+		// (~163K on 272K, 300K on gpt-6.1-sol's 500K) stays well under codex's own
 		// 95% auto-compact while keeping folds rare (2026-10-18).
 		return 0.6
 	case glmFamily(m):
