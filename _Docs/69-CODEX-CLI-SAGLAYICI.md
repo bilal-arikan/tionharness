@@ -12,7 +12,7 @@
 > geçersizdir. Güncel davranış ve doğrulama:
 > [Araç izinleri raporu](69-CODEX-ARAC-IZINLERI-2026-09-28.md).
 
-> **Özet (2026-10-18):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`. `codexStdoutIdleSec` varsayılanı 90→300 sn (codex exec muhakeme boyunca sessizdir), koordinatör spawn iddiası guard'ı kaldırıldı.
+> **Özet (2026-10-18):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`. `codexStdoutIdleSec` varsayılanı 90→300 sn (codex exec muhakeme boyunca sessizdir), koordinatör spawn iddiası guard'ı kaldırıldı. Sahipsiz resume home'lar artık periyodik çöp toplayıcıyla siliniyor (§4).
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
 > yaklaşımı OpenAI **Codex CLI** için de kurabilir miyiz?
@@ -256,6 +256,32 @@ sürecin PID'si ve gerçek başlangıç zamanı yazılır. Süpürücü dizini y
 ölüyse veya aynı PID artık farklı başlangıç zamanına aitse siler; karşılaştırma
 ±2 saniye toleranslıdır. Süreç başlangıç zamanı alınamazsa canlı turu silme
 riskine karşı dizin fail-safe olarak korunur.
+
+### Resume home çöp toplama (2026-10-18)
+
+Scope sistem promptunu da içerdiği için talimat, model veya ajan değişikliği ve
+silinen her oturum eski resume home'u (~70MB, çoğu kopyalanmış `plugins/` ve
+`cache/`) kalıcı olarak sahipsiz bırakır. 2026-10-18'de 180 home 12GB tutuyordu;
+yalnız 2'si bir oturumun `cliSessionId`'sine bağlıydı. `PruneCodexResumeHomes`
+(`internal/providers/codexcli_resume_gc.go`) bunları siler; `internal/app/codexgc.go`
+açılıştan 5 dk sonra ve her 6 saatte bir, uygulama-global `codex-home` ile kendi
+`configDir`'i olan her codex-cli örneği için çalıştırır.
+
+Bir home şu durumlardan biri varsa **korunur**: içindeki bir rollout'un thread id'si
+herhangi bir workspace'teki (arşivliler dahil) bir oturumun `cliSessionId`'si;
+son 24 saatte yazılmış olması (soğuk tur rollout'u, oturum kaydı thread id'yi
+almadan önce yazar); ya da şu anda bir turun tutması (`prepareCodexTurnHome` tur
+boyunca süreç içi bir referans sayacı tutar). Açılamayan (degraded) bir workspace
+varsa geçiş tamamen atlanır: okunamayan oturumlar "referans yok" sayılmaz. Silme,
+kilit altında `.trash-<ad>` olarak yeniden adlandırıp kilit dışında `RemoveAll`
+ile yapılır; yarıda kalan çöp bir sonraki geçişte temizlenir. Yalnız 64 haneli hex
+adlar taranır.
+
+Scope hash'inden sistem promptunu çıkarmak veya `plugins/`/`cache/` ağaçlarını
+paylaşmak düşünüldü ama yapılmadı: prompt değişince thread'i bilinçli olarak
+geçersiz kılmak resume güvenliğinin parçası (yanlış persona ile devam etmez),
+ağaç paylaşımı da Codex'in kendi yazdığı cache'te yarış riski taşır. Çöp toplama
+sızıntıyı bu tasarımı değiştirmeden kapatır.
 
 Canlı doğrulandı: boş bir `CODEX_HOME` verildiğinde CLI onu kullandı ve
 "login yok" hatasına düştü (global `~/.codex`'e sızmadı).

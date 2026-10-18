@@ -9,6 +9,20 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Codex resume home çöp toplayıcı (2026-10-18)
+
+Codex her chat scope'u (oturum + ajan + sağlayıcı + model + sistem promptu) için
+`codex-home/resume-homes/<sha256>/` altında kalıcı bir home açıyor, ama hiçbir şey
+silmiyordu; prompt/model değişikliği ve silinen oturumlar eski home'u sahipsiz
+bırakıyordu. Diskte 180 home 12GB tutuyordu, yalnız 2'si bir oturuma bağlıydı;
+178'i elle silindi. Kalıcı çözüm: `internal/providers/codexcli_resume_gc.go`
+(`PruneCodexResumeHomes`; canlı thread'li, son 24 saatte yazılmış veya bir turun
+tuttuğu home korunur) ve `internal/app/codexgc.go` (açılıştan 5 dk sonra, sonra
+6 saatte bir; degraded workspace varsa atlanır; Shutdown'da durur).
+`prepareCodexTurnHome` artık tur boyunca home'u tutan bir release döndürüyor.
+Tasarım notu `_Docs/69` §4. Doğrulama: yeni testler `-race` ile geçti,
+`scripts/test.sh full` geçti.
+
 ## Koordinatör/worker, peer mesajlaşma ve Rota grafı kaldırıldı; varsayılanlar ayarlandı (2026-10-18)
 
 Sistem sadeleştirmesi (Kısıt Raporu önerileri). Kaldırılanlar: koordinatör modu ve worker

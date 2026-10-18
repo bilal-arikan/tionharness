@@ -46,15 +46,19 @@ func prepareCodexTurnHome(base, scope string) (dir string, cleanup func(), err e
 		return "", func() {}, errors.New("codex CLI: scoped resume requires a configured CODEX_HOME")
 	}
 	dir = codexResumeHome(base, scope)
+	// Held for the whole turn so PruneCodexResumeHomes cannot remove it underneath.
+	release := acquireCodexResumeHome(dir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		release()
 		return "", func() {}, err
 	}
 	for _, name := range []string{"auth.json", "models_cache.json", "installation_id"} {
 		if err := seedCodexResumeFile(base, dir, name); err != nil {
+			release()
 			return "", func() {}, err
 		}
 	}
-	return dir, func() {}, nil
+	return dir, release, nil
 }
 
 func seedCodexResumeFile(base, dir, name string) error {

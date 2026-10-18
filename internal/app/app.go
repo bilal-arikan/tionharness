@@ -39,6 +39,7 @@ type App struct {
 	listener net.Listener
 	settings *settings.Store
 	backups  *backup.Manager
+	codexGC  *codexResumeGC
 	// lock is the exclusive data-dir lock held for this process's lifetime so no
 	// second server ever serves the same file store concurrently. Released on Shutdown.
 	lock *instanceLock
@@ -310,6 +311,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		listener: ln,
 		settings: settingsStore,
 		backups:  backups,
+		codexGC:  startCodexResumeGC(cfg.DataDir, manager, providerStore, logger.With("component", "codex-gc")),
 		lock:     lock,
 	}, nil
 }
@@ -347,6 +349,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 	a.logger.Info("shutting down")
 	if a.backups != nil {
 		a.backups.Stop()
+	}
+	if a.codexGC != nil {
+		a.codexGC.Stop()
 	}
 	err := a.httpSrv.Shutdown(ctx)
 	a.manager.Close() // closes each workspace Runtime (incl. the MCP pool the gateway shares)
