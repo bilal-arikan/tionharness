@@ -67,8 +67,21 @@ func TestConversationSearchTool(t *testing.T) {
 		t.Fatalf("expected no-match message, got %q", out)
 	}
 
-	// Empty query rejected.
+	// Empty query without a session is rejected.
 	if _, err := tool.Call(ctx, json.RawMessage(`{"query":"  "}`)); err == nil {
 		t.Fatalf("expected error for empty query")
+	}
+
+	// Empty query with a session reads its latest turns, oldest first.
+	out, err = tool.Call(ctx, json.RawMessage(`{"query":"","session_id":"`+s.ID+`","full":true}`))
+	if err != nil {
+		t.Fatalf("latest turns: %v", err)
+	}
+	if !strings.Contains(out, "deploy the gateway") || strings.Index(out, "gateway") > strings.Index(out, "docker") {
+		t.Fatalf("expected both turns in order, got %q", out)
+	}
+	out, _ = tool.Call(ctx, json.RawMessage(`{"session_id":"`+s.ID+`","limit":1}`))
+	if strings.Contains(out, "gateway") || !strings.Contains(out, "docker") {
+		t.Fatalf("limit must keep the newest turn only, got %q", out)
 	}
 }

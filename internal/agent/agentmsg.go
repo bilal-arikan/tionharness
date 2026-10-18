@@ -108,6 +108,41 @@ func (r *Runtime) DeliverAgentMessage(ctx context.Context, fromAgentID, toRef, s
 	return fmt.Sprintf("Message delivered to %q (inbox, receipt %s). It processes it in the background; the reply is NOT relayed here — it may message you back with send_message.", target.Name, receipt.ID), nil
 }
 
+// messageOwnCoordinator delivers a worker's send_message addressed to the agent
+// running its own coordinator session straight into that session, as a
+// coordinator notification. Through the inbox it would open a context-free turn
+// of the same agent beside the coordinator ("💬 PM — Mesajlar"), whose answer
+// starts yet another turn in the worker agent's inbox — the coordinator that
+// actually owns the work never sees the question. routed is false when the
+// caller is not a worker or the target is someone else.
+func (r *Runtime) messageOwnCoordinator(ctx context.Context, fromAgentID, toRef, summary, message string) (out string, routed bool) {
+	sid := SessionIDFrom(ctx)
+	if sid == "" || strings.TrimSpace(message) == "" || strings.TrimSpace(toRef) == "*" {
+		return "", false
+	}
+	sess, err := r.db.GetSession(ctx, sid)
+	if err != nil || sess.CoordinatorSessionID == "" {
+		return "", false
+	}
+	coord, err := r.db.GetSession(ctx, sess.CoordinatorSessionID)
+	if err != nil {
+		return "", false
+	}
+	target, err := r.resolveAgent(ctx, toRef)
+	if err != nil || target.ID != coord.AgentID || target.ID == fromAgentID {
+		return "", false
+	}
+	from := r.agentName(fromAgentID)
+	if from == "" {
+		from = "worker"
+	}
+	note := formatAgentMessage(from+" (worker "+sid+")", summary, strings.TrimSpace(message)) +
+		"\n\nThe worker is still running. Answer it with send_to_worker(" + sid + ") if it needs a reply."
+	r.NotifyCoordinator(coord.ID, note)
+	r.logger.Info("agent message: routed to the sender's coordinator", "worker", sid, "coordinator", coord.ID)
+	return fmt.Sprintf("Message delivered to your coordinator session %s (%q). It answers with send_to_worker when needed; keep working meanwhile.", coord.ID, target.Name), true
+}
+
 // broadcastAgentMessage delivers a message to every other agent's inbox. Each
 // delivery takes a background-turn slot; recipients past the concurrency cap are
 // skipped (best-effort) and reported, rather than failing the whole broadcast.

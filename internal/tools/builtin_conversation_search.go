@@ -36,7 +36,7 @@ func (ConversationSearchTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "query": { "type": "string", "description": "Keyword(s) or phrase to find. Multiple words must all appear in a message." },
+    "query": { "type": "string", "description": "Keyword(s) or phrase to find. Multiple words must all appear in a message. Empty with session_id: that session's latest turns." },
     "limit": { "type": "integer", "description": "Max results (default 15)." },
     "role": { "type": "string", "enum": ["user", "assistant", "all"], "description": "Restrict to a sender role (default all)." },
     "session_id": { "type": "string", "description": "Restrict the search to a single session id (default: all sessions in the workspace)." },
@@ -64,11 +64,17 @@ func (t ConversationSearchTool) Call(ctx context.Context, input json.RawMessage)
 	if err := json.Unmarshal(input, &args); err != nil {
 		return "", argErr(err)
 	}
-	if strings.TrimSpace(args.Query) == "" {
-		return "", fmt.Errorf("query is required")
-	}
 	if args.Limit <= 0 {
 		args.Limit = 15
+	}
+	sessionID := strings.TrimSpace(args.SessionID)
+	if strings.TrimSpace(args.Query) == "" {
+		// Agents ask for "what was said in SESx" with an empty query far more often
+		// than they mistype one: answer with that session's latest turns.
+		if sessionID == "" {
+			return "", fmt.Errorf("query is required (or pass session_id alone to read that session's latest turns)")
+		}
+		return t.latestTurns(ctx, sessionID, args.Limit, args.Role, args.Full)
 	}
 	if args.Context < 0 {
 		args.Context = 0
@@ -76,7 +82,7 @@ func (t ConversationSearchTool) Call(ctx context.Context, input json.RawMessage)
 	if args.Context > 5 {
 		args.Context = 5
 	}
-	opts := db.SearchOpts{Query: args.Query, Limit: args.Limit, OnlyID: strings.TrimSpace(args.SessionID)}
+	opts := db.SearchOpts{Query: args.Query, Limit: args.Limit, OnlyID: sessionID}
 	if args.Role != "" && args.Role != "all" {
 		opts.Roles = []string{args.Role}
 	}
@@ -121,6 +127,26 @@ func (t ConversationSearchTool) Call(ctx context.Context, input json.RawMessage)
 			fmt.Fprintf(&b, "    %s\n", h.Snippet)
 		}
 		b.WriteString("\n")
+	}
+	return strings.TrimSpace(b.String()), nil
+}
+
+// latestTurns lists a session's last limit turns, oldest first — the empty-query
+// form of the tool.
+func (t ConversationSearchTool) latestTurns(ctx context.Context, sessionID string, limit int, role string, full bool) (string, error) {
+	msgs, _, err := t.db.ListMessagesTail(ctx, sessionID, limit)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for _, m := range msgs {
+		if (role != "" && role != "all" && m.Role != role) || strings.TrimSpace(m.Text) == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "- [%s] %s\n    %s\n\n", m.Role, sessAge(time.Now().Unix()-m.CreatedAt), clipText(m.Text, full))
+	}
+	if b.Len() == 0 {
+		return "No messages in session " + sessionID + ".", nil
 	}
 	return strings.TrimSpace(b.String()), nil
 }

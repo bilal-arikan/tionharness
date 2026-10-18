@@ -354,3 +354,33 @@ func TestDeleteAgentAllowsIdleTarget(t *testing.T) {
 		t.Fatal("agent was not marked deleted")
 	}
 }
+
+// TestCreateScheduleTargetsASession: sessionId binds the routine to that
+// session and takes its agent; an agentId of someone else is refused.
+func TestCreateScheduleTargetsASession(t *testing.T) {
+	d := openTestDB(t)
+	ctx := context.Background()
+	pm, _ := d.CreateAgent(ctx, db.Agent{Name: "PM"})
+	other, _ := d.CreateAgent(ctx, db.Agent{Name: "Other"})
+	sess, _ := d.CreateSession(ctx, db.Session{AgentID: pm.ID, Kind: "chat"})
+	create := NewCreateScheduleTool(d, "", func(context.Context) error { return nil })
+
+	out, err := create.Call(ctx, json.RawMessage(`{"cronExpr":"5 16 18 10 *","prompt":"pencere","sessionId":"`+sess.ID+`"}`))
+	if err != nil {
+		t.Fatalf("create_schedule with sessionId: %v", err)
+	}
+	var res struct{ ID string }
+	_ = json.Unmarshal([]byte(out), &res)
+	if sc, _ := d.GetSchedule(ctx, res.ID); sc.SessionID != sess.ID || sc.AgentID != pm.ID || sc.OneShot {
+		t.Fatalf("schedule must bind the session and its agent: %+v", sc)
+	}
+	if _, err := create.Call(ctx, json.RawMessage(`{"agentId":"`+other.ID+`","cronExpr":"0 9 * * *","prompt":"x","sessionId":"`+sess.ID+`"}`)); err == nil {
+		t.Fatal("a foreign agentId with sessionId must be refused")
+	}
+	if _, err := create.Call(ctx, json.RawMessage(`{"cronExpr":"0 9 * * *","prompt":"x","sessionId":"SES404"}`)); err == nil {
+		t.Fatal("an unknown session must be refused")
+	}
+	if _, err := create.Call(ctx, json.RawMessage(`{"cronExpr":"0 9 * * *","prompt":"x"}`)); err == nil {
+		t.Fatal("without sessionId an agentId is still required")
+	}
+}

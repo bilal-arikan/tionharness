@@ -1004,6 +1004,37 @@ lazy-activation'ı kullanamadığı için, bu maliyet codex'in **her turunda**
 sabit olarak ödenir (claude-cli'de ise extended tier normalde boş başlar ve
 yalnız aktive edilen araçlar kadar büyür).
 
+**Gizli araçlar: `tool_search` + `call_tool` (2026-10-18).** Yukarıdaki maliyet
+hesabı pratikte hiç ödenmiyordu: codex'in `config.toml`'undaki `enabled_tools`
+listesi `splitInteractionTiers`'tan gelir ve "gizli" görünürlükteki araçları
+(update_task, move_task, create_agent… 56 araç, ~15k token) hiçbir katmana
+koymaz. Sunucu `?full=1` ile bunları ilan etse de codex istemcisi süzüyordu;
+WS3'teki codex PM her turda "pano yazma aracı erişilemez" deyip kartları REST
+API'ye curl ile yazıyordu, worker'lar "katalogda tool_search/update_task yok"
+diyordu. Hepsini her tura eklemek yerine (`providers.StaticToolList` sağlayıcıları,
+yani codex-cli ve opencode-cli için):
+
+1. `tool_search` artık `-full` core katmanında kalır (açıklaması codex'e göre
+   yazılır) ve sonuçlarda her eşleşmenin **giriş şemasını** basar
+   (`fullTierToolSearchText`, en fazla 6 satır).
+2. Yeni core araç `call_tool({name, arguments})` gizli aracı adıyla, doğrudan
+   çağrıyla aynı kabulden (`toolCallError`: bilinmeyen ad, politika engeli) ve
+   aynı dağıtımdan (`dispatchTool`) geçirir. `call_tool` yalnız `-full` katmanda
+   ilan edilir (`fullTierOnlyTools`); claude-cli yüzeyi değişmez.
+3. Ajan prompt'u (`renderLazyToolCatalog`) codex'e listelenen araçların zaten
+   çağrılabilir olduğunu ve gizli öz-yönetim araçlarının `tool_search` →
+   `call_tool` ile çalıştığını söyler; `activate_tools`/`ToolSearch` geçmez.
+
+Testler: `TestFullTierCallToolRunsHiddenTools`, `TestFullTierBypassesGatewayGate`,
+`TestLazyCatalogStaticToolListCLI`.
+
+**Köprü ön kontrolü açılışta bekler (2026-10-18):** `filterReachableCodexServers`
+erişilemeyen uzak sunucuyu config'den çıkarır; köprü (`tionharness_interaction` /
+`tionharness_extended`) çıkarsa tur hata verir. Yeniden başlatmada geri alınan
+worker'lar HTTP dinleyicisi açılmadan başladığı için bu hata her açılışta birkaç
+turu düşürüyordu. Köprü anahtarları artık `codexBridgeProbeGrace` (15 sn) boyunca
+yeniden yoklanır. Test: `TestCodexBridgeProbeWaitsForListener`.
+
 ---
 
 ## 10. Codex'e özgü kazançlar (claude-cli'de olmayan)
@@ -1143,6 +1174,16 @@ Codex turunun kendi zaman aşımı katmanı bunlara ek bir savunma sağlar:
   `subagentStepObserver` ile bu izleyiciye düşer. Aynı koruma opencode-cli'da da
   vardır. Testler: `codexcli_toolidle_test.go`, `subagent_activity_test.go`,
   `TestAutonomousInteractionRegistersTurnTracker`.
+  **Anlamsal bekçi de araç çalışırken bekler (2026-10-18):** codex bir araç bitene
+  kadar adım yayınlamadığından 5 dk'lık spawn idle bekçisi, çıktısız uzun bir komutu
+  (`-race` + izole PostgreSQL testleri) çalıştıran worker'ı komutun ortasında
+  kesiyordu (SES366, `worker: turn truncated status=timeout idleCap=5m`). Parser
+  artık araç öğesi başlarken öğe kimliğiyle bir `Running` karesi yayınlar (canlı
+  görünümde çalışan komut görünür; tamamlanan adım aynı kimlikle yerine geçer);
+  `ActivityTracker` bu kareyi ilerleme saymaz ama aynı kimliğin bitiş adımı gelene
+  kadar pencereyi `toolInFlightIdleFactor` (4) katına çıkarır. Hiç dönmeyen araç yine
+  geri alınır, yalnız daha geç. Testler: `TestCodexParserAnnouncesRunningTools`,
+  `TestSemanticTrackerStretchesWindowWhileToolRuns`.
 - **Tek atışlık fold çağrıları (`/handoff`, `/compact`, reaktif ara-döngü
   sıkıştırması) bu pencereyi 10 dakikaya yükseltir.** Bir tur içinde codex
   sürekli tool/step olayı yayar, dolayısıyla 90 saniyelik sessizlik gerçekten

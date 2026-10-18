@@ -88,7 +88,10 @@ func wellKnownBinDirs(goos, home string) []string {
 		dirs = append(dirs, "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin", "/snap/bin")
 	}
 	if home != "" {
-		for _, rel := range []string{".local/bin", ".npm-global/bin", ".bun/bin", ".volta/bin", ".cargo/bin", "go/bin"} {
+		// .docker/bin: Docker Desktop's per-user CLI dir; when it was installed
+		// without the /usr/local/bin symlinks, agent shells otherwise report
+		// "docker: command not found" while the engine is running.
+		for _, rel := range []string{".local/bin", ".npm-global/bin", ".bun/bin", ".volta/bin", ".cargo/bin", "go/bin", ".docker/bin"} {
 			dirs = append(dirs, filepath.Join(home, filepath.FromSlash(rel)))
 		}
 	}

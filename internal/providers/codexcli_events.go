@@ -475,6 +475,13 @@ func (p *codexStreamParser) setStep(it *codexItem, final bool, step TraceStep) {
 	// Codex runs the tool loop itself, so the harness shell cap never saw this
 	// output. Bound it here — the single choke point every step passes through.
 	step.Output = CapToolOutput(step.Output)
+	tool := codexToolItemTypes[it.Type] && it.ID != ""
+	if tool && step.ID == "" {
+		// The item id pairs the running frame below with the completed step, so
+		// the live view replaces one with the other and the run's activity
+		// tracker knows which tool finished.
+		step.ID = it.ID
+	}
 	idx, ok := p.itemIdx[it.ID]
 	if !ok || it.ID == "" {
 		idx = p.appendStep(it.ID, step)
@@ -483,6 +490,14 @@ func (p *codexStreamParser) setStep(it *codexItem, final bool, step TraceStep) {
 		p.resp.Trace[idx] = step
 	}
 	if !final {
+		// A tool stays silent until it returns; announce that it is running so a
+		// long command (a test suite, a container build) shows up live and holds
+		// the turn's idle window open (agent.ActivityTracker).
+		if tool && !ok && p.onEvent != nil {
+			running := p.resp.Trace[idx]
+			running.Running = true
+			p.onEvent(running)
+		}
 		return
 	}
 	if start, ok := p.itemStart[it.ID]; ok {

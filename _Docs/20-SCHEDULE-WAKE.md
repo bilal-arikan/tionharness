@@ -99,6 +99,22 @@ Ajan turunda (native veya CLI)
   tüketilir (`lastDeliveryStatus="expired"`), yeniden kuyruğa girmez.
 - Hata yönetimi: `invokeTraced` başarısız olursa, hata metni asistan mesajı olarak sohbete yazılır (sohbet askıda kalmaz)
 
+## Oturuma bağlı tekrarlayan zamanlama (2026-10-18)
+
+`schedule_wake` en fazla bir saat ileriye uzanır ve bir saatten fazla gecikmiş wake
+açılışta düşürülür. Saatler sonraki bir pencereye (örn. 16:05 maç başlangıcı) kendini
+uyandırmak isteyen bir koordinatörün bu yüzden yolu yoktu: cron zamanlaması yalnız
+ajanın "schedule" dizisine ya da yeni bir oturuma teslim ediyordu. WS3'te PM'in
+kurduğu dokuz cron tetikleyici PM'e `send_message` atıyor, mesaj koordinatör oturumu
+yerine PM'in gelen kutusuna düşüyordu.
+
+`create_schedule` artık isteğe bağlı `sessionId` alır: verilen oturumun ajanı
+zamanlamanın ajanı olur (`agentId` atlanabilir; farklı bir ajan reddedilir) ve her
+cron tetiklemesi `Scheduler.run` içinde `deliverWake` ile o oturuma yeni bir tur
+olarak teslim edilir: aynı tur yuvası, aynı durdurulabilirlik, aynı kayıt. Zamanlama
+tekrarlayan kalır (tüketilmez); `expiresAt` ile sınırlanabilir. Testler:
+`TestSessionTargetedRoutineContinuesItsSession`, `TestCreateScheduleTargetsASession`.
+
 ## Tükenmiş wake satırının UI görünürlüğü (2026-08-28)
 
 Teslimi denenmiş ama başarısız olmuş (`failure`) veya bayatlamış (`expired`) bir

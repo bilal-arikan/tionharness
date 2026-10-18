@@ -123,6 +123,15 @@ func TransportOf(kindID string) string {
 	return k.Manifest().Transport
 }
 
+// StaticToolList reports whether a CLI kind fixes its MCP tool list for the
+// whole turn: codex-cli and opencode-cli receive tools/list_changed but never
+// re-list, so a tool activated mid-turn never becomes callable. The bridge
+// gives such a client the full tier up front and a call_tool path for the
+// hidden tools instead of the activation gateway (_Docs/69, boşluk-4).
+func StaticToolList(kindID string) bool {
+	return kindID == "codex-cli" || kindID == "opencode-cli"
+}
+
 // ResolvedConfig carries the credentials and options a kind needs to build a
 // concrete client. The Registry fills it from its live (mutable) fields per
 // provider id. Fields a given kind does not use are simply left zero — the CLI

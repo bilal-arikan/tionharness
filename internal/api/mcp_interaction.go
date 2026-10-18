@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -296,7 +297,20 @@ var coreInteractionTools = map[string]bool{
 	"deactivate_tools": true,
 	"active_tools":     true,
 	"tool_search":      true,
+	"call_tool":        true,
 }
+
+// fullTierOnlyTools are advertised only to a "-full" client (codex-cli,
+// opencode-cli). Such a client never re-lists tools, so the activation gateway
+// cannot work for it, and advertising the 50+ hidden self-management tools
+// eagerly would cost every turn ~15k tokens most turns never use. Instead it
+// finds a hidden tool with tool_search (which prints the input schema there)
+// and runs it through call_tool.
+var fullTierOnlyTools = map[string]bool{"call_tool": true}
+
+// fullTierToolSearchDescription replaces tool_search's gateway wording for a
+// "-full" client, which has no activate_tools.
+const fullTierToolSearchDescription = "Search ALL on-demand TionHarness tools by keyword — including the hidden self-management tools (tasks/board, agents, schedules, automations, skills, settings…) that are not in your tool list. Each match shows its input schema. Call a match that is not in your tool list with call_tool; tools already in your list are called directly."
 
 // cliTier classifies a bare tool name into the claude-cli wire tier: "core"
 // (eager — advertised on the alwaysLoad tionharness_interaction server, never deferred),
@@ -424,8 +438,14 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	// — the CLI analogue of native hidden tools (§7-15). Core is unaffected (always eager).
 	filtered := make([]interaction.ToolSpec, 0, len(specs))
 	for _, s := range specs {
-		if full && gatewayMetaTools[s.Name] {
+		if full && gatewayMetaTools[s.Name] && s.Name != "tool_search" {
 			continue // codex can never activate anything, so hide the mechanism entirely
+		}
+		if !full && fullTierOnlyTools[s.Name] {
+			continue
+		}
+		if full && s.Name == "tool_search" {
+			s.Description = fullTierToolSearchDescription
 		}
 		t := cliTier(s.Name, visOf)
 		if tier == "extended" {
@@ -698,6 +718,11 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 			InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
 		},
 		interaction.ToolSpec{
+			Name:        "call_tool",
+			Description: "Run an on-demand TionHarness tool that is NOT in your tool list (find it and its input schema with tool_search first). `name` is the tool name, `arguments` its input object exactly as that schema describes. Tools already in your list are called directly, not through this.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","description":"Tool name from tool_search, e.g. update_task"},"arguments":{"type":"object","description":"The tool's input, per the schema tool_search printed"}},"required":["name"]}`),
+		},
+		interaction.ToolSpec{
 			Name:        "tool_search",
 			Description: "Search ALL on-demand tools by keyword — including ones not shown in the 'Available Tools' catalog (hidden tier). Returns matching names to load with activate_tools. Use when you need a capability you don't see listed. To browse a whole family instead of searching, pass a bundle key (\"group:<category>\") to activate_tools — it lists members without loading schemas.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"Keywords to match against tool names + descriptions"}},"required":["query"]}`),
@@ -838,9 +863,7 @@ func bareToolName(name string) string {
 // Such a run can never populate the session's activated set, so the call-time
 // activation gate must not apply to it either — otherwise every extended tool it
 // was shown answers "is not activated" with no way to fix it.
-func fullTierProvider(provider string) bool {
-	return provider == "codex-cli" || provider == "opencode-cli"
-}
+func fullTierProvider(provider string) bool { return providers.StaticToolList(provider) }
 
 // toolCallError distinguishes an unloaded on-demand tool from a policy-blocked or
 // genuinely unknown name before dispatch. Claude can submit either a bare or MCP-
@@ -992,6 +1015,12 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 			b.recordEntityRead(ctx, run, bare, args)
 		}
 	}()
+	return b.dispatchTool(ctx, token, run, name, bare, args)
+}
+
+// dispatchTool runs one already-admitted tool call (Call checked the name).
+// call_tool re-enters here for its target after admitting that name too.
+func (b *interactionBackend) dispatchTool(ctx context.Context, token string, run *chatRun, name, bare string, args json.RawMessage) (interaction.CallResult, error) {
 	// Sink-bound tools (todo/artifact/notify/focus/session-edit) all share one
 	// shape: pull the per-run sink, inject it as a context value, call the shared
 	// builtin handler. Dispatched through a single table+helper instead of one
@@ -1047,6 +1076,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callActiveTools(token), nil
 	case "tool_search":
 		return b.callToolSearch(run, args), nil
+	case "call_tool":
+		return b.callTool(ctx, token, run, args)
 	default:
 		// CLI-3: dispatch a bridged self-management tool through the run's native
 		// registry. The advertised catalog (and the per-agent tool filter) gates
@@ -1275,6 +1306,48 @@ func (b *interactionBackend) callActiveTools(token string) interaction.CallResul
 // activatable (non-core) tool — including hidden-tier ones not shown in the catalog — so
 // the model can discover a capability it doesn't see listed, then load it with
 // activate_tools. Mirrors the native tool_search over the load-on-demand catalog.
+// callTool runs a hidden on-demand tool by name for a "-full" client (see
+// fullTierOnlyTools). The target passes the same admission as a direct call
+// (toolCallError: unknown names, policy blocks) and the same dispatch.
+func (b *interactionBackend) callTool(ctx context.Context, token string, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+	var in struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return interaction.CallResult{Text: "invalid input: " + err.Error(), IsError: true}, nil
+	}
+	target := bareToolName(strings.TrimSpace(in.Name))
+	if target == "" {
+		return interaction.CallResult{Text: "name is required", IsError: true}, nil
+	}
+	if gatewayMetaTools[target] {
+		return interaction.CallResult{Text: target + " cannot be run through call_tool; call it directly", IsError: true}, nil
+	}
+	if text := b.toolCallError(token, target, run); text != "" {
+		return interaction.CallResult{Text: text, IsError: true}, nil
+	}
+	if len(in.Arguments) == 0 || string(in.Arguments) == "null" {
+		in.Arguments = json.RawMessage(`{}`)
+	}
+	return b.dispatchTool(ctx, token, run, target, target, in.Arguments)
+}
+
+// candidateSchemas returns the input schema of every activatable tool of the
+// run, for tool_search's "-full" output.
+func (b *interactionBackend) candidateSchemas(run *chatRun) map[string]json.RawMessage {
+	out := map[string]json.RawMessage{}
+	for _, s := range interactionToolSpecs(b.tun, run != nil && run.autonomous) {
+		out[s.Name] = s.InputSchema
+	}
+	if run != nil {
+		for _, d := range run.bridgeDefsFor() {
+			out[d.Name] = d.InputSchema
+		}
+	}
+	return out
+}
+
 func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) interaction.CallResult {
 	var in struct {
 		Query string `json:"query"`
@@ -1362,6 +1435,9 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 	for _, r := range ranked {
 		rows = append(rows, tools.ToolSearchRow{Name: r.name, Desc: cands[r.name]})
 	}
+	if run != nil && fullTierProvider(run.providerOf()) {
+		return interaction.CallResult{Text: lead + fullTierToolSearchText(rows, b.candidateSchemas(run))}
+	}
 	return interaction.CallResult{Text: lead + tools.RenderToolSearch(rows, tools.ToolSearchRenderOpts{
 		Header:                  "Matching tools (load with activate_tools):",
 		Max:                     tools.ToolSearchMaxRows,
@@ -1378,4 +1454,38 @@ func (s *Server) interactionURL() string {
 		return ""
 	}
 	return strings.TrimRight(s.selfURL, "/") + "/mcp/interaction"
+}
+
+// fullTierToolSearchMax bounds a "-full" tool_search answer: each row carries
+// its input schema, so fewer rows than the gateway listing.
+const fullTierToolSearchMax = 6
+
+// fullTierToolSearchText renders tool_search for a "-full" client: the best
+// matches with their input schemas and how to run them (call_tool), since that
+// client cannot activate anything.
+func fullTierToolSearchText(rows []tools.ToolSearchRow, schemas map[string]json.RawMessage) string {
+	var b strings.Builder
+	b.WriteString("Matching tools — run one that is not in your tool list with call_tool({\"name\": \"<name>\", \"arguments\": {...}}):\n")
+	for i, r := range rows {
+		if i == fullTierToolSearchMax {
+			fmt.Fprintf(&b, "(%d more matches; narrow the query)\n", len(rows)-i)
+			break
+		}
+		fmt.Fprintf(&b, "\n- %s — %s\n", r.Name, truncateRunes(r.Desc, gatewayToolSearchDescLimit))
+		if schema := compactJSONBytes(schemas[r.Name]); schema != "" {
+			fmt.Fprintf(&b, "  input schema: %s\n", schema)
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func compactJSONBytes(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return string(raw)
+	}
+	return buf.String()
 }

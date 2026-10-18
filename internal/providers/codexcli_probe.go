@@ -105,11 +105,46 @@ func filterReachableCodexServers(ctx context.Context, servers map[string]CLIMCPS
 	var dropped []string
 	for _, key := range sortedKeys(servers) {
 		s := servers[key]
-		if !codexServerIsRemote(s) || probe(ctx, s.URL) {
+		reachable := func() bool { return probe(ctx, s.URL) }
+		if codexBridgeKeys[key] {
+			reachable = func() bool { return probeWithGrace(ctx, probe, s.URL, codexBridgeProbeGrace) }
+		}
+		if !codexServerIsRemote(s) || reachable() {
 			kept[key] = s
 			continue
 		}
 		dropped = append(dropped, key)
 	}
 	return kept, dropped
+}
+
+// codexBridgeKeys are the Interaction MCP entries (climcp.InteractionCoreKey /
+// InteractionExtendedKey). They are served by THIS process, so a failed probe
+// almost always means the HTTP listener is not up yet: the workers a restart
+// reclaims start their turns while the server is still booting, and dropping
+// the bridge then failed each of them with "required TionHarness bridge
+// unavailable". They get a short grace period instead of one probe.
+var codexBridgeKeys = map[string]bool{"tionharness_interaction": true, "tionharness_extended": true}
+
+// codexBridgeProbeGrace bounds how long a bridge probe keeps retrying (a var so
+// tests that need the bridge down do not wait it out).
+var codexBridgeProbeGrace = 15 * time.Second
+
+// probeWithGrace retries probe every half second until it succeeds, grace
+// elapses or ctx ends.
+func probeWithGrace(ctx context.Context, probe codexMCPProbe, rawURL string, grace time.Duration) bool {
+	deadline := time.Now().Add(grace)
+	for {
+		if probe(ctx, rawURL) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }

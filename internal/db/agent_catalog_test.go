@@ -227,3 +227,47 @@ func TestAgentCatalogImportsRepairedLegacySystemIdentity(t *testing.T) {
 		t.Fatalf("legacy repair created duplicate catalog profiles: %d", len(rows))
 	}
 }
+
+// TestAgentCatalogBuiltinNeverLinksThroughAReusedOrigin: a library row
+// published by another agent that once held a built-in's local id ("WS3/AGT15"
+// was a CEO before the id was reused) must not capture the built-in — neither
+// on a fresh link nor when an older matcher already stored that link.
+func TestAgentCatalogBuiltinNeverLinksThroughAReusedOrigin(t *testing.T) {
+	ctx := t.Context()
+	defs := []SystemAgentDefinition{{SystemKey: "subagent-validator", Name: "Worker: Validator", SystemPrompt: "Validate"}}
+	catalog := openCatalogTestDB(t, t.TempDir())
+	catalog.MarkAgentCatalog()
+	if err := catalog.EnsureSystemAgents(ctx, defs...); err != nil {
+		t.Fatal(err)
+	}
+	for _, stale := range []bool{false, true} {
+		local := openCatalogTestDB(t, t.TempDir())
+		local.PrepareAgentCatalog("WS3")
+		if err := local.EnsureSystemAgents(ctx, defs...); err != nil {
+			t.Fatal(err)
+		}
+		builtin, ok := local.FindBuiltinAgentBySystemKey("subagent-validator")
+		if !ok {
+			t.Fatal("builtin not seeded")
+		}
+		ceo, err := catalog.createAgent(ctx, Agent{Name: "CEO", CatalogOrigin: "WS3/" + builtin.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stale {
+			if _, err := local.mutateAgentLocked(builtin.ID, func(a *Agent) { a.CatalogID = ceo.ID }); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := local.AttachAgentCatalog(catalog, "WS3"); err != nil {
+			t.Fatal(err)
+		}
+		got, err := local.GetAgent(ctx, builtin.ID)
+		if err != nil || got.Name != "Worker: Validator" || got.CatalogID == ceo.ID {
+			t.Fatalf("stale=%v: builtin resolved through the CEO row: %+v %v", stale, got, err)
+		}
+		if found, ok := local.FindAgentBySystemKey("subagent-validator"); !ok || found.ID != builtin.ID {
+			t.Fatalf("stale=%v: role lookup = %+v %v", stale, found, ok)
+		}
+	}
+}

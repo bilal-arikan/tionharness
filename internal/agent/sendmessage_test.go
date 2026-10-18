@@ -160,3 +160,37 @@ func TestDeliverAgentMessage_RejectsEmpty(t *testing.T) {
 		t.Fatal("expected an error for an empty message")
 	}
 }
+
+// TestSendMessageToOwnCoordinatorLandsInTheCoordinatorSession: a worker writing
+// to the agent that runs its coordinator reaches that coordinator session, not
+// a fresh inbox turn of the same agent; anyone else still goes to the inbox.
+func TestSendMessageToOwnCoordinatorLandsInTheCoordinatorSession(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	pm, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "PM", Provider: "anthropic", Model: "m"})
+	coder, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Coder", Provider: "anthropic", Model: "m"})
+	coord, _ := rt.db.CreateSession(ctx, db.Session{AgentID: pm.ID, Kind: "chat"})
+	worker, _ := rt.db.CreateSession(ctx, db.Session{AgentID: coder.ID, Kind: "worker", CoordinatorSessionID: coord.ID})
+	loose, _ := rt.db.CreateSession(ctx, db.Session{AgentID: coder.ID, Kind: "chat"})
+
+	out, routed := rt.messageOwnCoordinator(WithSessionID(ctx, worker.ID), coder.ID, "PM", "migration", "need 000013")
+	if !routed || !strings.Contains(out, coord.ID) {
+		t.Fatalf("worker → own coordinator not routed: %q %v", out, routed)
+	}
+	msgs, _ := rt.db.ListMessages(ctx, coord.ID)
+	if len(msgs) == 0 || !strings.Contains(msgs[len(msgs)-1].Text, "need 000013") || !strings.Contains(msgs[len(msgs)-1].Text, "send_to_worker("+worker.ID+")") {
+		t.Fatalf("coordinator session did not get the note: %+v", msgs)
+	}
+	all, _ := rt.db.ListSessions(ctx, pm.ID)
+	for _, s := range all {
+		if s.SourceID == inboxSessionSource(pm.ID) {
+			t.Fatal("a routed message must not open the PM inbox")
+		}
+	}
+	if _, routed := rt.messageOwnCoordinator(WithSessionID(ctx, loose.ID), coder.ID, "PM", "", "hi"); routed {
+		t.Fatal("a non-worker session must use the inbox")
+	}
+	if _, routed := rt.messageOwnCoordinator(WithSessionID(ctx, worker.ID), coder.ID, "*", "", "hi"); routed {
+		t.Fatal("a broadcast must use the inboxes")
+	}
+}

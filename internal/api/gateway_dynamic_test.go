@@ -249,10 +249,20 @@ func TestFullTierBypassesGatewayGate(t *testing.T) {
 	if !specHasTool(fullCore, "ask_user") {
 		t.Fatalf("full core tier must still advertise ordinary core tools, got %v", specNames(fullCore))
 	}
-	for _, meta := range []string{"activate_tools", "deactivate_tools", "active_tools", "tool_search"} {
+	for _, meta := range []string{"activate_tools", "deactivate_tools", "active_tools"} {
 		if specHasTool(fullCore, meta) {
 			t.Fatalf("full core tier must NOT advertise the gateway meta-tool %s, got %v", meta, specNames(fullCore))
 		}
+	}
+	// The hidden tools reach a "-full" client through tool_search + call_tool
+	// instead (the client filters its list to the names it was configured with).
+	for _, meta := range []string{"tool_search", "call_tool"} {
+		if !specHasTool(fullCore, meta) {
+			t.Fatalf("full core tier must advertise %s, got %v", meta, specNames(fullCore))
+		}
+	}
+	if specHasTool(core, "call_tool") {
+		t.Fatalf("the plain core tier must not advertise call_tool (claude-cli activates instead), got %v", specNames(core))
 	}
 
 	// The plain-tier request must STILL be gated after a full-tier call was made —
@@ -371,5 +381,51 @@ func TestUnlabeledRunKeepsActivationGate(t *testing.T) {
 	run.setProvider("codex-cli")
 	if msg := b.toolCallError(tok, extendedNSPrefix+"update_task", run); msg != "" {
 		t.Fatalf("codex-cli must pass the gate, got %q", msg)
+	}
+}
+
+// TestFullTierCallToolRunsHiddenTools: a "-full" client (codex-cli) finds a
+// hidden self-management tool with tool_search, which prints its input schema,
+// and runs it with call_tool through the same admission as a direct call.
+func TestFullTierCallToolRunsHiddenTools(t *testing.T) {
+	tun := agent.NewTunables()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: tun}
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
+	runs.bindActive(tok, run)
+	run.setProvider("codex-cli")
+	var gotArgs string
+	run.setBridge(
+		[]providers.ToolDef{{Name: "update_task", Description: "Edit a task on the board", InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}}}`)}},
+		func(_ context.Context, name string, args json.RawMessage) (string, error) {
+			gotArgs = string(args)
+			return "did:" + name, nil
+		},
+	)
+	run.setTierVis(func(name string) string {
+		if name == "update_task" {
+			return tools.VisibilityHidden
+		}
+		return tools.VisibilityNameOnly
+	})
+	ctx := context.Background()
+
+	found, err := b.Call(ctx, tok, interactionNSPrefix+"tool_search", json.RawMessage(`{"query":"task board"}`))
+	if err != nil || found.IsError || !strings.Contains(found.Text, "update_task") || !strings.Contains(found.Text, `"id"`) || !strings.Contains(found.Text, "call_tool") {
+		t.Fatalf("tool_search must list update_task with its schema and the call_tool hint, got (%q, %v)", found.Text, err)
+	}
+	res, err := b.Call(ctx, tok, interactionNSPrefix+"call_tool", json.RawMessage(`{"name":"mcp__tionharness_extended__update_task","arguments":{"id":"TSK1"}}`))
+	if err != nil || res.IsError || res.Text != "did:update_task" || gotArgs != `{"id":"TSK1"}` {
+		t.Fatalf("call_tool must dispatch with the given arguments, got (%q, %v) args=%s", res.Text, err, gotArgs)
+	}
+	for _, bad := range []string{`{"name":"no_such_tool"}`, `{"name":"call_tool"}`, `{"name":""}`} {
+		if res, _ := b.Call(ctx, tok, interactionNSPrefix+"call_tool", json.RawMessage(bad)); !res.IsError {
+			t.Fatalf("call_tool %s must be refused, got %q", bad, res.Text)
+		}
+	}
+	run.setToolAllowed(func(name string) bool { return name != "update_task" })
+	if res, _ := b.Call(ctx, tok, interactionNSPrefix+"call_tool", json.RawMessage(`{"name":"update_task"}`)); !res.IsError || !strings.Contains(res.Text, "blocked") {
+		t.Fatalf("a policy-blocked tool must stay blocked through call_tool, got %q", res.Text)
 	}
 }

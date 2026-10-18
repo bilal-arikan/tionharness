@@ -171,8 +171,9 @@ func TestInteractionTierSplit(t *testing.T) {
 	if coreC+extC != len(full) {
 		t.Fatalf("classification must partition full: core(%d)+extended(%d) != full(%d)", coreC, extC, len(full))
 	}
-	if len(core) != coreC {
-		t.Fatalf("advertised core(%d) must equal core-classified(%d)", len(core), coreC)
+	// call_tool is core-classified but advertised only on the "-full" tier.
+	if len(core) != coreC-len(fullTierOnlyTools) {
+		t.Fatalf("advertised core(%d) must equal core-classified(%d) minus the full-tier-only tools", len(core), coreC)
 	}
 	// Pure classification: the eager shell/edit tools are core.
 	for _, n := range []string{"Bash", "run_subagent"} {

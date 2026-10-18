@@ -211,9 +211,9 @@ func TestCodexParserMCPToolCall(t *testing.T) {
 	if step.Batch != 0 {
 		t.Errorf("Batch = %d, want 0", step.Batch)
 	}
-	// Emitted exactly once, on item.completed.
-	if len(events) != 1 || events[0].Tool != "mcp__tionprobe__tion_ping" {
-		t.Fatalf("onEvent got %+v, want one tool step", events)
+	// A running frame on item.started, then the step itself on item.completed.
+	if len(events) != 2 || !events[0].Running || events[1].Running || events[1].Tool != "mcp__tionprobe__tion_ping" || events[0].ID != events[1].ID {
+		t.Fatalf("onEvent got %+v, want a running frame then one tool step", events)
 	}
 	if !p.ranTool() {
 		t.Error("ranTool = false, want true")
@@ -371,11 +371,12 @@ func TestCodexParserItemUpdatedDoesNotReemit(t *testing.T) {
 	p := newCodexParser("", func(s TraceStep) { events = append(events, s) })
 	feedAll(p, fxThreadStarted, fxTurnStarted, fxCmdStarted, updated, fxCmdCompleted, fxTurnCompleted)
 
-	if len(events) != 1 {
-		t.Fatalf("onEvent fired %d times, want 1 (only on item.completed)", len(events))
+	// item.started announces the running tool once; item.updated adds nothing.
+	if len(events) != 2 || !events[0].Running {
+		t.Fatalf("onEvent fired %d times (%+v), want a running frame plus the completed step", len(events), events)
 	}
-	if events[0].Output != "hello-from-shell\r\n" {
-		t.Errorf("emitted Output = %q, want the completed output", events[0].Output)
+	if events[1].Output != "hello-from-shell\r\n" {
+		t.Errorf("emitted Output = %q, want the completed output", events[1].Output)
 	}
 	if _, err := p.finish(); err != nil {
 		t.Fatalf("finish: %v", err)

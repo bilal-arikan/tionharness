@@ -182,6 +182,26 @@ func (d *DB) MarkFlowOptimized(ctx context.Context, flowID string) error {
 	return d.persistFlowLocked(f)
 }
 
+// NoteFlowObserverPass records whether an observer pass changed nothing
+// (quiet: the streak grows) or filed a proposal (the streak resets).
+func (d *DB) NoteFlowObserverPass(ctx context.Context, flowID string, quiet bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	f, ok := d.flows[flowID]
+	if !ok {
+		return ErrNotFound
+	}
+	next := 0
+	if quiet {
+		next = f.Stats.QuietPasses + 1
+	}
+	if next == f.Stats.QuietPasses {
+		return nil
+	}
+	f.Stats.QuietPasses = next
+	return d.persistFlowLocked(f)
+}
+
 // RewindFlowOptimizeMarkerForTest resets the observer's "looked at" marker so a
 // test can make the policy window due again. Not used by production code.
 func (d *DB) RewindFlowOptimizeMarkerForTest(flowID string) {

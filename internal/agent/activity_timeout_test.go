@@ -260,3 +260,46 @@ func TestSpawnIdleTimeoutTunable(t *testing.T) {
 		t.Fatalf("override idle = %v", got)
 	}
 }
+
+// TestSemanticTrackerStretchesWindowWhileToolRuns: a running tool holds the
+// idle window open (toolInFlightIdleFactor) without counting as progress; its
+// terminal step restores the plain window, and a tool that never returns is
+// still reclaimed.
+func TestSemanticTrackerStretchesWindowWhileToolRuns(t *testing.T) {
+	const idle = time.Minute
+	clock := time.Unix(1_000, 0)
+	tracker := &ActivityTracker{
+		last:    ActivitySnapshot{LastProgressAt: clock},
+		sources: map[string]sourceActivity{},
+		running: map[string]bool{},
+		idle:    idle,
+		wake:    make(chan struct{}, 1),
+		cancel:  func(error) {},
+		now:     func() time.Time { return clock },
+	}
+	if tracker.ObserveStep(TurnStep{Kind: StepTool, ID: "cmd-1", Tool: "shell", Running: true}) {
+		t.Fatal("a running frame counted as progress")
+	}
+	clock = clock.Add(2 * idle)
+	if _, expired := tracker.expireIfIdle(); expired {
+		t.Fatal("a running tool was cut at the plain idle window")
+	}
+	if !tracker.ObserveStep(TurnStep{Kind: StepTool, ID: "cmd-1", Tool: "shell", Output: "ok"}) {
+		t.Fatal("the tool's completion did not count")
+	}
+	clock = clock.Add(idle + time.Second)
+	if _, expired := tracker.expireIfIdle(); !expired {
+		t.Fatal("after the tool finished the plain window must apply again")
+	}
+
+	hung := &ActivityTracker{
+		last: ActivitySnapshot{LastProgressAt: clock}, sources: map[string]sourceActivity{},
+		running: map[string]bool{}, idle: idle, wake: make(chan struct{}, 1),
+		cancel: func(error) {}, now: func() time.Time { return clock },
+	}
+	hung.ObserveStep(TurnStep{Kind: StepTool, ID: "cmd-2", Running: true})
+	clock = clock.Add(toolInFlightIdleFactor*idle + time.Second)
+	if _, expired := hung.expireIfIdle(); !expired {
+		t.Fatal("a tool that never returns must still be reclaimed")
+	}
+}

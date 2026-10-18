@@ -36,6 +36,12 @@ const maxConcurrentOperationLeases = 64
 
 var operationLeaseAdmission = make(chan struct{}, maxConcurrentOperationLeases)
 
+// toolInFlightIdleFactor stretches a run's idle window while one of its tools
+// is still running. A tool reports nothing until it returns, so a test suite or
+// a container build longer than the plain window read as a hung turn and was
+// cut mid-command; a tool that truly hangs is still reclaimed, only later.
+const toolInFlightIdleFactor = 4
+
 type sourceActivity struct {
 	fingerprint string
 	childCount  int
@@ -45,10 +51,13 @@ type sourceActivity struct {
 // ActivityTracker owns one run's idle deadline. Only semantic progress advances
 // it; transport heartbeat/keepalive and unrelated hub traffic never reach it.
 type ActivityTracker struct {
-	mu       sync.Mutex
-	last     ActivitySnapshot
-	sources  map[string]sourceActivity
-	order    []string
+	mu      sync.Mutex
+	last    ActivitySnapshot
+	sources map[string]sourceActivity
+	order   []string
+	// running holds the sources of tool steps seen running and not yet
+	// finished (see toolInFlightIdleFactor).
+	running  map[string]bool
 	idle     time.Duration
 	wake     chan struct{}
 	stop     chan struct{}
@@ -64,6 +73,7 @@ func newActivityTracker(ctx context.Context, cancel context.CancelCauseFunc, idl
 	t := &ActivityTracker{
 		last:    ActivitySnapshot{LastProgressAt: now(), Kind: "run_started"},
 		sources: make(map[string]sourceActivity),
+		running: make(map[string]bool),
 		idle:    idle,
 		wake:    make(chan struct{}, 1),
 		stop:    make(chan struct{}),
@@ -107,7 +117,7 @@ func (t *ActivityTracker) watch() {
 func (t *ActivityTracker) expireIfIdle() (time.Duration, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	remaining := t.idle - t.nowTime().Sub(t.last.LastProgressAt)
+	remaining := t.windowLocked() - t.nowTime().Sub(t.last.LastProgressAt)
 	if remaining > 0 {
 		return remaining, false
 	}
@@ -133,9 +143,17 @@ func resetTimer(timer *time.Timer, d time.Duration) {
 
 func (t *ActivityTracker) remaining() time.Duration {
 	t.mu.Lock()
-	last := t.last.LastProgressAt
+	last, window := t.last.LastProgressAt, t.windowLocked()
 	t.mu.Unlock()
-	return t.idle - t.nowTime().Sub(last)
+	return window - t.nowTime().Sub(last)
+}
+
+// windowLocked is the idle window in force: stretched while a tool runs.
+func (t *ActivityTracker) windowLocked() time.Duration {
+	if len(t.running) > 0 {
+		return t.idle * toolInFlightIdleFactor
+	}
+	return t.idle
 }
 
 func (t *ActivityTracker) nowTime() time.Time {
@@ -189,10 +207,18 @@ func (t *ActivityTracker) ObserveStep(st TurnStep) bool {
 		meaningful = meaningfulSubagentProgress(st, state)
 		kind = "child_progress"
 	case StepTool:
-		if st.Append {
+		switch {
+		case st.Append:
 			meaningful = strings.TrimSpace(st.Output) != "" && (!seen || sig != state.fingerprint)
 			kind = "tool_output"
-		} else if !st.Running {
+		case st.Running:
+			// A running frame is not progress, but it stretches the window
+			// until the same tool's terminal step arrives.
+			if st.ID != "" && len(t.running) < maxActivitySources {
+				t.running[source] = true
+			}
+		default:
+			delete(t.running, source)
 			meaningful = source != "" && state.terminal != sig
 			kind = "tool_terminal"
 		}

@@ -42,6 +42,9 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		// send_message is the "peer DM" complement: an addressed, sender-tagged
 		// message into another agent's persistent inbox (Claude Code mailbox model).
 		tools.NewSendMessageTool(agent.ID, func(ctx context.Context, to, summary, message string) (string, error) {
+			if out, routed := r.messageOwnCoordinator(ctx, agent.ID, to, summary, message); routed {
+				return out, nil
+			}
 			return r.DeliverAgentMessage(ctx, agent.ID, to, summary, message)
 		}),
 		// Context reset: let the agent hand off to a fresh session when it nears

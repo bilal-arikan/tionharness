@@ -22,8 +22,8 @@ func stallDecisionRequest(text string) decider.Request {
 			stallQuestionKey: decider.Noul(
 				"This coordinator turn made NO worker-spawn or coordination tool call, and no worker is running under it. "+
 					"Does its latest message claim (in any language) to have just started, spawned, opened or launched workers, branches or sub-tasks, "+
-					"or report them as running or in progress?",
-				"It narrates delegation as done or underway, e.g. \"spawned 3 workers\", \"Round 5 opened - 2 arms\", \"SES144 açıldı\", \"[running]\".",
+					"report them as running or in progress, say it is waiting for a result (a verification, review, test run, deployment) that nothing is producing, or report a FAIL or defect in its own work that it re-tasked nobody to fix?",
+				"It narrates delegation as done or underway, e.g. \"spawned 3 workers\", \"Round 5 opened - 2 arms\", \"SES144 açıldı\", \"[running]\", or waits on a result no running worker will deliver, e.g. \"Doğrulama bekliyor … çalışan worker yok\".",
 				"It plainly concludes, reports already-finished work, asks the user a question, or narrates only its own non-delegated actions.",
 			),
 		},

@@ -1133,6 +1133,10 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 		return ""
 	}
 	cli := isCLIProviderKind(provider)
+	// static: a CLI that never re-lists its tools (codex/opencode). The bridge
+	// already advertises every listed tool to it, and runs the hidden ones
+	// through call_tool — activate_tools does not exist there.
+	static := cli && providers.StaticToolList(provider)
 	// Separate built-in lazy tools from namespaced MCP tools (server__tool).
 	var builtin, mcpTools []providers.ToolDef
 	for _, d := range lazy {
@@ -1146,6 +1150,9 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 	var b strings.Builder
 	b.WriteString("# Available Tools (load on demand)\n")
 	switch {
+	case static:
+		b.WriteString("These TionHarness tools are already in your tool list: call them directly by the names " +
+			"below. (External MCP server tools named `mcp__<server>__…` are listed separately.)\n")
 	case cli:
 		// Gateway dynamic surface (Doc 52): the built-in extended tools below are NOT in
 		// your tool list yet — you load them by calling `activate_tools` (a core tool),
@@ -1174,7 +1181,10 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 		// The entries below sit under the activate_tools sentence but do NOT load
 		// that way on the CLI path; without this separator agents call
 		// activate_tools on an mcp__… name, get rejected, and retry.
-		if cli {
+		switch {
+		case static:
+			b.WriteString("\nThe entries below are EXTERNAL MCP tools, also callable directly.\n")
+		case cli:
 			b.WriteString("\nThe entries below are EXTERNAL MCP tools: load them with `ToolSearch` " +
 				"(`select:<name>,<name>`), not `activate_tools`.\n")
 		}
@@ -1203,8 +1213,13 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 		if cli {
 			findHint, actHint = "`ToolSearch` (`select:<name>,<name>`)", "load"
 		}
-		fmt.Fprintf(&b, "\n%d more tools are available from MCP servers but not listed individually "+
-			"(to save context). Find one with %s, then `%s` it. Servers:\n", len(mcpTools), findHint, actHint)
+		if static {
+			fmt.Fprintf(&b, "\n%d more tools from MCP servers are in your tool list but not repeated here "+
+				"(to save context); call them directly. Servers:\n", len(mcpTools))
+		} else {
+			fmt.Fprintf(&b, "\n%d more tools are available from MCP servers but not listed individually "+
+				"(to save context). Find one with %s, then `%s` it. Servers:\n", len(mcpTools), findHint, actHint)
+		}
 		for _, srv := range order {
 			label := srv
 			if cli {
@@ -1237,10 +1252,23 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 	// them) and at the search tool as the quick path. The skill + search names are
 	// namespaced for the CLI, bare for native.
 	if hiddenCount > 0 {
+		// These are TionHarness built-ins, so on the CLI path too they load through
+		// the gateway's tool_search/activate_tools. The CLI's own ToolSearch cannot
+		// see an un-advertised tool: pointing at it made agents conclude that the
+		// board/agent tools were unavailable and fall back to curl on the REST API.
 		skillTool, findHint, actHint := "use_skill", "`tool_search(\"keyword\")`", "activate_tools"
 		if cli {
 			skillTool = interactionToolPrefix + "use_skill"
-			findHint, actHint = "`ToolSearch` (`select:<name>,<name>`)", "load"
+			findHint = "`" + interactionToolPrefix + "tool_search(\"keyword\")`"
+			actHint = interactionToolPrefix + "activate_tools"
+		}
+		if static {
+			fmt.Fprintf(&b, "\n%d self-management tools (tasks/board, agents, flows, schedules, automations, hooks, "+
+				"MCP servers, skills, workspaces, app settings, your own prompts/config, secrets, logs) are not in your "+
+				"tool list. Find one with %s — each match shows its input schema — and run it with "+
+				"`%scall_tool({\"name\": \"update_task\", \"arguments\": {...}})`. The `tionharness-self-management` "+
+				"skill (via `%s`) lists them all.\n", hiddenCount, findHint, interactionToolPrefix, skillTool)
+			return strings.TrimSpace(b.String())
 		}
 		// "memory" is deliberately absent from this list: the memory subsystem was
 		// removed on 2026-07-05 and naming it here advertised tools that do not exist.

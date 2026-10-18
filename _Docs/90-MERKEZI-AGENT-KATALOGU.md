@@ -20,6 +20,8 @@ Merkezi profiller uygulama veri dizinindeki `agent-catalog/agents/` altında sak
 
 Merkezi veri dizini taşınırken veya elle yedeklenirken `agent-catalog/` ve `system-agents.json` birlikte korunmalıdır. Yalnız workspace klasörünü taşımak merkezi profil verilerini içermez. Merkezi karşılığı bulunmayan bir bağlantı, başka bir agentla sessizce eşleştirilmek yerine açılış hatası verir.
 
+Eşleştirme kuralı (`catalogLinkFits`, 2026-10-18): yerleşik (kilitli) bir sistem agentı yalnız kendi rolünün kilitli merkezi kaydına bağlanır; diğer agentlar yalnız yerleşik olmayan bir kayda ve kendi kaynak bilgileriyle (`WSn/AGTm`). Kaynak bilgisi tek başına yeterli değildir, çünkü yerel ID'ler workspace içinde yeniden kullanılabilir. Eski eşleştiricinin bu ikisini rastgele sırayla denemesi, bir workspace'te `Worker: Validator` satırını o ID'yi önceden taşımış CEO'nun merkezi kaydına bağlamıştı: rol CEO profiliyle çözülüyor ve `spawn_worker validator` "system agent is not seeded" hatası veriyordu. Açılışta rolüne uymayan mevcut bağlar temizlenip doğru kayda yeniden bağlanır.
+
 ## Doğrulama
 
 Veri katmanı testleri ayrı profillerin korunmasını, workspace üzerinden ortak düzenlemeyi, araç ayarlarını, kalıtımı, yeniden atamayı, yeniden açılışı ve yerleşik tanımların tekilleştirilmesini kapsar. API testleri onaysız çoklu-workspace yazımının engellenmesini denetler. Arayüz testleri birleşik listeyi, çoklu seçimi ve onay/iptal davranışını doğrular.

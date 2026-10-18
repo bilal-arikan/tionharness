@@ -98,6 +98,10 @@ type FlowStats struct {
 	// EveryRuns counts from here.
 	RunsAtOptimize int   `json:"runsAtOptimize"`
 	LastOptimizeAt int64 `json:"lastOptimizeAt,omitempty"`
+	// QuietPasses counts the observer's consecutive passes that changed
+	// nothing (no change, or an invalid proposal); each one doubles the wait
+	// before the next automatic look. A filed proposal resets it.
+	QuietPasses int `json:"quietPasses,omitempty"`
 	// Graded / GradeSum keep the decision model's quality grades (1..5) so
 	// the average is one division away (see FlowRun.Grade).
 	Graded   int `json:"graded,omitempty"`

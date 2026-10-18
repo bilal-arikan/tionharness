@@ -1061,6 +1061,10 @@ func writeDBError(w http.ResponseWriter, err error, notFoundMsg string) bool {
 		writeError(w, http.StatusNotFound, notFoundMsg)
 	case errors.Is(err, archive.ErrArchived):
 		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, context.Canceled):
+		// The client went away (a panel's AbortController on refresh/unmount): no
+		// server fault, so no 500 and no ERROR log line for it.
+		writeError(w, statusClientClosedRequest, "client closed request")
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}

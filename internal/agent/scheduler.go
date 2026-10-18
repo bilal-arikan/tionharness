@@ -461,7 +461,16 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 		"schedule", scheduleID, "trigger", trigger,
 		"agent", sc.AgentID, "cron", sc.CronExpr)
 
-	sessionID, fireErr := s.deliverPrompt(ctx, sc)
+	var sessionID string
+	var fireErr error
+	if sc.SessionID != "" {
+		// Session-targeted routine: each fire continues that conversation, the
+		// same way a one-shot wake does (a coordinator waking itself for a
+		// window hours ahead, beyond schedule_wake's one-hour reach).
+		sessionID, fireErr = sc.SessionID, s.deliverWake(ctx, sc)
+	} else {
+		sessionID, fireErr = s.deliverPrompt(ctx, sc)
+	}
 	s.emitPromptDelivery(sc, sessionID, fireErr)
 
 	status := "success"

@@ -10,6 +10,12 @@
 > etiketli mesaj + **arka planda** alıcının geçmiş-duyarlı turu (`runSessionTurn` →
 > wake-runner; SpawnMaxConcurrent guard). **Yanıt:** `to`=gönderenin `from` adı.
 > **Broadcast:** `to="*"` → tüm diğer ajanlar (`broadcastAgentMessage`, best-effort).
+> **Worker → kendi koordinatörü (2026-10-18):** bir worker oturumu, koordinatör
+> oturumunu çalıştıran ajana `send_message` yazarsa mesaj inbox'a değil doğrudan o
+> koordinatör oturumuna worker notu olarak düşer (`messageOwnCoordinator`); not,
+> `send_to_worker(<worker>)` ile yanıt verilebileceğini söyler. Inbox yolunda aynı
+> ajanın bağlamsız ikinci turu açılıyor, yanıtı da worker ajanının inbox'ında üçüncü bir
+> tur başlatıyordu; işin sahibi koordinatör soruyu hiç görmüyordu.
 > Kendine-mesaj reddi. Dosyalar: `internal/agent/agentmsg.go`,
 > `internal/tools/builtin_sendmessage.go`, `internal/agent/toolsetup.go`; testler:
 > `sendmessage_test.go`. **Kalan:** Faz 3 UI inbox göstergesi + grafik kenarı, Faz 4 (ertelendi).

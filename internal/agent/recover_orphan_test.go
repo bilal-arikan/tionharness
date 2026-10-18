@@ -110,3 +110,41 @@ func TestRecoverSkipsCompletedWorker(t *testing.T) {
 		t.Fatalf("no notification for a completed worker, got %d", len(cm))
 	}
 }
+
+// TestRecoverResumesOrphanedWorkerOnce: a worker whose coordinator is alive is
+// resumed from its own history after a restart instead of being reported
+// killed; if it is cut again on that resume turn, it is reported killed.
+func TestRecoverResumesOrphanedWorkerOnce(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	rt.coordRunFn = func(string) {}
+	var resumed []string
+	rt.workerRunFn = func(_ db.Agent, wsid, prompt, _ string) { resumed = append(resumed, wsid+"|"+prompt) }
+	ctx := context.Background()
+	ag, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Coder", Provider: "anthropic", Model: "m"})
+	coord, _ := rt.db.CreateSession(ctx, db.Session{AgentID: ag.ID, Kind: "chat", Role: "coordinator", SourceID: "s:rc"})
+	worker, _ := rt.db.CreateSession(ctx, db.Session{AgentID: ag.ID, Kind: "worker", Role: "worker", SourceID: "s:rw", CoordinatorSessionID: coord.ID})
+	rt.db.AddMessage(ctx, db.Message{SessionID: worker.ID, Role: "user", Text: "run the suite"})
+
+	rt.RecoverOrphanedTurns(ctx)
+
+	if len(resumed) != 1 || !strings.HasPrefix(strings.SplitN(resumed[0], "|", 2)[1], workerResumeNote) {
+		t.Fatalf("worker must be resumed once with the resume note, got %v", resumed)
+	}
+	if cm, _ := rt.db.ListMessages(ctx, coord.ID); len(cm) != 0 {
+		t.Fatalf("a resumed worker must not be reported killed, coordinator got %+v", cm)
+	}
+	wm, _ := rt.db.ListMessages(ctx, worker.ID)
+	if len(wm) != 3 || !wm[1].Interrupted || !strings.HasPrefix(wm[2].Text, workerResumeNote) {
+		t.Fatalf("worker transcript = interrupted reply then the resume note, got %+v", wm)
+	}
+
+	// Cut again on the resume turn (the note is still the last message): killed.
+	rt.RecoverOrphanedTurns(ctx)
+	if len(resumed) != 1 {
+		t.Fatalf("a worker cut on its resume turn must not be resumed again, got %v", resumed)
+	}
+	if cm, _ := rt.db.ListMessages(ctx, coord.ID); len(cm) != 1 || !strings.Contains(cm[0].Text, "<status>killed</status>") {
+		t.Fatalf("second cut must be reported killed, got %+v", cm)
+	}
+	drainSpawns(t, rt)
+}

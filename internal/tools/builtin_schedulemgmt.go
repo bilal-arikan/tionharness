@@ -99,7 +99,7 @@ func NewCreateScheduleTool(database *db.DB, actorID string, reload func(context.
 func (CreateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_schedule",
-		Description: "Create a recurring schedule (routine) on a cron expression. It delivers a prompt to an agent (agentId+prompt); the agent's own evolving flow shapes the turn. New schedules default to disabled, matching REST. The schedule is tagged as created by you. Returns the new schedule id.",
+		Description: "Create a recurring schedule (routine) on a cron expression. It delivers a prompt to an agent (agentId+prompt); the agent's own evolving flow shapes the turn. With sessionId every fire is delivered INTO that existing session as a new turn instead (e.g. to wake your own coordinator session at a known time hours ahead — schedule_wake reaches at most one hour); agentId may then be omitted. New schedules default to disabled, matching REST. The schedule is tagged as created by you. Returns the new schedule id.",
 		InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
@@ -108,9 +108,10 @@ func (CreateScheduleTool) Def() providers.ToolDef {
 					"cronExpr":{"type":"string","description":"Standard 5-field cron expression, e.g. \"0 9 * * *\""},
 					"prompt":{"type":"string","description":"The prompt delivered to the agent on each fire"},
 					"enabled":{"type":"boolean","description":"Whether the schedule is active immediately (default false)"},
-					"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); 0 means no end date"}
+					"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); 0 means no end date"},
+					"sessionId":{"type":"string","description":"Deliver each fire into this existing session (its own agent answers) instead of the agent's schedule thread"}
 				},
-				"required":["agentId","cronExpr","prompt"],
+				"required":["cronExpr","prompt"],
 				"additionalProperties":false
 			}`),
 		Examples: []json.RawMessage{
@@ -130,11 +131,26 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		Prompt    string `json:"prompt"`
 		Enabled   *bool  `json:"enabled"`
 		ExpiresAt int64  `json:"expiresAt"`
+		SessionID string `json:"sessionId"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
 	}
 	in.AgentID = strings.TrimSpace(in.AgentID)
+	in.SessionID = strings.TrimSpace(in.SessionID)
+	if in.SessionID != "" {
+		// A session-targeted fire is answered by that session's own agent, so the
+		// agent follows from the session; a different agentId would run a
+		// stranger's turn inside someone else's conversation.
+		sess, err := t.d.db.GetSession(ctx, in.SessionID)
+		if err != nil {
+			return "", fmt.Errorf("no session with id %q", in.SessionID)
+		}
+		if in.AgentID != "" && in.AgentID != sess.AgentID {
+			return "", fmt.Errorf("session %s belongs to agent %s, not %s; omit agentId", in.SessionID, sess.AgentID, in.AgentID)
+		}
+		in.AgentID = sess.AgentID
+	}
 	in.CronExpr = strings.TrimSpace(in.CronExpr)
 	in.Prompt = strings.TrimSpace(in.Prompt)
 	if in.CronExpr == "" {
@@ -163,6 +179,7 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		Prompt:    in.Prompt,
 		Enabled:   enabled,
 		ExpiresAt: in.ExpiresAt,
+		SessionID: in.SessionID,
 		CreatedBy: t.d.actorID,
 	})
 	if err != nil {

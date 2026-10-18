@@ -95,13 +95,35 @@ yeteneklerini (araçlar, izinler, prompt cache, resume) korur. Yardımcı çağr
   son 8 koşunun düğüm izi ve geri bildirimi, önceki öneriler. Yanıt STRICT JSON
   (`noChange / reason / expected / confidence / ops / prompt`); kodda doğrulanır (op
   sayısı ≤ 8, graf, bütçe) ve `FlowProposal` olarak dosyalanır (`pending` / `applied` /
-  `rejected` / `invalid`). `auto` modda `confidence ≥ MinConfidence` ise **öneri kapısından**
+  `rejected` / `invalid`). Doğrulamadan geçemeyen yanıt **bir kez onarım turuna** gider
+  (2026-10-18): gözlemci aynı konuşmada doğrulayıcının hata metnini alır ve düzeltilmiş
+  JSON verir; ikinci yanıt da geçersizse öneri ilk denemenin op'larıyla ve iki hatayla
+  (`… (after repair: …)`) `invalid` dosyalanır. Prompt RE2 kısıtını (lookahead/lookbehind
+  ve geri başvuru yok) ve "girdi/llm/transform/trigger tek çıkış kenarı" kuralını açıkça
+  söyler; canlı workspace'te geçersiz önerilerin çoğu `(?=`/`(?!` kullanan regex kollarıydı. `auto` modda `confidence ≥ MinConfidence` ise **öneri kapısından**
   (`flow-proposal-gate` mercii: off → uygula, shadow → uygula ama kaydet, on → "hayır"
   derse `pending` kalır, sonuç `FlowOptimizeResult.Held`) geçip uygulanır; aksi halde
   kullanıcı Evrim sekmesinden uygular/reddeder. Her geçiş `flow-optimizer` etiketli bir
   sistem oturumuna kaydedilir. "Değişiklik yok" iyi bir cevaptır. Kanıtta koşu puanları ve
   ölçüt kapısı ayrıntıları da vardır; pencere içindeki tüm koşular başarılı, puanı ≥ 4 ve
-  👎'siz ise geçiş atlanır ve işaret ilerletilir (`flowRunsHealthy`).
+  👎'siz ise geçiş atlanır ve işaret ilerletilir (`flowRunsHealthy`). Art arda hiçbir şey
+  değiştirmeyen geçişler (değişiklik yok ya da `invalid`) `Stats.QuietPasses`'ı artırır;
+  otomatik bakış her biri için iki kat bekler (`flowObserverDueRuns`: `EveryRuns × 2^n`, en
+  fazla 8×), dosyalanan bir öneri sayacı sıfırlar, elle tetikleme her zaman çalışır
+  (2026-10-18). Puan üretilemeyen bir workspace'te (karar modeli anahtarsız) gözlemci her
+  beş koşuda aynı "ortam sorunu, değişiklik yok" cevabı için model çağrısı yapıyordu.
+- **Koordinatör akışında öz-tur döngüsü yasak (2026-10-18):** `validateProposal`, sahibi
+  koordinatör olan bir akışta ajanın kendi turunu (thread bağlamlı, araçlı, başka ajana
+  devredilmemiş `llm` düğümü) bir döngü içine sokan öneriyi reddeder (`rerunsAgentTurn`);
+  gözlemci kanıtında `role: COORDINATOR` satırı bunu söyler. WS3'te gözlemci, karar modeli
+  çalışmaya başlar başlamaz PM akışını üç kez otomatik evirdi (v3–v5): bir ölçüt kapısı +
+  `fail` kolunda `respond`'a dönüş, yeniden deneme isteminde "yeni test, görev veya worker
+  açma; yalnız kanıtı yeniden oku, 'doğrulama bekliyor' yaz", ölçütte de "doğrulama bekliyor"
+  ifadesi geçerli sonuç sayılıyordu. PM'in iş başlatan her yanıtı kapıda reddedildi, ikinci
+  geçiş iş açmayı yasakladı; koordinatör saatlerce "doğrulama bekliyor" yazıp hiçbir şey
+  başlatmadı. Gözlemci prompt'una iki kural eklendi: yeniden deneme istemi ajanın işini
+  yasaklamaz (kapı yanıtı düzeltir), ve bir ifadeyle karşılanabilen ölçüt iş değil ifade
+  ölçer. FLW2 ve FLW37 (20 tura kadar `PENDING` yoklama döngüsü) varsayılan akışa geri alındı.
 - **Otomatik kabul** (`internal/agent/flow_autoaccept.go`, 2026-10-17): bir öneri iki
   durumda insansız uygulanır: akışın kendi politikası `auto` ise, ya da workspace
   ayarı `flowAutoAccept` açık ve akışın politikası `propose` ise (`off` kapalı kalır;

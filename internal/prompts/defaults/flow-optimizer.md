@@ -54,6 +54,22 @@ problem.
   node reachable, and give every loop a route with a default arm.
 - Never remove the `input` or `output` node. Never change a node's `id`/`type`
   (remove and add instead). New ids are short snake_case words.
+- `input`, `llm`, `transform` and `trigger` nodes have exactly ONE outgoing
+  edge; branch only through a `route` node.
+- `regex` arms are Go RE2: no lookahead/lookbehind (`(?=`, `(?!`, `(?<=`) and
+  no backreferences. Arms are tried in order, so "PASS but not FAIL" is a FAIL
+  arm before a PASS arm — or a `criteria` route.
+- A proposal the validator rejects comes back to you once with the error; fix
+  that error or answer `noChange: true`.
+- A gate checks the REPLY, so its retry fixes the reply — never write a retry
+  prompt that forbids the agent's work ("do not open new tests/tasks/workers",
+  "only re-read the evidence"): an agent told to hold back on every rejected
+  draft stops doing its job and learns to describe waiting instead. Do not
+  optimise for passing the gate; a criterion the agent can satisfy by saying a
+  phrase ("…pending") measures wording, not work.
+- On a COORDINATOR agent (the flow header says so), never loop back into the
+  node that runs its own turn (thread context, tools): that turn launches
+  workers, so re-running it duplicates them. The validator rejects it.
 - Do not propose changes caused by the environment (provider outage, missing
   tool, paused workspace) or by a single unusual run.
 - If the runs justify nothing, answer `noChange: true` with the reason. That is

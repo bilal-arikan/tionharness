@@ -363,6 +363,9 @@ gerektiren her araç çağrı anında kendi açık `IsError` metnini döndürür
 (native'de her turda hazır, native-loop ctx bağımlılığı yok). Lazy işaretleyip köprülemek
 native UX'i bozardı; bunun yerine `BridgeTools` onu köprü ilan listesine **doğrudan ekler**
 (gate: `SessionContextEnabled()`); dispatch `bridgeCallFor()` → `reg.Call` ile isimle çalışır.
+Boş `query` + `session_id` (2026-10-18) o oturumun son `limit` turunu eskiden yeniye döndürür;
+ajanlar "SESx'te ne konuşuldu" için sorguyu boş bırakıyor ve her seferinde "query is
+required" hatası alıyordu. `session_id` olmadan boş sorgu hâlâ hatadır.
 
 **İsim hizalama (2026-06-22):** Çekirdek dosya/şel araçları artık claude-cli ile **aynı
 isimleri** taşır — `read_file→Read`, `write_file→Write`, `edit_file→Edit`, `list_dir→LS`,

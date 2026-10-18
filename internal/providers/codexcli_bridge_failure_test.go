@@ -9,6 +9,9 @@ import (
 )
 
 func TestCodexRequiredBridgeFailureIsVisibleAndNeverDropped(t *testing.T) {
+	grace := codexBridgeProbeGrace
+	codexBridgeProbeGrace = 0
+	t.Cleanup(func() { codexBridgeProbeGrace = grace })
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

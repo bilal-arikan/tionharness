@@ -89,3 +89,38 @@ func TestOpenCodeParserTracksToolParts(t *testing.T) {
 		t.Fatal("a completed tool part is still in flight")
 	}
 }
+
+// TestCodexParserAnnouncesRunningTools: a started tool item is emitted once as
+// a running step carrying the item id, and its completion reuses that id.
+func TestCodexParserAnnouncesRunningTools(t *testing.T) {
+	var got []TraceStep
+	p := newCodexParser("gpt-test", func(st TraceStep) { got = append(got, st) })
+	p.feed(`{"type":"item.started","item":{"id":"s1","type":"command_execution","command":"go test ./...","status":"in_progress"}}`)
+	p.feed(`{"type":"item.updated","item":{"id":"s1","type":"command_execution","command":"go test ./...","status":"in_progress"}}`)
+	p.feed(`{"type":"item.completed","item":{"id":"s1","type":"command_execution","command":"go test ./...","exit_code":0,"status":"completed"}}`)
+	if len(got) != 2 || !got[0].Running || got[0].ID != "s1" || got[1].Running || got[1].ID != "s1" {
+		t.Fatalf("want one running frame then the completed step, both id s1; got %+v", got)
+	}
+}
+
+// TestCodexBridgeProbeWaitsForListener: the in-process bridge is probed until
+// the listener comes up (a restart reclaims workers before it does); any other
+// unreachable server is still dropped on the first failed probe.
+func TestCodexBridgeProbeWaitsForListener(t *testing.T) {
+	calls := map[string]int{}
+	probe := func(_ context.Context, u string) bool {
+		calls[u]++
+		return u == "http://127.0.0.1:1/bridge" && calls[u] >= 3
+	}
+	servers := map[string]CLIMCPServer{
+		"tionharness_interaction": {Transport: "http", URL: "http://127.0.0.1:1/bridge"},
+		"remote":                  {Transport: "http", URL: "http://127.0.0.1:1/remote"},
+	}
+	kept, dropped := filterReachableCodexServers(context.Background(), servers, probe)
+	if _, ok := kept["tionharness_interaction"]; !ok || calls["http://127.0.0.1:1/bridge"] != 3 {
+		t.Fatalf("bridge must be retried until reachable: kept=%v calls=%v", kept, calls)
+	}
+	if len(dropped) != 1 || dropped[0] != "remote" || calls["http://127.0.0.1:1/remote"] != 1 {
+		t.Fatalf("other servers keep the single probe: dropped=%v calls=%v", dropped, calls)
+	}
+}

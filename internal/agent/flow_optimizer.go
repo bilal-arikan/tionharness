@@ -37,6 +37,11 @@ const (
 	// flowHealthyGrade is the grade (1..5) from which a run counts as "fine"
 	// for the observer's skip rule.
 	flowHealthyGrade = 4
+
+	// flowObserverMaxBackoff caps the quiet-pass backoff: after this many
+	// passes in a row that changed nothing the observer waits 2^n times the
+	// policy's EveryRuns, and no longer.
+	flowObserverMaxBackoff = 3
 )
 
 var flowOptimizerSchema = json.RawMessage(`{
@@ -97,7 +102,7 @@ func (r *Runtime) maybeObserveFlow(ctx context.Context, flowID string) {
 	if pol.Mode == db.FlowPolicyOff {
 		return
 	}
-	if f.Stats.Runs-f.Stats.RunsAtOptimize < pol.EveryRuns {
+	if f.Stats.Runs-f.Stats.RunsAtOptimize < flowObserverDueRuns(pol.EveryRuns, f.Stats.QuietPasses) {
 		return
 	}
 	if _, busy := flowOptimizerFlights.Load(flowID); busy {
@@ -119,6 +124,15 @@ func (r *Runtime) maybeObserveFlow(ctx context.Context, flowID string) {
 	}
 }
 
+// flowObserverDueRuns is how many new runs an automatic pass waits for: the
+// policy's EveryRuns, doubled for every recent pass that changed nothing. On a
+// busy flow whose evidence keeps saying the same thing (an environment problem
+// the graph cannot fix) the observer otherwise spends a model call every few
+// turns to answer "no change" again.
+func flowObserverDueRuns(everyRuns, quietPasses int) int {
+	return everyRuns << min(max(quietPasses, 0), flowObserverMaxBackoff)
+}
+
 // flowRunsHealthy reports whether every one of the last n runs succeeded, was
 // graded at least flowHealthyGrade and got no thumbs-down — the case where an
 // observer pass would only spend tokens to say "no change".
@@ -132,6 +146,51 @@ func flowRunsHealthy(runs []db.FlowRun, n int) bool {
 		}
 	}
 	return true
+}
+
+// flowOptimizerRepairPrompt is the follow-up the observer gets when the
+// validator rejected its proposal; %s is the validator's error.
+const flowOptimizerRepairPrompt = `The proposal was rejected by the flow validator: %s
+
+Fix exactly that problem and return the corrected JSON object only, with the same contract. Regexps are Go RE2: no lookahead/lookbehind ((?=, (?!, (?<=), no backreferences. To mean "PASS but not FAIL", use two arms instead (the FAIL arm is matched first) or a criteria route. If the change cannot be expressed validly, answer {"noChange": true, ...}.`
+
+// parseFlowOptimizerReply extracts the observer's JSON answer.
+func parseFlowOptimizerReply(text string) (flowOptimizerReply, bool) {
+	var reply flowOptimizerReply
+	raw := extractJSONObject(text)
+	if raw == "" || json.Unmarshal([]byte(raw), &reply) != nil {
+		return reply, false
+	}
+	return reply, true
+}
+
+// flowProposalFromReply turns an observer answer into an unfiled proposal,
+// applying the policy's prompt switch and clamping the confidence.
+func (r *Runtime) flowProposalFromReply(f db.Flow, exec db.Agent, pol db.FlowPolicy, trigger string, runs []db.FlowRun, reply flowOptimizerReply) db.FlowProposal {
+	if !pol.AllowPromptChanges {
+		reply.Prompt = nil
+	}
+	if reply.Prompt != nil && reply.Prompt.Soul == nil && reply.Prompt.Identity == nil {
+		reply.Prompt = nil
+	}
+	reply.Confidence = min(max(reply.Confidence, 0), 1)
+	evidence := make([]string, 0, len(runs))
+	for _, run := range runs {
+		evidence = append(evidence, run.ID)
+	}
+	return db.FlowProposal{
+		FlowID:      f.ID,
+		AgentID:     f.AgentID,
+		BaseVersion: f.Version,
+		Author:      db.FlowAuthor{Kind: db.FlowAuthorObserver, ID: exec.ID},
+		Trigger:     trigger,
+		Ops:         compactJSON(reply.Ops),
+		Prompt:      reply.Prompt,
+		Reason:      strings.TrimSpace(reply.Reason),
+		Expected:    strings.TrimSpace(reply.Expected),
+		Confidence:  reply.Confidence,
+		Evidence:    strings.Join(evidence, ","),
+	}
 }
 
 // OptimizeFlow runs one observer pass: gather the evidence, ask the optimizer
@@ -185,57 +244,63 @@ func (r *Runtime) OptimizeFlow(ctx context.Context, flowID, trigger string) (Flo
 		lang = r.tun.Language()
 	}
 	user := flowOptimizerUserPrompt(f, g, owner, runs, proposals, lang)
-	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), flowOptimizerSystemKey, system), exec, providers.Request{
-		Model: exec.Model, System: system, MaxTokens: flowOptimizerMaxTokens, OutputSchema: flowOptimizerSchema,
-		Messages: []providers.Message{{Role: providers.RoleUser, Text: user}},
-	}, false)
-	if err != nil {
-		return res, fmt.Errorf("flow observer: model call: %w", err)
+	call := func(msgs []providers.Message) (string, error) {
+		resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), flowOptimizerSystemKey, system), exec, providers.Request{
+			Model: exec.Model, System: system, MaxTokens: flowOptimizerMaxTokens, OutputSchema: flowOptimizerSchema,
+			Messages: msgs,
+		}, false)
+		if err != nil {
+			return "", fmt.Errorf("flow observer: model call: %w", err)
+		}
+		return resp.Text, nil
 	}
-	res.SessionID = r.recordSystemAgentSession(ctx, flowOptimizerSystemKey, exec, "Akış gözlemcisi: "+f.Name, user, resp.Text)
-	raw := extractJSONObject(resp.Text)
-	var reply flowOptimizerReply
-	if raw == "" || json.Unmarshal([]byte(raw), &reply) != nil {
+	msgs := []providers.Message{{Role: providers.RoleUser, Text: user}}
+	text, err := call(msgs)
+	if err != nil {
+		return res, err
+	}
+	transcript := text
+	reply, ok := parseFlowOptimizerReply(text)
+	if !ok {
+		res.SessionID = r.recordSystemAgentSession(ctx, flowOptimizerSystemKey, exec, "Akış gözlemcisi: "+f.Name, user, transcript)
 		return res, errors.New("flow observer: no JSON in reply")
 	}
 	res.Ran = true
 	if reply.NoChange || (len(reply.Ops) == 0 && reply.Prompt == nil) {
+		res.SessionID = r.recordSystemAgentSession(ctx, flowOptimizerSystemKey, exec, "Akış gözlemcisi: "+f.Name, user, transcript)
 		res.Skipped = "observer found nothing to change: " + strings.TrimSpace(reply.Reason)
 		r.logger.Info("flow observer: no change", "flow", flowID, "reason", reply.Reason)
+		_ = r.db.NoteFlowObserverPass(ctx, flowID, true)
 		return res, nil
 	}
-	if !pol.AllowPromptChanges {
-		reply.Prompt = nil
+	prop := r.flowProposalFromReply(f, exec, pol, trigger, runs, reply)
+	// Validate in code before filing. A proposal the validator rejects gets ONE
+	// repair round: the observer sees the exact error (an RE2-incompatible
+	// regexp, a dangling loop) and answers again; most rejections are a syntax
+	// slip in an otherwise sound diagnosis. What still fails is recorded as
+	// invalid so the history shows what the observer tried.
+	verr := r.validateProposal(g, pol, prop, owner)
+	if verr != nil {
+		repair := fmt.Sprintf(flowOptimizerRepairPrompt, verr.Error())
+		msgs = append(msgs,
+			providers.Message{Role: providers.RoleAssistant, Text: text},
+			providers.Message{Role: providers.RoleUser, Text: repair})
+		if fixed, cerr := call(msgs); cerr == nil {
+			transcript += "\n\n---\n" + repair + "\n\n---\n" + fixed
+			if again, ok := parseFlowOptimizerReply(fixed); ok && !again.NoChange && (len(again.Ops) > 0 || again.Prompt != nil) {
+				candidate := r.flowProposalFromReply(f, exec, pol, trigger, runs, again)
+				if cverr := r.validateProposal(g, pol, candidate, owner); cverr == nil {
+					prop, verr = candidate, nil
+				} else {
+					verr = fmt.Errorf("%w (after repair: %v)", verr, cverr)
+				}
+			}
+		} else {
+			r.logger.Warn("flow observer: repair call failed", "flow", flowID, "error", cerr)
+		}
 	}
-	if reply.Prompt != nil && reply.Prompt.Soul == nil && reply.Prompt.Identity == nil {
-		reply.Prompt = nil
-	}
-	if reply.Confidence < 0 {
-		reply.Confidence = 0
-	}
-	if reply.Confidence > 1 {
-		reply.Confidence = 1
-	}
-	evidence := make([]string, 0, len(runs))
-	for _, run := range runs {
-		evidence = append(evidence, run.ID)
-	}
-	prop := db.FlowProposal{
-		FlowID:      f.ID,
-		AgentID:     f.AgentID,
-		BaseVersion: f.Version,
-		Author:      db.FlowAuthor{Kind: db.FlowAuthorObserver, ID: exec.ID},
-		Trigger:     trigger,
-		Ops:         compactJSON(reply.Ops),
-		Prompt:      reply.Prompt,
-		Reason:      strings.TrimSpace(reply.Reason),
-		Expected:    strings.TrimSpace(reply.Expected),
-		Confidence:  reply.Confidence,
-		Evidence:    strings.Join(evidence, ","),
-	}
-	// Validate in code before filing: an unparseable or invalid op set is
-	// recorded as invalid so the history shows what the observer tried.
-	if verr := r.validateProposal(g, pol, prop); verr != nil {
+	res.SessionID = r.recordSystemAgentSession(ctx, flowOptimizerSystemKey, exec, "Akış gözlemcisi: "+f.Name, user, transcript)
+	if verr != nil {
 		prop.Status = db.ProposalInvalid
 		prop.Error = verr.Error()
 	}
@@ -244,6 +309,7 @@ func (r *Runtime) OptimizeFlow(ctx context.Context, flowID, trigger string) (Flo
 		return res, err
 	}
 	res.Proposal = &prop
+	_ = r.db.NoteFlowObserverPass(ctx, flowID, prop.Status == db.ProposalInvalid)
 	if prop.Status == db.ProposalInvalid {
 		r.emitFlowChanged(f.ID, "🧬 Akış gözlemcisi geçersiz bir öneri üretti — "+f.Name, prop.Error)
 		return res, nil
@@ -270,7 +336,7 @@ func (r *Runtime) OptimizeFlow(ctx context.Context, flowID, trigger string) (Flo
 
 // validateProposal checks a proposal's ops against the head graph and the
 // policy budget without applying anything.
-func (r *Runtime) validateProposal(head flow.Graph, pol db.FlowPolicy, p db.FlowProposal) error {
+func (r *Runtime) validateProposal(head flow.Graph, pol db.FlowPolicy, p db.FlowProposal, owner db.Agent) error {
 	if len(p.Ops) > 0 && string(p.Ops) != "null" {
 		ops, err := flow.ParseOps(p.Ops)
 		if err != nil {
@@ -286,6 +352,11 @@ func (r *Runtime) validateProposal(head flow.Graph, pol db.FlowPolicy, p db.Flow
 		if len(next.Nodes) > pol.MaxNodes {
 			return fmt.Errorf("growth budget: %d nodes exceeds the policy cap %d", len(next.Nodes), pol.MaxNodes)
 		}
+		if owner.CoordinatorMode {
+			if id, loops := rerunsAgentTurn(next); loops {
+				return fmt.Errorf("node %q runs the coordinator's own turn (thread context, tools) inside a loop; a coordinator turn launches workers, so a re-run duplicates them or, told to hold back, stops delegation. Gate a fresh tool-less node instead, or change the prompt", id)
+			}
+		}
 	} else if p.Prompt == nil {
 		return errors.New("proposal changes nothing")
 	}
@@ -295,6 +366,40 @@ func (r *Runtime) validateProposal(head flow.Graph, pol db.FlowPolicy, p db.Flow
 		}
 	}
 	return nil
+}
+
+// rerunsAgentTurn reports an llm node that runs as the agent itself — thread
+// context with its tools (the defaults) — and sits on a cycle, so a loop would
+// execute the agent's full turn again. A fresh or tool-less node (a critic) may
+// loop freely.
+func rerunsAgentTurn(g flow.Graph) (string, bool) {
+	reach := func(from, to string) bool {
+		seen := map[string]bool{}
+		stack := []string{from}
+		for len(stack) > 0 {
+			id := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			for _, e := range g.Outgoing(id) {
+				if e.To == to {
+					return true
+				}
+				if !seen[e.To] {
+					seen[e.To] = true
+					stack = append(stack, e.To)
+				}
+			}
+		}
+		return false
+	}
+	for _, n := range g.Nodes {
+		if n.Type != flow.NodeLLM || n.Context == "fresh" || n.Tools == "none" || n.AgentID != "" {
+			continue
+		}
+		if reach(n.ID, n.ID) {
+			return n.ID, true
+		}
+	}
+	return "", false
 }
 
 // ApplyFlowProposal applies a pending proposal on top of the CURRENT head
@@ -523,6 +628,9 @@ func flowOptimizerUserPrompt(f db.Flow, g flow.Graph, owner db.Agent, runs []db.
 		f.Name, f.ID, owner.Name, owner.ID, f.Version, pol.Mode, pol.EveryRuns, pol.MinConfidence, pol.MaxNodes, pol.AllowPromptChanges)
 	if f.Note != "" {
 		fmt.Fprintf(&b, "note: %s\n", f.Note)
+	}
+	if owner.CoordinatorMode {
+		b.WriteString("role: COORDINATOR (its turns launch workers; never loop back into the node that runs its own turn)\n")
 	}
 	fmt.Fprintf(&b, "shape: %s\n", g.Summary())
 	fmt.Fprintf(&b, "\n## Graph JSON\n%s\n", flow.Encode(g))

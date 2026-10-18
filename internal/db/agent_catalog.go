@@ -55,10 +55,17 @@ func (d *DB) importCatalogAgentLocked(id string, visiting map[string]bool) (stri
 		return "", ErrAgentParentNotFound
 	}
 	if a.CatalogID != "" {
-		if _, err := d.agentCatalog.GetAgent(context.Background(), a.CatalogID); err != nil {
+		linked, err := d.agentCatalog.GetAgent(context.Background(), a.CatalogID)
+		if err != nil {
 			return "", fmt.Errorf("catalog agent %s missing: %w", a.CatalogID, err)
 		}
-		return a.CatalogID, nil
+		if catalogLinkFits(a, linked) {
+			return a.CatalogID, nil
+		}
+		// A link an older matcher made across roles (a built-in bound to the
+		// entry of an agent that once held the same local id) would serve the
+		// other agent's profile under this id: relink below.
+		a.CatalogID = ""
 	}
 	if visiting[id] {
 		return "", ErrAgentParentCycle
@@ -68,7 +75,10 @@ func (d *DB) importCatalogAgentLocked(id string, visiting map[string]bool) (stri
 	origin := d.catalogWorkspaceID + "/" + id
 	d.agentCatalog.mu.RLock()
 	for _, candidate := range d.agentCatalog.agents {
-		if (a.Locked && candidate.Locked && a.SystemKey == candidate.SystemKey) || candidate.CatalogOrigin == origin {
+		// A built-in shares the library row of its role; any other agent the row
+		// it published itself. The origin alone is not enough: local ids are
+		// per workspace and reused, so an origin can name a different agent now.
+		if catalogLinkFits(a, candidate) && (a.Locked || candidate.CatalogOrigin == origin) {
 			a.CatalogID = candidate.ID
 			break
 		}
@@ -95,6 +105,16 @@ func (d *DB) importCatalogAgentLocked(id string, visiting map[string]bool) (stri
 		return "", err
 	}
 	return a.CatalogID, nil
+}
+
+// catalogLinkFits reports whether a local agent may resolve through a library
+// row: a built-in only through the locked row of its own role, any other agent
+// only through a row that is not a built-in.
+func catalogLinkFits(local, shared Agent) bool {
+	if local.Locked || shared.Locked {
+		return local.Locked && shared.Locked && local.SystemKey == shared.SystemKey
+	}
+	return local.SystemKey == shared.SystemKey
 }
 
 func (d *DB) catalogTarget(id string) (*DB, string) {

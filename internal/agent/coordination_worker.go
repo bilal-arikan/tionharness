@@ -804,8 +804,23 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 		}
 		switch {
 		case isWorker:
+			// A worker cut by a restart was working on a task that is still valid:
+			// resume it ONCE from its own history (its files and trace are intact)
+			// instead of reporting it killed and leaving the re-dispatch to the
+			// coordinator — which, reading "killed", sometimes just waits. A worker
+			// that dies again on its resume turn is reported killed as before, so a
+			// crash loop cannot keep restarting it.
+			resume := !reclaimed[sess.CoordinatorSessionID] && !strings.HasPrefix(msgs[len(msgs)-1].Text, workerResumeNote)
 			r.recordInterruptedReply(ctx, sess, "⏹️ Worker turu süreç yeniden başlarken yarıda kaldı (kurtarıldı).")
 			reclaimed[sess.ID] = true
+			if resume {
+				if _, err := r.SendToWorker(ctx, sess.CoordinatorSessionID, sess.ID, workerResumeNote+" "+workerResumeHint); err == nil {
+					r.logger.Info("recover: orphaned worker resumed", "session", sess.ID, "coordinator", sess.CoordinatorSessionID)
+					continue
+				} else {
+					r.logger.Warn("recover: worker resume failed; reporting it killed", "session", sess.ID, "error", err)
+				}
+			}
 			// Tell the coordinator so it stops waiting and can re-dispatch or conclude.
 			// Skipped when the coordinator is a mid-level node THIS sweep already
 			// reclaimed and reported dead upward — notifying it would wake a zombie
@@ -830,6 +845,12 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 		}
 	}
 }
+
+// workerResumeNote opens the follow-up a restart-reclaimed worker is resumed
+// with; RecoverOrphanedTurns also reads it to resume a worker only once.
+const workerResumeNote = "[Süreç yeniden başlatıldı]"
+
+const workerResumeHint = "Önceki turun yeniden başlatma yüzünden yarıda kaldı; bu bir görev hatası değil. Kaldığın yerden devam et: çalışma ağacının ve son adımlarının durumunu kontrol et. Kesilen komutların (test, build, doğrulama) sonucu YOK — onları yeniden çalıştır ve sonuçlarını almadan \"çalıştırılmadı\" diye rapor ya da hüküm verme. Görev kesilmeden önce zaten tamamlandıysa yalnız sonucunu raporla."
 
 // recordInterruptedReply persists a crash-recovered assistant reply on an orphaned
 // autonomous session so it reads as finished (Interrupted) instead of hanging on a

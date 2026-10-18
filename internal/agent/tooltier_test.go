@@ -197,9 +197,15 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	if sel < strings.Index(out, "mcp__tionharness_extended__update_session") {
 		t.Errorf("CLI form must NOT instruct ToolSearch select for built-ins (gateway path):\n%s", out)
 	}
-	// Self-management pointer uses the namespaced use_skill on the CLI path.
+	// Self-management pointer uses the namespaced use_skill on the CLI path, and
+	// loads the hidden built-ins through the gateway — never the CLI's ToolSearch,
+	// which cannot see an un-advertised tool.
 	if !strings.Contains(out, "mcp__tionharness_interaction__use_skill") {
 		t.Errorf("CLI self-management pointer must namespace use_skill:\n%s", out)
+	}
+	pointer := out[strings.Index(out, "self-management tools"):]
+	if !strings.Contains(pointer, "mcp__tionharness_interaction__tool_search") || !strings.Contains(pointer, "mcp__tionharness_interaction__activate_tools") || strings.Contains(pointer, "ToolSearch") {
+		t.Errorf("CLI self-management pointer must load via the gateway tool_search/activate_tools:\n%s", pointer)
 	}
 
 	// Native form keeps bare names + activate_tools (regression guard).
@@ -214,9 +220,11 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 
 // TestLazyCatalogSummaryFormSpellsToolSearchSyntax guards the SUMMARISED branch
 // (MCP tools above lazyCatalogMCPListLimit): the CLI form must spell out the
-// ToolSearch query syntax (`select:<name>`) in both the server summary and the
-// self-management pointer, otherwise agents call ToolSearch with an invented
-// parameter and get an InputValidationError. Native form keeps tool_search.
+// ToolSearch query syntax (`select:<name>`) in the external-server summary,
+// otherwise agents call ToolSearch with an invented parameter and get an
+// InputValidationError. The self-management pointer names the gateway's
+// tool_search instead: those are built-ins ToolSearch cannot see. Native form
+// keeps tool_search.
 func TestLazyCatalogSummaryFormSpellsToolSearchSyntax(t *testing.T) {
 	var lazy []providers.ToolDef
 	for i := 0; i <= lazyCatalogMCPListLimit; i++ { // one past the list limit → summary branch
@@ -227,8 +235,11 @@ func TestLazyCatalogSummaryFormSpellsToolSearchSyntax(t *testing.T) {
 	if strings.Contains(out, "srvA__tool0") {
 		t.Fatalf("fixture must exceed the list limit and summarise instead:\n%s", out)
 	}
-	if strings.Count(out, "select:<name>") != 2 {
-		t.Errorf("CLI summary + self-management pointer must both spell the ToolSearch select: syntax:\n%s", out)
+	if strings.Count(out, "select:<name>") != 1 {
+		t.Errorf("only the external-server summary spells the ToolSearch select: syntax:\n%s", out)
+	}
+	if !strings.Contains(out, "mcp__tionharness_interaction__tool_search") {
+		t.Errorf("the self-management pointer must name the gateway tool_search:\n%s", out)
 	}
 
 	nat := renderLazyToolCatalog(lazy, 7, "anthropic", nil, nil)
@@ -294,5 +305,21 @@ func TestAgentTierIntersectsWorkspace(t *testing.T) {
 	// A tool that is active but not in the allowlist is excluded.
 	if hasTool(eff, "todo_write") {
 		t.Fatal("tool outside the agent allowlist must be excluded")
+	}
+}
+
+// TestLazyCatalogStaticToolListCLI: codex-cli never re-lists its tools, so its
+// catalog says the listed tools are already callable and sends the hidden
+// self-management tools through tool_search + call_tool — never activate_tools,
+// which that client is not given.
+func TestLazyCatalogStaticToolListCLI(t *testing.T) {
+	out := renderLazyToolCatalog([]providers.ToolDef{{Name: "update_session"}}, 56, "codex-cli", nil, nil)
+	for _, want := range []string{"mcp__tionharness_extended__update_session", "already in your tool list", "56 self-management tools", "mcp__tionharness_interaction__tool_search", "mcp__tionharness_interaction__call_tool"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("codex catalog must contain %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "activate_tools") || strings.Contains(out, "ToolSearch") {
+		t.Errorf("codex catalog must not point at activate_tools or ToolSearch:\n%s", out)
 	}
 }
