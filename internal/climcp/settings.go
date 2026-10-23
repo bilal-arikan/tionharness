@@ -87,6 +87,16 @@ func WriteSettings(ctx context.Context, h Host, deny []string, effort string) (s
 				if hk.Type != "" && hk.Type != "command" {
 					continue // only command hooks map to the CLI contract
 				}
+				if prog, missing := HookExecutableMissing(hk.Command); missing {
+					// A hook whose program is not installed fails on every matching
+					// tool call and the CLI echoes each failure into the transcript;
+					// leave it out and say so once.
+					if _, seen := missingHookWarned.LoadOrStore(hk.ID+"\x00"+hk.Command, true); !seen && logger != nil {
+						logger.Warn("cli settings: hook skipped, its program is not on PATH",
+							"hook", hk.ID, "event", event, "program", prog)
+					}
+					continue
+				}
 				hooks[event] = append(hooks[event], HookRule{
 					// Translate TionHarness's comma-glob matcher to Claude Code regex — a
 					// verbatim comma list never matches in the CLI (see MatcherRegex).

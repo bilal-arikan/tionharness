@@ -91,6 +91,17 @@ func (s *Server) workspaceRunning(wsp *workspace.Workspace) bool {
 		wsp.Runtime.InsightScanActive() // retrospective scan
 }
 
+// AnyWorkspaceRunning reports whether any open workspace has live work (the
+// same predicate the activity report uses). The app's keep-awake guard polls it.
+func (s *Server) AnyWorkspaceRunning() bool {
+	for _, m := range s.workspaces.List() {
+		if wsp, err := s.workspaces.Get(m.ID); err == nil && s.workspaceRunning(wsp) {
+			return true
+		}
+	}
+	return false
+}
+
 // workspaceActivityItem is one row of the cross-workspace activity report: a
 // workspace id and whether it currently has live work. Completed-run signalling
 // is NOT carried here — that stays on the SSE unread-badge channel, which already

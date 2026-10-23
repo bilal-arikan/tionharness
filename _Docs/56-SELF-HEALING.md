@@ -9,6 +9,10 @@
 > döngüsünü sürer — Faz A/B/C ona uygulanmaz; Faz D (oturum-seviyesi) her iki
 > yol için geçerlidir.
 
+> **Not (2026-10-23):** Uyku engelleme eklendi (`internal/app/keepawake.go`): çalışan iş varken
+> sunucu macOS'ta `caffeinate -i`, Linux'ta `systemd-inhibit` tutar; uykuda geçen dakikalar CLI
+> araç çağrılarını "no progress" ile kestiriyordu (SES745, `_Docs/05` 2026-10-23).
+
 ## Bileşenler
 
 ### Faz A — Provider hata sınıflandırıcı + sınırlı retry

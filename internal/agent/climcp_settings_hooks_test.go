@@ -21,7 +21,7 @@ func TestWriteCLISettingsConvertsMatcher(t *testing.T) {
 	if _, err := rt.db.CreateHook(ctx, db.Hook{
 		Event: db.HookPreToolUse, Type: "command", Enabled: true, TimeoutSec: 30,
 		Matcher: "Bash,PowerShell",
-		Command: "sqz hook claude",
+		Command: "sh -c 'exit 0'",
 	}); err != nil {
 		t.Fatalf("create hook: %v", err)
 	}

@@ -245,7 +245,11 @@ func TestWriteConfigExternalServersAndGate(t *testing.T) {
 // from max to xhigh, and nothing written when there is nothing to say.
 func TestWriteSettingsHooksAndEffort(t *testing.T) {
 	h := &fakeHost{cliHooks: true, hooks: map[string][]db.Hook{
-		db.HookPreToolUse: {{Type: "command", Matcher: "Bash,PowerShell", Command: "sqz hook claude", TimeoutSec: 30}},
+		db.HookPreToolUse: {
+			{Type: "command", Matcher: "Bash,PowerShell", Command: "sh -c 'exit 0'", TimeoutSec: 30},
+			// Its program is not installed: left out instead of failing every call.
+			{ID: "HOK-missing", Type: "command", Matcher: "Bash", Command: "tionharness-no-such-hook-tool run", TimeoutSec: 30},
+		},
 	}}
 	path, cleanup, err := WriteSettings(context.Background(), h, []string{"Task"}, "max")
 	if err != nil {
@@ -264,7 +268,7 @@ func TestWriteSettingsHooksAndEffort(t *testing.T) {
 		t.Errorf("permissions = %+v", set.Permissions)
 	}
 	rules := set.Hooks[db.HookPreToolUse]
-	if len(rules) != 1 || rules[0].Matcher != MatcherRegex("Bash,PowerShell") || rules[0].Hooks[0].Command != HookCommand("sqz hook claude") {
+	if len(rules) != 1 || rules[0].Matcher != MatcherRegex("Bash,PowerShell") || rules[0].Hooks[0].Command != HookCommand("sh -c 'exit 0'") {
 		t.Errorf("hook rules = %+v", rules)
 	}
 

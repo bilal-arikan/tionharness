@@ -317,6 +317,12 @@ func traceStepToTurnStep(t providers.TraceStep) TurnStep {
 		AfterTokens:   t.AfterTokens,
 		Trigger:       t.Trigger,
 	}
+	// The claude-cli parser measures tool latency into DurMs only (codex and
+	// opencode mirror it into DurationMs); without this fallback every claude-cli
+	// tool step persisted with no duration, so slow tools were invisible.
+	if st.DurationMs == 0 && st.Kind == StepTool {
+		st.DurationMs = t.DurMs
+	}
 	if st.Kind == StepTool && !st.IsError && isChecklistTool(tool) {
 		if todos := todoStepItems(t.Input, t.Output); len(todos) > 0 {
 			st.Kind = StepTodo

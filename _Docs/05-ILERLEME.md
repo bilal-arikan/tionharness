@@ -9,6 +9,28 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## SES745 incelemesi: uyku engelleme, eksik programlı hook, alt-ajan profili, araç süreleri (2026-10-23)
+
+WS3 PM'in (claude-cli, Sonnet 5.5) 49 dakikalık iş turu 04:02–08:10 arasında yaklaşık 4 saat
+sürdü. `pmset` kaydı: Mac pildeydi (%15 → %8) ve derin uykudaydı; yalnız ~15 dakikada bir
+~20 sn bakım uyanmalarında ilerledi. Altı `Bash` çağrısı claude-cli tarafından "no response or
+progress for 690–940s" ile kesildi (uyku süreleriyle birebir); Docker VM saati 15 dk kaydı ve
+saate bağlı testler düştü.
+
+1. **Uyku engelleme:** `internal/app/keepawake.go` — çalışan iş varken (`Server.AnyWorkspaceRunning`)
+   macOS'ta `caffeinate -i -w <pid>`, Linux'ta `systemd-inhibit --what=idle:sleep` tutar, iki boş
+   yoklamadan sonra bırakır. Kapak kapalı + pil uykusunu hiçbir yazılım engelleyemez.
+2. **Eksik programlı hook:** WS3'teki HOK1 (`sqz hook claude`, PreToolUse) her `Bash` çağrısında exit
+   127 verip transkripte hata satırı yazıyordu (~70 kez); `sqz` kurulu değil. HOK1 kapatıldı, WS3
+   `shellOutputCompression` `off` yapıldı. Kod: `climcp.HookExecutableMissing` — programı PATH'te
+   olmayan komut hook'u CLI ayarlarına yazılmaz, bir kez uyarı loglanır.
+3. **Alt-ajan profili:** PM önce silinmiş "FootballOracle Validator Codex"i, sonra kabuğu olmayan
+   `reviewer`'ı seçti (testleri çalıştıramadı → FAIL → tekrar). `run_subagent` açıklaması profil
+   yeteneklerini yazıyor (`reviewer` kabuksuz, `validator` test çalıştırır); bilinmeyen hedef hatası
+   çalıştırılabilir workspace ajanlarını listeler.
+4. **Araç süreleri:** claude-cli ayrıştırıcısı araç gecikmesini yalnız `DurMs`'e yazıyordu; kalıcı
+   adımda `durationMs` hep 0'dı. `traceStepToTurnStep` `DurMs`'e geri düşer.
+
 ## WS3 verim incelemesi: alt-ajan zaman aşımı, codex dosya araçları, toplu pano işlemleri (2026-10-19)
 
 WS3 PM turu (SES681, codex gpt-6.1-sol) 82 dk sürdü: 254 araç çağrısı, 46,2M cache-read token;

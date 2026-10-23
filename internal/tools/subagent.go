@@ -136,17 +136,17 @@ func (RunSubagentTool) Def() providers.ToolDef {
 		Description: "Delegate a self-contained task to an isolated subagent and get back ONLY its final " +
 			"result — its intermediate tool output never enters your context.\n" +
 			"`target` is a built-in " +
-			"profile (\"explore\" read-only search, \"planner\" read-only planning, \"coder\" edits code, " +
-			"\"reviewer\" read-only review) " +
+			"profile (\"explore\" read-only search, \"planner\" read-only planning, \"coder\" edits code and " +
+			"runs commands, \"reviewer\" read-only code review — no shell, cannot run tests, \"validator\" " +
+			"independent verification that reads AND runs tests/commands) " +
 			"or an existing agent's name/id. Default context: isolated. The call BLOCKS until the subagent " +
-			"finishes. Call several times in one turn to fan work out in parallel. A long run can hit the " +
-			"tool-call timeout, so split long work into several smaller self-contained subagent calls; for " +
+			"finishes. Call several times in one turn to fan work out in parallel. For " +
 			"genuinely long-running work, use `spawn_session` (fire-and-forget). Set `objective`/`output_format`/`boundaries` for best results — vague " +
 			"tasks cause gaps.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "target": { "type": "string", "description": "Profile id (\"explore\" | \"planner\" | \"coder\" | \"reviewer\") or an existing agent's name/id." },
+    "target": { "type": "string", "description": "Profile id (\"explore\" | \"planner\" | \"coder\" | \"reviewer\" (read-only, no shell) | \"validator\" (reads and runs tests)) or an existing agent's name/id." },
     "task": { "type": "string", "description": "A clear, self-contained instruction. The subagent sees nothing of your context unless context=inherited." },
     "context": { "type": "string", "enum": ["isolated", "inherited"], "description": "\"isolated\" (default): clean context. \"inherited\": also pass the current conversation." },
     "model": { "type": "string", "description": "Optional model id override." },

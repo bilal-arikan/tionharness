@@ -535,7 +535,35 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 	if p, ok := r.subagentProfile(target); ok {
 		return r.ephemeralSubagent(caller, p), true, nil
 	}
-	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer|validator|config)", target)
+	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|planner|coder|reviewer|validator|config)%s", target, r.subagentAgentHint(ctx))
+}
+
+// subagentAgentHint lists the workspace agents a run_subagent target may name,
+// so a call that names a deleted or misspelled agent can be corrected in one
+// step instead of falling back to a profile that may lack the needed tools
+// (WS3 SES745 asked for a deleted agent, then a reviewer that could not run tests).
+func (r *Runtime) subagentAgentHint(ctx context.Context) string {
+	agents, err := r.db.ListAgents(ctx)
+	if err != nil {
+		return ""
+	}
+	var names []string
+	for _, a := range agents {
+		if a.System || a.RunnableErr() != nil {
+			continue
+		}
+		names = append(names, a.Name)
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	const maxNames = 20
+	more := ""
+	if len(names) > maxNames {
+		more = fmt.Sprintf(", … (%d more; see list_agents)", len(names)-maxNames)
+		names = names[:maxNames]
+	}
+	return "; workspace agents: " + strings.Join(names, ", ") + more
 }
 
 func (r *Runtime) ephemeralSubagent(caller db.Agent, p SubagentProfile) db.Agent {
