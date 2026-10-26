@@ -2,7 +2,6 @@ package providers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -67,7 +66,7 @@ type CLISession struct {
 	watch  *procwatch.Handle
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
-	stderr *bytes.Buffer
+	stderr *syncBuffer // os/exec writes it from its own goroutine while Turn reads it
 	// lines is fed by the ONE reader goroutine of this process (startReader). It
 	// used to be a goroutine per Turn over the shared bufio.Reader: the previous
 	// turn's goroutine stayed blocked in ReadString after delivering its result and
@@ -125,6 +124,10 @@ type sessionReadItem struct {
 // session mutex indefinitely (the user's Stop button did nothing). Any watchdog
 // firing tears the process down and marks the session closed, so the pool drops it
 // instead of handing the next turn a dead pipe.
+// errSessionAlreadyEnded: the warm process exited between turns, before this
+// turn wrote anything. Nothing was sent, so the pool may cold-start in place.
+var errSessionAlreadyEnded = errors.New("cli session stream already ended")
+
 func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEvent func(TraceStep)) (*Response, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -140,7 +143,7 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEve
 		select {
 		case it := <-s.lines:
 			if it.err != nil {
-				return nil, fmt.Errorf("cli session stream already ended: %v %s", it.err, strings.TrimSpace(s.stderr.String()))
+				return nil, fmt.Errorf("%w: %v %s", errSessionAlreadyEnded, it.err, strings.TrimSpace(s.stderr.String()))
 			}
 		default:
 			drained = true
@@ -380,22 +383,20 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	args = append(args, c.mcpArgs()...)
 	args = append(args, nativeToolArgs(req)...)
 
-	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
+	// The process outlives the turn that starts it — that is the point of a warm
+	// session — so it must NOT be bound to the turn's ctx: it was, and every turn's
+	// end killed it, so the next turn found a dead pipe and fell back to one-shot
+	// (2026-10-27). A cancelled turn still kills it (CLISession.Turn handles
+	// ctx.Done); otherwise the pool's Close / EvictIdle / Drop end it.
+	cmd := proc.CommandContextNested(context.WithoutCancel(ctx), c.binPath, args...)
 	// Persistent process: its MCP servers and tool subprocesses inherit the pipes,
 	// so tear the whole tree down on cancellation instead of orphaning them.
 	proc.TreeKill(cmd)
-	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
-	// Thinking parity with the one-shot path: "Kapalı" disables thinking for the
-	// whole persistent process (MAX_THINKING_TOKENS=0; restores ≥2.1.203 parallel
-	// tool batching — see Request.DisableThinking). Safe to pin at launch: the
-	// pool key is per (session, agent), so the agent's level is stable for the
-	// process lifetime.
-	if req.DisableThinking && claude55Tier(model) != "opus" {
-		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
-	}
-	// Native subagent menu is part of the launch fingerprint, so pinning it for
-	// the process lifetime is as safe as the thinking flag above.
-	cmd.Env = append(cmd.Env, nativeSubagentEnv(req)...)
+	// Same environment as a one-shot turn (config home, credential, MCP timeouts,
+	// thinking/effort, native subagents). Pinned for the process lifetime; every
+	// input that shapes it is part of persistentFingerprint, so a change restarts
+	// the process instead of reusing a stale one.
+	cmd.Env = c.turnEnv(req, model)
 	if req.WorkDir != "" {
 		if fi, statErr := os.Stat(req.WorkDir); statErr == nil && fi.IsDir() {
 			cmd.Dir = req.WorkDir
@@ -415,7 +416,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 		}
 		return nil, oerr
 	}
-	var stderr bytes.Buffer
+	var stderr syncBuffer
 	cmd.Stderr = &stderr
 	if serr := cmd.Start(); serr != nil {
 		if sysPath != "" {
@@ -471,6 +472,10 @@ func (c *ClaudeCLI) persistentFingerprint(req Request, sys string) string {
 	fmt.Fprintln(h, strings.Join(c.disallowedTools, ","))
 	fmt.Fprintln(h, req.CLIRestrictNativeTools, strings.Join(req.CLINativeTools, ","))
 	fmt.Fprintln(h, req.CLINativeSubagents)
+	// The launch environment (turnEnv): config home, credential (hashed, never
+	// stored), thinking switch and the max-effort env channel.
+	fmt.Fprintln(h, c.configDir, c.authKind, fmt.Sprintf("%x", sha256.Sum256([]byte(c.authToken))))
+	fmt.Fprintln(h, req.DisableThinking, strings.EqualFold(req.CLIEffortLevel, "max"))
 	fmt.Fprintln(h, sys)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
@@ -575,6 +580,18 @@ func (pl *CLISessionPool) Turn(ctx context.Context, key string, c *ClaudeCLI, re
 	}
 
 	resp, err := sess.Turn(ctx, prompt, req, onEvent)
+	if err != nil && !cold && errors.Is(err, errSessionAlreadyEnded) {
+		// The warm process died between turns and this turn sent nothing yet:
+		// cold-start a fresh one now instead of failing over to one-shot.
+		pl.log(slog.LevelInfo, "cli persistent session found dead between turns; cold-restarting", "key", key)
+		pl.mu.Lock()
+		if pl.sessions[key] == sess {
+			delete(pl.sessions, key)
+		}
+		pl.mu.Unlock()
+		sess.Close()
+		return pl.Turn(ctx, key, c, req, onEvent)
+	}
 	if err != nil {
 		pl.mu.Lock()
 		if pl.sessions[key] == sess {

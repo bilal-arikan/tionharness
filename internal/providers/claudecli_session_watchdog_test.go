@@ -2,7 +2,6 @@ package providers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -24,7 +23,7 @@ func newTestCLISession(t *testing.T) (*CLISession, *io.PipeWriter) {
 	return &CLISession{
 		stdin:  inW,
 		stdout: bufio.NewReader(outR),
-		stderr: &bytes.Buffer{},
+		stderr: &syncBuffer{},
 		model:  "test-model",
 	}, outW
 }

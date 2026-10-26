@@ -2,7 +2,6 @@ package providers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -40,7 +39,7 @@ func newRespondingCLISession(t *testing.T, reply string) *CLISession {
 	return &CLISession{
 		stdin:  inW,
 		stdout: bufio.NewReader(outR),
-		stderr: &bytes.Buffer{},
+		stderr: &syncBuffer{},
 		model:  "test-model",
 	}
 }

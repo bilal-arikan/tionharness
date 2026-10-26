@@ -9,6 +9,33 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## claude-cli kalıcı oturumu hiç ısınamıyordu: yanlış login + tur sonunda öldürülme (2026-10-27)
+
+10-25'ten beri her claude-cli turunda kalıcı (warm) süreç anında "OAuth session expired and could
+not be refreshed" ile düşüp tek seferlik yola geri dönüyordu (42 kez; SES745'te 14 soğuk başlangıç):
+warm oturumun önbellek kazancı hiç alınmadı, her tur tam önek yeniden gönderildi. Neden:
+`startPersistent` ortamı yalnız `cliBaseEnv` + düşünme/alt-ajan bayraklarıyla kuruyordu;
+`CLAUDE_CONFIG_DIR`, yapılandırılmış kimlik bilgisi, `MCP_TOOL_TIMEOUT`/`MCP_TIMEOUT` ve
+`CLAUDE_CODE_EFFORT_LEVEL=max` yoktu. Süreç TionHarness'in `claude-home` girişi yerine ortamdaki
+`~/.claude` girişini kullanıyordu; o oturum 10-25'te düşünce her tur başarısız oldu. Düzeltme:
+`ClaudeCLI.turnEnv` iki başlatma yolunun tek ortam kaynağı; kalıcı süreç parmak izi config dizinini,
+kimlik bilgisinin özetini ve düşünme/efor bayraklarını da kapsar. Test:
+`TestPersistentSessionUsesTurnEnv`.
+
+Not: günlükte bu geri düşüş 2026-10-02'den beri vardı (454 kez); 10-25 yalnız bu oturumda fark
+edildiği tarih. Login düzelince ikinci bir hata çıktı: kalıcı süreç ilk turun `ctx`'ine bağlı
+başlatılıyordu (`proc.CommandContextNested(ctx, …)`), tur bitince öldürülüyor, sonraki tur ölü boruya
+yazıp yine tek seferliğe düşüyordu. Süreç artık `context.WithoutCancel(ctx)` ile başlar (iptal edilen
+tur onu `CLISession.Turn` içinde yine öldürür; havuz Close/EvictIdle/Drop bitirir) ve turlar arasında
+ölmüş bir süreç aynı turda yeniden başlatılır (`errSessionAlreadyEnded`). Ayrıca warm oturumun
+stderr'i `bytes.Buffer` yerine `syncBuffer` (os/exec yazarken `Turn` okuyordu; veri yarışı).
+Test: `TestWarmSessionOutlivesItsTurn` (-race). Canlı: iki turluk deneme oturumunda ikinci tur
+warm süreci yeniden kullandı.
+
+Aynı incelemede `session.json` başlığındaki `messageCount: 0` / eski `updatedAt` hata değil: mesajlar
+satır olarak eklenir, başlık bilerek bayat kalır ve yüklemede/bellekte doğru hesaplanır; API doğru
+sayıları döndürüyor.
+
 ## SES745 incelemesi: uyku engelleme, eksik programlı hook, alt-ajan profili, araç süreleri (2026-10-23)
 
 WS3 PM'in (claude-cli, Sonnet 5.5) 49 dakikalık iş turu 04:02–08:10 arasında yaklaşık 4 saat

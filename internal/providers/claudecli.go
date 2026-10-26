@@ -775,59 +775,7 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// open and cmd.Wait below never returns. TreeKill reaps the whole tree on
 	// cancellation and caps Wait with a WaitDelay backstop.
 	proc.TreeKill(cmd)
-	// Enable the CLI's threshold-based MCP tool search (claude-cli 2.1.x+): tool
-	// schemas that fit within 10% of the context window are inlined and only the
-	// overflow is deferred. Combined with the core interaction server's alwaysLoad
-	// flag, the eager tier (Bash, ask_user, ...) is always present while the extended
-	// self-management surface is lazily discovered via ToolSearch. Inherit the parent
-	// environment and append the flag (cmd.Env nil would otherwise drop it).
-	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
-	// Long sync run_subagent calls (a delegated agent reads files, runs tests, ...)
-	// can exceed the CLI's default 60s MCP tool-call timeout, surfacing to the caller
-	// as "The operation timed out." Give MCP tool calls and server startup generous
-	// headroom so sync delegation completes in-band. Only fill defaults the parent
-	// env didn't already provide, so a user override still wins. Values are ms.
-	//
-	// A sync run_subagent waits for a whole delegated run; 15 minutes cut live
-	// delegations measured at 17-22 minutes (2026-10-18) and lost their results.
-	// claude-cli has one global MCP tool timeout, so it follows the Interaction
-	// server's ceiling (InteractionToolTimeoutSec). The caller's ctx (user stop,
-	// turn cancellation) still bounds every call.
-	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TOOL_TIMEOUT", strconv.Itoa(InteractionToolTimeoutSec*1000))
-	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TIMEOUT", "60000")
-	// Thinking parity: "Kapalı" turns extended thinking fully off in the CLI
-	// (MAX_THINKING_TOKENS=0). Also restores parallel tool batching on claude-code
-	// ≥2.1.203 ("think XOR batch") — see Request.DisableThinking.
-	// Opus 5.5 requires adaptive thinking, so never force it off here.
-	if req.DisableThinking && claude55Tier(model) != "opus" {
-		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
-	}
-	cmd.Env = append(cmd.Env, nativeSubagentEnv(req)...)
-	// Max effort parity: Claude Code's settings.json effortLevel enum rejects "max"
-	// (it silently downgrades to high the moment the session touches /effort or
-	// /model), so the --settings file can only carry up to xhigh. The env var is
-	// the only channel the CLI honours for max reasoning — see Request.CLIEffortLevel.
-	if strings.EqualFold(req.CLIEffortLevel, "max") {
-		cmd.Env = append(cmd.Env, "CLAUDE_CODE_EFFORT_LEVEL=max")
-	}
-	// Isolated config home: point the CLI at a clean CLAUDE_CONFIG_DIR so its
-	// skills/settings/commands/global CLAUDE.md/login come from there instead of the
-	// shared ~/.claude. Appended last so it overrides any inherited value.
-	if c.configDir != "" {
-		cmd.Env = append(cmd.Env, "CLAUDE_CONFIG_DIR="+c.configDir)
-	}
-	// Inject the configured credential so an isolated config dir authenticates
-	// without an interactive in-dir login. Per the CLI's auth precedence,
-	// ANTHROPIC_API_KEY outranks the OAuth token, so we set exactly one. Appended
-	// last → overrides any inherited value.
-	if c.authToken != "" {
-		switch c.authKind {
-		case "oauth":
-			cmd.Env = append(cmd.Env, "CLAUDE_CODE_OAUTH_TOKEN="+c.authToken)
-		case "apikey":
-			cmd.Env = append(cmd.Env, "ANTHROPIC_API_KEY="+c.authToken)
-		}
-	}
+	cmd.Env = c.turnEnv(req, model)
 	// Run inside the workspace sandbox so relative paths (e.g. an attachment's
 	// "uploads/<sid>/<file>") resolve there rather than the backend's launch
 	// directory. Only set when the dir exists; otherwise inherit the default cwd.
@@ -1114,4 +1062,69 @@ func stdoutCrashTail(lines []string) string {
 		return "(no stderr and empty stdout — CLI exited without output)"
 	}
 	return "stdout-tail: " + out
+}
+
+// turnEnv is the environment of every claude-cli turn process, one-shot and
+// persistent alike: tool search, MCP timeouts, thinking/effort parity, the
+// native-subagent menu, the isolated config home and the configured credential.
+// One function so the two launch paths cannot drift — the persistent path used
+// to set only the first few, so it ran against the ambient ~/.claude login
+// instead of TionHarness's claude-home and failed every turn once that login
+// expired (WS3, 2026-10-25), and it never got the MCP tool timeout either.
+func (c *ClaudeCLI) turnEnv(req Request, model string) []string {
+	var env []string
+	// Enable the CLI's threshold-based MCP tool search (claude-cli 2.1.x+): tool
+	// schemas that fit within 10% of the context window are inlined and only the
+	// overflow is deferred. Combined with the core interaction server's alwaysLoad
+	// flag, the eager tier (Bash, ask_user, ...) is always present while the extended
+	// self-management surface is lazily discovered via ToolSearch. Inherit the parent
+	// environment and append the flag (env nil would otherwise drop it).
+	env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
+	// Long sync run_subagent calls (a delegated agent reads files, runs tests, ...)
+	// can exceed the CLI's default 60s MCP tool-call timeout, surfacing to the caller
+	// as "The operation timed out." Give MCP tool calls and server startup generous
+	// headroom so sync delegation completes in-band. Only fill defaults the parent
+	// env didn't already provide, so a user override still wins. Values are ms.
+	//
+	// A sync run_subagent waits for a whole delegated run; 15 minutes cut live
+	// delegations measured at 17-22 minutes (2026-10-18) and lost their results.
+	// claude-cli has one global MCP tool timeout, so it follows the Interaction
+	// server's ceiling (InteractionToolTimeoutSec). The caller's ctx (user stop,
+	// turn cancellation) still bounds every call.
+	env = ensureEnvDefault(env, "MCP_TOOL_TIMEOUT", strconv.Itoa(InteractionToolTimeoutSec*1000))
+	env = ensureEnvDefault(env, "MCP_TIMEOUT", "60000")
+	// Thinking parity: "Kapalı" turns extended thinking fully off in the CLI
+	// (MAX_THINKING_TOKENS=0). Also restores parallel tool batching on claude-code
+	// ≥2.1.203 ("think XOR batch") — see Request.DisableThinking.
+	// Opus 5.5 requires adaptive thinking, so never force it off here.
+	if req.DisableThinking && claude55Tier(model) != "opus" {
+		env = append(env, "MAX_THINKING_TOKENS=0")
+	}
+	env = append(env, nativeSubagentEnv(req)...)
+	// Max effort parity: Claude Code's settings.json effortLevel enum rejects "max"
+	// (it silently downgrades to high the moment the session touches /effort or
+	// /model), so the --settings file can only carry up to xhigh. The env var is
+	// the only channel the CLI honours for max reasoning — see Request.CLIEffortLevel.
+	if strings.EqualFold(req.CLIEffortLevel, "max") {
+		env = append(env, "CLAUDE_CODE_EFFORT_LEVEL=max")
+	}
+	// Isolated config home: point the CLI at a clean CLAUDE_CONFIG_DIR so its
+	// skills/settings/commands/global CLAUDE.md/login come from there instead of the
+	// shared ~/.claude. Appended last so it overrides any inherited value.
+	if c.configDir != "" {
+		env = append(env, "CLAUDE_CONFIG_DIR="+c.configDir)
+	}
+	// Inject the configured credential so an isolated config dir authenticates
+	// without an interactive in-dir login. Per the CLI's auth precedence,
+	// ANTHROPIC_API_KEY outranks the OAuth token, so we set exactly one. Appended
+	// last → overrides any inherited value.
+	if c.authToken != "" {
+		switch c.authKind {
+		case "oauth":
+			env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+c.authToken)
+		case "apikey":
+			env = append(env, "ANTHROPIC_API_KEY="+c.authToken)
+		}
+	}
+	return env
 }
