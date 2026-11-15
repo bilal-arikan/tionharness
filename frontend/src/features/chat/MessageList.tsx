@@ -22,6 +22,7 @@ import { useTranscriptWindow } from './useTranscriptWindow'
 import { TranscriptPaging, type TranscriptPagingState } from './TranscriptPaging'
 import { CACHE_TTL_SEC } from '@/features/sessions/sessionDetailFormat'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 const SNOWFLAKE = String.fromCodePoint(0x2744, 0xfe0f)
 
@@ -685,7 +686,7 @@ function CLIColdStartDivider() {
 }
 
 // formatGap renders a between-messages gap in hours/days (it is always > 1h here).
-function formatGap(sec: number, t: (key: string, options?: { count: number }) => string): string {
+function formatGap(sec: number, t: TFunction<'chat'>): string {
   const h = Math.floor(sec / 3600)
   if (h < 24) return t('messageList.hours', { count: h })
   const d = Math.floor(h / 24)

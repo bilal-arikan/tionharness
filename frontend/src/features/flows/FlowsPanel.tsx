@@ -499,7 +499,7 @@ export function FlowsPanel({ agents, onError, tab: tabProp, onTabChange, onOpenS
                 {problems.length > 0 && (
                   <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 rounded-md border border-[var(--color-warning)]/50 bg-[var(--color-surface)] px-3 py-1.5 text-[11px] text-[var(--color-warning)] shadow-[var(--shadow-md)]">
                     {problems.slice(0, 3).map((p, i) => (
-                      <div key={i}>{t(p.key, p.params)}</div>
+                      <div key={i}>{t(p.key, p.params ?? {})}</div>
                     ))}
                   </div>
                 )}

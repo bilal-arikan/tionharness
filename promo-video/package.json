@@ -14,14 +14,14 @@
     "render:flows": "npm run music:flows && remotion render FlowsOverview out/flows/1-flows.mp4 && remotion render FlowsEvolution out/flows/2-evolution.mp4 && remotion render FlowsJev out/flows/3-jev-automation.mp4"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.532",
-    "@remotion/google-fonts": "4.0.532",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "remotion": "4.0.532"
+    "@remotion/cli": "4.0.543",
+    "@remotion/google-fonts": "4.0.543",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.543"
   },
   "devDependencies": {
-    "@types/react": "19.1.8",
-    "typescript": "5.8.3"
+    "@types/react": "19.3.0",
+    "typescript": "5.9.3"
   }
 }
