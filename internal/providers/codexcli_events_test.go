@@ -447,6 +447,10 @@ func TestCodexParserWebSearchAndTodoList(t *testing.T) {
 	if resp.Trace[0].Tool != "web_search" || resp.Trace[0].Output != "search: golang json flatten" {
 		t.Errorf("step 0 = %+v", resp.Trace[0])
 	}
+	// The query rides the step input too, so the chat card header names it.
+	if got, want := string(resp.Trace[0].Input), `{"action":"search","query":"golang json flatten"}`; got != want {
+		t.Errorf("step 0 input = %s, want %s", got, want)
+	}
 	if resp.Trace[1].Tool != "todo_list" || resp.Trace[1].Output != "[x] read contract\n[ ] write parser" {
 		t.Errorf("step 1 = %+v", resp.Trace[1])
 	}

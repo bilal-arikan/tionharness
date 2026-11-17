@@ -47,7 +47,14 @@ Kaldırılanlar:
    (`climcp.shellFamily`, `cliHost.ShellAllowed`).
 5. **codex-cli / opencode-cli:** codex'e `[features] shell_tool = false` hiç yazılmaz ve köprülü
    `Read/LS/Glob/Grep/Write/Edit` artık verilmez (2026-10-19'daki `BridgeTools` kararı geri
-   alındı; codex kendi kabuğu + `apply_patch` ile çalışır), köprülü `WebFetch`/`WebSearch` kalır.
+   alındı; codex kendi kabuğu + `apply_patch` ile çalışır). Aynı gün köprülü `WebFetch`/`WebSearch`
+   de kaldırıldı: codex web için yalnız kendi `web_search`'ünü (`"live"`: arama + sayfa açma) kullanır;
+   claude-cli ve opencode-cli zaten kendi web araçlarını kullanıyordu. `claudeOnlyBridgeExclusions` /
+   `cliBridgeExcludes` silindi (test: `TestBridgeToolsNoWebTools`,
+   `TestCatalogDisplayNameWebToolsAreWithheldFromCLIs`). Ajanın web araması kapalıysa artık hiç
+   web aracı yoktur. Sohbet kartları: `WebSearch`/`websearch`/`web_search` artık arama ikonu alır
+   (`toolIcons.ts`); codex `web_search` adımı sorguyu girdi olarak da taşır, böylece kart başlığı
+   sorguyu/URL'yi gösterir (codex sonuç metnini akışta göndermez, yalnız `search:`/`open:` görünür).
    opencode'un `bash`'i artık kapatılmaz. İki CLI de kabuğu araç bazında daraltamadığı için araç
    filtresinde `Bash` olmayan ajan `read-only` izin moduna zorlanır (codex `-s read-only`;
    opencode read-only bash/edit/write/patch'i reddeder) — `toolLoopTurn.prepare`.

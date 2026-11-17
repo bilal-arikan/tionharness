@@ -12,8 +12,9 @@
 > **Kabuk güncellemesi (2026-11-17):** TionHarness'in kendi (köprülü) kabuğu kaldırıldı.
 > Codex artık **daima kendi native kabuğunu** (`shell`/`unified_exec`) ve `apply_patch`'i
 > kullanır: `[features] shell_tool = false` hiç yazılmaz, köprülü `Read`/`LS`/`Glob`/
-> `Grep`/`Write`/`Edit` codex'e verilmez (köprüden `WebFetch`/`WebSearch` ve diğer
-> TionHarness araçları gelmeye devam eder). Araç filtresi `Bash`'i kabul etmeyen ajan
+> `Grep`/`Write`/`Edit` codex'e verilmez. Aynı gün köprülü `WebFetch`/`WebSearch` de
+> kaldırıldı: codex'in tek web yolu kendi `web_search`'üdür (`"live"`, arama + sayfa
+> açma); diğer TionHarness araçları köprüden gelmeye devam eder. Araç filtresi `Bash`'i kabul etmeyen ajan
 > (salt-okur explore/planner/reviewer profilleri) izin modu zorla `read-only` yapılarak
 > `-s read-only` ile koşar (`internal/agent/toolloop_phases.go` `prepare`). Gözetimsiz
 > turlar (otonom + `autonomousConfine`) `GIT_CONFIG_*` env'iyle commit/tag imzalamayı
@@ -21,7 +22,7 @@
 > kuralının codex karşılığı **yoktur** (bilinen boşluk). Aşağıdaki "native shell
 > kapalı / köprülü shell" anlatımları bu tarihten önceki durumu anlatır.
 
-> **Özet (2026-11-17):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. **2026-11-17:** TionHarness'in kendi kabuğu kaldırıldı; codex daima kendi kabuğunu + `apply_patch`'i kullanır (köprülü dosya araçları verilmez, `WebFetch`/`WebSearch` köprüsü kalır), `Bash`'siz araç filtresi `-s read-only` demektir, gözetimsiz turlarda git imzalama kapatılır ama `git push` freni yoktur. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`. `codexStdoutIdleSec` varsayılanı 90→300 sn (codex exec muhakeme boyunca sessizdir), koordinatör spawn iddiası guard'ı kaldırıldı. Sahipsiz resume home'lar artık periyodik çöp toplayıcıyla siliniyor (§4).
+> **Özet (2026-11-17):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. **2026-11-17:** TionHarness'in kendi kabuğu kaldırıldı; codex daima kendi kabuğunu + `apply_patch`'i kullanır (köprülü dosya ve web araçları verilmez; web için codex'in kendi `web_search`'ü kullanılır), `Bash`'siz araç filtresi `-s read-only` demektir, gözetimsiz turlarda git imzalama kapatılır ama `git push` freni yoktur. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`. `codexStdoutIdleSec` varsayılanı 90→300 sn (codex exec muhakeme boyunca sessizdir), koordinatör spawn iddiası guard'ı kaldırıldı. Sahipsiz resume home'lar artık periyodik çöp toplayıcıyla siliniyor (§4).
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
 > yaklaşımı OpenAI **Codex CLI** için de kurabilir miyiz?
@@ -860,6 +861,14 @@ korunabiliyor (kapatılabilir), dosya-shell tarafı native kalıyor.**
 
 **Web araçları codex'e köprüleniyor (2026-08-28).** claude-cli'nin aksine codex'in
 **native `WebFetch`'i hiç yok** ve kendi `web_search`'ü varsayılan **kapalı** — ikisi
+> **Kaldırıldı (2026-11-17):** codex'e köprülenen `WebFetch`/`WebSearch` çıkarıldı.
+> Bu köprü, codex'in kendi aramasının kapalı olduğu döneme aitti; bugün ajan web
+> aramasını açıkken `web_search = "live"` yazılır ve codex bununla hem arar hem
+> sayfa açar (`action: "open"`). Ham içerik gerektiğinde codex'in kendi kabuğu
+> (`curl`) kullanılır. `claudeOnlyBridgeExclusions` / `cliBridgeExcludes` silindi;
+> `WebFetch`/`WebSearch` artık her CLI için `cliLazyBridgeExcluded`'dadır. Aşağıdaki
+> paragraf tarihsel kayıttır.
+
 birden verilmeyince ajan web erişimsiz kalıp kaynak uyduruyordu. Bu yüzden
 `Runtime.BridgeTools` codex-cli için `WebFetch` + `WebSearch`'ü Interaction MCP
 köprüsüne açıkça ekliyor (`internal/agent/runtime.go`); claude-cli'de ikisi de
@@ -898,8 +907,8 @@ model alanı `*bool`'dur — düz `bool` + `omitempty` ile mevcut ajan dosyalar�
 yüklenince sessizce kapanırdı (bkz. `_Docs/11-INTERACTION-MCP.md`).
 
 - **Açık (varsayılan):** config'e bu konuda **hiçbir satır yazılmaz**.
-- **Kapalı (açık `false`):** `web_search = false` yazılır; arama yalnız köprülenen
-  `WebSearch`/`WebFetch` araçlarından geçer.
+- **Kapalı (açık `false`):** `web_search = "disabled"` yazılır; 2026-11-17'den beri
+  köprülü web aracı da olmadığından ajanın web erişimi yoktur.
 
 Açıkken satır yazılmamasının nedeni: `web_search = true`'nun desteklendiği
 kanıtlanmadı ve tur `--strict-config` ile koşuyor — bilinmeyen bir değer tüm turu

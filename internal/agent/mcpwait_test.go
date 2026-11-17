@@ -304,7 +304,7 @@ func TestWaitForMCPServersWarmsCallerScopedSlot(t *testing.T) {
 // reporting a state it cannot observe.
 func TestWaitForMCPServersWithheldFromCLIBridge(t *testing.T) {
 	for _, provider := range []string{"", providerKindCodexCLI} {
-		if !cliBridgeExcludes("wait_for_mcp_servers", provider) {
+		if _, ok := catalogDisplayName("wait_for_mcp_servers", provider); ok {
 			t.Errorf("provider %q: wait_for_mcp_servers must be excluded from the CLI bridge", provider)
 		}
 	}

@@ -356,7 +356,7 @@ func TestReadMCPResourceUnsupportedServer(t *testing.T) {
 func TestMCPResourceToolsWithheldFromCLIBridge(t *testing.T) {
 	for _, provider := range []string{"", providerKindCodexCLI} {
 		for _, name := range []string{"list_mcp_resources", "read_mcp_resource"} {
-			if !cliBridgeExcludes(name, provider) {
+			if _, ok := catalogDisplayName(name, provider); ok {
 				t.Errorf("provider %q: %s must be excluded from the CLI bridge", provider, name)
 			}
 		}

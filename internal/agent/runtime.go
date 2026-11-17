@@ -963,18 +963,9 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent, autonomous ..
 	if r.settingsBridge != nil {
 		extra = append(extra, tools.NewUpdateUserPreferencesTool(r.settingsBridge).Def())
 	}
-	//   - WebFetch / WebSearch : codex-cli ONLY. Unlike claude-cli, codex ships no
-	//     native WebFetch at all and its own web_search is OFF by default, so a codex
-	//     agent that is given neither ends up with no web access and starts inventing
-	//     sources. Both are eager built-ins (never in BridgeableDefs, and WebFetch is
-	//     in tools.bridgeExcluded), so they are advertised here explicitly and
-	//     dispatched by name through reg.Call below, exactly like the other extras.
-	//     claude-cli is deliberately untouched — it keeps using its own natives.
-	//     Files are codex's own business: its native shell and apply_patch read and
-	//     edit the tree, so no TionHarness file tool is bridged to it.
-	if r.agentProviderKind(agent) == providerKindCodexCLI {
-		extra = append(extra, tools.NewWebFetchTool().Def(), tools.NewWebSearchTool(r.vault).Def())
-	}
+	// No CLI gets TionHarness's web or file tools over the bridge: claude-cli and
+	// opencode-cli ship WebSearch/WebFetch, codex-cli's web_search ("live") searches
+	// and opens pages, and every CLI reads and edits the tree with its own tools.
 	for _, d := range extra {
 		if allow == nil || allow(d.Name) {
 			defs = append(defs, d)

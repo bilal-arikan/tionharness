@@ -110,8 +110,10 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   bash: SquareTerminal,
   terminal: SquareTerminal,
 
-  // web
+  // web (claude-cli WebFetch/WebSearch, opencode webfetch/websearch, codex web_search)
   webfetch: Globe,
+  websearch: Search,
+  web_search: Search,
   http_get: Globe,
   http_request: Globe,
 

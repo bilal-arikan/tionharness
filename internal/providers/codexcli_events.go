@@ -363,7 +363,7 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 			IsError: it.Error != nil || it.Status == "failed" || (it.Result != nil && it.Result.IsError),
 		})
 	case "web_search":
-		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "web_search", Output: webSearchStepOutput(it)})
+		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "web_search", Input: webSearchStepInput(it), Output: webSearchStepOutput(it)})
 	case "todo_list":
 		// Input carries the list in todo_write's {"todos":[{content,status}]} shape so
 		// the agent layer can promote the step to a checklist card and mirror it into
@@ -688,6 +688,27 @@ func hasUnifiedDiffFileHeader(diff string) bool {
 // item carries the query AND an action ("search", "open", …); showing only the
 // query made a page-open step look like a search for a URL, so both are surfaced
 // when the action is present ("search: golang generics").
+// webSearchStepInput carries the query (a search string, or the URL an "open"
+// action loads) as the step input, so the chat card's header names it the way
+// it names a claude-cli WebSearch/WebFetch call. Nil when the item has neither.
+func webSearchStepInput(it *codexItem) json.RawMessage {
+	in := map[string]string{}
+	if q := strings.TrimSpace(it.Query); q != "" {
+		in["query"] = q
+	}
+	if a := strings.TrimSpace(it.Action); a != "" {
+		in["action"] = a
+	}
+	if len(in) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(in)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 func webSearchStepOutput(it *codexItem) string {
 	query := strings.TrimSpace(it.Query)
 	action := strings.TrimSpace(it.Action)

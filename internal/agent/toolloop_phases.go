@@ -142,8 +142,8 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// Provider-native web search is opt-OUT per agent: on unless the agent stores
 	// an explicit false (NativeWebSearchEnabled resolves the nil = enabled
 	// default). On leaves the native tool available and its call surfaces as a
-	// trace step; off tells the CLI providers to switch their own search off so
-	// the bridged WebSearch/WebFetch tools stay the single path.
+	// trace step; off tells the CLI providers to switch their own web tools off,
+	// which leaves the agent without web access (no CLI gets a bridged one).
 	t.req.NativeWebSearch = t.agent.NativeWebSearchEnabled()
 
 	// Process ledger ownership (internal/procwatch): every native process this

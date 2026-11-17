@@ -34,13 +34,12 @@ func TestCatalogDisplayName(t *testing.T) {
 	}
 }
 
-// TestCatalogDisplayNameWebToolsAreProviderAware pins the split between the two CLI
-// dialects: claude-cli has native WebFetch/WebSearch so ours stay withheld, while
-// codex-cli (no native WebFetch, web_search off by default) must see both — they are
-// bridged for it in Runtime.BridgeTools, so the catalog has to name them. Every other
-// exclusion (run_subagent, run_code, deactivate_tools) is about dispatch context and
-// applies to BOTH dialects.
-func TestCatalogDisplayNameWebToolsAreProviderAware(t *testing.T) {
+// TestCatalogDisplayNameWebToolsAreWithheldFromCLIs pins that no CLI dialect sees
+// TionHarness's WebFetch/WebSearch: every CLI ships its own web tools (codex-cli's
+// web_search searches and opens pages). The other exclusions (run_subagent,
+// run_code, deactivate_tools) are about dispatch context; the native path keeps
+// the bare names.
+func TestCatalogDisplayNameWebToolsAreWithheldFromCLIs(t *testing.T) {
 	tests := []struct {
 		tool     string
 		provider string
@@ -50,8 +49,9 @@ func TestCatalogDisplayNameWebToolsAreProviderAware(t *testing.T) {
 		{"WebSearch", "claude-cli", ""},
 		{"WebFetch", "", ""}, // empty provider = keyless claude-cli default
 		{"WebSearch", "", ""},
-		{"WebFetch", "codex-cli", "mcp__tionharness_extended__WebFetch"},
-		{"WebSearch", "codex-cli", "mcp__tionharness_extended__WebSearch"},
+		{"WebFetch", "codex-cli", ""},
+		{"WebSearch", "codex-cli", ""},
+		{"WebFetch", "opencode-cli", ""},
 		{"run_subagent", "claude-cli", ""},
 		{"run_subagent", "codex-cli", ""},
 		{"run_code", "codex-cli", ""},

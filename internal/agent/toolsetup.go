@@ -159,15 +159,10 @@ func (r *Runtime) readTrackerFor(sessionID string) *tools.ReadTracker {
 func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Registry {
 	builtins := []tools.Tool{
 		tools.NewWebFetchTool(),
-		// WebSearch: native web search for every NATIVE-API provider (anthropic,
-		// minimax, openrouter). Registered unconditionally — exactly like
-		// its sibling WebFetch — so it also appears in the workspace tools catalog.
-		// claude-cli never receives it: it has its OWN native WebSearch/WebFetch, so
-		// TionHarness's are withheld to avoid doubling the surface. codex-cli DOES
-		// receive both over the Interaction bridge (BridgeTools): codex ships no
-		// native WebFetch at all and its own web_search is OFF by default, so without
-		// the bridge a codex agent has no web access and starts inventing sources.
-		// Backed by the workspace vault (a self-hosted SEARXNG_URL or a TAVILY_API_KEY).
+		// WebSearch / WebFetch serve the native tool loop only. No CLI receives
+		// them over the bridge: every CLI ships its own web tools (claude-cli and
+		// opencode-cli WebSearch/WebFetch, codex-cli web_search). Backed by the
+		// workspace vault (a self-hosted SEARXNG_URL or a TAVILY_API_KEY).
 		tools.NewWebSearchTool(r.vault),
 		// Interaction tools: todo_write surfaces a live checklist; ask_user pauses
 		// the turn for a clarifying question; request_confirmation blocks for a
@@ -906,8 +901,8 @@ const lazyCatalogMCPListLimit = 50
 // tools.bridgeExcluded — keep in sync. run_subagent is eager (never in the lazy
 // catalog), so WebFetch is the only one that normally surfaces here.
 var cliLazyBridgeExcluded = map[string]bool{
-	"WebFetch":     true, // claude-cli has its own native WebFetch (see claudeOnlyBridgeExclusions)
-	"WebSearch":    true, // claude-cli has its own native WebSearch (defensive: eager, so not normally lazy)
+	"WebFetch":     true, // every CLI ships its own web fetch
+	"WebSearch":    true, // every CLI ships its own web search (defensive: eager, so not normally lazy)
 	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
 	"run_code":     true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
 	// deactivate_tools is a TionHarness-native meta-tool (paired with activate_tools);
@@ -929,38 +924,12 @@ var cliLazyBridgeExcluded = map[string]bool{
 	"read_mcp_resource":  true,
 }
 
-// claudeOnlyBridgeExclusions narrows cliLazyBridgeExcluded to the entries that are
-// withheld ONLY because claude-cli already ships an equivalent native. codex-cli
-// ships no native WebFetch and keeps its own web_search OFF by default, so for it
-// these are bridged (Runtime.BridgeTools advertises them) and must appear in the
-// catalog — otherwise the agent has no web tool at all and starts inventing sources.
-// Every other entry (run_subagent, run_code, deactivate_tools) stays excluded for
-// BOTH dialects: those are about dispatch context, not about a CLI-native twin.
-var claudeOnlyBridgeExclusions = map[string]bool{
-	"WebFetch":  true,
-	"WebSearch": true,
-}
-
-// cliBridgeExcludes reports whether a built-in is withheld from the CLI bridge for
-// the given provider KIND. provider "" is the keyless claude-cli default, so an
-// unknown/empty provider keeps the historical (claude-cli) exclusions.
-func cliBridgeExcludes(name, provider string) bool {
-	if !cliLazyBridgeExcluded[name] {
-		return false
-	}
-	if provider == providerKindCodexCLI && claudeOnlyBridgeExclusions[name] {
-		return false
-	}
-	return true
-}
-
 // catalogDisplayName maps a registry tool name to the identifier the target agent
 // must actually call. Native agents call the bare/registry name as-is. A CLI agent
 // reaches everything as MCP tools, so the name is namespaced: a namespaced MCP tool
 // (server__tool) gains the CLI's "mcp__" prefix, and a built-in gains the
 // Interaction MCP prefix. Returns ok=false for built-ins that CLI dialect does not
-// bridge, so the caller skips them — which entries those are depends on the
-// provider (see cliBridgeExcludes). provider is a provider KIND; "" is the keyless
+// bridge (cliLazyBridgeExcluded), so the caller skips them. provider is a provider KIND; "" is the keyless
 // claude-cli default and native-API kinds take the bare name.
 func catalogDisplayName(name, provider string) (string, bool) {
 	if !isCLIProviderKind(provider) {
@@ -969,8 +938,8 @@ func catalogDisplayName(name, provider string) (string, bool) {
 	if _, _, ok := mcp.SplitNamespaced(name); ok {
 		return mcp.NamespaceTool("mcp", name), true // server__tool → mcp__server__tool
 	}
-	if cliBridgeExcludes(name, provider) {
-		return "", false // not bridged to this CLI (it has its own equivalent)
+	if cliLazyBridgeExcluded[name] {
+		return "", false // not bridged to a CLI (it has its own equivalent)
 	}
 	// Lazy built-ins are the EXTENDED tier (deferred via the CLI's ToolSearch), so
 	// they are namespaced under the extended server key. Eager built-ins never reach
@@ -989,8 +958,8 @@ func catalogDisplayName(name, provider string) (string, bool) {
 // names are namespaced (mcp__tionharness_interaction__<name> for built-ins,
 // mcp__<server>__<tool> for MCP) and loaded via the CLI's own ToolSearch — NOT
 // TionHarness's native activate_tools (the CLI has neither activate_tools nor
-// tool_search). Built-ins that dialect does not bridge (claude-cli's own WebFetch/
-// WebSearch) are dropped. This mirrors how the skills block
+// tool_search). Built-ins no CLI gets over the bridge (WebFetch/WebSearch: every
+// CLI ships its own) are dropped. This mirrors how the skills block
 // (CatalogBlockForAgentTool) already adapts to the CLI.
 // bundles (key -> member count) adds ONE discovery line naming the openable
 // bundles; empty/nil emits nothing, so a workspace without bundles renders the

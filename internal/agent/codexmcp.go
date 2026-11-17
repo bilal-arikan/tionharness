@@ -224,15 +224,15 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // not ship most of those natives (no Task/Agent launcher, no Skill tool, no
 // native TodoWrite family beyond update_plan). Only the genuine overlaps are
 // named, so a reader can tell suppression from absence. The collaboration names
-// are the actual codex tool ids; the renderer disables their shared feature
-// gates (`multi_agent` and `multi_agent_v2`) rather than trying to configure the
-// tools one by one.
+// are the actual codex tool ids; the renderer turns them off with
+// `[agents] enabled = false` (guarded by `multi_agent_v2 = false`) rather than
+// trying to configure the tools one by one.
 // web_search is left out on purpose, but no longer because it is always off: it
 // is now an AGENT-level toggle (db.Agent.NativeWebSearch → Request.NativeWebSearch
 // → codexConfig.WebSearchMode). With the toggle off the config renderer writes
 // `web_search = "disabled"`, so there is nothing left to suppress here; with it on
-// the user has explicitly asked for the native search to run next to the bridged
-// TionHarness WebSearch/WebFetch, so listing it here would revoke that choice.
+// web_search ("live") is codex's only web tool, so listing it here would leave the
+// agent with no web access at all.
 // update_plan is likewise NOT listed any more: its todo_list stream items are
 // promoted to checklist cards and mirrored into the progress sink, so it no
 // longer shadows todo_write.
