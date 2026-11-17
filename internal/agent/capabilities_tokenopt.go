@@ -79,38 +79,13 @@ func (r *Runtime) detectTokenOptimizers(ctx context.Context) tokenOptimizerState
 	return st
 }
 
-// effectiveTokenOptimizers is detectTokenOptimizers plus the in-process shell
-// filter, which is what the agent actually observes. A workspace with
-// ShellOutputCompression="on" compresses shell output WITHOUT any hook (see
-// sqzShellFilter), so hook detection alone would leave the agent unwarned and it
-// could read sqz's abbreviated output as truncation — re-running commands or
-// mis-parsing compiler/test output. The forced filter covers every shell call
-// (Bash + PowerShell, native + bridged), so it claims the "*" matcher and no
-// narrowing scope note is emitted.
-func (r *Runtime) effectiveTokenOptimizers(ctx context.Context) tokenOptimizerState {
-	st := r.detectTokenOptimizers(ctx)
-	// Either in-process filter, when forced on, covers EVERY shell call (Bash +
-	// PowerShell, native + bridged) — so it claims the "*" matcher and no narrowing
-	// scope note is emitted.
-	if r.shellCompressMode.Load() == shellCompressOn {
-		st.sqz = true
-		st.matchers = append(st.matchers, "*")
-	}
-	if r.shellRewriteMode.Load() == shellCompressOn {
-		st.rtk = true
-		st.matchers = append(st.matchers, "*")
-	}
-	slices.Sort(st.matchers)
-	return st
-}
-
 var tokenOptimizerCapability = Capability{
 	ID: "token-optimizers",
 	Detect: func(ctx context.Context, r *Runtime, _ db.Agent) bool {
-		return r.effectiveTokenOptimizers(ctx).present()
+		return r.detectTokenOptimizers(ctx).present()
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd, provider string) string {
-		return tokenOptimizerGuidance(r.effectiveTokenOptimizers(ctx))
+		return tokenOptimizerGuidance(r.detectTokenOptimizers(ctx))
 	},
 }
 
@@ -141,7 +116,7 @@ func tokenOptimizerGuidance(st tokenOptimizerState) string {
 			" tool(s) ONLY — commands run through other shell tools are NOT optimized. Prefer the matched tool for token-heavy commands (logs, greps, diffs, test runs) so the optimization applies.\n")
 	}
 	b.WriteString("Run the commands you actually need and let the optimizer trim the output. " +
-		"Every optimizer here is opt-OUT per call: pass `no_compress: true` to the shell tool to get the byte-exact raw result.")
+		"When you need the byte-exact raw output of an rtk-rewritten command, run it as `rtk proxy <command>`.")
 	return b.String()
 }
 
@@ -153,9 +128,8 @@ const rtkGuidance = "- rtk (command layer) — for test/build/lint runners and `
 	"`go test ./...` comes back as \"226 passed in 1 packages\" instead of hundreds of lines. This is " +
 	"deliberate loss of PASSING detail — failures are preserved in full, with file:line and the assertion " +
 	"message. A short result means everything passed; it does NOT mean the command did not run.\n" +
-	"  If a rewritten command FAILS you may get an explicit `[optimizer note: …]` telling you the summary " +
-	"may not explain the failure. Follow it — re-run that same command with `no_compress: true` — rather " +
-	"than guessing at the cause or trying variations of the command.\n"
+	"  If a rewritten command FAILS and the summary does not explain why, re-run that same command as " +
+	"`rtk proxy <command>` for the raw output rather than guessing at the cause.\n"
 
 // sqzGuidance describes the OUTPUT-layer optimizer.
 const sqzGuidance = "- sqz (output layer) — after a command runs, output above ~2KB is passed through the `sqz` " +
@@ -175,8 +149,8 @@ const rtkSqzInteractionGuidance = "  Both are active, at opposite ends of the sa
 	"legend on it. That is the pipeline working, not sqz failing.\n"
 
 // sqzOutputFormsGuidance names the two shapes sqz output actually arrives in.
-// Both are easy to misread as a broken tool, and the recovery (re-run with
-// no_compress) is only obvious once you know the convention:
+// Both are easy to misread as a broken tool, and the recovery (`sqz expand`) is
+// only obvious once you know the convention:
 //
 //   - the abbreviation legend, which is self-describing once you see the header;
 //   - a bare `§ref:<hash>§`, which is NOT — it replaces the ENTIRE result when the

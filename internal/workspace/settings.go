@@ -130,19 +130,6 @@ type WSSettings struct {
 	// conversation home before the turn runs.
 	CodexPlugins []string `json:"codexPlugins,omitempty"`
 
-	// ShellOutputCompression overrides the in-process shell-output token-optimizer
-	// (sqz) for this workspace: "" (or "auto") = follow sqz-hook detection (default),
-	// "on" = force it on (needs the sqz binary), "off" = disable. See _Docs/17.
-	ShellOutputCompression string `json:"shellOutputCompression,omitempty"`
-
-	// ShellCommandRewrite overrides the in-process shell-COMMAND token-optimizer
-	// (rtk) for this workspace: "" (or "auto") = follow rtk-hook detection (default),
-	// "on" = force it on (needs the rtk binary), "off" = disable. Distinct from
-	// ShellOutputCompression because the two act at opposite ends: rtk rewrites the
-	// COMMAND before it runs (so a test runner reports only failures), sqz compresses
-	// the OUTPUT after. They compose — see _Docs/17.
-	ShellCommandRewrite string `json:"shellCommandRewrite,omitempty"`
-
 	// BoardColumns overrides the default kanban column set for this workspace.
 	// Empty/nil means "use db.DefaultBoardColumns()".
 	BoardColumns []db.BoardColumnDef `json:"boardColumns,omitempty"`
@@ -205,13 +192,11 @@ type WSSettingsPatch struct {
 	Accent      *string `json:"accent"`
 	ThemePreset *string `json:"themePreset"`
 
-	TerseMode              *bool   `json:"terseMode"`
-	CodebaseMemoryEnabled  *bool   `json:"codebaseMemoryEnabled"`
-	ZvecGrepEnabled        *bool   `json:"zvecGrepEnabled"`
-	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
-	FlowAutoAccept         *bool   `json:"flowAutoAccept"`
-	ShellOutputCompression *string `json:"shellOutputCompression"`
-	ShellCommandRewrite    *string `json:"shellCommandRewrite"`
+	TerseMode             *bool `json:"terseMode"`
+	CodebaseMemoryEnabled *bool `json:"codebaseMemoryEnabled"`
+	ZvecGrepEnabled       *bool `json:"zvecGrepEnabled"`
+	PromptEpochEnabled    *bool `json:"promptEpochEnabled"`
+	FlowAutoAccept        *bool `json:"flowAutoAccept"`
 
 	// Codex plugin support: the master switch plus the two lists it renders and
 	// installs. Each list replaces the whole set (add/remove are expressed as a
@@ -372,8 +357,6 @@ func (w *Workspace) loadSettings() {
 		// settings.mu is not held here (loadSettings owns w.settings exclusively
 		// during boot), so read the spec through the same helper UpdateSettings uses.
 		w.Runtime.SetCodexPlugins(w.codexPluginSpecLocked())
-		w.Runtime.SetShellCompression(s.ShellOutputCompression)
-		w.Runtime.SetShellCommandRewrite(s.ShellCommandRewrite)
 		w.Runtime.SetAwarenessSettings(s.Awareness)
 		w.Runtime.SetSystemRoleAssignments(s.SystemAgentAssignments)
 	}
@@ -538,12 +521,6 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.CodexPlugins != nil {
 		ws.settings.cur.CodexPlugins = *patch.CodexPlugins
 	}
-	if patch.ShellOutputCompression != nil {
-		ws.settings.cur.ShellOutputCompression = *patch.ShellOutputCompression
-	}
-	if patch.ShellCommandRewrite != nil {
-		ws.settings.cur.ShellCommandRewrite = *patch.ShellCommandRewrite
-	}
 	if patch.BoardColumns != nil {
 		ws.settings.cur.BoardColumns = *patch.BoardColumns
 	}
@@ -577,8 +554,6 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
 	flowAutoAccept := ws.settings.cur.FlowAutoAccept
 	codexPlugins := ws.codexPluginSpecLocked()
-	shellCompression := ws.settings.cur.ShellOutputCompression
-	shellRewrite := ws.settings.cur.ShellCommandRewrite
 	awareSettings := ws.settings.cur.Awareness
 	roleAssignments := ws.settings.cur.SystemAgentAssignments
 	ws.settings.mu.Unlock()
@@ -610,8 +585,6 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetPromptEpoch(epochEnabled)
 		ws.Runtime.SetFlowAutoAccept(flowAutoAccept)
 		ws.Runtime.SetCodexPlugins(codexPlugins)
-		ws.Runtime.SetShellCompression(shellCompression)
-		ws.Runtime.SetShellCommandRewrite(shellRewrite)
 		ws.Runtime.SetAwarenessSettings(awareSettings)
 		ws.Runtime.SetSystemRoleAssignments(roleAssignments)
 		if sweepFlows {

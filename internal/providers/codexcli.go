@@ -31,8 +31,7 @@ type CodexCLI struct {
 
 	// MCP delegation: one turn's server set, rendered into
 	// <configDir>/config.toml before launch. Set by ConfigureCLIMCP.
-	mcpServers         map[string]CLIMCPServer
-	disableNativeShell bool
+	mcpServers map[string]CLIMCPServer
 
 	// Plugin delegation: the marketplaces and plugin selectors rendered into the
 	// same config.toml, and installed into the turn's home before launch. Set by
@@ -119,12 +118,10 @@ func (c *CodexCLI) SetConfigDir(dir string) {
 // a workspace-derived one.
 func (c *CodexCLI) ConfigDir() string { return c.configDir }
 
-// ConfigureCLIMCP installs the current turn's server filters and native shell
-// policy. Claude's command-line flags are translated by the agent layer into
+// ConfigureCLIMCP installs the current turn's server filters. Claude's command-line flags are translated by the agent layer into
 // structured Codex settings, rather than passed through as unsupported flags.
 func (c *CodexCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
 	c.mcpServers = spec.Servers
-	c.disableNativeShell = spec.DisableNativeShell
 }
 
 // SetCodexPlugins installs the marketplaces and plugin selectors this provider
@@ -251,7 +248,6 @@ func (c *CodexCLI) buildConfig(req Request) codexConfig {
 		// of these keys, strict-config rejects it and EVERY turn fails. Re-check all
 		// of them whenever the codex version is bumped.
 		DisableNativeMultiAgent: true,
-		DisableNativeShell:      c.disableNativeShell,
 		DisableSubAgents:        true,
 		Servers:                 c.mcpServers,
 		// Re-rendered every turn on purpose: config.toml is rewritten from scratch
@@ -622,6 +618,9 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 	// Wait with a WaitDelay backstop.
 	proc.TreeKill(cmd)
 	cmd.Env = codexBaseEnv()
+	if req.Unattended {
+		cmd.Env = append(cmd.Env, proc.DisableGitSigningEnv()...)
+	}
 	if home != "" {
 		// Appended last so it overrides any inherited CODEX_HOME. Codex errors out
 		// when this points at a missing directory, so surface that here rather than

@@ -19,31 +19,17 @@ type codexPolicyCapture struct {
 func (c *codexPolicyCapture) ConfigureCLIMCP(spec providers.CLIMCPSpec) { c.spec = spec }
 
 func TestCodexTurnPolicyReplacesPreviousTurn(t *testing.T) {
-	rt, tun := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	tun.SetShellEnabled(true)
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	c := &codexPolicyCapture{}
 	turn := toolLoopTurn{r: rt, ctx: context.Background(), provider: providers.NewCodexCLI("codex", "", ""), cli: c,
 		inter: tools.InteractionEndpoint{URL: "http://localhost/bridge", CoreToolNames: []string{"ask_user"}}}
 	turn.configureCLIMCP()()
-	if !c.spec.DisableNativeShell || len(c.spec.Servers) == 0 {
-		t.Fatal("bridge must disable native shell even when shell tools are excluded by agent policy")
+	if len(c.spec.Servers) == 0 {
+		t.Fatal("bridge turn must mount the interaction servers")
 	}
-	on := true
-	turn.agent.NativeShell = &on
-	turn.configureCLIMCP()()
-	if c.spec.DisableNativeShell {
-		t.Fatal("explicit native shell opt-in lost")
-	}
-	turn.agent.NativeShell = nil
-	tun.SetShellEnabled(false)
-	turn.configureCLIMCP()()
-	if c.spec.DisableNativeShell {
-		t.Fatal("disabled shell bridge must preserve native fallback")
-	}
-	tun.SetShellEnabled(true)
 	turn.inter = tools.InteractionEndpoint{}
 	turn.configureCLIMCP()()
-	if c.spec.DisableNativeShell || len(c.spec.Servers) > 0 {
+	if len(c.spec.Servers) > 0 {
 		t.Fatal("empty turn retained previous policy")
 	}
 	c.spec.Servers = map[string]providers.CLIMCPServer{"stale": {Command: "unused"}}

@@ -210,7 +210,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.AutoTitleEnabled = *p.AutoTitleEnabled
 	}
 
-	applyBool(&next.EnableShell, p.EnableShell)
 	applyBool(&next.EnableCLIHooks, p.EnableCLIHooks)
 	applyBool(&next.EnableCodeMode, p.EnableCodeMode)
 	applyBool(&next.ClaudeResume, p.ClaudeResume)
@@ -227,8 +226,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.TurnIdleTimeoutMin, p.TurnIdleTimeoutMin)
 	applyInt(&next.CodexStdoutIdleSec, p.CodexStdoutIdleSec)
 	applyInt(&next.IdleResumeMax, p.IdleResumeMax)
-	applyInt(&next.ShellDefaultTimeoutSec, p.ShellDefaultTimeoutSec)
-	applyInt(&next.ShellMaxTimeoutSec, p.ShellMaxTimeoutSec)
 	applyInt(&next.MaxToolOutputKB, p.MaxToolOutputKB)
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)

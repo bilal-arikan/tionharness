@@ -27,12 +27,6 @@ package procwatch
 type Kind string
 
 const (
-	// KindShell is a foreground Bash/PowerShell tool call: the turn is blocked
-	// on it, and it dies with the tool call.
-	KindShell Kind = "shell"
-	// KindShellBackground is a detached background shell (run_in_background),
-	// managed afterwards through the shell_manage tool.
-	KindShellBackground Kind = "shell_background"
 	// KindCode is a code-mode interpreter run (run_code / transform_data).
 	KindCode Kind = "code"
 	// KindProvider is an agentic CLI subprocess acting as the model transport
@@ -58,8 +52,7 @@ const (
 	StatusSucceeded Status = "succeeded"
 	// StatusFailed: exited non-zero, or never started (ExitCode -1 with Error).
 	StatusFailed Status = "failed"
-	// StatusKilled: stopped on request — from the panel, the shell_manage tool,
-	// or a cancelled turn.
+	// StatusKilled: stopped on request — from the panel or a cancelled turn.
 	StatusKilled Status = "killed"
 	// StatusTimedOut: the run context hit its deadline and the process was
 	// terminated by it.

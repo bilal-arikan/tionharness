@@ -185,16 +185,15 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		}
 		return nil
 	}
-	// TIONHARNESS_ENABLE_SELFMANAGE was removed 2026-07-01 and TIONHARNESS_ENABLE_DELEGATION
-	// on 2026-07-02 (both are always installed now; visibility is per-tool from the
-	// Tools screen). Env-seedable capabilities: the shell, and code-execution mode
-	// (TIONHARNESS_CODE_MODE — run_code + generated MCP python bindings, _Docs/44;
-	// also requires the shell capability to take effect).
+	// TIONHARNESS_ENABLE_SELFMANAGE was removed 2026-07-01, TIONHARNESS_ENABLE_DELEGATION
+	// on 2026-07-02 and TIONHARNESS_ENABLE_SHELL on 2026-11-17 (TionHarness no longer
+	// ships a shell tool; agents use their CLI's own). Env-seedable capability:
+	// code-execution mode (TIONHARNESS_CODE_MODE — run_code + generated MCP python
+	// bindings, _Docs/44).
 	seed := settings.Patch{
-		EnableShell:    envOn("TIONHARNESS_ENABLE_SHELL"),
 		EnableCodeMode: envOn("TIONHARNESS_CODE_MODE"),
 	}
-	if seed.EnableShell != nil || seed.EnableCodeMode != nil {
+	if seed.EnableCodeMode != nil {
 		if _, err := settingsStore.Apply(seed); err != nil {
 			logger.Warn("seed enable-flags from env failed", "error", err)
 		} else {

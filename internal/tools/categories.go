@@ -30,13 +30,13 @@ const (
 // one explicit map (rather than name-prefix heuristics) so the grouping is exact
 // and reviewable.
 var builtinCategory = map[string]string{
-	// Files & shell
+	// Files & shell. Bash / PowerShell are the CLI's own shell tools, not
+	// TionHarness built-ins, but an agent allowlist naming "group:files" must
+	// still grant them (the CLI shell is gated on the tool filter admitting Bash).
 	"Read": CategoryFiles, "Write": CategoryFiles, "Edit": CategoryFiles,
 	"LS": CategoryFiles, "Glob": CategoryFiles, "Grep": CategoryFiles,
 	"Bash": CategoryFiles, "PowerShell": CategoryFiles,
-	"shell_manage": CategoryFiles,
-	"monitor":      CategoryFiles,
-	"apply_patch":  CategoryFiles, "run_code": CategoryFiles,
+	"apply_patch": CategoryFiles, "run_code": CategoryFiles,
 
 	// Search & web
 	"WebFetch": CategorySearch, "WebSearch": CategorySearch,

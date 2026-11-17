@@ -121,10 +121,6 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		run.setSkillAllowed(func(slug string) []string {
 			return rt.SkillAllowedToolsForAgent(ag, slug)
 		})
-		// shell (CLI path): sandboxed PowerShell shell so the CLI's POSIX Bash can be
-		// disallowed; nil when shell is off (then native Bash stays available).
-		run.setShellRunner(rt.NewShellRunner())
-
 		// spawn_session (CLI path): self-management is always on now. A fresh instance
 		// resets the per-turn spawn budget.
 		run.setSpawnTool(tools.NewSpawnSessionTool(ag.ID, s.tun.SpawnMaxPerTurn(),

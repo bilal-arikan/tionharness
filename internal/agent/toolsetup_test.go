@@ -125,29 +125,24 @@ func TestBuiltinFSToolsThroughRegistry(t *testing.T) {
 	}
 }
 
-// TestShellToolGate verifies the shell tool is absent until enabled, then runs
-// a real command inside the sandbox once turned on.
+// TestShellToolGate verifies TionHarness registers no shell tool of its own
+// (agents use their CLI shell).
 func TestShellToolGate(t *testing.T) {
 	workDir := filepath.Join(t.TempDir(), "workspace")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rt, tun := newTestRuntime(t, workDir)
+	rt, _ := newTestRuntime(t, workDir)
 	ctx := context.Background()
 	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Sh", Provider: "anthropic", MCPEnabled: true})
 	if err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
 
-	// Off by default.
-	if rt.buildRegistry(ctx, agent).Has("Bash") {
-		t.Fatal("shell tool must be absent when disabled")
-	}
-
-	// Enabled → present and actually executes.
-	tun.SetShellEnabled(true)
-	res := callTool(t, rt, agent, "Bash", map[string]any{"command": "echo tionharness-shell-ok"})
-	if res.IsError || !strings.Contains(res.Content, "tionharness-shell-ok") {
-		t.Fatalf("shell run got %q (err=%v)", res.Content, res.IsError)
+	// TionHarness ships no shell tool: agents use their CLI's own.
+	for _, name := range []string{"Bash", "PowerShell", "shell_manage", "monitor"} {
+		if rt.buildRegistry(ctx, agent).Has(name) {
+			t.Fatalf("%s must not be registered", name)
+		}
 	}
 }

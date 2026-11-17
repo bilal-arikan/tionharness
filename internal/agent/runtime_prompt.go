@@ -14,7 +14,6 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/awareness"
 	"github.com/bilal-arikan/tionharness/internal/db"
-	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // BuildSystemPrompt composes the agent's persona from soul + identity. Exported
@@ -35,120 +34,12 @@ func BuildSystemPrompt(a db.Agent) string {
 }
 
 // EnvironmentContextBlock renders a one-line machine-environment marker (OS,
-// arch, native shell) so the agent writes shell commands in the correct syntax
-// instead of guessing — on Windows the shell tool is PowerShell, on Unix it is
-// Bash (NewShellRunner picks the same identity). Mirrors the external agent project's
-// <environment> marker, trimmed to the one field that actually changes agent
-// behaviour (shell). Exported so both the chat path (api.composeTurnRequest) and
-// the headless path (autonomousSystemPrompt) inject the identical line. It rides
-// the volatile dynamic suffix, so it never disturbs the cached static prefix.
+// arch) so the agent writes commands for the right platform instead of guessing.
+// Shell commands run through the CLI's own shell tool (claude-cli Bash, codex /
+// opencode shell), which documents its own dialect. It rides the volatile
+// dynamic suffix, so it never disturbs the cached static prefix.
 func EnvironmentContextBlock() string {
-	// Prefer Bash when a POSIX shell backs it (always on Unix; on Windows only when a
-	// bash.exe — Git Bash / WSL — is on PATH). PowerShell is advertised as the
-	// fallback only for Windows-native tasks (cmdlets, registry, $env:). ShellToolNames
-	// orders Bash first when present, so its first entry is the preferred shell and
-	// can never claim "Bash" on a machine where bash.exe is missing.
-	names := tools.ShellToolNames()
-	shell := "Bash"
-	if len(names) > 0 {
-		shell = names[0]
-	}
-	hint := fmt.Sprintf("write shell commands in %s syntax for this machine.", shell)
-	if shell == "Bash" && runtime.GOOS == "windows" {
-		// Bash-first on Windows, but PowerShell stays available for native tasks.
-		hint = "prefer Bash; use PowerShell only for Windows-native tasks (cmdlets, registry, `$env:`)."
-	}
-	return fmt.Sprintf("<environment os=%q arch=%q shell=%q /> — %s",
-		runtime.GOOS, runtime.GOARCH, shell, hint)
-}
-
-// ShellToolsContextBlock states this session's shell-execution capability, and is
-// the SINGLE source for it on both the chat (composeTurnRequest) and headless
-// (autonomousDynamicSuffix) paths. It never returns empty:
-//
-//   - ENABLED — the shell gate is on (Tunables.ShellEnabled) AND a backing
-//     interpreter is present (same resolvers as buildRegistry via
-//     tools.ShellToolNames, so prompt ↔ catalog never drift) AND the agent's own
-//     tool filter actually offers the tool: advertise only the shell tools that
-//     survive all three, by their exact names.
-//   - DISABLED — the gate is off OR no interpreter backs it OR the agent's
-//     allow/denylist strips every shell tool: the Bash/PowerShell tools are NOT
-//     registered for this agent, so say so explicitly and give the dead-tool rule.
-//     Otherwise the model emits a bare `PowerShell`/`Bash` call, hits "No such
-//     tool available … not enabled in this context", and — with nothing telling it
-//     the tool is gone — repeats the identical call until the turn times out
-//     (FND-9c9a52aa, FND-6095a777, FND-e9c79d9a, FND-495575b8).
-//
-// The per-agent filter is the SAME gate ToolCatalog applies (ToolAllowedFunc), so
-// the block can never advertise a tool the agent's allowlist would strip: a
-// read-only profile (allowlist without Bash/PowerShell) used to be told shell was
-// ENABLED, called Bash, and got "No such tool available" on every attempt.
-//
-// It rides the VOLATILE dynamic suffix on both paths because the gate can toggle
-// mid-session; the file tools (Read/Write/Edit/LS/Glob/Grep) stay the always-on
-// core named in the static instructions.
-func (r *Runtime) ShellToolsContextBlock(ctx context.Context, agent db.Agent, confined bool) string {
-	names := r.availableShellToolNames(ctx, agent)
-	if !r.tun.ShellEnabled() || len(names) == 0 {
-		return "Shell execution is DISABLED for this session: there is NO Bash or PowerShell tool. " +
-			"Do NOT call Bash or PowerShell — such a call fails with \"No such tool available\" / " +
-			"\"not enabled in this context\". Any workspace guidance that assumes a terminal " +
-			"(rtk wrappers, `go test`, `npm …`, shell one-liners) does NOT apply here. " +
-			"General dead-tool rule: if ANY tool call returns \"No such tool available\" / " +
-			"\"not enabled in this context\", treat that tool as absent — do NOT repeat the identical " +
-			"call. Reach the goal with the file tools (Read / Glob / Grep / Edit / Write), or report " +
-			"that the step needs a shell that is not available in this context."
-	}
-	// Name the tools as THIS agent will actually call them. On a CLI turn the bare
-	// name is not merely unqualified — claude-cli's OWN native Bash is suppressed
-	// once TionHarness's shell is bridged (climcp.go), so a bare `Bash` call dies
-	// with "No such tool available: Bash. Bash is disabled for this session" and
-	// the model has to guess the namespace to recover.
-	names = shellToolNamesFor(agent.Provider, names)
-	noun, verb := "tool", "runs"
-	if len(names) > 1 {
-		noun, verb = "tools", "run"
-	}
-	scope := "not confined to the working directory (absolute paths and `..` allowed)"
-	if confined {
-		scope = "confined to the working directory (write relative paths; an in-root absolute path is allowed, but escapes are rejected)"
-	}
-	return "Shell execution is ENABLED for this session: the " + strings.Join(names, " / ") + " " + noun +
-		" " + verb + " host commands — " + scope + ", " +
-		"with the permission mode as the safety layer. Call " + strings.Join(names, " / ") + " by that exact name."
-}
-
-// shellToolNamesFor renders shell tool names the way the given provider exposes
-// them: bare for a native (API) agent, Interaction-MCP-namespaced for a CLI one.
-// Same reasoning as skillToolNameFor, and the same forms climcp_matcher.go
-// matches hooks against — the allow/denylist gating in availableShellToolNames
-// stays on the BARE names, because that is what the tool filter is keyed by.
-func shellToolNamesFor(provider string, names []string) []string {
-	if !isCLIProviderKind(provider) {
-		return names
-	}
-	out := make([]string, 0, len(names))
-	for _, n := range names {
-		out = append(out, interactionToolPrefix+n)
-	}
-	return out
-}
-
-// availableShellToolNames narrows the host's backing shell interpreters
-// (tools.ShellToolNames) to the ones THIS agent may actually call, by running each
-// name through the agent's effective tool filter — the same predicate ToolCatalog
-// uses. Host support and the agent's allow/denylist are independent gates: a
-// machine can have bash.exe while the agent's profile allowlist omits "Bash", and
-// only the intersection is real. Returns nil when the agent can call neither.
-func (r *Runtime) availableShellToolNames(ctx context.Context, agent db.Agent) []string {
-	allowed := r.ToolAllowedFunc(ctx, agent)
-	var names []string
-	for _, n := range tools.ShellToolNames() {
-		if allowed(n) {
-			names = append(names, n)
-		}
-	}
-	return names
+	return fmt.Sprintf("<environment os=%q arch=%q />", runtime.GOOS, runtime.GOARCH)
 }
 
 // systemPrompt builds an agent's static system prefix: its soul+identity persona
@@ -284,14 +175,6 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) s
 	confined := r.tun != nil && r.tun.AutonomousConfine()
 	if wb := r.workdirConfineBlock(ctx, confined); wb != "" {
 		lead = append(lead, awareness.Section{Key: "workdir", Text: wb, Priority: awareness.PriorityPinned, Volatile: true})
-	}
-	// Shell-execution capability, single-sourced with the chat path: advertises
-	// the registered Bash/PowerShell tools when the gate is on + a shell backs it,
-	// else states shell is disabled and gives the dead-tool rule. Volatile →
-	// dynamic suffix, since the gate can toggle mid-session. The confined flag keeps
-	// its "confined/not confined" clause consistent with the block above.
-	if sh := r.ShellToolsContextBlock(ctx, agent, confined); sh != "" {
-		lead = append(lead, awareness.Section{Key: "shell", Text: sh, Priority: awareness.PriorityPinned, Volatile: true})
 	}
 	// Prompt-epoch drift notice (mirrors the chat path): the frozen snapshot is
 	// holding back a live change — a compact diff on the volatile side. The suffix

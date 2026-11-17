@@ -11,7 +11,7 @@ import (
 func TestBeginListsRunningEntryWithOwnerFromContext(t *testing.T) {
 	r := New(10)
 	ctx := WithOwner(context.Background(), Owner{WorkspaceID: "WS1", SessionID: "SES1"})
-	h := r.Begin(ctx, Meta{Kind: KindShell, Label: "Bash", Command: "go test ./...", Owner: Owner{AgentID: "AGT1"}})
+	h := r.Begin(ctx, Meta{Kind: KindCode, Label: "Bash", Command: "go test ./...", Owner: Owner{AgentID: "AGT1"}})
 
 	got := r.List(Filter{})
 	if len(got) != 1 {
@@ -51,7 +51,7 @@ func TestFinishClassifiesOutcome(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := New(10)
-			h := r.Begin(tc.ctx, Meta{Kind: KindShell, Command: "x", Stop: func() {}})
+			h := r.Begin(tc.ctx, Meta{Kind: KindCode, Command: "x", Stop: func() {}})
 			if tc.stop {
 				if ok, err := r.Stop(h.ID()); err != nil || !ok {
 					t.Fatalf("Stop = (%v, %v), want (true, nil)", ok, err)
@@ -81,7 +81,7 @@ func TestFinishClassifiesOutcome(t *testing.T) {
 
 func TestFinishIsIdempotent(t *testing.T) {
 	r := New(10)
-	h := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "x"})
+	h := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "x"})
 	h.Finish(nil)
 	h.Finish(errors.New("late failure"))
 
@@ -96,8 +96,8 @@ func TestFinishIsIdempotent(t *testing.T) {
 
 func TestFinishCodeMapsToStatus(t *testing.T) {
 	r := New(10)
-	ok := r.Begin(context.Background(), Meta{Kind: KindShellBackground, Command: "a"})
-	bad := r.Begin(context.Background(), Meta{Kind: KindShellBackground, Command: "b"})
+	ok := r.Begin(context.Background(), Meta{Kind: KindHook, Command: "a"})
+	bad := r.Begin(context.Background(), Meta{Kind: KindHook, Command: "b"})
 	ok.FinishCode(0)
 	bad.FinishCode(2)
 
@@ -113,9 +113,9 @@ func TestFinishCodeMapsToStatus(t *testing.T) {
 
 func TestHistoryIsBoundedButRunningEntriesAreKept(t *testing.T) {
 	r := New(2)
-	live := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "live"})
+	live := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "live"})
 	for i := range 5 {
-		h := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "done"})
+		h := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "done"})
 		_ = i
 		h.Finish(nil)
 	}
@@ -130,7 +130,7 @@ func TestHistoryIsBoundedButRunningEntriesAreKept(t *testing.T) {
 
 func TestFilterFacets(t *testing.T) {
 	r := New(10)
-	shell := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "a", Owner: Owner{SessionID: "SES1"}})
+	shell := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "a", Owner: Owner{SessionID: "SES1"}})
 	r.Begin(context.Background(), Meta{Kind: KindMCP, Command: "b", Owner: Owner{SessionID: "SES2"}})
 	shell.Finish(nil)
 
@@ -153,7 +153,7 @@ func TestStopUnknownAndFinishedEntries(t *testing.T) {
 	if _, err := r.Stop("nope"); err == nil {
 		t.Error("stopping an unknown id must error")
 	}
-	h := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "x", Stop: func() {}})
+	h := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "x", Stop: func() {}})
 	h.Finish(nil)
 	ok, err := r.Stop(h.ID())
 	if err != nil || ok {
@@ -165,7 +165,7 @@ func TestNotifyFiresOnStartAndFinish(t *testing.T) {
 	r := New(10)
 	var seen []Status
 	r.SetNotify(func(e Entry) { seen = append(seen, e.Status) })
-	h := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "x"})
+	h := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "x"})
 	h.Finish(nil)
 
 	if len(seen) != 2 || seen[0] != StatusRunning || seen[1] != StatusSucceeded {
@@ -175,7 +175,7 @@ func TestNotifyFiresOnStartAndFinish(t *testing.T) {
 
 func TestOutputTailIsBounded(t *testing.T) {
 	r := New(10)
-	h := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "x"})
+	h := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "x"})
 	for range 10 {
 		h.AppendOutput(string(make([]byte, 1024)))
 	}
@@ -193,7 +193,7 @@ func TestOutputTailIsBounded(t *testing.T) {
 
 func TestNilRegistryAndHandleAreInert(t *testing.T) {
 	var r *Registry
-	h := r.Begin(context.Background(), Meta{Kind: KindShell, Command: "x"})
+	h := r.Begin(context.Background(), Meta{Kind: KindCode, Command: "x"})
 	h.Started(nil)
 	h.AppendOutput("out")
 	h.Finish(nil)

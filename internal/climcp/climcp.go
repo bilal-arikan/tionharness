@@ -35,8 +35,6 @@ type Host interface {
 	ServerGate(ctx context.Context, ag db.Agent) (func(serverKey string) bool, error)
 	// EnabledHooks lists the workspace's enabled hooks for one event.
 	EnabledHooks(ctx context.Context, event string) ([]db.Hook, error)
-	// ShellEnabled reports whether TionHarness's own shell tool is bridged.
-	ShellEnabled() bool
 	// CLIHooksEnabled reports whether workspace hooks are passed to the CLI.
 	CLIHooksEnabled() bool
 	// NativeSubagentsEnabled reports whether claude-cli's own Agent launcher may
@@ -44,6 +42,11 @@ type Host interface {
 	// folded into the trace by the stream parser, so it is observable; every
 	// other native subagent type stays denied.
 	NativeSubagentsEnabled() bool
+	// ShellAllowed reports whether the agent's effective tool filter (profile
+	// allowlist, agent denylist, workspace DisabledTools) permits "Bash". The CLI's
+	// native shell family is the only shell an agent has, so a filter without Bash
+	// (a read-only profile such as reviewer) must take it off the menu.
+	ShellAllowed(ctx context.Context, ag db.Agent) bool
 	Logger() *slog.Logger
 	// EmitDebug records a diagnostic event on the turn's session journal.
 	EmitDebug(ctx context.Context, ev db.DebugEvent)
@@ -194,6 +197,12 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 	if !ag.NativeWebSearchEnabled() {
 		disallowed = append(disallowed, "WebSearch", "WebFetch")
 	}
+	// Shell: the native shell family is kept unless the agent's tool filter has
+	// no Bash (a read-only profile). Like web search this is agent-level, so it
+	// sits outside the interaction-endpoint branch.
+	if !h.ShellAllowed(ctx, ag) {
+		disallowed = append(disallowed, shellFamily...)
+	}
 
 	if inter.URL != "" {
 		authHeader := map[string]string{"Authorization": "Bearer " + inter.Token}
@@ -301,28 +310,6 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 		// agent-to-agent messaging; a model that discovers the native one via ToolSearch
 		// would reach for it and fail, so suppress it.
 		disallowed = append(disallowed, "SendMessage")
-		// Bash: only suppress the CLI's native POSIX Bash when TionHarness's own shell is
-		// bridged (shell enabled) as its replacement — otherwise the agent would lose
-		// shell entirely (TionHarness's shell is not bridged when disabled). With the
-		// bridge present, all commands route through TionHarness's own sandboxed shells
-		// (bridged Bash-preferred, plus PowerShell for Windows-native tasks) — unless
-		// the agent opted into its native shell (Agent.NativeShell): every native Bash
-		// call still lands in the trace with its command and output, so the toggle
-		// trades TionHarness's sandbox/background-shell management for the CLI's
-		// in-process shell (no bridge round-trip, hooks such as rtk apply).
-		if h.ShellEnabled() && !ag.NativeShellEnabled() {
-			// Also suppress the native background-shell siblings (BashOutput/KillShell,
-			// renamed TaskOutput/TaskStop in newer CLIs): they only operate on shells the
-			// native Bash spawned, which is now gone, so they are inert — but suppressing
-			// them keeps the whole native shell family off the menu so a model never
-			// reaches for them instead of TionHarness's bridged run_in_background +
-			// shell_manage. Both old and new names are listed because a CLI upgrade could
-			// swap the exposed name; disallowing an absent tool is a no-op, so covering
-			// both is safe across CLI versions. These stay INSIDE the ShellEnabled guard
-			// on purpose: when shell is disabled the native Bash lives, and TaskOutput/
-			// TaskStop are then the only way to manage the background tasks it spawns.
-			disallowed = append(disallowed, shellFamily...)
-		}
 		// Plan mode: claude-cli's EnterPlanMode/ExitPlanMode only complete when their
 		// exit approval can be answered. TionHarness answers it via the permission-prompt
 		// tool, which is wired only in "ask" and "read-only" modes (see
@@ -359,8 +346,12 @@ var (
 	// taskChecklistFamily is the newer CLI checklist family that has NO mirror
 	// into TionHarness's progress sink (the mirrored TodoWrite is handled apart).
 	taskChecklistFamily = []string{"TaskCreate", "TaskUpdate", "TaskList", "TaskGet"}
-	shellFamily         = []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"}
-	planFamily          = []string{"EnterPlanMode", "ExitPlanMode"}
+	// shellFamily is the CLI's native shell family (older names BashOutput/
+	// KillShell, renamed TaskOutput/TaskStop in newer CLIs). TionHarness ships no
+	// shell of its own, so it stays on the menu unless the agent's tool filter
+	// drops Bash.
+	shellFamily = []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"}
+	planFamily  = []string{"EnterPlanMode", "ExitPlanMode"}
 	// deniedNativeSubagentTypes are the scoped Agent(<type>) deny rules applied
 	// when the native launcher stays on the menu: only the read-only research
 	// types (Explore, Plan) remain callable. Custom agents a CLI config dir might

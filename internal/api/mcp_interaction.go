@@ -270,7 +270,7 @@ func (b *interactionBackend) Valid(token string) bool {
 
 // coreInteractionTools is the eager tier of Interaction MCP tools: the ones the
 // CLI MCP-config advertises on the alwaysLoad `tionharness_interaction` server so they
-// are NEVER deferred by the CLI's tool search (Bash, ask_user, the artifact/skill
+// are NEVER deferred by the CLI's tool search (ask_user, the artifact/skill
 // path, working-memory edits, permission_prompt). Everything else (notify,
 // focus_view, the session-lifecycle setters, schedule_wake, spawn_session) plus the
 // entire bridged self-management suite is the EXTENDED tier → a separate
@@ -278,8 +278,6 @@ func (b *interactionBackend) Valid(token string) bool {
 // registry's eager-vs-lazy split (see _Docs/19) and is the single source for both
 // the tier filter below and the per-tier CLI allowlist.
 var coreInteractionTools = map[string]bool{
-	"Bash":                 true,
-	"PowerShell":           true, // Windows-native shell (OS-default bridged shell)
 	"ask_user":             true,
 	"ask_user_async":       true,
 	"request_confirmation": true,
@@ -640,35 +638,6 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// not advertised in its appended catalog, mirroring the native path. (SK-2)
 		tools.NewSkillSearchTool(nil).Def(),
 	}
-	// shell is bridged only when enabled, mirroring the native tool loop's shell
-	// gate. Bash-preferred: whenever a POSIX shell backs it (always on Unix; on
-	// Windows only when bash.exe — Git Bash / WSL — is on PATH) the CLI gets Bash.
-	// On Windows, PowerShell is ALSO advertised alongside Bash for Windows-native
-	// tasks (cmdlets, registry, $env:); when no bash.exe is present it is the sole
-	// fallback shell. tools.ShellToolNames() is the single source of what is
-	// available, so the bridge can never advertise a shell that is not registered.
-	// The runner that backs it (NewShellRunner) dispatches per tool name (callShell
-	// passes it), and the CLI's own native Bash can be safely disallowed.
-	if tun != nil && tun.ShellEnabled() {
-		for _, name := range tools.ShellToolNames() {
-			switch name {
-			// AdvertiseOptimizerFlag: the schema is built here from a bare tool, but
-			// the real output filter is installed per turn by NewShellRunner — so
-			// no_compress IS supported at call time and must be declared, or the
-			// schema's "additionalProperties": false forbids the very escape hatch
-			// the optimizer's degraded note tells the agent to use.
-			case "Bash":
-				defs = append(defs, tools.NewShellTool(tools.Sandbox{}).AdvertiseOptimizerFlag().Def())
-			case "PowerShell":
-				defs = append(defs, tools.NewPowerShellTool(tools.Sandbox{}).AdvertiseOptimizerFlag().Def())
-			}
-		}
-		// monitor rides the same shell gate: it only ever watches a background shell,
-		// so without shell execution it has nothing to observe. The def is built from a
-		// bare tool (schema only); the real managers are installed per turn by
-		// setMonitor, exactly like the shell runner above.
-		defs = append(defs, tools.NewMonitorTool(nil, nil, tools.Sandbox{}).Def())
-	}
 	// spawn_session is a self-management capability, always advertised now (the
 	// self-manage master toggle was removed). The per-turn spawn tool is installed
 	// on each run by the stream handler.
@@ -958,7 +927,7 @@ func toolNameDistance(a, b string) int {
 // agent.WithSessionID (runtime paths: effectiveWorkDir, subagent parenting). The Interaction HTTP server's request ctx carries neither, so
 // every bridged tool used to stamp it itself — three copies that a new tool could
 // silently forget. No-op on a run with no persisted session: what the empty case
-// means stays each tool's own decision (callRunSubagent rejects, callShell warns).
+// means stays each tool's own decision (callRunSubagent rejects).
 //
 // It also stamps the process-ledger owner (internal/procwatch). A tool call that
 // arrives here comes from a CLI subprocess over HTTP, NOT down the turn's ctx, so
@@ -1058,13 +1027,6 @@ func (b *interactionBackend) dispatchTool(ctx context.Context, token string, run
 		return b.callUseSkill(run, args)
 	case "skill_search":
 		return b.callSkillSearch(run, args)
-	case "Bash", "PowerShell":
-		// Both shells can be bridged (Bash-preferred; PowerShell for Windows-native
-		// tasks). Pass the tool name so the runner dispatches to the right interpreter
-		// instead of guessing from OS.
-		return b.callShell(ctx, run, bare, args)
-	case "monitor":
-		return b.callMonitor(ctx, run, args)
 	case "run_subagent":
 		return b.callRunSubagent(ctx, run, args)
 	case "activate_tools":

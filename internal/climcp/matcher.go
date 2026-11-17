@@ -19,20 +19,6 @@ import "strings"
 // CLI matching mirrors native filepath.Match's full-string semantics (so "Bash"
 // does not also match "BashOutput"). An empty matcher stays empty — both engines
 // treat that as "every tool".
-//
-// Bridged-shell expansion: when the built-in shell is on, the CLI does NOT see a
-// plain "Bash"/"PowerShell" tool — it sees the interaction-server-namespaced
-// mcp__tionharness_interaction__Bash / __PowerShell. So a matcher naming the plain
-// shell tool would still miss every shell call on a claude-cli turn. We therefore
-// auto-add the bridged form for those two names, deduped — a plain "Bash,PowerShell"
-// matcher now fires across every workspace with no per-workspace data edit. Native
-// (non-bridged) turns are unaffected: the bridged alternative simply never matches
-// a tool that isn't present.
-var shellBridgedForms = map[string]string{
-	"Bash":       InteractionToolPrefix + "Bash",
-	"PowerShell": InteractionToolPrefix + "PowerShell",
-}
-
 func MatcherRegex(matcher string) string {
 	m := strings.TrimSpace(matcher)
 	if m == "" {
@@ -53,9 +39,6 @@ func MatcherRegex(matcher string) string {
 			continue
 		}
 		add(globToRegexFragment(part))
-		if bridged, ok := shellBridgedForms[part]; ok {
-			add(globToRegexFragment(bridged))
-		}
 	}
 	switch len(alts) {
 	case 0:

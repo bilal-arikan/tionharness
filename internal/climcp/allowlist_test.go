@@ -10,23 +10,23 @@ import (
 
 // TestNativeToolAllowlistBase pins the always-present core of the `--tools`
 // menu and the conditional families: web tools follow the agent toggle, the
-// native shell family survives only while TionHarness's shell is not bridged,
+// native shell family stays unless the agent's tool filter drops Bash,
 // plan-mode tools ride only the modes that can answer their exit prompt, and a
 // native whose bridge is advertised is NOT kept.
 func TestNativeToolAllowlistBase(t *testing.T) {
 	inter := tools.InteractionEndpoint{
 		URL:               "http://127.0.0.1:1/mcp",
-		CoreToolNames:     []string{"Bash", "todo_write", "use_skill"},
+		CoreToolNames:     []string{"todo_write", "use_skill"},
 		ExtendedToolNames: []string{"update_session"},
 	}
 	got := toSet(NativeToolAllowlist(db.Agent{}, inter, "auto", true, false))
 	// TodoWrite is always kept: its calls are mirrored into the progress sink.
-	for _, want := range []string{"Read", "Edit", "Write", "Glob", "Grep", "NotebookEdit", "ToolSearch", "WebSearch", "WebFetch", "TodoWrite"} {
+	for _, want := range []string{"Read", "Edit", "Write", "Glob", "Grep", "NotebookEdit", "ToolSearch", "WebSearch", "WebFetch", "TodoWrite", "Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"} {
 		if !got[want] {
 			t.Errorf("allowlist missing %q: %v", want, got)
 		}
 	}
-	for _, banned := range []string{"Bash", "TaskCreate", "Skill", "EnterPlanMode", "Task", "Agent", "AskUserQuestion", "SendMessage"} {
+	for _, banned := range []string{"TaskCreate", "Skill", "EnterPlanMode", "Task", "Agent", "AskUserQuestion", "SendMessage"} {
 		if got[banned] {
 			t.Errorf("allowlist must not keep %q while its bridge is advertised / mode is auto", banned)
 		}
@@ -39,20 +39,11 @@ func TestNativeToolAllowlistBase(t *testing.T) {
 		t.Error("agent with native web search off must not keep WebSearch/WebFetch")
 	}
 
-	// Shell not bridged → native Bash family stays (the agent has no other shell).
+	// Tool filter without Bash (read-only profile) -> the native shell family leaves.
 	got = toSet(NativeToolAllowlist(db.Agent{}, inter, "auto", false, false))
-	for _, want := range []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"} {
-		if !got[want] {
-			t.Errorf("shell disabled: allowlist must keep native %q", want)
-		}
-	}
-
-	// Agent opted into its native shell next to the bridge → the family stays too.
-	on := true
-	got = toSet(NativeToolAllowlist(db.Agent{NativeShell: &on}, inter, "auto", true, false))
-	for _, want := range []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"} {
-		if !got[want] {
-			t.Errorf("native shell opt-in: allowlist must keep native %q", want)
+	for _, gone := range []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"} {
+		if got[gone] {
+			t.Errorf("shell not allowed: allowlist must drop native %q", gone)
 		}
 	}
 
@@ -67,7 +58,7 @@ func TestNativeToolAllowlistBase(t *testing.T) {
 	}
 
 	// Bridges not advertised this turn → the WS17 invariant keeps the native fallback.
-	bare := tools.InteractionEndpoint{URL: inter.URL, CoreToolNames: []string{"Bash"}}
+	bare := tools.InteractionEndpoint{URL: inter.URL, CoreToolNames: []string{"ask_user"}}
 	got = toSet(NativeToolAllowlist(db.Agent{}, bare, "ask", true, false))
 	for _, want := range []string{"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "Skill", "EnterPlanMode", "ExitPlanMode"} {
 		if !got[want] {
@@ -84,16 +75,15 @@ func TestNativeToolAllowlistDisjointFromSuppression(t *testing.T) {
 	inter := tools.InteractionEndpoint{
 		URL:               "http://127.0.0.1:1/mcp",
 		Token:             "tok",
-		CoreToolNames:     []string{"Bash", "ask_user", "todo_write", "use_skill", "permission_prompt"},
+		CoreToolNames:     []string{"ask_user", "todo_write", "use_skill", "permission_prompt"},
 		ExtendedToolNames: []string{"update_session"},
 	}
-	on := true
-	agents := map[string]db.Agent{"default": {}, "nativeShell": {NativeShell: &on}}
+	agents := map[string]db.Agent{"default": {}}
 	for _, shell := range []bool{true, false} {
 		for _, subagents := range []bool{true, false} {
 			for _, mode := range []string{"auto", "ask", "read-only"} {
 				for name, ag := range agents {
-					res, err := WriteConfig(context.Background(), &fakeHost{shell: shell, nativeSubagents: subagents}, false, ag, inter, mode)
+					res, err := WriteConfig(context.Background(), &fakeHost{shellDenied: !shell, nativeSubagents: subagents}, false, ag, inter, mode)
 					if err != nil {
 						t.Fatalf("WriteConfig(shell=%v, subagents=%v, mode=%s, agent=%s): %v", shell, subagents, mode, name, err)
 					}

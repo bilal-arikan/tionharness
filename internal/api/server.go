@@ -306,7 +306,6 @@ func (s *Server) applySettings() {
 			}
 		}
 	}
-	s.tun.SetShellEnabled(cur.EnableShell)
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
 	s.tun.SetCodeMode(cur.EnableCodeMode)
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
@@ -321,7 +320,6 @@ func (s *Server) applySettings() {
 	// opencode-cli shares the codex stdout-idle window: same transport shape.
 	providers.SetOpenCodeIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleSec) * time.Second)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
-	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.AutonomousBootSeq)
 	s.tun.SetRecoveryLimits(cur.ReactiveCompact, cur.MaxTokenRetries, cur.ReactiveKeepRecent)

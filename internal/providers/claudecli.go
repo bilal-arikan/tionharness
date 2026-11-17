@@ -695,8 +695,7 @@ func cliBaseEnv(extra ...string) []string {
 		}
 		out = append(out, kv)
 	}
-	// Harden the CLI's own subprocess environment the same way the native shell
-	// tools are: a claude-cli agent running `git commit` must not hang on a GUI
+	// Harden the CLI's own subprocess environment: a claude-cli agent running `git commit` must not hang on a GUI
 	// editor (core.editor=notepad) or a credential prompt inside the stdin-less
 	// child. Guards win over inherited values (appended last).
 	//
@@ -1107,6 +1106,9 @@ func (c *ClaudeCLI) turnEnv(req Request, model string) []string {
 	// the only channel the CLI honours for max reasoning — see Request.CLIEffortLevel.
 	if strings.EqualFold(req.CLIEffortLevel, "max") {
 		env = append(env, "CLAUDE_CODE_EFFORT_LEVEL=max")
+	}
+	if req.Unattended {
+		env = append(env, proc.DisableGitSigningEnv()...)
 	}
 	// Isolated config home: point the CLI at a clean CLAUDE_CONFIG_DIR so its
 	// skills/settings/commands/global CLAUDE.md/login come from there instead of the

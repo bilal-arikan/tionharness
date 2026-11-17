@@ -84,43 +84,20 @@ func TestBridgeToolsWebToolsRespectAgentDenylist(t *testing.T) {
 	}
 }
 
-// TestBridgeToolsFSToolsAreCodexOnly: codex runs with its native shell off, so the
-// sandboxed file tools must be bridged — otherwise a read-only profile subagent
-// (explore/reviewer, allowlist Read/LS/Glob/Grep) has no tool at all. claude-cli
-// keeps its own natives and must not see duplicates.
-func TestBridgeToolsFSToolsAreCodexOnly(t *testing.T) {
+// TestBridgeToolsNoFSTools: no CLI gets TionHarness's file tools over the
+// bridge. codex reads and edits through its own shell and apply_patch, and
+// claude-cli has its own natives; either way a bridged copy would only duplicate.
+func TestBridgeToolsNoFSTools(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
-	fsTools := []string{"Read", "LS", "Glob", "Grep", "Write", "Edit"}
-
-	codex, call := bridgedNames(t, rt, db.Agent{ID: "a-codex", Provider: providerKindCodexCLI})
-	for _, name := range fsTools {
-		if !codex[name] {
-			t.Errorf("codex-cli bridge must advertise %s", name)
-		}
-	}
-	out, err := call(context.Background(), "LS", json.RawMessage(`{}`))
-	if err != nil && strings.Contains(strings.ToLower(err.Error()), "unknown tool") {
-		t.Fatalf("LS must be dispatchable through the bridge, got %v", err)
-	}
-	_ = out
-
-	reviewer := db.Agent{ID: "a-rev", Provider: providerKindCodexCLI, AllowedTools: `["Read","LS","Glob","Grep"]`}
-	names, _ := bridgedNames(t, rt, reviewer)
-	for _, name := range []string{"Read", "LS", "Glob", "Grep"} {
-		if !names[name] {
-			t.Errorf("a read-only codex profile must keep %s", name)
-		}
-	}
-	for _, name := range []string{"Write", "Edit"} {
-		if names[name] {
-			t.Errorf("a read-only codex profile must not get %s", name)
-		}
-	}
-
-	claude, _ := bridgedNames(t, rt, db.Agent{ID: "a-claude", Provider: "claude-cli"})
-	for _, name := range fsTools {
-		if claude[name] {
-			t.Errorf("claude-cli bridge must NOT advertise %s — the CLI has its own native", name)
+	for _, ag := range []db.Agent{
+		{ID: "a-codex", Provider: providerKindCodexCLI},
+		{ID: "a-claude", Provider: "claude-cli"},
+	} {
+		names, _ := bridgedNames(t, rt, ag)
+		for _, name := range []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash", "PowerShell"} {
+			if names[name] {
+				t.Errorf("%s bridge must NOT advertise %s", ag.Provider, name)
+			}
 		}
 	}
 }

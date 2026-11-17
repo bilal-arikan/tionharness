@@ -153,50 +153,6 @@ func (r *Runtime) readTrackerFor(sessionID string) *tools.ReadTracker {
 	return v.(*tools.ReadTracker)
 }
 
-// shellMgrFor returns the background-shell manager for a session, creating it on
-// first use. An empty session id (catalog/preview builds with no session on ctx)
-// yields nil, which disables run_in_background for that build.
-func (r *Runtime) shellMgrFor(sessionID string) *tools.ShellManager {
-	if sessionID == "" {
-		return nil
-	}
-	v, _ := r.shellMgrs.LoadOrStore(sessionID, tools.NewShellManager())
-	return v.(*tools.ShellManager)
-}
-
-// monitorMgrFor returns the monitor manager for a session, creating it on first
-// use and binding it to that session's wake channel. An empty session id
-// (catalog/preview builds with no session on ctx) yields nil, which disables the
-// monitor tool for that build — a monitor with nowhere to wake into is useless.
-//
-// agentID is the agent a match wakes; it is captured at creation time, so the
-// monitor keeps waking the agent that armed it even if another agent later
-// responds in the same session.
-func (r *Runtime) monitorMgrFor(sessionID, agentID string) *tools.MonitorManager {
-	if sessionID == "" {
-		return nil
-	}
-	v, _ := r.monitorMgrs.LoadOrStore(sessionID, tools.NewMonitorManager(
-		func(ctx context.Context, prompt, reason string) (string, error) {
-			return r.WakeNow(ctx, sessionID, agentID, prompt, reason)
-		}))
-	return v.(*tools.MonitorManager)
-}
-
-// SessionMonitorManagers returns the monitor and background-shell managers for a
-// session plus the sandbox a watched file path resolves against — the accessor
-// the claude-cli bridge needs, since a bridged turn builds no native registry of
-// its own. The managers are created on first use and a monitor armed here wakes
-// agentID. Both managers are nil when shell execution is disabled for the
-// workspace or the session id is empty; the sandbox is then the zero value, whose
-// Resolve reports the sandbox is not configured.
-func (r *Runtime) SessionMonitorManagers(sessionID, agentID string) (*tools.MonitorManager, *tools.ShellManager, tools.Sandbox) {
-	if !r.tun.ShellEnabled() {
-		return nil, nil, tools.Sandbox{}
-	}
-	return r.monitorMgrFor(sessionID, agentID), r.shellMgrFor(sessionID), tools.NewSandbox(r.SessionWorkdir(sessionID))
-}
-
 // buildRegistry assembles the tool registry for an agent: built-in tools plus
 // the catalog of every enabled MCP server in the workspace. cfgByServer maps
 // sanitized server names back to their configs for dispatch.
@@ -413,47 +369,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// files, rooted at this turn's working dir. Read-only.
 			tools.NewConfigValidateTool(sb),
 		)
-		// The shell tools are high-risk; offer them only when explicitly enabled. Two
-		// siblings share one execution core: Bash (POSIX — /bin/sh, or bash.exe on
-		// Windows) and PowerShell (pwsh/powershell.exe). Each is registered only when
-		// its backing shell is present, so the model gets a correctly-NAMED tool and
-		// emits the matching syntax. On every OS at least one is available (Unix→Bash,
-		// Windows→PowerShell). transform_data also runs arbitrary host code (python/
-		// node/bun) under the same gate; it reshapes large data into a JSON file
-		// (referenced as a table src) without inlining rows into context.
-		if r.tun.ShellEnabled() {
-			// Session-scoped background-shell manager: wired onto both shell tools so
-			// run_in_background can launch detached processes, plus the three management
-			// tools (shell_output/shell_kill/shell_list) that poll and reap them. Nil for
-			// catalog/preview builds (no session) → background execution simply unavailable.
-			shellMgr := r.shellMgrFor(SessionIDFrom(ctx))
-			// Route foreground shell output through the token-optimizer (sqz) in-process
-			// when wired — same filter the bridged (claude-cli) path uses, so native
-			// providers save tokens identically. nil when sqz is not opted-in.
-			shellFilter := r.sqzShellFilter(ctx)
-			// Command-layer optimizer (rtk) at the other end of the same call: it
-			// rewrites the command so it emits less, where sqz compresses what it
-			// emitted. Independently gated; both, either or neither may be active.
-			cmdFilter := r.rtkCommandFilter(ctx)
-			if sh := tools.NewShellTool(sb); sh.Available() {
-				builtins = append(builtins, sh.WithManager(shellMgr).WithOutputFilter(shellFilter).WithCommandFilter(cmdFilter))
-			}
-			if ps := tools.NewPowerShellTool(sb); ps.Available() {
-				builtins = append(builtins, ps.WithManager(shellMgr).WithOutputFilter(shellFilter).WithCommandFilter(cmdFilter))
-			}
-			if shellMgr != nil {
-				// One control tool (action=output/kill/list) polls and reaps the
-				// detached processes started with run_in_background.
-				builtins = append(builtins, tools.NewShellManageTool(shellMgr))
-				// monitor is the PUSH counterpart of shell_manage's polling: it watches a
-				// background shell, a file or a URL/WebSocket for a pattern and wakes the
-				// agent on a match, so a long wait costs no turns at all. Registered
-				// alongside, on the same manager; sb bounds a watched file path.
-				builtins = append(builtins, tools.NewMonitorTool(
-					r.monitorMgrFor(SessionIDFrom(ctx), agent.ID), shellMgr, sb))
-			}
-			builtins = append(builtins, tools.NewTransformDataTool(sb))
-		}
+		// transform_data runs host code (python/node/bun) to reshape large data into
+		// a JSON file (referenced as a table src) without inlining rows into context.
+		// Shell commands are the CLI's own (claude-cli Bash, codex/opencode shell);
+		// TionHarness ships no shell tool of its own.
+		builtins = append(builtins, tools.NewTransformDataTool(sb))
 	}
 
 	// Workspace config tools (confined to <workspace>/config/): let an agent
@@ -655,12 +575,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// eligible built-in tools as generated Python bindings behind a single run_code
 	// tool, so tool schemas stay OUT of the context window and intermediate data
 	// stays in the execution environment (the model orchestrates list→filter→act in
-	// ONE call). Gated by CodeMode+Shell toggles + a working dir; the bridge re-
+	// ONE call). Gated by the CodeMode toggle + a working dir; the bridge re-
 	// applies this agent's tool filter (plus the code-mode eligibility filter), so
 	// code mode grants no tool the agent could not call directly. Available even
 	// WITHOUT MCP servers now — the built-ins alone are enough. Native path only
 	// (the CLI bridge excludes run_code, bridgeExcluded).
-	if r.tun.CodeModeEnabled() && r.tun.ShellEnabled() && sb.Ready() {
+	if r.tun.CodeModeEnabled() && sb.Ready() {
 		toolFilter := r.toolFilter(ctx, agent)
 		// codeAllow = code-mode eligibility AND the agent's own filter. Eligibility is
 		// keyed on bare built-in names; a namespaced MCP name is always eligible (never

@@ -24,8 +24,9 @@ arguments — call tools by their exact name and never guess one. A few rules th
 catalog cannot express:
 
 - **Files** are not locked to the working directory; the permission mode is the
-  safety layer. **Shell** (`Bash` / `PowerShell`) is offered only when the
-  workspace enables it — when absent, use the file tools.
+  safety layer. **Shell** is your CLI's own shell tool (claude-cli `Bash`, the
+  codex / opencode shell). A read-only subagent profile has none — use the file
+  tools there.
 - **Web** (`WebSearch`, `WebFetch`): use proactively; your training data is stale
   on fast-moving topics.
 - **Delegation:** `run_subagent` runs an isolated subagent and returns its final

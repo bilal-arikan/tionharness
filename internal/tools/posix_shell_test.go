@@ -1,8 +1,6 @@
 package tools
 
 import (
-	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -136,30 +134,5 @@ func TestResolvePOSIXShellFallsBackToWSL(t *testing.T) {
 	}
 	if got := POSIXShellFlavor(); got != POSIXShellWSL {
 		t.Fatalf("POSIXShellFlavor() = %q, want %q", got, POSIXShellWSL)
-	}
-}
-
-// TestPOSIXShellExpandsVariables runs a real command through whatever shell the
-// resolver chose and asserts that assignments and command substitution survive.
-// This is the behavioural half of the regression: the WSL launcher returned
-// "x=[] y=[]" here because an outer shell expanded the script first.
-func TestPOSIXShellExpandsVariables(t *testing.T) {
-	tool := NewShellTool(NewSandbox(t.TempDir()))
-	if !tool.Available() {
-		t.Skip("no POSIX shell on this host")
-	}
-	in, err := json.Marshal(shellArgs{
-		Command:    `X=alpha; Y=$(printf beta); echo "x=[$X] y=[$Y]"`,
-		TimeoutSec: 30,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	out, err := tool.Call(context.Background(), in)
-	if err != nil {
-		t.Fatalf("shell call failed: %v (out=%q)", err, out)
-	}
-	if !strings.Contains(out, "x=[alpha] y=[beta]") {
-		t.Fatalf("shell expansion broken via %q: got %q", tool.exe, out)
 	}
 }

@@ -58,7 +58,6 @@ const DefaultIdleResumeMax = 1
 // change applies uniformly regardless of which workspace runtime reads it.
 type Tunables struct {
 	mu               sync.RWMutex
-	shellEnabled     bool // gates the high-risk built-in `shell` tool (off by default)
 	cliHooks         bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
 	cliPersist       bool // keep a long-lived claude-cli process per session (on by default)
 	cliSysPromptFile bool // hand claude-cli system prompt via temp file vs inline (off by default = inline)
@@ -233,22 +232,6 @@ func NewTunables() *Tunables {
 		// SetAutoTagSessions); test runtimes that skip applySettings still auto-tag.
 		autoTagSessions: true,
 	}
-}
-
-// SetShellEnabled toggles the built-in `shell` tool. It is off by default
-// because it grants arbitrary command execution inside the workspace sandbox;
-// enable it only once a permission/approval layer is in place.
-func (t *Tunables) SetShellEnabled(enabled bool) {
-	t.mu.Lock()
-	t.shellEnabled = enabled
-	t.mu.Unlock()
-}
-
-// ShellEnabled reports whether the built-in `shell` tool may be offered.
-func (t *Tunables) ShellEnabled() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.shellEnabled
 }
 
 // SetCLIHooksEnabled toggles whether the workspace's PreToolUse/PostToolUse hooks

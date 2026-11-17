@@ -149,9 +149,9 @@ func (h *Handle) ID() string {
 // It reports false when there is nothing to stop (already finished, or no cancel
 // func was registered).
 //
-// A spawn site that offers its OWN stop path (the shell_manage tool killing a
-// background shell) routes it through here instead of calling the cancel func
-// directly — otherwise the panel would show the same kill as a failure.
+// A spawn site that offers its OWN stop path routes it through here instead of
+// calling the cancel func directly — otherwise the panel would show the same
+// kill as a failure.
 func (h *Handle) RequestStop() bool {
 	if h == nil {
 		return false

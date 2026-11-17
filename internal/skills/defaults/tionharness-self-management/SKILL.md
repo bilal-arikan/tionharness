@@ -224,8 +224,9 @@ MCP servers, hooks and external tool runs, each with its command line, pid,
 owner (session + agent), status, exit code and a short output tail. Filter by
 `status`/`kind`/`session`. Reach for it before starting yet another long
 command — a build that never exited is visible here and nowhere else. There is
-no kill tool: stopping a process is a user action in the workspace process panel,
-and your OWN background shells are stopped with `shell_manage`.
+no kill tool: stopping a process is a user action in the workspace process panel.
+Commands your CLI's own shell runs are not in this ledger; manage those with the
+CLI's own background-task tools.
 
 **Secrets & sessions** — `secret` (one tool, `action: list|get|set|delete`) reads
 the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions

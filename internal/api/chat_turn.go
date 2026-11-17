@@ -105,17 +105,9 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if wb := workdirContextBlock(cwd); wb != "" {
 		lead = append(lead, pin("workdir", wb))
 	}
-	// Machine-environment marker (OS/arch/native shell) so the agent writes shell
-	// commands in the right syntax without guessing. Shares ONE source with the
-	// headless path (agent.autonomousSystemPrompt).
+	// Machine-environment marker (OS/arch) so the agent writes commands for the
+	// right platform without guessing.
 	lead = append(lead, pin("environment", agent.EnvironmentContextBlock()))
-	// Shell-execution capability, single-sourced: when the gate is on + a shell
-	// backs it + THIS agent's tool filter offers it, this advertises the registered
-	// Bash/PowerShell tools; otherwise it states shell is disabled and gives the
-	// dead-tool rule so a bare `PowerShell` call is not looped on.
-	if sh := wsp.Runtime.ShellToolsContextBlock(ctx, agentRow, false); sh != "" {
-		lead = append(lead, pin("shell", sh))
-	}
 	// Prompt-epoch drift notice: the frozen snapshot is holding back a live
 	// change. A compact diff of WHAT changed on the volatile side, so telling the
 	// agent about the drift never causes the very cache bust the snapshot exists

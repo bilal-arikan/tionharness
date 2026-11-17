@@ -99,10 +99,6 @@ type chatRun struct {
 	skillAllow  skillAllowedFunc             // current agent's skill allowed-tools lookup, for use_skill auto-grant (SK-3)
 	skillLedger *tools.SkillLedger           // session use_skill dedupe ledger, shared with the native tool
 	skillEpoch  int                          // fold epoch the ledger entries are valid in (session CompactionCount)
-	shell       shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
-	monitor     *tools.MonitorManager        // current session's monitor manager, for the Interaction MCP monitor tool
-	monitorSh   *tools.ShellManager          // current session's shell manager, the source monitor watches
-	monitorSb   tools.Sandbox                // sandbox a monitored file path resolves against
 	runAgent    runAgentRunner               // current agent's run_subagent runner (delegation on), for the Interaction MCP run_subagent tool
 	// bridge exposes the responding agent's lazy self-management tools to the CLI
 	// path (CLI-3): bridgeDefs are advertised in tools/list + the allowlist, and
@@ -269,47 +265,6 @@ func (r *chatRun) skillAllowedFor() skillAllowedFunc {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.skillAllow
-}
-
-// shellRunner runs a shell command for the responding agent (CLI path), bound to
-// the workspace sandbox. Mirrors the native shell built-in over the Interaction
-// MCP bridge so a claude-cli agent runs commands through TionHarness's own shell
-// (sandboxed + bounded) instead of the CLI's POSIX Bash. toolName selects the
-// interpreter ("Bash" / "PowerShell"); the runner resolves the backing shell and
-// falls back to PowerShell on Windows when no bash.exe is present.
-type shellRunner func(ctx context.Context, toolName string, args json.RawMessage) (string, error)
-
-// setShellRunner installs the per-agent shell runner so the Interaction MCP shell
-// tool (CLI path) can run a command. A nil value disables it (shell off).
-func (r *chatRun) setShellRunner(fn shellRunner) {
-	r.mu.Lock()
-	r.shell = fn
-	r.mu.Unlock()
-}
-
-// shellRunnerFor returns the current shell runner (nil if none installed).
-func (r *chatRun) shellRunnerFor() shellRunner {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.shell
-}
-
-// setMonitor installs the session's monitor + shell managers so the Interaction
-// MCP monitor tool (CLI path) can arm and list monitors. Nil values disable it
-// (shell off, or a build with no session), and the bridge then reports monitoring
-// is unavailable rather than silently doing nothing.
-func (r *chatRun) setMonitor(m *tools.MonitorManager, sh *tools.ShellManager, sb tools.Sandbox) {
-	r.mu.Lock()
-	r.monitor, r.monitorSh, r.monitorSb = m, sh, sb
-	r.mu.Unlock()
-}
-
-// monitorFor returns the current monitor + shell managers and the sandbox a
-// watched file path resolves against (managers nil when not installed).
-func (r *chatRun) monitorFor() (*tools.MonitorManager, *tools.ShellManager, tools.Sandbox) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.monitor, r.monitorSh, r.monitorSb
 }
 
 // runAgentRunner runs a run_subagent call for the responding agent (CLI path),

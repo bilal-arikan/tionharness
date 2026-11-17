@@ -70,26 +70,3 @@ func TestTools_WriteThenReadLoop(t *testing.T) {
 		t.Errorf("no steps streamed via the live sink")
 	}
 }
-
-// TestTools_ShellGate confirms the high-risk shell tool stays absent until the
-// workspace enables it, then runs a real command through the sandbox inside a turn.
-func TestTools_ShellGate(t *testing.T) {
-	prov := newScriptedProvider(
-		callTools("", tc("c1", "Bash", map[string]any{"command": "echo e2e-shell-ok"})),
-		sayText("done"),
-	)
-	h := newHarness(t, prov)
-	h.tun.SetShellEnabled(true)
-	ag := h.newAgent("Sheller")
-	sess := h.newSession(ag)
-
-	res := h.send(ag, sess, "Run echo for me.")
-
-	bash := findToolStep(res.steps, "Bash")
-	if bash == nil {
-		t.Fatalf("no Bash tool step in trace: %+v", res.steps)
-	}
-	if bash.IsError || !strings.Contains(bash.Output, "e2e-shell-ok") {
-		t.Errorf("Bash output = %q (err=%v), want it to contain the echo", bash.Output, bash.IsError)
-	}
-}

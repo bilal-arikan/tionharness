@@ -251,6 +251,11 @@ type Request struct {
 	// CLAUDE_CODE_EFFORT_LEVEL. Codex maps it to model_reasoning_effort; 0.148.0
 	// accepts xhigh, max and ultra. HTTP providers ignore it.
 	CLIEffortLevel string
+	// Unattended marks a turn with no human in the loop (an autonomous turn with
+	// the confine brake on). CLI transports then launch with commit/tag signing
+	// off (proc.DisableGitSigningEnv), so a `git commit` from the CLI's own shell
+	// cannot block forever on a GPG pinentry prompt nobody can answer.
+	Unattended bool
 	// CLIRestrictNativeTools, when set, pins claude-cli's BUILT-IN tool menu to
 	// CLINativeTools via `--tools` (an empty list disables every built-in). The
 	// CLI prompt is sized by the tools it carries: the unrestricted menu costs
@@ -509,9 +514,6 @@ const InteractionToolTimeoutSec = 3 * 60 * 60
 // dialect (codex) renders Servers itself. Fields a dialect cannot express are
 // simply unused by it — see each field's comment.
 type CLIMCPSpec struct {
-	// DisableNativeShell routes shell execution through the permissioned bridge.
-	// Codex renders this as features.shell_tool = false.
-	DisableNativeShell bool
 	// ConfigPath is the already-written claude --mcp-config file.
 	ConfigPath string
 	// Servers is the structured server set, for dialects that render their own

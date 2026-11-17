@@ -21,7 +21,7 @@ type fakeHost struct {
 	gate            func(string) bool
 	gateErr         error
 	hooks           map[string][]db.Hook
-	shell           bool
+	shellDenied     bool
 	cliHooks        bool
 	nativeSubagents bool
 	debug           []db.DebugEvent
@@ -34,10 +34,10 @@ func (f *fakeHost) ServerGate(context.Context, db.Agent) (func(string) bool, err
 func (f *fakeHost) EnabledHooks(_ context.Context, event string) ([]db.Hook, error) {
 	return f.hooks[event], nil
 }
-func (f *fakeHost) ShellEnabled() bool           { return f.shell }
-func (f *fakeHost) CLIHooksEnabled() bool        { return f.cliHooks }
-func (f *fakeHost) NativeSubagentsEnabled() bool { return f.nativeSubagents }
-func (f *fakeHost) Logger() *slog.Logger         { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+func (f *fakeHost) ShellAllowed(context.Context, db.Agent) bool { return !f.shellDenied }
+func (f *fakeHost) CLIHooksEnabled() bool                       { return f.cliHooks }
+func (f *fakeHost) NativeSubagentsEnabled() bool                { return f.nativeSubagents }
+func (f *fakeHost) Logger() *slog.Logger                        { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 func (f *fakeHost) EmitDebug(_ context.Context, ev db.DebugEvent) {
 	f.debug = append(f.debug, ev)
 }
@@ -66,7 +66,7 @@ func toSet(list []string) map[string]bool {
 var bridgedInter = tools.InteractionEndpoint{
 	URL:               "http://127.0.0.1:8090/mcp/interaction",
 	Token:             "tok-123",
-	CoreToolNames:     []string{"Bash", "ask_user", "todo_write", "use_skill", "permission_prompt"},
+	CoreToolNames:     []string{"ask_user", "todo_write", "use_skill", "permission_prompt"},
 	ExtendedToolNames: []string{"update_session", "create_agent"},
 }
 
@@ -76,7 +76,7 @@ var bridgedInter = tools.InteractionEndpoint{
 // the CLI's ToolSearch) — with the core tier allowlisted per tool and the
 // extended tier through a single server-level wildcard.
 func TestWriteConfigTwoTierInteraction(t *testing.T) {
-	h := &fakeHost{shell: true}
+	h := &fakeHost{}
 	res, err := WriteConfig(context.Background(), h, false, db.Agent{}, bridgedInter, "ask")
 	if err != nil {
 		t.Fatalf("WriteConfig: %v", err)
@@ -101,7 +101,7 @@ func TestWriteConfigTwoTierInteraction(t *testing.T) {
 
 	got := toSet(res.Allowed)
 	for _, w := range []string{
-		InteractionToolPrefix + "Bash", InteractionToolPrefix + "ask_user",
+		InteractionToolPrefix + "ask_user",
 		InteractionToolPrefix + "permission_prompt", "mcp__" + InteractionExtendedKey,
 	} {
 		if !got[w] {
@@ -115,9 +115,15 @@ func TestWriteConfigTwoTierInteraction(t *testing.T) {
 	}
 	// Bridged families are suppressed; plan mode stays (ask mode can answer it).
 	dis := toSet(res.Disallowed)
-	for _, w := range []string{"AskUserQuestion", "TaskCreate", "Skill", "Task", "Agent", "SendMessage", "Bash", "TaskStop"} {
+	for _, w := range []string{"AskUserQuestion", "TaskCreate", "Skill", "Task", "Agent", "SendMessage"} {
 		if !dis[w] {
 			t.Errorf("expected %q suppressed; got %v", w, res.Disallowed)
+		}
+	}
+	// The CLI's own shell is the agent's only shell: never suppressed.
+	for _, w := range []string{"Bash", "BashOutput", "TaskOutput", "TaskStop"} {
+		if dis[w] {
+			t.Errorf("native shell %q must stay available; got %v", w, res.Disallowed)
 		}
 	}
 	// TodoWrite is mirrored into the progress sink, so it is never suppressed.
@@ -132,12 +138,11 @@ func TestWriteConfigTwoTierInteraction(t *testing.T) {
 // TestWriteConfigNativeSubagentsScopedDeny pins the opt-in shape of the native
 // Agent launcher: the tool itself stays available (no bare "Agent" rule) while
 // the non-research built-in types are denied with scoped Agent(<type>) rules;
-// the old Task launcher and the output reader stay off. A native-shell agent
-// likewise keeps the whole Bash family.
+// the old Task launcher and the output reader stay off. The agent keeps the
+// whole native Bash family.
 func TestWriteConfigNativeSubagentsScopedDeny(t *testing.T) {
-	on := true
-	h := &fakeHost{shell: true, nativeSubagents: true}
-	res, err := WriteConfig(context.Background(), h, false, db.Agent{NativeShell: &on}, bridgedInter, "auto")
+	h := &fakeHost{nativeSubagents: true}
+	res, err := WriteConfig(context.Background(), h, false, db.Agent{}, bridgedInter, "auto")
 	if err != nil {
 		t.Fatalf("WriteConfig: %v", err)
 	}
@@ -153,7 +158,26 @@ func TestWriteConfigNativeSubagentsScopedDeny(t *testing.T) {
 	}
 	for _, w := range []string{"Bash", "BashOutput", "TaskOutput", "TaskStop"} {
 		if dis[w] {
-			t.Errorf("native shell agent: %q must not be suppressed; got %v", w, res.Disallowed)
+			t.Errorf("native shell %q must not be suppressed; got %v", w, res.Disallowed)
+		}
+	}
+}
+
+// TestWriteConfigShellDeniedByToolFilter pins the read-only-profile case: an
+// agent whose tool filter has no Bash loses the CLI's native shell family, with
+// or without an Interaction endpoint (the gate is agent-level).
+func TestWriteConfigShellDeniedByToolFilter(t *testing.T) {
+	for _, inter := range []tools.InteractionEndpoint{bridgedInter, {}} {
+		res, err := WriteConfig(context.Background(), &fakeHost{shellDenied: true}, false, db.Agent{}, inter, "auto")
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Cleanup()
+		dis := toSet(res.Disallowed)
+		for _, w := range []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"} {
+			if !dis[w] {
+				t.Errorf("bridged=%v: %q must be suppressed when the tool filter has no Bash; got %v", inter.URL != "", w, res.Disallowed)
+			}
 		}
 	}
 }
@@ -180,8 +204,8 @@ func TestWriteConfigNativeWebSearchWithoutServers(t *testing.T) {
 // TestWriteConfigRequiredCoreInvariant is the WS17 rule: a native whose bridged
 // replacement is NOT advertised this turn keeps its native fallback.
 func TestWriteConfigRequiredCoreInvariant(t *testing.T) {
-	bare := tools.InteractionEndpoint{URL: bridgedInter.URL, Token: "t", CoreToolNames: []string{"Bash"}}
-	res, err := WriteConfig(context.Background(), &fakeHost{shell: true}, false, db.Agent{}, bare, "auto")
+	bare := tools.InteractionEndpoint{URL: bridgedInter.URL, Token: "t", CoreToolNames: []string{"ask_user"}}
+	res, err := WriteConfig(context.Background(), &fakeHost{}, false, db.Agent{}, bare, "auto")
 	if err != nil {
 		t.Fatal(err)
 	}

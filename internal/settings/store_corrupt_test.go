@@ -23,7 +23,7 @@ func TestOpenQuarantinesCorruptSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a corrupt settings.json must not fail Open: %v", err)
 	}
-	if got := store.Get(); got.Theme != Default().Theme || got.EnableShell {
+	if got := store.Get(); got.Theme != Default().Theme || got.EnableCodeMode {
 		t.Fatalf("store did not fall back to defaults: %+v", got)
 	}
 

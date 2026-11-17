@@ -95,10 +95,7 @@ var codeModeExcludedBuiltins = map[string]bool{
 	// UI-sink fire-and-forget; meaningless when scripted.
 	"notify": true, "focus_view": true,
 	// Other execution engines / code-in-code.
-	"Bash": true, "PowerShell": true, "transform_data": true, "run_code": true,
-	"shell_manage": true,
-	// monitor arms a cross-turn wake; a scripted run has no turn to be woken into.
-	"monitor": true,
+	"transform_data": true, "run_code": true,
 	// Delegation / recursion / meta tool-loading.
 	"run_subagent": true, "run_adhoc_flow": true, "use_skill": true, "skill_search": true,
 	"activate_tools": true, "deactivate_tools": true, "tool_search": true,

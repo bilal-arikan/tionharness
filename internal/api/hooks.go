@@ -67,14 +67,6 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Description: "On the claude-cli path, native tools that can't be honoured headless are suppressed (--disallowedTools) and routed to TionHarness equivalents: AskUserQuestion→ask_user, TodoWrite/Task*→todo_write, ScheduleWakeup→schedule_wake, Skill→use_skill, Task/Agent→run_subagent.",
 		},
 		{
-			Name:        "CLI Bash → TionHarness shell bridge",
-			Scope:       "cli",
-			Event:       "System",
-			Setting:     "enableShell",
-			Enabled:     cur.EnableShell,
-			Description: "When the built-in shell is enabled, the CLI's native Bash is suppressed so shell commands route through TionHarness's own Bash/PowerShell tool (OS-correct shell resolution — git-bash/PowerShell on Windows, bash on macOS/Linux — plus streaming and background shells).",
-		},
-		{
 			Name:        "CLI hook passthrough",
 			Scope:       "cli",
 			Event:       "PreToolUse / PostToolUse",

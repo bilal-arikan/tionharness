@@ -179,11 +179,10 @@ type Settings struct {
 	// Gated tool capabilities — off by default; each expands agent power/cost.
 	// (enableSelfManage was removed 2026-07-01: the self-management suite is always
 	// built now; visibility is per-tool.)
-	EnableShell    bool `json:"enableShell"`    // built-in shell (arbitrary commands in sandbox)
 	EnableCLIHooks bool `json:"enableCliHooks"` // pass PreToolUse/PostToolUse hooks to claude-cli agents via --settings
 	// EnableCodeMode (code execution with MCP, _Docs/44): expose the MCP catalog
-	// as generated Python bindings behind the run_code tool. Also requires
-	// EnableShell (run_code executes arbitrary host code). Native path only.
+	// as generated Python bindings behind the run_code tool (it executes
+	// arbitrary host code). Native path only.
 	EnableCodeMode bool `json:"enableCodeMode"`
 	// ClaudeResume keeps the claude-cli session warm across turns: each turn passes
 	// --resume <id> and sends only the new turn (not the full transcript), so the
@@ -245,17 +244,15 @@ type Settings struct {
 	IdleResumeMax      int `json:"idleResumeMax"` // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
 
 	// Tool execution guards (process-global tool behaviour).
-	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 120); per-call timeout_sec still overrides
-	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`     // hard-max Bash/PowerShell timeout in seconds (0 = default 600)
-	MaxToolOutputKB        int `json:"maxToolOutputKB"`        // backstop cap on a tool's output in KB before truncation (0 = default 50)
+	MaxToolOutputKB int `json:"maxToolOutputKB"` // backstop cap on a tool's output in KB before truncation (0 = default 50)
 
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
-	// Scope caveat: AutonomousConfine confines the FS tools, but shell/powershell
-	// are NOT path-restricted by it. transform_data resolves its input/output
-	// arguments through the sandbox, but its arbitrary host-code script can bypass
-	// that path restriction. See internal/tools/builtin_shell.go.
-	AutonomousConfine bool `json:"autonomousConfine"` // confine the fs tools to the working dir on autonomous turns; shell is unaffected (default true)
+	// Scope caveat: AutonomousConfine confines TionHarness's own FS tools; the
+	// CLI's shell is NOT path-restricted by it. transform_data resolves its
+	// input/output arguments through the sandbox, but its arbitrary host-code
+	// script can bypass that path restriction.
+	AutonomousConfine bool `json:"autonomousConfine"` // confine the fs tools to the working dir on autonomous turns; the CLI shell is unaffected (default true)
 	AutonomousBootSeq bool `json:"autonomousBootSeq"` // inject the boot/verification-sequence reminder on autonomous turns (default true)
 
 	// Workspace backups — periodic, retention-bounded zip snapshots of every
@@ -344,7 +341,7 @@ func Default() Settings {
 		AutoTitleEnabled: true,
 
 		// CLI-path hooks default ON (preserves the hook-passthrough behaviour); turn
-		// off when a hook authored for TionHarness's shell misbehaves under the CLI's.
+		// off when a workspace hook misbehaves under the CLI's hook runner.
 		EnableCLIHooks: true,
 
 		// claude-cli session resume default ON: each turn passes --resume <id> and
@@ -395,12 +392,10 @@ func Default() Settings {
 
 		// Same as Claude Code's documented Bash defaults (2 min default, 10 min max):
 		// builds and test suites routinely exceed 30 s.
-		ShellDefaultTimeoutSec: 120,
-		ShellMaxTimeoutSec:     600,
 		// ~12K tokens; larger output is offloaded to a file with head+tail kept.
 		MaxToolOutputKB: 50,
 
-		// Autonomous turns confine fs/shell by default (safety brake).
+		// Autonomous turns confine the fs tools by default (safety brake).
 		AutonomousConfine: true,
 		AutonomousBootSeq: true,
 
@@ -473,7 +468,6 @@ type DTO struct {
 
 	AutoTitleEnabled bool `json:"autoTitleEnabled"`
 
-	EnableShell    bool `json:"enableShell"`
 	EnableCLIHooks bool `json:"enableCliHooks"`
 	EnableCodeMode bool `json:"enableCodeMode"`
 	ClaudeResume   bool `json:"claudeResume"`
@@ -504,9 +498,7 @@ type DTO struct {
 	CodexStdoutIdleSec int `json:"codexStdoutIdleSec"`
 	IdleResumeMax      int `json:"idleResumeMax"`
 
-	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
-	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
-	MaxToolOutputKB        int `json:"maxToolOutputKB"`
+	MaxToolOutputKB int `json:"maxToolOutputKB"`
 
 	AutonomousConfine bool `json:"autonomousConfine"`
 	AutonomousBootSeq bool `json:"autonomousBootSeq"`
@@ -578,7 +570,6 @@ func (s Settings) ToDTO() DTO {
 
 		AutoTitleEnabled: s.AutoTitleEnabled,
 
-		EnableShell:              s.EnableShell,
 		EnableCLIHooks:           s.EnableCLIHooks,
 		EnableCodeMode:           s.EnableCodeMode,
 		ClaudeResume:             s.ClaudeResume,
@@ -597,9 +588,7 @@ func (s Settings) ToDTO() DTO {
 		CodexStdoutIdleSec: s.CodexStdoutIdleSec,
 		IdleResumeMax:      s.IdleResumeMax,
 
-		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
-		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
-		MaxToolOutputKB:        s.MaxToolOutputKB,
+		MaxToolOutputKB: s.MaxToolOutputKB,
 
 		AutonomousConfine: s.AutonomousConfine,
 		AutonomousBootSeq: s.AutonomousBootSeq,
@@ -673,7 +662,6 @@ type Patch struct {
 
 	AutoTitleEnabled *bool `json:"autoTitleEnabled"`
 
-	EnableShell              *bool `json:"enableShell"`
 	EnableCLIHooks           *bool `json:"enableCliHooks"`
 	EnableCodeMode           *bool `json:"enableCodeMode"`
 	ClaudeResume             *bool `json:"claudeResume"`
@@ -692,9 +680,7 @@ type Patch struct {
 	CodexStdoutIdleSec *int `json:"codexStdoutIdleSec"`
 	IdleResumeMax      *int `json:"idleResumeMax"`
 
-	ShellDefaultTimeoutSec *int `json:"shellDefaultTimeoutSec"`
-	ShellMaxTimeoutSec     *int `json:"shellMaxTimeoutSec"`
-	MaxToolOutputKB        *int `json:"maxToolOutputKB"`
+	MaxToolOutputKB *int `json:"maxToolOutputKB"`
 
 	AutonomousConfine *bool `json:"autonomousConfine"`
 	AutonomousBootSeq *bool `json:"autonomousBootSeq"`

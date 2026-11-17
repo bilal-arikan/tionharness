@@ -165,6 +165,11 @@ func TestNoStaleCategoryEntries(t *testing.T) {
 	declared := declaredToolNames(t)
 	var stale []string
 	for name := range builtinCategory {
+		// The CLI's own shell tools are categorised on purpose (see builtinCategory):
+		// "group:files" must keep granting them although no built-in declares them.
+		if name == "Bash" || name == "PowerShell" {
+			continue
+		}
 		if _, ok := declared[name]; !ok {
 			stale = append(stale, name)
 		}

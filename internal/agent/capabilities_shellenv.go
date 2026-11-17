@@ -21,14 +21,18 @@ import (
 // session, because nothing in the prompt says which one it got.
 //
 // This capability states the resolved flavour once, in the cached static prefix.
+// It applies to claude-cli only: Claude Code's own Bash tool runs through the
+// host's POSIX shell (git-bash on Windows), while codex-cli and opencode-cli
+// bring shells of their own that this block does not describe.
 
 var shellEnvironmentCapability = Capability{
 	ID: "shell-environment",
-	Detect: func(ctx context.Context, r *Runtime, _ db.Agent) bool {
-		// Only worth a prompt block when the agent can actually run shell commands
-		// AND the path spelling is ambiguous (Windows). A native Unix /bin/sh needs
-		// no explanation.
-		return r.tun.ShellEnabled() && shellEnvironmentGuidance(tools.POSIXShellFlavor(), tools.POSIXShellExecutable()) != ""
+	Detect: func(ctx context.Context, r *Runtime, ag db.Agent) bool {
+		// Only worth a prompt block for a claude-cli agent AND when the path
+		// spelling is ambiguous (Windows). A native Unix /bin/sh needs no
+		// explanation.
+		return r.agentProviderKind(ag) == providerKindClaudeCLI &&
+			shellEnvironmentGuidance(tools.POSIXShellFlavor(), tools.POSIXShellExecutable()) != ""
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd, provider string) string {
 		return shellEnvironmentGuidance(tools.POSIXShellFlavor(), tools.POSIXShellExecutable())

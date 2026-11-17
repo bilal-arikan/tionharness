@@ -16,8 +16,8 @@ var wantNameOnlyDefaults = []string{
 	"create_task", "deactivate_tools", "expand", "focus_view",
 	"get_session_info", "get_task", "handoff_session", "insight_apply_finding",
 	"insight_list_findings", "insight_scan", "list_sessions", "list_tasks", "mermaid_validate",
-	"monitor", "move_task", "note_correct", "note_expand", "notify", "read_decider_debug", "read_session_debug", "render_template",
-	"run_adhoc_flow", "set_archived_task", "shell_manage", "skill_validate", "update_artifact",
+	"move_task", "note_correct", "note_expand", "notify", "read_decider_debug", "read_session_debug", "render_template",
+	"run_adhoc_flow", "set_archived_task", "skill_validate", "update_artifact",
 	"update_session", "update_task", "update_user_preferences", "wait_for_mcp_servers",
 }
 

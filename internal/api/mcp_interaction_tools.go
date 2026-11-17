@@ -405,55 +405,6 @@ func (b *interactionBackend) callSkillSearch(run *chatRun, args json.RawMessage)
 	return interaction.CallResult{Text: strings.TrimSpace(sb.String())}, nil
 }
 
-// callShell runs a shell command through the run's per-agent shell runner (CLI
-// path), which is bound to the workspace sandbox and uses TionHarness's own shell.
-// toolName ("Bash" / "PowerShell") selects the interpreter so a Bash-first agent
-// and a PowerShell call both dispatch correctly. Returns a graceful error result
-// when shell is not available for this turn (disabled or no sandbox).
-func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, toolName string, args json.RawMessage) (interaction.CallResult, error) {
-	runFn := run.shellRunnerFor()
-	if runFn == nil {
-		return interaction.CallResult{Text: "shell is not available for this turn", IsError: true}, nil
-	}
-	// The runner resolves the command's working directory from the session id on
-	// the context (Runtime.effectiveWorkDir), which Call() stamps centrally
-	// (stampRunSession). Unlike a subagent, a shell call is still legitimate on a
-	// run with no persisted session — it falls back to the workspace default dir —
-	// but that fallback must not be silent.
-	if run.sessionID == "" {
-		b.logWarn("bridged shell call has no session id; command runs in the workspace default dir",
-			"tool", toolName, "workspace", run.workspaceID)
-	}
-	out, err := runFn(ctx, toolName, args)
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: out}, nil
-}
-
-// callMonitor arms/lists/stops output monitors through the run's session-scoped
-// monitor manager (CLI path). The manager is installed per turn by setMonitor and
-// is the SAME object the native registry uses, so a monitor armed over the bridge
-// wakes the session exactly like a natively-armed one.
-//
-// A missing manager is reported as an explicit error result rather than an empty
-// success: an agent that thinks it armed a monitor would end its turn and wait for
-// a wake that can never arrive.
-func (b *interactionBackend) callMonitor(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	mgr, shellMgr, sb := run.monitorFor()
-	if mgr == nil {
-		return interaction.CallResult{
-			Text:    "monitoring is not available in this context",
-			IsError: true,
-		}, nil
-	}
-	out, err := tools.NewMonitorTool(mgr, shellMgr, sb).Call(ctx, args)
-	if err != nil {
-		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
-	}
-	return interaction.CallResult{Text: out}, nil
-}
-
 // logWarn records a warning from a bridged tool call. The backend is also built
 // bare in tests (no owning server), so the nil checks live here.
 func (b *interactionBackend) logWarn(msg string, args ...any) {

@@ -162,16 +162,18 @@ instances with different keys).
 ### MCP & gated tool capabilities (off by default — each expands power/cost)
 - (The dead `mcpGatewayUrl` setting was removed entirely 2026-07-01 — it was never
   consumed by the runtime. MCP servers are managed in the "Araçlar & MCP" category.)
-- `enableShell` — the built-in shell tool. On claude-cli agents it is bridged
-  (PowerShell on Windows) and the CLI's native `Bash` is suppressed so commands
-  route through TionHarness's shell.
+- `enableShell` — **REMOVED (2026-11-17).** TionHarness no longer ships a shell
+  tool; every agent uses its CLI's own shell (claude-cli `Bash`, codex / opencode
+  shell). The `TIONHARNESS_ENABLE_SHELL` env seed, `shellDefaultTimeoutSec` /
+  `shellMaxTimeoutSec` and the workspace `shellOutputCompression` /
+  `shellCommandRewrite` overrides went with it; rtk / sqz run as CLI hooks.
 - `enableSelfManage` — **REMOVED (2026-07-01).** The self-management suite is now
   ALWAYS built; visibility is per-tool (full / summary / name-only / hidden) on the
   "Araçlar" screen, defaulting to `hidden`. The settings field, its `TIONHARNESS_ENABLE_SELFMANAGE`
   env seed, and the `SelfManageEnabled` tunable were all deleted. See `_Docs/19`.
 - `enableCliHooks` — pass PreToolUse/PostToolUse hooks to claude-cli agents via
-  `--settings` (default true). Turn off to keep hooks native-only when a hook
-  authored for TionHarness's shell misbehaves under the CLI's own hook runner.
+  `--settings` (default true). Turn off when a workspace hook misbehaves under
+  the CLI's own hook runner.
 - `claudeResume` — keep the claude-cli session warm across turns (default **true**).
   When on, each single-agent turn passes `--resume <id>` and sends only the new
   delta (not the full transcript), so the CLI reuses its server-side prompt cache
@@ -241,7 +243,7 @@ available over `POST /api/backups/run` (not an agent tool).
 ## Safety notes
 
 - These tools change settings for the **whole application** (all workspaces).
-  Confirm intent before flipping capability switches like `enableShell`.
+  Confirm intent before flipping capability switches like `enableCodeMode`.
 - Out-of-range numbers are clamped, not rejected — read back the result to see
   the value that actually took effect.
 - Invalid enum/format values (e.g. an unknown `theme`, a malformed `accent`, a

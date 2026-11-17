@@ -29,7 +29,6 @@ const (
 
 // codexConfig is one turn's rendered codex configuration.
 type codexConfig struct {
-	DisableNativeShell bool
 	// DeveloperInstructions becomes `developer_instructions`, an additive
 	// developer-role message. It is the codex analogue of claude-cli's
 	// --append-system-prompt and is rendered as a multi-line basic string.
@@ -115,7 +114,7 @@ func renderCodexConfig(cfg codexConfig) string {
 		fmt.Fprintf(&b, "web_search = %s\n", tomlString(cfg.WebSearchMode))
 	}
 
-	if cfg.DisableNativeMultiAgent || cfg.DisableNativeShell {
+	if cfg.DisableNativeMultiAgent {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
@@ -124,13 +123,8 @@ func renderCodexConfig(cfg codexConfig) string {
 		// collaboration.spawn_agent remains available and can still spawn an agent.
 		// The actual enforcement is `[agents] enabled = false` below.
 		b.WriteString("[features]\n")
-		if cfg.DisableNativeShell {
-			b.WriteString("shell_tool = false\n")
-		}
-		if cfg.DisableNativeMultiAgent {
-			b.WriteString("multi_agent = false\n")
-			b.WriteString("multi_agent_v2 = false\n")
-		}
+		b.WriteString("multi_agent = false\n")
+		b.WriteString("multi_agent_v2 = false\n")
 	}
 
 	if cfg.DisableSubAgents {

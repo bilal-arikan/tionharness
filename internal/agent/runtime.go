@@ -144,21 +144,6 @@ type Runtime struct {
 	// process. Keyed by "<cwd>|<store>"; value is bool. See EnsureCodebaseIndexed.
 	cbmIndexed sync.Map
 
-	// shellMgrs holds one *tools.ShellManager per session id, tracking that session's
-	// background shells (run_in_background) so their output can be polled and they can
-	// be stopped across turns. Session-scoped and persistent across turns; keyed by
-	// session id, value is *tools.ShellManager. Unstamped-session builds (catalog/
-	// preview) get nil, which disables background execution for that build.
-	shellMgrs sync.Map
-
-	// monitorMgrs holds one *tools.MonitorManager per session id, tracking that
-	// session's armed monitors (the `monitor` tool) and the single goroutine that
-	// polls their sources. Session-scoped and persistent across turns — a monitor
-	// outlives the turn that armed it, which is the whole point: it wakes a LATER
-	// turn. Memory-only; released by ReleaseSessionRuntimeState. Unstamped-session
-	// builds (catalog/preview) get nil, which disables monitoring for that build.
-	monitorMgrs sync.Map
-
 	// settingsBridge backs the get_settings / update_settings self-management
 	// tools: read and live-apply the application-wide settings. Wired by the
 	// workspace manager once the api server exists; nil before then (tools off).
@@ -233,21 +218,6 @@ type Runtime struct {
 	// prompt block, the cwd auto-index and the allowlist exemption. Default on, like
 	// codebaseMemoryEnabled. See capabilities_zvecgrep.go.
 	zvecGrepEnabled atomic.Bool
-
-	// shellCompressMode is the per-workspace shell-output compression override:
-	// 0 = auto (follow sqz-hook detection), 1 = force on, 2 = force off. Set from
-	// WSSettings.ShellOutputCompression; consulted by sqzShellFilter (shell_optimizer.go).
-	shellCompressMode atomic.Int32
-
-	// shellRewriteMode is the per-workspace shell-COMMAND rewrite override (rtk),
-	// same tri-state encoding as shellCompressMode. Set from
-	// WSSettings.ShellCommandRewrite; consulted by rtkCommandFilter (rtk_optimizer.go).
-	shellRewriteMode atomic.Int32
-
-	// optLog remembers which recent shell OUTPUTS a token optimizer produced, so
-	// the claude-cli path (where the CLI owns the tool loop and steps are rebuilt
-	// from its trace) can still tag those steps. See optimizer_log.go.
-	optLog optimizerLog
 
 	// activeMu guards activeSessions, which tracks the sessions currently executing
 	// an autonomous invoke (schedule / wake / spawn). Keyed by session
@@ -556,47 +526,6 @@ func (r *Runtime) SetCodebaseMemory(enabled bool) { r.codebaseMemoryEnabled.Stor
 // for this workspace.
 func (r *Runtime) CodebaseMemoryEnabled() bool { return r.codebaseMemoryEnabled.Load() }
 
-// Shell-output compression modes (see shellCompressMode).
-const (
-	shellCompressAuto int32 = 0 // follow sqz-hook detection (default)
-	shellCompressOn   int32 = 1 // force on (needs the sqz binary)
-	shellCompressOff  int32 = 2 // force off
-)
-
-// SetShellCompression sets the per-workspace shell-output compression override from
-// the WSSettings string ("on"/"off"; anything else — including "" or "auto" — is
-// auto). Consulted by sqzShellFilter.
-func (r *Runtime) SetShellCompression(mode string) {
-	var v int32
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "on":
-		v = shellCompressOn
-	case "off":
-		v = shellCompressOff
-	default:
-		v = shellCompressAuto
-	}
-	r.shellCompressMode.Store(v)
-}
-
-// SetShellCommandRewrite sets the per-workspace shell-COMMAND rewrite override
-// (rtk) from the WSSettings string ("on"/"off"; anything else is auto). Shares the
-// tri-state shape with SetShellCompression but is a SEPARATE knob: rtk rewrites the
-// command before it runs, sqz compresses the output after, and a workspace may
-// reasonably want one without the other. Consulted by rtkCommandFilter.
-func (r *Runtime) SetShellCommandRewrite(mode string) {
-	var v int32
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "on":
-		v = shellCompressOn
-	case "off":
-		v = shellCompressOff
-	default:
-		v = shellCompressAuto
-	}
-	r.shellRewriteMode.Store(v)
-}
-
 // SetCodexPlugins installs this workspace's codex plugin configuration. An empty
 // spec (the off state) is stored as-is, so readers never have to distinguish
 // "disabled" from "configured with nothing".
@@ -810,25 +739,13 @@ func (r *Runtime) CloseSessionMCP(sessionID string) int {
 }
 
 // ReleaseSessionRuntimeState drops the per-session runtime state the Runtime
-// keeps in memory across turns: the monitor manager (stopping its poll goroutine
-// and every armed monitor), the background-shell manager and the file-freshness
-// read tracker. Session deletion calls it.
-//
-// Without this those sync.Map entries were never removed — every session that
-// ever ran a shell or read a file leaked its manager for the life of the process,
-// and a live monitor kept polling (and could still wake) a session that no longer
-// exists. The shells themselves are already terminated by the teardown phases
-// before this runs; this releases the bookkeeping.
+// keeps in memory across turns (the file-freshness read tracker). Session
+// deletion calls it; without it every session that ever read a file leaked its
+// tracker for the life of the process.
 func (r *Runtime) ReleaseSessionRuntimeState(sessionID string) {
 	if sessionID == "" {
 		return
 	}
-	// Monitors first: a monitor holds a goroutine and can arm a wake, so it must
-	// stop before the state it observes is dropped.
-	if v, ok := r.monitorMgrs.LoadAndDelete(sessionID); ok {
-		v.(*tools.MonitorManager).Close()
-	}
-	r.shellMgrs.Delete(sessionID)
 	r.readTrackers.Delete(sessionID)
 }
 
@@ -930,11 +847,6 @@ func (r *Runtime) WorkspaceHookScriptsDir() string {
 	return filepath.Join(filepath.Dir(r.workDir), "hook-scripts")
 }
 
-// ShellEnabled reports whether the built-in shell tool may be offered. Exposed so
-// the CLI Interaction MCP bridge gates the bridged shell exactly like the native
-// path's shell gate.
-func (r *Runtime) ShellEnabled() bool { return r.tun.ShellEnabled() }
-
 // WorkDir returns this workspace's default working directory (the fs/shell base
 // dir). Exposed so the API layer can show the effective cwd when a session has no
 // per-session WorkingDir override.
@@ -975,59 +887,6 @@ func (r *Runtime) SetWakeTurnRunner(fn WakeTurnFunc) { r.wakeTurn = fn }
 // the runtime can resolve its workspace (DB, settings) from the manager.
 func (r *Runtime) WorkspaceID() string { return r.wsID }
 
-// NewShellRunner returns a closure that runs a shell command through a
-// workspace-sandboxed shell tool for the claude-cli Interaction MCP bridge — so a
-// CLI agent runs commands through TionHarness's own shell (sandboxed, bounded,
-// permission/hook-gated) instead of the CLI's native POSIX Bash. The toolName
-// argument selects the interpreter: "PowerShell" routes to the PowerShell host,
-// anything else (including "Bash") routes to the POSIX shell — falling back to
-// PowerShell on Windows when no bash.exe is present, so the runner honours whatever
-// the bridge advertises (see interactionToolSpecs) without depending on OS alone.
-// Returns nil when shell is disabled or no sandbox is configured, so the bridge
-// advertises shell only when it can honour it.
-func (r *Runtime) NewShellRunner() func(ctx context.Context, toolName string, args json.RawMessage) (string, error) {
-	if !r.tun.ShellEnabled() {
-		return nil
-	}
-	if !tools.NewSandbox(r.workDir).Ready() {
-		return nil
-	}
-	// Resolve the working dir per call so the bridged shell honours the session's
-	// WorkingDir override (the ctx carries the session id), matching the native
-	// path. Unconfined, like an interactive turn.
-	return func(ctx context.Context, toolName string, args json.RawMessage) (string, error) {
-		sb := tools.NewSandbox(r.effectiveWorkDir(ctx))
-		// Route bridged shell output through the token-optimizer (sqz) in-process when
-		// wired — the CLI hook path cannot reach this bridged tool name (see sqzShellFilter).
-		filter := r.sqzShellFilter(ctx)
-		// Command-layer optimizer (rtk), same reasoning as the output filter: the
-		// CLI's own hook cannot see this bridged tool name.
-		cmdFilter := r.rtkCommandFilter(ctx)
-		// The CLI rebuilds its steps from its own stream-json trace, far from this
-		// call stack, so the per-call sink is drained here and parked in the
-		// output-keyed log the trace conversion reads (see optimizer_log.go).
-		callCtx, opt := tools.WithOptimizerSink(ctx)
-
-		out, err := func() (string, error) {
-			if toolName == "PowerShell" {
-				return tools.NewPowerShellTool(sb).WithOutputFilter(filter).WithCommandFilter(cmdFilter).Call(callCtx, args)
-			}
-			// Bash-preferred: use the POSIX shell when one backs it. On Windows without a
-			// bash.exe, ShellTool.Available() is false, so fall back to PowerShell rather
-			// than dispatch to a shell that cannot run — no silent failure.
-			bash := tools.NewShellTool(sb)
-			if !bash.Available() {
-				return tools.NewPowerShellTool(sb).WithOutputFilter(filter).WithCommandFilter(cmdFilter).Call(callCtx, args)
-			}
-			return bash.WithOutputFilter(filter).WithCommandFilter(cmdFilter).Call(callCtx, args)
-		}()
-		if o := opt.Take(); o != nil && err == nil {
-			r.optLog.record(out, *o)
-		}
-		return out, err
-	}
-}
-
 // MarketGlobalDir exposes the data-dir-level global market directory so the api
 // layer can build a workspace-independent market store (used by the workspace
 // template picker, which must work even with zero workspaces during onboarding).
@@ -1065,13 +924,6 @@ func workspaceLedgerDir(workDir string) string {
 // and the same per-agent allowlist. Returns an empty catalog when self-management
 // is off (no lazy built-ins are registered). The dispatcher runs any built-in by
 // name (the catalog is the gate); unknown/foreign names return an error.
-// codexBridgedFSTools are the eager sandboxed file tools BridgeTools advertises
-// to a codex-cli agent (see the comment there). apply_patch is lazy and already
-// bridged for every CLI through BridgeableDefsFiltered.
-var codexBridgedFSTools = map[string]bool{
-	"Read": true, "LS": true, "Glob": true, "Grep": true, "Write": true, "Edit": true,
-}
-
 func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent, autonomous ...bool) ([]providers.ToolDef, func(ctx context.Context, name string, args json.RawMessage) (string, error)) {
 	// Bridge installation precedes turn composition. Bind filesystem tools to
 	// the session now, just as the shell runner does at each call.
@@ -1118,15 +970,10 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent, autonomous ..
 	//     in tools.bridgeExcluded), so they are advertised here explicitly and
 	//     dispatched by name through reg.Call below, exactly like the other extras.
 	//     claude-cli is deliberately untouched — it keeps using its own natives.
-	//   - Read / LS / Glob / Grep / Write / Edit : codex-cli ONLY. TionHarness turns
-	//     codex's native shell off and bridges its own Bash instead, so without these
-	//     a codex agent reads files through `cat` and a read-only profile subagent
-	//     (explore / planner / reviewer, whose allowlist names exactly these tools)
-	//     had NO way to look at the repo at all (measured 2026-10-18 in WS3). They
-	//     are the registry's own sandboxed fs tools, dispatched by name below.
+	//     Files are codex's own business: its native shell and apply_patch read and
+	//     edit the tree, so no TionHarness file tool is bridged to it.
 	if r.agentProviderKind(agent) == providerKindCodexCLI {
 		extra = append(extra, tools.NewWebFetchTool().Def(), tools.NewWebSearchTool(r.vault).Def())
-		extra = append(extra, reg.BuiltinDefs(func(name string) bool { return codexBridgedFSTools[name] })...)
 	}
 	for _, d := range extra {
 		if allow == nil || allow(d.Name) {

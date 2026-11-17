@@ -150,7 +150,7 @@ func TestOpenCodeBuildArgs(t *testing.T) {
 
 func TestOpenCodeConfigRender(t *testing.T) {
 	c := NewOpenCodeCLI("/bin/opencode", "", t.TempDir())
-	c.ConfigureCLIMCP(CLIMCPSpec{DisableNativeShell: true, Servers: map[string]CLIMCPServer{
+	c.ConfigureCLIMCP(CLIMCPSpec{Servers: map[string]CLIMCPServer{
 		"tionharness_interaction": {Transport: "http", URL: "http://127.0.0.1:1/core?full=1", Headers: map[string]string{"Authorization": "Bearer t"}, DisabledTools: []string{"noisy"}},
 		"local":                   {Command: "srv", Args: []string{"--x"}, Env: map[string]string{"K": "V"}},
 	}})

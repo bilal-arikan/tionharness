@@ -48,7 +48,7 @@ func listProcessesIn(t *testing.T, s *Server, wsp *workspace.Workspace, query st
 }
 
 func TestListProcessesReturnsTheLedger(t *testing.T) {
-	h := beginTestProcess(t, procwatch.Meta{Kind: procwatch.KindShell, Label: "Bash", Command: "go test ./api-list-probe"})
+	h := beginTestProcess(t, procwatch.Meta{Kind: procwatch.KindCode, Label: "Bash", Command: "go test ./api-list-probe"})
 
 	var got *procwatch.Entry
 	for _, e := range listProcesses(t, "") {
@@ -67,7 +67,7 @@ func TestListProcessesReturnsTheLedger(t *testing.T) {
 
 func TestListProcessesFiltersByStatusAndKind(t *testing.T) {
 	running := beginTestProcess(t, procwatch.Meta{Kind: procwatch.KindMCP, Command: "mcp-server --probe"})
-	done := procwatch.Default().Begin(t.Context(), procwatch.Meta{Kind: procwatch.KindShell, Command: "echo done-probe"})
+	done := procwatch.Default().Begin(t.Context(), procwatch.Meta{Kind: procwatch.KindCode, Command: "echo done-probe"})
 	done.Finish(nil)
 
 	// Comma-separated and repeated params mean the same thing.
@@ -102,13 +102,13 @@ func TestListProcessesResolvesTheAgentBehindASessionOnlyOwner(t *testing.T) {
 
 	// What the Interaction MCP bridge stamps: workspace + session, no agent.
 	bridged := beginTestProcess(t, procwatch.Meta{
-		Kind:    procwatch.KindShell,
+		Kind:    procwatch.KindCode,
 		Command: "echo bridged-probe",
 		Owner:   procwatch.Owner{WorkspaceID: wsp.ID, SessionID: sess.ID},
 	})
 	// A process whose session is already gone must still be listed.
 	orphan := beginTestProcess(t, procwatch.Meta{
-		Kind:    procwatch.KindShell,
+		Kind:    procwatch.KindCode,
 		Command: "echo orphan-probe",
 		Owner:   procwatch.Owner{WorkspaceID: wsp.ID, SessionID: "SES-deleted"},
 	})
@@ -134,7 +134,7 @@ func TestListProcessesResolvesTheAgentBehindASessionOnlyOwner(t *testing.T) {
 func TestStopProcessSignalsAndReportsOutcome(t *testing.T) {
 	stopped := false
 	h := procwatch.Default().Begin(t.Context(), procwatch.Meta{
-		Kind: procwatch.KindShell, Command: "sleep probe", Stop: func() { stopped = true },
+		Kind: procwatch.KindCode, Command: "sleep probe", Stop: func() { stopped = true },
 	})
 
 	s := &Server{}

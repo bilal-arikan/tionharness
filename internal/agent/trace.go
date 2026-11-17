@@ -214,10 +214,6 @@ type TurnStep struct {
 	Source        string `json:"source,omitempty"`
 	Provider      string `json:"provider,omitempty"`
 	SessionAction string `json:"sessionAction,omitempty"`
-	// Optimizer records that an external token-optimizer (sqz / rtk) shrank this
-	// shell step's output before it re-entered the model's context, so the UI can
-	// show a chip instead of the rewrite being invisible. nil = untouched.
-	Optimizer *tools.ShellOptimization `json:"optimizer,omitempty"`
 }
 
 // ContextChangeStep builds the persisted/streamed TurnStep for a prompt-epoch
@@ -362,16 +358,9 @@ func isNativeSubagentLauncher(tool string) bool {
 	return tool == "Agent" || tool == "Task"
 }
 
-// traceStepToTurnStep is the runtime-bound form: the pure mapping plus the
-// token-optimizer chip, which only the runtime can resolve (the CLI ran the shell
-// through our bridge in a different call stack, so the optimization is recovered
-// from the output-keyed log rather than a ctx sink). A miss leaves Optimizer nil.
+// traceStepToTurnStep is the runtime-bound form of the pure mapping.
 func (r *Runtime) traceStepToTurnStep(t providers.TraceStep) TurnStep {
-	st := traceStepToTurnStep(t)
-	if st.Kind == StepTool {
-		st.Optimizer = r.optLog.lookup(st.Output)
-	}
-	return st
+	return traceStepToTurnStep(t)
 }
 
 // traceToSteps converts a provider-produced trace (claude CLI stream-json) into

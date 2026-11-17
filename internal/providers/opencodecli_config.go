@@ -43,9 +43,6 @@ type opencodeConfig struct {
 	SystemPrompt string
 	// PermissionMode is TionHarness's "" | "auto" | "ask" | "read-only".
 	PermissionMode string
-	// DisableNativeShell switches opencode's bash tool off so shell execution
-	// goes through the permissioned TionHarness bridge instead.
-	DisableNativeShell bool
 	// DisableNativeWeb switches websearch/webfetch off (Request.NativeWebSearch
 	// false) so the bridged TionHarness web tools are the only path.
 	DisableNativeWeb bool
@@ -118,9 +115,6 @@ func opencodeToolsBlock(cfg opencodeConfig) map[string]bool {
 			off[t] = false
 		}
 		return off
-	}
-	if cfg.DisableNativeShell {
-		off["bash"] = false
 	}
 	if cfg.DisableNativeWeb {
 		off["websearch"] = false

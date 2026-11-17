@@ -224,21 +224,17 @@ var Catalog = []Tool{
 			Note: "Bu codex kurulumunu hangi aracın yaptığı anlaşılamadı (npm veya Homebrew değil), o yüzden TionHarness karışmaz. npm ile kurduysan `npm install -g @openai/codex@latest`, Homebrew ile kurduysan `brew upgrade --cask codex`; aksi halde release sayfasından yeni ikiliyi indirip mevcut olanın üzerine kopyala.",
 		},
 	},
-	// rtk is wired by the ShellCommandRewrite SETTING, not a hook. It used to ship a
-	// PreToolUse hook that prefixed `rtk ` onto every command; that template was
-	// removed after it bricked the shell (2026-07-31, WS10/SES63): the hook body was
-	// a PowerShell one-liner, but claude-cli runs hooks through bash, so it died with
-	// `syntax error near unexpected token '|'` — and a failing PreToolUse hook BLOCKS
-	// the tool call, so every Bash call in that workspace failed. The in-process
-	// rewriter replaces it and is strictly better: it covers both the native and
-	// bridged paths, and it only rewrites commands measured to benefit (the hook
-	// wrapped everything, including `git diff` and `cat`, where rtk loses).
+	// rtk is wired as a PreToolUse hook on the CLI's own Bash tool: `rtk hook claude`
+	// is rtk's Claude Code hook handler (a plain command word, valid under the bash
+	// runner claude-cli uses for hooks). An earlier template prefixed `rtk ` onto
+	// every command through a PowerShell one-liner and bricked the shell under bash
+	// (2026-07-31, WS10/SES63); the handler form decides per command instead.
 	{
 		Name:        "rtk",
-		Desc:        "Rust Token Killer — test/build komutlarını yeniden yazan CLI proxy'si (Ayarlar ▸ Workspace ▸ \"Shell komutu yeniden yazma\" ile açılır)",
+		Desc:        "Rust Token Killer — test/build komutlarını yeniden yazan CLI proxy'si (PreToolUse hook)",
 		URL:         "https://github.com/rtk-ai/rtk",
 		Category:    "token",
-		Wire:        "setting",
+		Wire:        "hook",
 		VersionArgs: []string{"--version"},
 		Update: UpdateSpec{
 			Kind: UpdateManual,

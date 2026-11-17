@@ -37,8 +37,7 @@ type OpenCodeCLI struct {
 	// vendors whose variant names are known; see opencodeVariant).
 	effortVariant bool
 
-	mcpServers         map[string]CLIMCPServer
-	disableNativeShell bool
+	mcpServers map[string]CLIMCPServer
 }
 
 // NewOpenCodeCLI creates a provider that invokes the given opencode binary.
@@ -76,11 +75,10 @@ func (c *OpenCodeCLI) SetConfigDir(dir string) {
 // ConfigDir returns the opencode home this provider currently uses.
 func (c *OpenCodeCLI) ConfigDir() string { return c.configDir }
 
-// ConfigureCLIMCP installs the current turn's MCP server set and native shell
-// policy (rendered into opencode.json by buildConfig).
+// ConfigureCLIMCP installs the current turn's MCP server set (rendered into
+// opencode.json by buildConfig).
 func (c *OpenCodeCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
 	c.mcpServers = spec.Servers
-	c.disableNativeShell = spec.DisableNativeShell
 }
 
 // opencodeVariant maps the product's reasoning tier onto opencode's `--variant`
@@ -157,7 +155,6 @@ func (c *OpenCodeCLI) buildConfig(req Request) opencodeConfig {
 	return opencodeConfig{
 		SystemPrompt:          strings.TrimSpace(joinNonEmpty(req.System, interactionSystemNote)),
 		PermissionMode:        req.PermissionMode,
-		DisableNativeShell:    c.disableNativeShell,
 		DisableNativeWeb:      !req.NativeWebSearch,
 		DisableAllNativeTools: aux,
 		Servers:               c.mcpServers,
@@ -345,6 +342,9 @@ func (c *OpenCodeCLI) runAttempt(ctx context.Context, args []string, prompt, mod
 		}
 	}
 	cmd.Env = c.env(configPath)
+	if req.Unattended {
+		cmd.Env = append(cmd.Env, proc.DisableGitSigningEnv()...)
+	}
 	if req.WorkDir != "" {
 		if fi, statErr := os.Stat(req.WorkDir); statErr == nil && fi.IsDir() {
 			cmd.Dir = req.WorkDir

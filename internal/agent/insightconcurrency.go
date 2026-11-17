@@ -12,6 +12,12 @@ import (
 // instead of scattered string comparisons.
 const providerKindCodexCLI = "codex-cli"
 
+// providerKindClaudeCLI and providerKindOpenCodeCLI are the other CLI kinds.
+const (
+	providerKindClaudeCLI   = "claude-cli"
+	providerKindOpenCodeCLI = "opencode-cli"
+)
+
 // agentProviderKind resolves an agent's provider KIND id. Agent.Provider is the
 // derived kind (see SyncProviderFields) and is the cheap answer; an older row
 // that only carries the instance id falls back to the registry lookup. Returns

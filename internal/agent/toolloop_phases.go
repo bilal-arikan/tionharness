@@ -87,6 +87,17 @@ type toolBatch struct {
 	results    []providers.ToolResult
 }
 
+// unattendedGitDeny are the claude permission rules an unattended turn carries:
+// publishing to a remote (push, adding or re-pointing a remote) needs a human.
+var unattendedGitDeny = []string{"Bash(git push:*)", "Bash(git remote add:*)", "Bash(git remote set-url:*)"}
+
+// unattended reports a turn with no human in the loop: autonomous AND the
+// workspace's autonomous confine brake on (the same condition that used to make
+// TionHarness's own shell "confined").
+func (t *toolLoopTurn) unattended() bool {
+	return t.autonomous && t.r.tun != nil && t.r.tun.AutonomousConfine()
+}
+
 // prepare wires the per-turn request fields, context sinks and provider homes
 // that every downstream path (plain completion, CLI delegation, native loop)
 // depends on. It returns a cleanup func the caller MUST defer: the headless
@@ -97,6 +108,16 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
 	// gate their tool use. Empty maps to "auto" downstream.
 	t.req.PermissionMode = effectivePermissionMode(t.agent.PermissionMode, t.autonomous)
+	t.req.Unattended = t.unattended()
+	// codex-cli and opencode-cli shells cannot be scoped per tool, so an agent
+	// whose tool filter has no Bash (a read-only profile: explore, planner,
+	// reviewer) runs in their read-only mode instead: it can still read the tree,
+	// but nothing it runs can write. claude-cli drops its shell family instead
+	// (climcp.WriteConfig / NativeToolAllowlist).
+	if kind := t.r.agentProviderKind(t.agent); (kind == providerKindCodexCLI || kind == providerKindOpenCodeCLI) &&
+		!t.r.ToolAllowedFunc(t.ctx, t.agent)("Bash") {
+		t.req.PermissionMode = "read-only"
+	}
 	// Resolved here, not in initLoopState: the plain (no-tools) path folds steer
 	// messages too and never reaches the native loop's setup.
 	// Steer messages ride the user role: the operator ({"role":"system"} in
@@ -377,7 +398,6 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 			t.r.logger.Warn("codex mcp spec failed", "error", err)
 		}
 		// Always replace the previous turn's policy, including empty/error specs.
-		spec.DisableNativeShell = t.inter.URL != "" && t.r.tun.ShellEnabled() && !t.agent.NativeShellEnabled()
 		t.cli.ConfigureCLIMCP(spec)
 		return noop
 	}
@@ -391,6 +411,14 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 		t.r.logger.Warn("cli mcp config failed", "error", err)
 		return noop
 	}
+	// Unattended turns may not publish: the CLI's own Bash is the agent's shell,
+	// so the git push / remote brake TionHarness's shell used to apply becomes
+	// scoped claude permission rules (--disallowedTools + permissions.deny).
+	// codex-cli and opencode-cli have no per-command rule, so the brake is
+	// claude-cli only.
+	if t.req.Unattended {
+		disallowed = append(disallowed, unattendedGitDeny...)
+	}
 	// Built-in tool allowlist (`--tools`): only when the bridge is wired — without
 	// an Interaction endpoint the natives ARE the agent's whole tool surface, so the
 	// menu is left untouched (the suppression list alone applies, as before).
@@ -399,7 +427,7 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 	t.req.CLINativeSubagents = t.inter.URL != "" && t.r.tun.ClaudeCLINativeSubagents()
 	if t.inter.URL != "" && t.r.tun.ClaudeCLIToolAllowlist() {
 		t.req.CLIRestrictNativeTools = true
-		t.req.CLINativeTools = climcp.NativeToolAllowlist(t.agent, t.inter, t.agent.PermissionMode, t.r.tun.ShellEnabled(), t.req.CLINativeSubagents)
+		t.req.CLINativeTools = climcp.NativeToolAllowlist(t.agent, t.inter, t.agent.PermissionMode, t.r.ToolAllowedFunc(t.ctx, t.agent)("Bash"), t.req.CLINativeSubagents)
 	}
 	if path == "" && len(disallowed) == 0 {
 		return noop
@@ -1058,11 +1086,6 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 	if call.Name == "run_subagent" && call.ID != "" && b.subFutures[call.ID] == nil {
 		subs.bindLive(card)
 	}
-	// Per-call optimizer sink: a shell tool whose output was shrunk by sqz
-	// (or whose command was rtk-wrapped) reports it here, so the card can
-	// show what the model actually received.
-	callCtx, opts := tools.WithOptimizerSink(callCtx)
-
 	// Stream long-running tool output into the already-open live card when
 	// the tool and live sink support it.
 	toolStart := time.Now()
@@ -1234,10 +1257,6 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 		IsError: res.IsError,
 		Batch:   b.batch,
 	}
-	// Token-optimizer chip: recorded even on an errored shell call, since the
-	// compression happened regardless and the user should see why the output
-	// reads abbreviated.
-	st.Optimizer = opts.Take()
 	// The working checklist is a first-class step, not a generic tool row.
 	// `set` updates carry the merged list in the result, not the input.
 	if call.Name == "todo_write" && !res.IsError {

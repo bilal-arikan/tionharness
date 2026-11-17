@@ -10,9 +10,6 @@ func TestTunables_Defaults(t *testing.T) {
 	if tun.MaxOutputTokens() != 0 {
 		t.Errorf("MaxOutputTokens = %d, want 0", tun.MaxOutputTokens())
 	}
-	if tun.ShellEnabled() {
-		t.Error("ShellEnabled = true, want false")
-	}
 }
 
 func TestTunables_SetAndGet(t *testing.T) {
@@ -30,7 +27,7 @@ func TestTunables_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 50 {
 		wg.Add(2)
-		go func() { defer wg.Done(); tun.SetShellEnabled(true); _ = tun.ShellEnabled() }()
+		go func() { defer wg.Done(); tun.SetCLIHooksEnabled(true); _ = tun.CLIHooksEnabled() }()
 		go func() { defer wg.Done(); tun.SetMaxOutputTokens(1000); _ = tun.MaxOutputTokens() }()
 	}
 	wg.Wait()

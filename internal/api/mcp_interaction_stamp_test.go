@@ -82,51 +82,6 @@ func TestCallStampsSessionIDCentrally(t *testing.T) {
 	wantLedgerOwner(t, gotCtx, run)
 }
 
-// TestCallStampsShellSessionID: the shell runner resolves the command's working
-// directory from the session id on the context (Runtime.effectiveWorkDir). The
-// Interaction HTTP server's request ctx carries none, so an unstamped call
-// silently ran in the workspace default dir instead of the session's WorkingDir.
-// Same central stamp, a second dispatch branch.
-func TestCallStampsShellSessionID(t *testing.T) {
-	shellName := ""
-	for _, name := range tools.ShellToolNames() {
-		shellName = name
-		break
-	}
-	if shellName == "" {
-		t.Skip("no shell interpreter is registered on this host")
-	}
-	runs, run, tok := newStampRun(t, "r-stamp-shell", "s-stamp-shell")
-
-	var gotAgentSession, gotToolSession, gotTool string
-	run.setShellRunner(func(ctx context.Context, toolName string, _ json.RawMessage) (string, error) {
-		gotAgentSession = agent.SessionIDFrom(ctx)
-		gotToolSession = tools.CurrentSessionID(ctx)
-		gotTool = toolName
-		return "ok", nil
-	})
-
-	tun := agent.NewTunables()
-	tun.SetShellEnabled(true) // else interactionToolSpecs omits the shell and Call() reports "No such tool"
-	b := &interactionBackend{runs: runs, tun: tun}
-	res, err := b.Call(context.Background(), tok, shellName, json.RawMessage(`{"command":"echo hi"}`))
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if res.IsError || res.Text != "ok" {
-		t.Fatalf("want the runner result, got %+v", res)
-	}
-	if gotTool != shellName {
-		t.Errorf("toolName = %q, want %q", gotTool, shellName)
-	}
-	if gotAgentSession != run.sessionID {
-		t.Errorf("agent.SessionIDFrom(ctx) = %q, want %q", gotAgentSession, run.sessionID)
-	}
-	if gotToolSession != run.sessionID {
-		t.Errorf("tools.CurrentSessionID(ctx) = %q, want %q", gotToolSession, run.sessionID)
-	}
-}
-
 // ctxCaptureTool is a tools.Tool that only records the ctx it was called with.
 type ctxCaptureTool struct{ ctx context.Context }
 
