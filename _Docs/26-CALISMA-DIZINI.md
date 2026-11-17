@@ -1,26 +1,29 @@
 # Çalışma Dizini (Working Directory) — Oturum-Başına cwd
 
-> **Özet (2026-09-22):** Her sohbet oturumunun ajan araçlarının çalışacağı kendi
+> **Özet (2026-09-22, güncelleme 2026-11-17):** Her sohbet oturumunun ajan araçlarının çalışacağı kendi
 > çalışma dizinini (`Session.WorkingDir`) seçebilmesini sağlayan mekanik (the external agent project
 > ilhamlı) — Composer'daki klasör rozeti, workspace varsayılan dizini, spawn/handoff
 > seeding'i ve otonom turlar için `autonomousConfine` freni. Durum: uygulanmış ve
-> olgun. En önemli/kritik karar: **confine yalnız fs araçlarını kilitler, shell'i
-> KİLİTLEMEZ** — `shell`/`powershell` aracı `Sandbox.Resolve`'dan hiç geçmediği için
-> confined bir turda bile shell ile sandbox dışına yazılabilir; bu bilinçli olarak
-> "belgelenmiş, kısıtlanmamış" bırakılmıştır (statik komut ayrıştırması güvenilir
-> değil). Ayrıca Windows'a özgü NT/device-namespace yol kaçışları (`\\?\`, ADS)
+> olgun. En önemli/kritik karar: **confine yalnız TionHarness'in fs araçlarını kilitler,
+> kabuğu KİLİTLEMEZ** — ajanın kabuğu 2026-11-17'den beri her zaman CLI'nin native
+> kabuğudur (claude-cli `Bash`, codex-cli kabuğu, opencode-cli `bash`) ve
+> `Sandbox.Resolve`'dan hiç geçmez; confined bir turda bile kabukla çalışma dizini
+> dışına yazılabilir — bilinçli olarak "belgelenmiş, kısıtlanmamış". Confine açık otonom
+> tur ("unattended") yalnız şunları alır: üç CLI'ye `GIT_CONFIG_*` ile commit/tag gpg
+> imzalama kapatma env'i (`proc.DisableGitSigningEnv`) ve claude-cli'ye
+> `Bash(git push:*)` / `Bash(git remote add:*)` / `Bash(git remote set-url:*)` deny
+> kuralları; codex/opencode'da push freni **yoktur**. Ayrıca Windows'a özgü NT/device-namespace yol kaçışları (`\\?\`, ADS)
 > ayrıca reddedilir; kök İÇİNDEKİ bir symlink/junction'ın dışarıyı göstermesi
-> handle tabanlı gerçek-yol kontrolüyle reddedilir (TSK393). Confined shell
-> komutu artık bir **Windows Job Object** içinde koşar: kopmuş alt süreçler dahil
-> tüm ağaç çağrı bitince öldürülür, süreç sayısı sınırlıdır — bu süreç/kaynak
-> sınırıdır, yol sınırı DEĞİLDİR (TSK392). Talimat dosyası çözümlemesi (2026-09-21) **`CLAUDE.md` önce,
+> handle tabanlı gerçek-yol kontrolüyle reddedilir (TSK393). Eski confined kabuğun
+> Windows Job Object kapsaması (TSK392) TionHarness kabuğuyla birlikte kalktı: CLI
+> kabuk komutları için süreç-job kapsaması yoktur. Talimat dosyası çözümlemesi (2026-09-21) **`CLAUDE.md` önce,
 > `AGENTS.md` fallback**: yalnız dosyanın ADI prompta yazılır (içerik asla inline
 > edilmez — CLI'lar zaten natively yüklüyor) ve headless turlar da aynı probe'u
 > alır. Dayandığı dosyalar: `internal/agent/workdir_ctx.go`,
 > `internal/agent/instructionfile.go`, `internal/api/workdir_context.go`,
 > `internal/tools/sandbox.go`, `internal/tools/sandbox_realpath*.go`,
-> `internal/tools/builtin_shell.go`, `internal/tools/builtin_shell_contain.go`,
-> `internal/tools/builtin_shell_harden.go`, `internal/proc/job*.go`.
+> `internal/agent/toolloop_phases.go` (`unattended`, `unattendedGitDeny`),
+> `internal/proc/env.go` (`DisableGitSigningEnv`).
 
 > Eklendi: **2026-06-22**. the external agent project (external-agent-oss) "working directory"
 > mekaniğinin TionHarness'e uyarlaması.
@@ -106,12 +109,20 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
 
 | Ayar | Varsayılan | Etki |
 |---|---|---|
-| `autonomousConfine` | **açık** | Otonom turda **fs araçları** çalışma dizinine **kilitlenir** (mutlak yol + `..` reddi) ve shell'de `git push` engellenir. **Shell yolu kısıtlanmaz** (aşağıya bak). İnteraktif sohbet etkilenmez. |
+| `autonomousConfine` | **açık** | Otonom turda TionHarness'in **fs araçları** çalışma dizinine **kilitlenir** (mutlak yol + `..` reddi); tur "unattended" sayılır: üç CLI'ye gpg imzalama kapatma env'i, claude-cli'ye `git push`/`git remote add`/`git remote set-url` deny kuralları. **Kabuk yolu kısıtlanmaz** (aşağıya bak). İnteraktif sohbet etkilenmez. |
 
 - Confine, `Sandbox.Confined` bayrağını yeniden kullanır (`internal/tools/sandbox.go`):
   interaktif = `NewSandbox` (kilitsiz), otonom+confine = `NewConfinedSandbox`.
-- `git push` engeli `builtin_shell.go isNetworkMutatingGit` ile (best-effort substring;
-  gerçek sınır confine'ın kendisidir).
+- **Unattended tur (2026-11-17):** `toolLoopTurn.unattended()` = otonom **ve**
+  `autonomousConfine` açık (`internal/agent/toolloop_phases.go`). Böyle bir turda
+  `ChatRequest.Unattended` set edilir; claude-cli/codex-cli/opencode-cli taşıyıcıları
+  env'e `proc.DisableGitSigningEnv()` ekler (`GIT_CONFIG_COUNT=2`, `commit.gpgsign=false`,
+  `tag.gpgsign=false` — headless `git commit` GPG pinentry istemine takılmasın).
+  claude-cli ayrıca `unattendedGitDeny` kurallarını disallow listesine ekler:
+  `Bash(git push:*)`, `Bash(git remote add:*)`, `Bash(git remote set-url:*)`.
+  **Bilinen boşluk:** codex-cli ve opencode-cli'de karşılığı yok — bu CLI'lerin kabuğu
+  komut deseniyle daraltılamadığından unattended turda push freni **yoktur**. Eski
+  `isNetworkMutatingGit` substring freni TionHarness kabuğuyla birlikte kaldırıldı.
 - **Windows yol yazımları (confined dalda, `rejectWindowsPathTricks`):** kök
   karşılaştırmasından ÖNCE açıkça reddedilenler — NT/device namespace önekleri
   (`\\?\`, `\\.\`, `\??\`, dolayısıyla `\\?\UNC\`), `GLOBALROOT` aygıt yolları ve
@@ -144,32 +155,29 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
 ### Confine, shell'de path kısıtlamaz (2026-08-28)
 
 `autonomousConfine` adı yanıltıcı olabilir: confine **yalnız fs araçlarını**
-kapatır, kabuğu kapatmaz.
+kapatır, kabuğu kapatmaz. (2026-11-17'den beri kabuk her zaman CLI'nin native
+kabuğudur.)
 
 | Araç | Confined turda kısıtlı mı? | Mekanizma |
 |---|---|---|
 | `read_file`, `write_file`, `edit_file`, `apply_patch`, `list_dir`, `glob`, `grep`, `config_validate` | **Evet** | Her yol argümanı `Sandbox.Resolve`'dan geçer; mutlak yol ve `..` kaçışı reddedilir. |
-| `shell` (Bash), `powershell` | **Hayır** | `Sandbox.Resolve` bu yolda **hiç çağrılmaz**. Komut, kabuğa opak bir metin olarak verilir. |
-| `transform_data` | **Argümanlar evet, script gövdesi hayır** | Aynı kapıdan (`ShellEnabled`) kayıtlı, ana makinede python/node çalıştırır. |
+| CLI'nin native kabuğu (claude-cli `Bash`, codex-cli kabuğu, opencode-cli `bash`) | **Hayır** | TionHarness'ten hiç geçmez; `Sandbox.Resolve` çağrılmaz. Yalnız başlangıç cwd'si çalışma dizinidir. |
+| `transform_data` | **Argümanlar evet, script gövdesi hayır** | Koşulsuz kayıtlı (eski `ShellEnabled` kapısı 2026-11-17'de kalktı), ana makinede python/node çalıştırır. |
 
 `transform_data` input/output argüman yollarını `Sandbox.Resolve` üzerinden
 kısıtlar. Ancak script gövdesi rastgele ana makine kodu çalıştırdığı için kendi
 dosya erişimini açabilir ve bu argüman kısıtını aşabilir.
 
-Confined bayrağının shell yolunda yaptığı üç şey
-(`internal/tools/builtin_shell.go`, `builtin_shell_harden.go`,
-`builtin_shell_contain.go`):
+Eskiden (TionHarness'in kendi kabuğu varken) confined bayrağı kabuk yolunda üç şey
+yapıyordu: gpg imzalama kapatma env'i, `isNetworkMutatingGit` ile `git push` /
+`git remote add` / `git remote set-url` engeli ve ön plan komutunu bir süreç işine
+(job) alma. 2026-11-17'den beri yalnız ilk ikisinin karşılığı var (yukarıdaki
+"Unattended tur" maddesi: env üç CLI'de, push freni yalnız claude-cli'de); süreç-job
+kapsaması yoktur.
 
-1. `proc.DisableGitSigningEnv()` env'e eklenir — ajanın koştuğu `git commit`
-   GPG pinentry parola istemine takılıp sonsuza kadar beklemesin diye.
-2. `isNetworkMutatingGit` ile `git push` / `git remote add` / `git remote set-url`
-   engellenir — substring tabanlı, best-effort fren.
-3. **Ön plan komutu bir süreç işi (job) içinde koşar** (TSK392, 2026-09-22) —
-   aşağıdaki "Süreç sınırı" bölümüne bak.
-
-Gerçek tek sınır **süreç çalışma dizinidir** (`cmd.Dir = sb.Root`). Yani confined
-bir turda `write_file` ile `/c/başka/yer` yazılamaz ama
-`sh -c 'echo x > /c/başka/yer/f'` serbesttir — shell, fs araçlarının kısıtını
+Gerçek tek sınır **süreç çalışma dizinidir**. Yani confined bir turda TionHarness'in
+fs aracıyla `/c/başka/yer` yazılamaz ama CLI kabuğunda
+`sh -c 'echo x > /c/başka/yer/f'` serbesttir — kabuk, fs araçlarının kısıtını
 komple bypass eder.
 
 **Neden statik komut ayrıştırma çözüm değil:** komut metninden yol çıkarıp
@@ -182,41 +190,22 @@ kısıtlanmamıştır**.
 Gerçek **yol** sınırı için kimlik düzeyinde OS izolasyonu gerekir (aşağıdaki
 seçenekler); o iş TSK392'den ayrılan yeni bir pbi kartındadır.
 
-### Süreç sınırı: confined shell Job Object içinde (TSK392, 2026-09-22)
+### Süreç sınırı: confined shell Job Object içinde (TSK392, 2026-09-22) — KALDIRILDI (2026-11-17)
 
-**Önceki durum:** confined turdaki shell komutu için tek OS mekanizması bağlam
-iptalinde `taskkill /T` idi. `/T` ebeveyn-PID ağacını yürür; ebeveyni çoktan
-ölmüş, kopmuş bir süreç (`start`, `Start-Process`, `nohup … &`) bu ağaçta yoktur.
-Otonom bir tur, araç çağrısı bittikten sonra da çalışan süreç bırakabiliyordu;
-fork bombasına karşı da hiçbir sınır yoktu.
-
-**Şimdi:** `runShellCmd` (`internal/tools/builtin_shell_contain.go`) confined ön
-plan komutunu `proc.Job` (`internal/proc/job_windows.go`) içinde başlatır:
-
-- Süreç `CREATE_SUSPENDED` yaratılır, job'a atanır, **sonra** `NtResumeProcess`
-  ile devam ettirilir — arada job dışında tek bir çocuk bile doğamaz.
-- `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: çağrı dönünce job kapanır ve içindeki
-  her süreç (kopmuşlar dahil) ölür.
-- `JOB_OBJECT_LIMIT_ACTIVE_PROCESS` = 128: aynı anda canlı süreç sınırı (fork
-  bombası freni; git-bash komut başına iki süreç harcar).
-- Job kurulamazsa komut **çalıştırılmaz**, araç hata döner — confined bir komut
-  asla sessizce kapsamsız koşmaz.
-- Windows dışı: job, komutun kendi süreç grubudur (`Setpgid`); `Close` grubu
-  öldürür. `setsid` çağıran süreci tutmaz, süreç sayısı sınırı yoktur.
-- İnteraktif (kilitsiz) shell etkilenmez; kasıtlı arka plan süreci bırakabilir.
-  `run_in_background` shell'leri de bu kapsamda değildir.
-
-**Bu bir yol sınırı DEĞİLDİR:** job içindeki süreçler aynı kullanıcıyla, aynı
-dosya erişimiyle koşar. Testler: `internal/proc/job_windows_test.go` (kopmuş
-torun job kapanınca ölür, job'suz kontrol vakasında yaşar, süreç sınırı çocuğu
-engeller), `internal/tools/builtin_shell_contain_windows_test.go` (confined çağrı
-kopmuş süreci öldürür, kilitsiz çağrı dokunmaz).
+TionHarness'in kendi kabuğu varken confined ön plan komutu `proc.Job`
+(`internal/proc/job_windows.go`; Windows dışında süreç grubu / cgroup) içinde koşuyordu:
+`KILL_ON_JOB_CLOSE` ile kopmuş alt süreçler dahil tüm ağaç çağrı bitince ölüyor,
+`ACTIVE_PROCESS` = 128 fork bombasını frenliyordu. Kabuk kaldırılınca bu kapsama da
+kalktı: CLI'nin native kabuğunda koşan komutlar CLI taşıyıcısının alt süreçleridir ve
+TionHarness onları bir job'a almaz (`internal/proc/job*.go` yerinde ama kabuk için
+çağıranı yok). Otonom bir CLI turu, araç çağrısı bittikten sonra da çalışan kopmuş
+süreç bırakabilir — **bilinen boşluk**. Job zaten bir yol sınırı değildi.
 
 **Yol sınırı için seçenekler (analiz, uygulanmadı):**
 
 | Seçenek | Ne verir | Maliyet / risk |
 |---|---|---|
-| Job Object (uygulandı) | Süreç ağacı + kaynak sınırı | Yol sınırı yok |
+| Job Object (2026-09-22 uygulandı, 2026-11-17 kabukla birlikte kaldırıldı) | Süreç ağacı + kaynak sınırı | Yol sınırı yok |
 | Düşük yetkili ayrı kullanıcı + kökte ACL | Gerçek dosya sistemi sınırı | Hesap yönetimi, `CreateProcessWithLogonW` kimlik bilgisi, git/araç zinciri profili, kök dışındaki araç yollarına (Go, node, git) okuma izni |
 | AppContainer / LPAC | Kullanıcı eklemeden dosya sistemi + ağ sınırı | Git-bash/MSYS ve çoğu CLI AppContainer'da kırılır; erişilecek her dizine capability SID ACL'i gerekir |
 | Container (Docker / WSL) | Tam izolasyon | Windows araç zinciri kaybı, başlatma gecikmesi, dosya senkronu |
@@ -252,10 +241,10 @@ tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dal�
 
 ## Akış matrisi
 
-| Tur tipi | fs araçları | shell path | git push |
+| Tur tipi | fs araçları | CLI kabuğu path | git push |
 |---|---|---|---|
 | İnteraktif sohbet | Kilitsiz | Kilitsiz | Serbest |
-| Otonom + confine açık | Çalışma dizinine kilitli | **Kilitsiz** (yalnız cwd = çalışma dizini) | Engelli |
+| Otonom + confine açık (unattended) | Çalışma dizinine kilitli | **Kilitsiz** (yalnız cwd = çalışma dizini) | claude-cli: deny kuralıyla engelli · codex/opencode: **serbest** (fren yok) |
 | Otonom + confine kapalı | Kilitsiz | Kilitsiz | Serbest |
 
 ## the external agent project ile fark

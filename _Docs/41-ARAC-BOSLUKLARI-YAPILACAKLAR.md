@@ -1,11 +1,13 @@
 # 41 — Araç Boşlukları ve Yapılacaklar (the external agent project ↔ TionHarness)
 
-> **Özet (2026-09-03):** the external agent project (Claude Code tabanlı) ile TionHarness builtin araç
+> **Özet (2026-09-03, güncelleme 2026-11-17):** the external agent project (Claude Code tabanlı) ile TionHarness builtin araç
 > envanterinin karşılaştırmasından çıkan **backlog** dokümanıdır — kısmen uygulanmış,
 > kısmen açık. Dalga 1-2 tamamlandı (`WebSearch`, `transform_data`, `PowerShell`,
 > `get_session_info`, `update_user_preferences`, `render_template`); açık kalanlar
-> `call_llm` (P1), güvenli credential-giriş UI'ı, `Monitor`, `EnterWorktree`/`ExitWorktree`
-> ve `NotebookEdit` (P3-P4). Ayrıca bilinçli kapsam-dışı bırakılanlar (OAuth trigger'lar,
+> `call_llm` (P1), güvenli credential-giriş UI'ı, `EnterWorktree`/`ExitWorktree`
+> ve `NotebookEdit` (P3-P4). **2026-11-17:** TionHarness'in kendi kabuğu kaldırıldı —
+> `PowerShell`/`Bash` araçları, arka plan kabukları ve 2026-09-22'de uygulanan `monitor`
+> aracı silindi; ajanlar CLI'nin native kabuğunu kullanır, `Monitor` maddesi kapsam dışı. Ayrıca bilinçli kapsam-dışı bırakılanlar (OAuth trigger'lar,
 > messaging kanalları, `browser_tool`) ve mevcut araçlara eklenen özellikler (Edit/Write
 > tazelik guard'ı, Read offset/limit, Grep/Glob genişletmeleri) listelenir. Dayandığı
 > dosyalar: `internal/tools/builtin_*.go`, `internal/tools/classify.go`, `toolsetup.go`.
@@ -31,13 +33,13 @@
 | 1 | `WebSearch` | Yeni araç | **P0** | ✅ Tamamlandı (2026-06-30) |
 | 2 | `call_llm` (hafif LLM alt-görevi) | Yeni araç | **P1** | Açık |
 | 3 | `transform_data` | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) |
-| 4 | `PowerShell` (ayrı shell) | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) |
+| 4 | `PowerShell` (ayrı shell) | Yeni araç | **P1** | ✅ Tamamlandı (2026-06-30) → **kaldırıldı (2026-11-17)**, CLI'nin native kabuğu kullanılır |
 | 5 | `get_session_info` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-03) |
 | 6 | `set_session_labels` / `set_session_status` | Yeni araç | **P2** | ❌ Kapsam dışı (2026-07-03 — `set_session_tags` + `archive_session`/Kanban karşılıyor) |
 | 7 | `update_user_preferences` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-03) |
 | 8 | `render_template` | Yeni araç | **P2** | ✅ Tamamlandı (2026-07-06 — _Docs/63) |
 | 9 | `source_credential_prompt` benzeri güvenli credential UI | Yeni araç | **P3** | Açık |
-| 10 | `Monitor` (koşul bekleme) | Yeni araç | **P3** | Açık |
+| 10 | `Monitor` (koşul bekleme) | Yeni araç | **P3** | ❌ Kapsam dışı — 2026-09-22 uygulandı, 2026-11-17 kabukla birlikte kaldırıldı ([arsiv/85](arsiv/85-MONITOR-SOZLESMESI.md)) |
 | 11 | `EnterWorktree` / `ExitWorktree` (ajan-kontrollü) | Yeni araç | **P3** | Açık |
 | 12 | `NotebookEdit` (Jupyter) | Yeni araç | **P4** | Açık (niş) |
 | I1–I4 | Mevcut araç iyileştirmeleri | İyileştirme | P1–P2 | Açık |
@@ -50,7 +52,7 @@
 > **Tamamlanan maddeler** (1 `WebSearch`, 3 `transform_data`, 4 `PowerShell`,
 > 5 `get_session_info`, 7 `update_user_preferences`, 8 `render_template`) ve Bölüm E
 > (mevcut araçlara eklenen özellikler: Edit/Write tazelik guard'ı, Read, Grep, Glob,
-> Bash/PowerShell arka plan, `.gitignore` farkındalığı) gövdeleri →
+> Bash/PowerShell arka plan [2026-11-17'de kabukla birlikte kaldırıldı], `.gitignore` farkındalığı) gövdeleri →
 > [arsiv/41-ARAC-BOSLUKLARI-TAMAMLANANLAR.md](arsiv/41-ARAC-BOSLUKLARI-TAMAMLANANLAR.md).
 > `render_template` ayrıntısı: [63-SOURCE-TEMPLATES-RENDER.md](63-SOURCE-TEMPLATES-RENDER.md).
 
@@ -107,9 +109,15 @@
 - **Dosyalar:** `builtin_ask.go`/`interaction.go` genişletmesi, UI prompt kartı.
 - **Risk sınıfı:** `RiskWrite`.
 
-### 10. `Monitor` — koşul bekleme — **P3**
+### 10. `Monitor` — koşul bekleme — **P3** — ❌ KAPSAM DIŞI (2026-11-17)
 
-- **Durum:** Yok. `schedule_wake` kısmen (zamanlı uyanış) ama bir **koşul sağlanana kadar** bloklayan
+> `monitor` aracı 2026-09-22'de uygulandı (sözleşme:
+> [arsiv/85-MONITOR-SOZLESMESI.md](arsiv/85-MONITOR-SOZLESMESI.md)) ve 2026-11-17'de
+> TionHarness'in kendi kabuğuyla birlikte **kaldırıldı**. Arka plan süreç izleme artık
+> CLI'nin kendi araçlarıyla yapılır; zamanlı uyanış için `schedule_wake` duruyor.
+> Aşağıdaki gövde ilk backlog kaydıdır.
+
+- **Durum (ilk kayıt):** Yok. `schedule_wake` kısmen (zamanlı uyanış) ama bir **koşul sağlanana kadar** bloklayan
   bekleme yok.
 - **Neden önemli:** Dış süreç/CI/uzak kuyruk gibi harness'in bildiremeyeceği durumları beklemek için.
 - **Yaklaşım:** Periyodik kontrol + timeout'lu bir bekleme aracı; otonom turlarda bütçe-dostu aralık.
@@ -190,11 +198,11 @@ the external agent project'ta olup TionHarness'in **kapsam/felsefe farkı** nede
 ## D. Önerilen uygulama dalgaları
 
 1. **Dalga 1 (P0–P1):** `WebSearch`, `call_llm` (veya `run_subagent` hafif mod), `transform_data`/
-   `script_sandbox`, `PowerShell`. En yüksek getiri/çaba.
+   `script_sandbox`, `PowerShell` (2026-11-17'de kaldırıldı). En yüksek getiri/çaba.
 2. **Dalga 2 (P2):** ~~`get_session_info`~~ ✅, ~~`set_session_labels`/`set_session_status`~~ ❌ kapsam
    dışı, ~~`update_user_preferences`~~ ✅ (üçü 2026-07-03'te kapandı), ~~`render_template`~~ ✅
    (2026-07-06, _Docs/63) — **Dalga 2 tamamlandı.**
-3. **Dalga 3 (P3–P4):** `Monitor`, `EnterWorktree`/`ExitWorktree`, güvenli credential UI, `NotebookEdit`.
+3. **Dalga 3 (P3–P4):** ~~`Monitor`~~ (uygulandı, sonra kaldırıldı), `EnterWorktree`/`ExitWorktree`, güvenli credential UI, `NotebookEdit`.
 
 Her araç eklemesinde ortak kontrol listesi:
 - [ ] `internal/tools/builtin_*.go` + birim test

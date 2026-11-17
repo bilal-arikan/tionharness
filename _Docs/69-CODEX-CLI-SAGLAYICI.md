@@ -5,14 +5,23 @@
 > sürümleri anlatır; güncel model seçimi için §14 ve kaynak kodunu kullanın.
 
 > **Araç izinleri güncellemesi (2026-09-28, CLI 0.157.1):** Genel
-> `--allowedTools` / `--disallowedTools` bayrakları hâlâ yok. Ancak MCP araçları
-> `enabled_tools` / `disabled_tools`, native kabuk ise `features.shell_tool`
-> üzerinden sınırlandırılıyor ve artık TionHarness bu ayarları aktarıyor.
-> Aşağıdaki eski “native shell bastırılmaz” değerlendirmeleri bu güncellemeyle
-> geçersizdir. Güncel davranış ve doğrulama:
-> [Araç izinleri raporu](69-CODEX-ARAC-IZINLERI-2026-09-28.md).
+> `--allowedTools` / `--disallowedTools` bayrakları hâlâ yok. MCP araçları
+> `enabled_tools` / `disabled_tools` ile sınırlandırılıyor ve TionHarness bu ayarları
+> aktarıyor. Ayrıntı: [Araç izinleri raporu](69-CODEX-ARAC-IZINLERI-2026-09-28.md).
+>
+> **Kabuk güncellemesi (2026-11-17):** TionHarness'in kendi (köprülü) kabuğu kaldırıldı.
+> Codex artık **daima kendi native kabuğunu** (`shell`/`unified_exec`) ve `apply_patch`'i
+> kullanır: `[features] shell_tool = false` hiç yazılmaz, köprülü `Read`/`LS`/`Glob`/
+> `Grep`/`Write`/`Edit` codex'e verilmez (köprüden `WebFetch`/`WebSearch` ve diğer
+> TionHarness araçları gelmeye devam eder). Araç filtresi `Bash`'i kabul etmeyen ajan
+> (salt-okur explore/planner/reviewer profilleri) izin modu zorla `read-only` yapılarak
+> `-s read-only` ile koşar (`internal/agent/toolloop_phases.go` `prepare`). Gözetimsiz
+> turlar (otonom + `autonomousConfine`) `GIT_CONFIG_*` env'iyle commit/tag imzalamayı
+> kapatır (`proc.DisableGitSigningEnv`); claude-cli'deki `Bash(git push:*)` deny
+> kuralının codex karşılığı **yoktur** (bilinen boşluk). Aşağıdaki "native shell
+> kapalı / köprülü shell" anlatımları bu tarihten önceki durumu anlatır.
 
-> **Özet (2026-10-18):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`. `codexStdoutIdleSec` varsayılanı 90→300 sn (codex exec muhakeme boyunca sessizdir), koordinatör spawn iddiası guard'ı kaldırıldı. Sahipsiz resume home'lar artık periyodik çöp toplayıcıyla siliniyor (§4).
+> **Özet (2026-11-17):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. **2026-11-17:** TionHarness'in kendi kabuğu kaldırıldı; codex daima kendi kabuğunu + `apply_patch`'i kullanır (köprülü dosya araçları verilmez, `WebFetch`/`WebSearch` köprüsü kalır), `Bash`'siz araç filtresi `-s read-only` demektir, gözetimsiz turlarda git imzalama kapatılır ama `git push` freni yoktur. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`. `codexStdoutIdleSec` varsayılanı 90→300 sn (codex exec muhakeme boyunca sessizdir), koordinatör spawn iddiası guard'ı kaldırıldı. Sahipsiz resume home'lar artık periyodik çöp toplayıcıyla siliniyor (§4).
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
 > yaklaşımı OpenAI **Codex CLI** için de kurabilir miyiz?
@@ -598,8 +607,10 @@ Interaction sunucusu (`run_subagent` dahil) sunucu başına `tool_timeout_sec = 
 claude-cli'de `MCP_TOOL_TIMEOUT` tek ve geneldir, o da 3 saate çıktı. Neden: WS3'te iki
 senkron `run_subagent` (17 ve 22 dk) 900 sn'de kesildi, sonuçları kayboldu ve aynı iş
 yeniden başlatıldı. Aynı gün codex turlarına sandbox'lı `Read`/`LS`/`Glob`/`Grep`/`Write`/
-`Edit` de köprülendi (`BridgeTools`, `codexBridgedFSTools`): native shell kapalı olduğundan
+`Edit` de köprülenmişti (`codexBridgedFSTools`): native shell kapalı olduğundan
 salt-okur profil alt-ajanları (explore/planner/reviewer) hiç araçsız kalıyordu.
+**(2026-11-17: kaldırıldı)** — native kabuk artık daima açık, köprülü dosya araçları
+codex'e verilmez; salt-okur profiller `-s read-only` sandbox'ında kendi kabuklarını kullanır.
 
 ### codebase-memory-mcp prefill guard codex yolunda YOK (Q4 notu)
 
@@ -833,15 +844,16 @@ Codex'in native araç seti (`codex-rs/core/src/tools/handlers/`):
 | `ask_user` | `request_user_input` | ✅ `experimental_request_user_input.enabled = false` (üstelik exec'te zaten çalışmıyor) |
 | `WebSearch` | `web_search` | ✅ `[tools] web_search = false` |
 | `run_subagent` / coordinator | `multi_agents` (collab) | ✅ **yalnız** `[agents] enabled = false` — `[features] multi_agent`/`multi_agent_v2` etkisiz (47 §18); `--ephemeral` altında araç açık kalır ama spawn `collab spawn failed: no thread with id` ile ölür ve model sonucu uydurur |
-| `Bash` / `PowerShell` | `shell`, `unified_exec` | ❌ kapatılamaz — **ama kapatmamalıyız da** |
+| (köprülü `Bash`/`PowerShell` — 2026-11-17'de kaldırıldı) | `shell`, `unified_exec` | ❌ kapatılamaz — **ama kapatmamalıyız da**; codex daima native kabuğu kullanır |
 | `Read`/`Write`/`Edit` | `apply_patch` | ❌ kapatılamaz — kapatmamalıyız |
 | `use_skill` | Codex `skills` alt sistemi | ⚠️ `[skills]` config ile sınırlanabilir |
 
 **Kritik gözlem:** Boşluk-2 aslında iyi haber. Codex'te native dosya/shell
 araçlarını **bastırmak istemiyoruz** — Codex modeli `shell` + `apply_patch`
 etrafında eğitildi, onları alırsak ajan işe yaramaz hale gelir. TionHarness'in
-claude-cli'de `Bash`'i bastırma gerekçesi ("kendi sandbox'ımızdan geçsin"),
-Codex'te **Codex'in kendi OS sandbox'ı** tarafından zaten karşılanıyor.
+eskiden claude-cli'de `Bash`'i bastırma gerekçesi ("kendi sandbox'ımızdan geçsin"),
+Codex'te **Codex'in kendi OS sandbox'ı** tarafından zaten karşılanıyordu. 2026-11-17'den
+beri TionHarness kendi kabuğunu hiç sunmuyor; claude-cli de native `Bash`'ini kullanıyor.
 
 Yani gerçek etkisi: **`todo_write` / `ask_user` / `WebSearch` köprüleri
 korunabiliyor (kapatılabilir), dosya-shell tarafı native kalıyor.**

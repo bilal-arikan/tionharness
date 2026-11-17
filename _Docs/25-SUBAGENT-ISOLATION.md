@@ -208,6 +208,15 @@ type SubagentProfile struct {
 | `coder` | Kod yazma/düzenleme | + Write, Edit, Bash |
 | `reviewer` | Bağımsız inceleme | Read, Glob, Grep (yazma yok) |
 
+**Kabuk ve salt-okur profiller (2026-11-17).** Ajanlar TionHarness'in değil CLI'nin
+native kabuğunu kullanır. Allowlist'i `Bash`'i kabul etmeyen bir profil (explore/
+planner/reviewer) claude-cli'de tüm kabuk ailesini (`Bash`, `BashOutput`, `KillShell`,
+`TaskOutput`, `TaskStop`) kaybeder; codex-cli/opencode-cli kabuğu araç bazında
+daraltılamadığından böyle bir ajan **read-only izin modunda** koşar (codex `-s read-only`,
+opencode read-only bash/edit/write/patch'i reddeder) — `internal/agent/toolloop_phases.go`
+`prepare`. `group:files` kategorisi `Bash`'i içerdiğinden onu adlayan allowlist'ler
+CLI kabuğunu yine kabul eder.
+
 **Allowlist'ten muaf iki yüzey.** Profilin `AllowedTools` listesi yalnız **iş**
 araçlarını tarif eder. `toolFilter` iki grubu allowlist'e bakmadan geçirir:
 koordinasyon araçları (`tools.IsCoordinationTool` — oturum-kapılı) ve skill-keşif

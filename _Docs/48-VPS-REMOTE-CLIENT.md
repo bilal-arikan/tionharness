@@ -26,7 +26,7 @@ yol. Neden reddedildiği §2'de; özeti: Android'de subprocess yasağı claude-c
 Kullanıcı TionHarness'e telefondan erişmek istiyor. İki mimari değerlendirildi:
 
 1. **On-device (telefonda Go server):** Android'in `execve` (W^X) kısıtı yüzünden
-   rastgele subprocess spawn yasak → claude-cli (Node), `Bash`/`PowerShell`,
+   rastgele subprocess spawn yasak → claude-cli (Node) ve onun native kabuğu,
    `transform_data` (python/node/bun), stdio-MCP **kırılır**. Ayrıca Doze/battery
    optimizasyonu scheduler/otonomiyi öldürür. Köklü yeniden mimari gerektirir.
 2. **VPS + ince istemci (bu doküman):** Backend gerçek bir Linux makinesinde
@@ -62,7 +62,7 @@ YOK — dosyalar zaten orada yaşar, ajanlar bugünkü gibi fs araçlarıyla edi
 | Konu | On-device Android | **VPS + ince istemci** |
 |------|-------------------|------------------------|
 | claude-cli (Node) | ❌ Node yok | ✅ Linux'ta çalışır |
-| `Bash` / `PowerShell`(→sh) | ❌ shell yok | ✅ |
+| CLI'nin native kabuğu (`Bash`) | ❌ shell yok | ✅ |
 | `transform_data` (py/node/bun) | ❌ runtime yok | ✅ |
 | stdio MCP (subprocess) | ❌ spawn kısıtı | ✅ |
 | HTTP MCP | ✅ | ✅ |

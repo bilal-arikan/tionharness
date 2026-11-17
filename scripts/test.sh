@@ -3,10 +3,8 @@
 #   scripts/test.sh fast   -> Go packages touched by the working tree + staged/committed-
 #                             since-main changes, plus frontend vitest when frontend/ changed
 #   scripts/test.sh full   -> go test ./... -count=1 + frontend vitest (the delivery gate)
-# Both export TIONHARNESS_ENABLE_SHELL=1 so the shell-tool tests do not skip.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export TIONHARNESS_ENABLE_SHELL=1
 
 mode="${1:-fast}"
 status=0

@@ -32,7 +32,6 @@ scripts/test.sh fast      # yalnız değişen Go paketleri + frontend vitest (sa
 scripts/test.sh full      # go test ./... -count=1 + vitest + depcheck + git diff --check (~3-4 dk; teslimden önce zorunlu)
 ```
 
-- Script dışında elle koşarken `TIONHARNESS_ENABLE_SHELL=1` ayarla.
 - Goroutine başlatan test sonunda `drainSpawns(t, rt)` çağırır (ayrıntı `_Docs/80` §6).
 - Paket alt-kümesi geçidi kurma; `full` teslim kapısıdır. Import yönü kuralı →
   `scripts/depcheck.sh`.

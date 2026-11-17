@@ -21,7 +21,7 @@ Başlangıç planı ile güncel uygulamanın karşılaştırması:
 | Anthropic | resmi SDK | **ince HTTP istemci (SDK yok)** | Tam kontrol; ayrıca **claude-cli** (anahtarsız), **minimax-anthropic**, **openrouter**, **zai**, **deepseek**, **deepseek-anthropic** (güncel kind listesi: `internal/providers/kind_*.go`) |
 | Web dağıtımı | ayrı statik sunum | **`go:embed all:dist`** (`internal/web/embed.go`) | `internal/web/dist/` derleme anında binary'ye gömülür; tek çalıştırılabilir dosya, CDN/statik sunucu gerekmez |
 | Zamanlama | robfig/cron | ✅ **robfig/cron/v3** | Workspace başına scheduler |
-| WebSocket/streaming | coder/websocket | **UI için SSE**, monitor için **coder/websocket** | Sohbet akışı SSE kullanır; `internal/tools/monitor_source_ws.go` harici WebSocket kaynaklarını izler (bkz. `85-MONITOR-SOZLESMESI.md`) |
+| WebSocket/streaming | coder/websocket | **UI için SSE** | Sohbet akışı SSE kullanır. `coder/websocket` yalnız `monitor` aracının WebSocket kaynağı içindi; araç 2026-11-17'de kaldırıldı (bkz. `arsiv/85-MONITOR-SOZLESMESI.md`) |
 | Frontend bileşen | shadcn/ui | **kendi Tailwind v4 bileşenleri** | Bileşen framework'ü yok; yalnız `lucide-react` (ikon) + `@fontsource-variable/inter`·`jetbrains-mono` (font) + `vis-network` v10.1.0 + `vis-data` (Harita ekranı) + `@xyflow/react` (flow canvas) eklendi |
 | Tema | tek koyu tema | **token-tabanlı + 10 renk ailesi × 2 mod** | `var(--color-*)` semantic token seti; preset `<html>` inline style'a basılır (`frontend/src/shared/lib/themePresets.ts` — 20 preset; varsayılan `violet-dark`); paylaşılan UI primitifleri `shared/components/Button.tsx`; kategorik palet `shared/lib/palette.ts`; backend `settings.ThemePreset` ile kalıcı |
 | Frontend state | Zustand/TanStack | **düz React `useState`** | Yeterli; ileride eklenebilir |
@@ -29,7 +29,7 @@ Başlangıç planı ile güncel uygulamanın karşılaştırması:
 | MCP istemci | mark3labs/mcp-go | **SDK'sız elle JSON-RPC 2.0** (stdio + Streamable HTTP) | Bağımlılıksız felsefe; `internal/mcp/manager.go` `DialStdio`/`DialHTTP`. Deprecated **SSE** taşıması bilinçli olarak desteklenmez (http'ye yönlendirir) |
 | OTel (gözlemlenebilirlik) | otel | ⏳ ileride | Henüz eklenmedi |
 
-> İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı. Doğrudan bağımlılıklar `go.mod` içinde tutulur: `google/uuid`, `robfig/cron/v3`, native pencere için `jchv/go-webview2`, WebSocket monitor için `coder/websocket` ve Windows süreç/dosya işlemleri için `golang.org/x/sys`.
+> İlke: bağımlılığı ancak gerçekten gerektiğinde ekle. Depolama dosya sistemine taşındıktan sonra `modernc.org/sqlite` + ~8 dolaylı bağımlılık kaldırıldı. Doğrudan bağımlılıklar `go.mod` içinde tutulur: `google/uuid`, `robfig/cron/v3`, native pencere için `jchv/go-webview2` ve Windows süreç/dosya işlemleri için `golang.org/x/sys`.
 
 ## Masaüstü Kabuk
 

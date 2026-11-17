@@ -99,8 +99,6 @@ try {
 
     Write-Host "==> Backend baslatiliyor: bin\tionharness.exe  (127.0.0.1:$Port)" -ForegroundColor Cyan
     $env:TIONHARNESS_ADDR = "127.0.0.1:$Port"
-    # Match dev.ps1: enable the built-in shell tool (agents run commands).
-    $env:TIONHARNESS_ENABLE_SHELL = "1"
     $backend = Start-Process -FilePath $exe -NoNewWindow -PassThru
     Start-Sleep -Milliseconds 300
     if ($backend.HasExited) { throw "backend aninda sonlandi (exit $($backend.ExitCode))" }

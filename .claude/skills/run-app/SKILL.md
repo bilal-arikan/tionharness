@@ -46,7 +46,7 @@ description: >
 ## macOS makinesi: kullanıcının terminalindeki sunucu
 
 macOS'ta kullanıcı sunucuyu kendi terminalinden `scripts/serve.sh` ile çalıştırır
-(`0.0.0.0:5173`, `TIONHARNESS_ENABLE_SHELL=1`, `bin/tionharness`). Arayüz binary'ye
+(`0.0.0.0:5173`, `bin/tionharness`). Arayüz binary'ye
 gömülü olduğundan frontend değişikliği yalnız yeniden derlemeyle görünür.
 
 - **Kullanıcı izni (2026-10-05):** Doğrulama gerekiyorsa bu sunucuyu durdurup aynı portta

@@ -1,6 +1,6 @@
 # TionHarness — Insight App-Fix Backlog
 
-> **Özet (2026-09-03):** Bu dosya bir uygulama değil, retrospektif tarayıcı (`_Docs/60`) tarafından oturum loglarından otomatik üretilen açık hata/iyileştirme kayıtlarının kuyruğudur. Her giriş bir `insight-sig` markörüyle tekilleştirilir ve tekrar taramada mükerrer eklenmez. Baskın tema: `Bash` aracının context'te devre dışıyken modele hâlâ önerilmesi (birçok tekrar eden kayıt), deferred/MCP araçların şema yüklenmeden çağrılabilir görünmesi, Windows'a özgü shell/path sorunları ve flow node referans doğrulamasının run-time yerine önceden yapılmaması. Durum tarihsel/canlı bir birikimdir; her madde henüz çözülmemiş bir bulgudur, uygulanmış bir karar değil.
+> **Özet (2026-11-17):** Bu dosya bir uygulama değil, retrospektif tarayıcı (`_Docs/60`) tarafından oturum loglarından otomatik üretilen açık hata/iyileştirme kayıtlarının kuyruğudur. Her giriş bir `insight-sig` markörüyle tekilleştirilir ve tekrar taramada mükerrer eklenmez. Baskın tema: `Bash` aracının context'te devre dışıyken modele hâlâ önerilmesi (birçok tekrar eden kayıt), deferred/MCP araçların şema yüklenmeden çağrılabilir görünmesi, Windows'a özgü shell/path sorunları ve flow node referans doğrulamasının run-time yerine önceden yapılmaması. Durum tarihsel/canlı bir birikimdir; her madde henüz çözülmemiş bir bulgudur, uygulanmış bir karar değil. **2026-11-17:** TionHarness'in kendi kabuğu (köprülü `Bash`/`PowerShell`, `enableShell` kapısı, `run_in_background`) kaldırıldığı için "Bash ilan edilip bağlamda kapalı" ve "Windows'ta yanlış kabuk" kayıtları (16 giriş) **eskimiş** olarak işaretlendi; silinmedi.
 
 Auto-appended by the retrospective scanner (_Docs/60). Each entry carries a
 stable `insight-sig` marker so re-scans never duplicate it.
@@ -32,6 +32,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:tool:get_flow|error:No such tool available -->
 
 ## Bash tool exposed to model but disabled in this execution context
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
 
 - **Severity:** med
 - **Occurrences:** 1
@@ -85,6 +87,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Bash tool is advertised in the prompt but disabled in the execution context, producing a dead-end tool call
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
+
 - **Severity:** high
 - **Occurrences:** 1
 - **Evidence sessions:** SES41
@@ -111,6 +115,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Agent calls Bash but the tool is not enabled in the session's tool context
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
+
 - **Severity:** med
 - **Occurrences:** 2
 - **Evidence sessions:** SES50, SES40
@@ -124,6 +130,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Agent calls `Bash` but the tool is not enabled in its context — tool advertisement/registry drift
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
+
 - **Severity:** med
 - **Occurrences:** 2
 - **Evidence sessions:** SES31, SES34
@@ -136,6 +144,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:tool:Bash|error:no_such_tool_available_not_enabled_in_context -->
 
 ## Model calls shell tools (PowerShell/Bash) that are not enabled in the session's toolset
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
 
 - **Severity:** med
 - **Occurrences:** 1
@@ -163,6 +173,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Agent calls Bash in a session kind where Bash is not enabled (tool-scope vs. prompt mismatch)
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
+
 - **Severity:** med
 - **Occurrences:** 1
 - **Evidence sessions:** SES8
@@ -175,6 +187,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:Bash|tool_not_enabled_in_context -->
 
 ## Bash tool rejects `run_in_background` at call time instead of hiding it from the schema
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in `run_in_background`'lı köprülü `Bash`'i ve arka plan kabuk yöneticisi kaldırıldı; arka plan yürütmeyi artık CLI'nin kendi kabuğu sağlar.
 
 - **Severity:** med
 - **Occurrences:** 1
@@ -202,6 +216,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Model calls Bash, which exists in the provider but is not enabled in the TionHarness tool context
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
+
 - **Severity:** med
 - **Occurrences:** 1
 - **Evidence sessions:** SES29
@@ -214,6 +230,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:Bash|no_such_tool_available|exists_but_not_enabled_in_this_context -->
 
 ## Model calls `Bash` in a session where the tool is registered but not enabled for the active scope
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
 
 - **Severity:** med
 - **Occurrences:** 1
@@ -241,6 +259,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Agent invokes Bash although the session's allowed-tools set excludes it
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
+
 - **Severity:** med
 - **Occurrences:** 1
 - **Evidence sessions:** SES37
@@ -253,6 +273,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:tool=Bash|error=no_such_tool_available_not_enabled_in_context -->
 
 ## Model is offered tools that are not enabled in the active context (Bash)
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
 
 - **Severity:** med
 - **Occurrences:** 1
@@ -292,6 +314,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:mcp:artifact_retrieve:not_found_expired_or_evicted -->
 
 ## Agent repeatedly calls `Bash` even though it is not in the enabled tool set for the session
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
 
 - **Severity:** med
 - **Occurrences:** 1
@@ -358,6 +382,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Windows oturumunda shell aracı yanlışlıkla `/bin/bash` çalıştırıyor
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuk yürütücüsü (köprülü `Bash`/`PowerShell`) kaldırıldı; komutlar artık CLI'nin native kabuğunda koşar (claude-cli Windows'ta Git Bash). Kaydın kök nedeni ortadan kalktı.
+
 - **Severity:** high
 - **Occurrences:** 1
 - **Evidence sessions:** SES1110
@@ -370,6 +396,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:shell:/bin/bash on Windows causes command not found for host executable -->
 
 ## Windows oturumundaki shell komutları yanlışlıkla Bash ile çalıştırılıyor
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuk yürütücüsü (köprülü `Bash`/`PowerShell`) kaldırıldı; komutlar artık CLI'nin native kabuğunda koşar (claude-cli Windows'ta Git Bash). Kaydın kök nedeni ortadan kalktı.
 
 - **Severity:** high
 - **Occurrences:** 1
@@ -501,6 +529,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 ## Proje zorunluluğuna karşın PowerShell'de bash sözdizimi komut başarısızlığı
 
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuk yürütücüsü (köprülü `Bash`/`PowerShell`) kaldırıldı; komutlar artık CLI'nin native kabuğunda koşar (claude-cli Windows'ta Git Bash). Kaydın kök nedeni ortadan kalktı.
+
 - **Severity:** med
 - **Occurrences:** 1
 - **Evidence sessions:** SES1412
@@ -630,6 +660,8 @@ stable `insight-sig` marker so re-scans never duplicate it.
 <!-- insight-sig:mcp__tionharness_extended:tools_unregistered_post_refactor -->
 
 ## Bash tool session compaction sonrası disabled hale geliyor
+
+> **Durum (2026-11-17): eskimiş.** TionHarness'in kendi kabuğu ve `enableShell` kapısı kaldırıldı; `Bash` artık CLI'nin native aracıdır ve claude-cli menüsünde daima bulunur. Araç filtresi `Bash`'i kabul etmeyen claude-cli ajanında tüm kabuk ailesi `--tools` menüsünden çıkarılır (codex-cli/opencode-cli: `read-only` izin modu), yani "ilan edilip bağlamda kapalı" durumu oluşmaz.
 
 - **Severity:** med
 - **Occurrences:** 1

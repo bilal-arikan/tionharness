@@ -1,6 +1,6 @@
 # 95 — OpenCode CLI Sağlayıcı ve Native Anthropic'in Kaldırılması
 
-> **Özet (2026-10-13):** TionHarness'in üçüncü CLI taşıyıcısı `opencode-cli`
+> **Özet (2026-11-17):** TionHarness'in üçüncü CLI taşıyıcısı `opencode-cli`
 > ([anomalyco/opencode](https://github.com/anomalyco/opencode)) eklendi ve native
 > Anthropic HTTP istemcisi (`anthropic.go`) ile ona dayanan kind'lar (`anthropic`,
 > `anthropic-compat`, `minimax-anthropic`, `deepseek-anthropic`, `zai`) kaldırıldı.
@@ -11,6 +11,9 @@
 > adımda OpenAI-uyumlu HTTP ailesi (`openrouter`, `deepseek`, `minimax`, `lmstudio`,
 > `openai-compat`) de kaldırıldı; karar katmanı (`internal/decider`) artık sağlayıcı
 > örneklerinden anahtar ödünç almaz, her karar modeli kendi anahtarını taşır (§7).
+> **2026-11-17:** TionHarness'in kendi kabuğu kaldırıldı; opencode'un `bash`'i artık hiç
+> kapatılmaz, `Bash`'siz araç filtresi `read-only` izin moduna zorlanır, gözetimsiz
+> turlarda git imzalama kapatılır ama `git push` freni yoktur (§3.2).
 > Dayandığı paketler:
 > `internal/providers` (`opencodecli*.go`, `kind_opencodecli.go`), `internal/agent`
 > (`codexhome.go`, `codexmcp.go`, `toolloop_phases.go`), `internal/api`
@@ -98,9 +101,18 @@ opencode run --format json --agent tionharness [-m <vendor/model>] [--variant <v
 | `agent.tionharness` | `mode: primary`, `prompt: {file:system.md}` (statik sistem promptu + interaction notu) |
 | `agent.general.disable` | `true` (opencode'un görünmez alt-ajanı kapalı) |
 | `permission` | auto → `{"*":"allow"}`; ask → `edit/bash: ask` (otomatik reddedilir, köprü araçları gerçek onayla çalışır); read-only → `edit/bash/webfetch: deny` |
-| `tools` | `task: false` daima; köprülü kabuk açıksa `bash: false`; `NativeWebSearch` kapalıysa `websearch/webfetch: false`; read-only'de mutasyon araçları kapalı; yardımcı (araçsız) çağrıda **tüm** yerleşikler kapalı; MCP `DisabledTools` → `<server>_<tool>: false` |
+| `tools` | `task: false` daima; `bash` hiçbir zaman kapatılmaz (2026-11-17'den beri TionHarness'in köprülü kabuğu yok, kabuk daima opencode'un kendi `bash`'i); `NativeWebSearch` kapalıysa `websearch/webfetch: false`; read-only'de mutasyon araçları kapalı; yardımcı (araçsız) çağrıda **tüm** yerleşikler kapalı; MCP `DisabledTools` → `<server>_<tool>: false` |
 | `mcp` | Interaction köprüsü iki girdi (`tionharness_interaction` `/core?full=1`, `tionharness_extended` `/extended?full=1`, Bearer başlığı) + etkin harici MCP sunucuları (remote `url/headers` ya da local `command/environment`) |
 | `share` / `autoupdate` | `disabled` / `false` |
+
+**Kabuk ve izin modu (2026-11-17):** opencode'un `bash` aracı tek kabuk yoludur; bash
+araç-başı süzülemediği için araç filtresi `Bash`'i kabul etmeyen bir ajan (salt-okur
+explore/planner/reviewer profilleri) izin modu zorla `read-only` yapılarak koşar
+(`internal/agent/toolloop_phases.go` `prepare`) → `bash`/`edit`/`write`/`patch` kapalı,
+`edit/bash/webfetch: deny`. Gözetimsiz turlar (otonom + `autonomousConfine`) alt sürece
+`GIT_CONFIG_*` ile commit/tag imzalamayı kapatan env alır (`proc.DisableGitSigningEnv`);
+claude-cli'deki `Bash(git push:*)` deny kuralının opencode karşılığı **yoktur** (bilinen
+boşluk: gözetimsiz bir opencode turu `git push` yapabilir).
 
 Dinamik bağlam (`SystemDynamic`, özet) codex yolundaki gibi stdin promptunun
 `[Context]` bloğunda gider; statik önek `system.md`'de kalır (önbellek için).

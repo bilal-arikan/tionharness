@@ -1,5 +1,7 @@
 # 85 — Monitor sözleşmesi
 
+> **ARŞİV (2026-11-17): `monitor` aracı, TionHarness'in kendi kabuğuyla birlikte kaldırıldı; bu doküman yalnız tarihçedir** (ayrıntı: `../05-ILERLEME.md`, 2026-11-17 kaydı).
+
 > **Özet (2026-09-22):** `monitor` aracı bir kaynağı bir regex'e karşı izler ve
 > eşleşme olduğunda ajanı **uyandırır** — böylece uzun süren bir işin beklenmesi
 > hiç tur harcamaz. Dört kaynak vardır: arka plan kabuğu (`shell_id`), dosya

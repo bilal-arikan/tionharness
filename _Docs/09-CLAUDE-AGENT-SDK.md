@@ -83,12 +83,11 @@ graph TD
   `internal/tools/builtin_fs.go` (`internal/tools/sandbox.go`: `Sandbox.Root` yalnız göreli
   yolların tabanıdır; 2026-06-22'den beri kilit/path-traversal sınırı yok, bkz. `06-WORKSPACES.md`). (İsimler 2026-06-22'de claude-cli ile hizalandı;
   eski `read_file`/`write_file`/… adları.)
-- [x] `Bash` (Windows'ta Git Bash, diğerinde `/bin/sh`; eski ad `shell`) → `internal/tools/builtin_shell.go`
-  (timeout + sandbox cwd + 64KB çıktı cap). Windows Bash komutuna
-  `LC_ALL=C.UTF-8`/`LANG=C.UTF-8` ve mevcutsa korumalı `chcp.com 65001` öneki
-  eklenir; çıktı `strings.ToValidUTF8` ile geçerli UTF-8'e çevrilir ve 64KB kesimi
-  rune sınırında yapılır. **Varsayılan KAPALI** (`Tunables.shellEnabled`);
-  `TIONHARNESS_ENABLE_SHELL=1` ile açılır. Permission katmanı (P3) gelene dek opt-in kalır.
+- [x] ~~`Bash` (Windows'ta Git Bash, diğerinde `/bin/sh`) → `internal/tools/builtin_shell.go`~~
+  **Kaldırıldı (2026-11-17):** TionHarness'in kendi kabuk aracı (köprülü `Bash`/`PowerShell`,
+  arka plan kabukları, `TIONHARNESS_ENABLE_SHELL` / `enableShell` gate'i) silindi. Ajanlar her
+  zaman CLI'nin native kabuğunu kullanır (claude-cli `Bash` ailesi, codex-cli kabuğu,
+  opencode-cli `bash`). Ayrıntı `05-ILERLEME.md` (2026-11-17).
 - [x] `WebFetch` (2026-06-22) — `http_get` zengin fetch'e yükseltildi: HTML→Markdown (stdlib-only converter `htmltomarkdown.go`, script/style/nav ayıklama, göreli link çözümleme), metinsel içerik verbatim, ikili içerik özet; SSRF guard korunur. `builtin_http.go` (`WebFetchTool`).
 
 ### Faz SM — Self-Management Araçları ✅ (2026-06-17)

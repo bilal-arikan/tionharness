@@ -7,6 +7,10 @@
 > bağlanır (`internal/agent/codexmcp.go`, `69-CODEX-CLI-SAGLAYICI.md` §13). Canlı CLI
 > yolları: claude-cli + codex-cli. Sonuçlar §14–20'de; tarihsel plan metinleri
 > [`arsiv/11-INTERACTION-MCP-TARIHSEL.md`](arsiv/11-INTERACTION-MCP-TARIHSEL.md).
+> **2026-11-17:** Köprülü kabuk kaldırıldı — `Bash`/`PowerShell` (`callShell`, shell
+> runner), `monitor` ve `shell_manage` artık Interaction MCP'de **yok**. CLI ajanları her
+> zaman kendi native kabuğunu kullanır (claude-cli `Bash` ailesi `--tools` menüsünde,
+> codex-cli kabuğu, opencode-cli `bash`). Aşağıdaki "Shell köprüsü" bölümleri tarihtir.
 > **Amaç:** Tüm insan-etkileşimli (human-in-the-loop) ve UI-etkileyen araçları
 > (`ask_user`, `todo_write`, artifact, onay/bildirim vb.) **tek bir ortak
 > MCP sunucusu** üzerinden **kendi agentic döngüsünü çalıştıran her CLI ajanına**
@@ -286,7 +290,7 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `schedule_wake` | bloklamayan | Faz 2 |
 | `use_skill` | bloklamayan (skill gövdesi döndürür; yüklerken skill'in `always_allow` araçlarını oturum grant'larına ekler — SK-3). Aynı oturumda **ikinci kez** istenen slug için gövde yerine kısa işaretçi döner (`tools.SkillLedger`, fold epoch'una duyarlı); `force: true` gövdeyi zorlar — bkz. `_Docs\19-LAZY-TOOL-LOADING.md` | Faz 4 |
 | `skill_search` | bloklamayan (anahtar kelimeyle skill bulur; koşullu/on-demand skill'leri keşfeder) | 2026-06-23 (SK-2) |
-| `Bash` (CLI köprüsü, eski `shell`) | bloklamayan (komut çıktısı) | 2026-06-19 |
+| ~~`Bash` (CLI köprüsü, eski `shell`)~~ | — | 2026-06-19, **KALDIRILDI (2026-11-17)** — CLI'nin native kabuğu kullanılır |
 | `spawn_session` (CLI köprüsü) | bloklamayan (fire-and-forget) | Faz 4 |
 | `run_subagent` (CLI köprüsü) | **bloklayan (cevabı bu turda döndürür)** | 2026-06-22 |
 | `conversation_search` (CLI köprüsü) | bloklamayan (geçmiş tam-metin arama) | 2026-06-22 |
@@ -332,9 +336,9 @@ kaydı yoksa sessizce yutmak yerine açık `IsError` döndür.
 **Damga tek noktada (2026-08-31, merkezîleştirme):** damgayı her araç kendi içinde basmaz;
 `Call()` `beginCall`'dan hemen sonra `stampRunSession(callCtx, run)` ile **bir kez** basar
 (`internal/api/mcp_interaction.go`). Böylece sink tablosu, ask/confirm/permission/wake/spawn,
-shell, `run_subagent` ve bridge default dalı damgalı ctx alır; yeni bir köprü aracı damgayı
+`run_subagent` ve bridge default dalı damgalı ctx alır; yeni bir köprü aracı damgayı
 yapısal olarak unutamaz. `stampRunSession`, `run.sessionID` boşken **no-op**'tur: boş durumun
-ne anlama geldiği hâlâ aracın kendi kararıdır (`callRunSubagent` reddeder, `callShell` uyarır).
+ne anlama geldiği hâlâ aracın kendi kararıdır (ör. `callRunSubagent` reddeder).
 `Runtime.BridgeTools`'un kendi damgası (`internal/agent/runtime.go`) paket sınırının diğer
 tarafında olduğu için kalır; aynı değeri yazdığından çift damga idempotenttir.
 
@@ -344,17 +348,14 @@ todo_write attach closure'ları bilinçli olarak taze bir `context.Background()`
 `Call()`'ın bastığı damgayı düşürürdü. Yeniden basma sayesinde kopukluk yalnız iptal
 edilebilirliği kapsar, kimliği değil.
 
-Aynı damga köprülü **`Bash`/`PowerShell`** (`callShell`) için de kritiktir: shell runner
-komutun çalışma dizinini ctx'teki session id'den çözer (`Runtime.effectiveWorkDir` →
-`Runtime.SessionWorkdir`), damgasız çağrı oturumun `WorkingDir`'i yerine **sessizce**
-workspace varsayılan dizininde koşardı. Shell, kalıcı kaydı olmayan bir run'da da meşru
-olduğundan burada `IsError` yerine uyarı loglanır ve çağrı sürer; `SessionWorkdir`
-fallback'leri de (oturum okunamadı / dizin yok / dizin değil) artık `Warn` ile loglanır.
+> Köprülü `Bash`/`PowerShell` (`callShell`) da bu damgaya dayanıp komutun çalışma dizinini
+> oturumdan çözüyordu; köprülü kabuk 2026-11-17'de kaldırıldı. CLI'nin native kabuğu turun
+> cwd'sinde (oturumun `WorkingDir`'i) başlar.
 
 **Oturumsuz autonomous tur (2026-08-31):** `autonomousInteraction` boş `sessionID` ile
 çağrıldığında (doğrulanmış vaka: flow agent-node turları — `internal/agent/flow.go` ctx'e
 `WithSessionID` basmıyor) grants, artifact/notify/nav/session/todo sink'leri ve
-`schedule_wake` kurulmaz; `use_skill`/`skill_search`/shell/spawn/`run_subagent` ise kurulur
+`schedule_wake` kurulmaz; `use_skill`/`skill_search`/spawn/`run_subagent` ise kurulur
 (oturumsuz da meşru yetenekler). Bu dejenerasyon eskiden **tek log satırı bile üretmiyordu**;
 artık kurulum anında bir kez `Warn`'lanır (`Server.logWarn`, nil-logger toleranslı) ve oturum
 gerektiren her araç çağrı anında kendi açık `IsError` metnini döndürür.
@@ -435,9 +436,9 @@ yok. Değişmez: `mcp_interaction_test.go`
 `TestInteractionAdvertisedNames` advertise == allowlist isimlerini kilitler.
 
 **Köprü `toolFilter`'a uyar (2026-07-25):** Önceden köprü araç seti yalnız
-tunables'tan (ShellEnabled vb.) türetiliyordu; workspace `DisabledTools` ve
+tunables'tan türetiliyordu; workspace `DisabledTools` ve
 ajan denylist'i **uygulanmıyordu** → native `ToolCatalog`'da elenen bir araç
-(ör. Bash'i zorlamak için PowerShell'i kapatan workspace) claude-cli köprüsünde
+(ör. workspace'te kapatılmış bir self-management aracı) claude-cli köprüsünde
 yine ilan ediliyor ve çağrılabiliyordu. Artık her tur `Runtime.ToolAllowedFunc`
 (= native `toolFilter`: workspace-active − DisabledTools − ajan block) run'a
 kurulur (`setToolAllowed`); `Tools()` (tools/list) + `candidateDefs()` (activate/
@@ -619,6 +620,14 @@ artifact dispatch, todo no-emit).
 
 ## Faz: Shell köprüsü + native araç bastırma (2026-06-19)
 
+> **Tarihsel (2026-11-17):** Köprülü `shell`/`Bash`/`PowerShell` ve `shell_manage`
+> kaldırıldı; claude-cli'nin `Bash`, `BashOutput`, `KillShell`, `TaskOutput`, `TaskStop`
+> araçları artık `--disallowedTools`'ta **değil**, her zaman `--tools` menüsündedir.
+> Tek istisna: etkin araç filtresi `Bash`'i kabul etmeyen ajan (salt-okur alt-ajan
+> profilleri explore/planner/reviewer) — onda tüm kabuk ailesi bastırılır
+> (`climcp.go` `shellFamily`, `ShellAllowed`). `Skill`/`TodoWrite`/`Task`/`Agent`/
+> `SendMessage`/`AskUserQuestion` gölgelemesi aşağıda anlatıldığı gibi sürer.
+
 **Sorun:** Bir claude-cli ajanı (özellikle scheduled koşuda) TionHarness skill'ini
 yükleyemiyor ("Unknown skill") ve `ConvertFrom-Json` gibi PowerShell sözdizimini
 POSIX bash'e verince hata alıyordu. Kök neden: CLI ajanı TionHarness'in köprülenen
@@ -644,8 +653,9 @@ seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge d
     2026-07-06 — native olan CLI'nin kendi subagent'larıyla konuşur, TionHarness
     ajanını geçerli ID'de bile "bulunamadı" der; model `ToolSearch` ile keşfedip
     seçince her teslim başarısız oluyordu)**, `AskUserQuestion` (↔`ask_user`),
-    `EnterPlanMode`/`ExitPlanMode` (auto/olmayan modda), ve `ShellEnabled` iken
-    `Bash`+`BashOutput`+`KillShell` (↔bridged shell + `shell_manage`). Aynı-isimli
+    `EnterPlanMode`/`ExitPlanMode` (auto/olmayan modda); `ShellEnabled` iken
+    `Bash`+`BashOutput`+`KillShell` de (↔bridged shell + `shell_manage`) bastırılıyordu —
+    2026-11-17'den beri yalnız `Bash`'siz araç filtresinde. Aynı-isimli
     fs/web araçları (Read/Write/Edit/Glob/Grep/WebSearch/WebFetch) **bilerek**
     native kullanılır — gölgeleme değil. Olmayan aracı disallow etmek no-op olduğu
     için sürümler arası güvenli. Canlı doğrulama: haiku ajan bile isimle
@@ -668,7 +678,7 @@ scheduled hatasının asıl kök nedeni buydu.
   eder, `defer cleanup`). sessionID ctx'ten (`WithSessionID`/`SessionIDFrom`,
   `callkind.go`); call-site'lar (scheduler ×2, spawn) damgalar.
 - **api factory (`autonomous_interaction.go`):** `Server.autonomousInteraction(rt)`
-  → headless tur için bir `chatRun` (token) kaydeder, skill loader + shell runner +
+  → headless tur için bir `chatRun` (token) kaydeder, skill loader + (2026-11-17'ye dek) shell runner +
   spawn + wake + self-manage bridge kurar (chat ile birebir), endpoint'i ctx'e yazar,
   cleanup'ta run'ı düşürür. `Manager.SetAutonomousInteraction` factory'yi her
   runtime'a (mevcut + sonra açılan) dağıtır; `NewServer` bağlar.
@@ -678,9 +688,10 @@ scheduled hatasının asıl kök nedeni buydu.
 - **Otonom ask bail:** `chatRun.autonomous` bayrağı; `blockForAnswer` headless
   turda `ask_user`/`request_confirmation`'ı 15dk beklemeden hemen hata döner.
 
-Sonuç: scheduled/spawn CLI ajanları artık `use_skill` (slug) + `shell`
-(PowerShell) köprüsünü ve skill kataloğunu alıyor; Faz 1'deki native `Skill`/`Bash`
-disallow'u da bu turlarda etkin (endpoint mevcut olduğundan).
+Sonuç: scheduled/spawn CLI ajanları artık `use_skill` (slug) köprüsünü ve skill
+kataloğunu alıyor; Faz 1'deki native `Skill` disallow'u da bu turlarda etkin (endpoint
+mevcut olduğundan). (`shell` köprüsü ve native `Bash` disallow'u 2026-11-17'de kalktı;
+otonom turda kabuk CLI'nin native kabuğudur.)
 
 ## Faz 3: `--settings` (permission deny + CLI-path hooks) (2026-06-19)
 
@@ -831,7 +842,7 @@ arşivin **görünür etkisi yoktu**. UI tamamlandı:
 
 claude-cli 2.1.x, MCP araç şemalarının toplamı bağlam penceresinin **%10**'unu aşınca
 tümünü erteler (Tool Search / deferred tools). Tek Interaction sunucusu tüm bridged
-araçları (eager + self-management) full-şema sunduğundan eager araçlar (Bash, use_skill)
+araçları (eager + self-management) full-şema sunduğundan eager araçlar (o zamanki köprülü Bash, use_skill)
 da erteleniyordu → ilk turda `No such tool available`.
 
 **Çözüm:** Aynı in-process handler **iki mcp-config sunucu anahtarı** olarak ilan edilir
@@ -839,7 +850,7 @@ da erteleniyordu → ilk turda `No such tool available`.
 
 | Anahtar | Path | `alwaysLoad` | İçerik |
 |---------|------|--------------|--------|
-| `tionharness_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `permission_prompt` |
+| `tionharness_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `ask_user`, `ask_user_async`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `permission_prompt` |
 | `tionharness_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `update_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
 
 - `alwaysLoad: true` → CORE tool-search'ten muaf (her zaman inline). CLI process env'ine

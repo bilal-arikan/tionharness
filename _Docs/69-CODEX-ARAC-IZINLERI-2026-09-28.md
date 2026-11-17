@@ -1,5 +1,7 @@
 # Codex CLI araç izinleri — 2026-09-28
 
+> **Not (2026-11-17):** TionHarness'in kendi kabuğu kaldırıldı — codex'in native kabuğu artık daima açık (`shell_tool=false` hiç yazılmaz, `NativeShell` alanı yok), köprülü `Read`/`LS`/`Glob`/`Grep`/`Write`/`Edit` codex'e verilmez; `Bash`'siz araç filtresi `-s read-only` ile koşar. Aşağıdaki "Native shell" satırları tarihseldir; güncel durum `69-CODEX-CLI-SAGLAYICI.md` başındaki kabuk notunda.
+
 > **Özet:** Kurulu Codex CLI 0.157.1, Claude'un `--allowedTools` ve
 > `--disallowedTools` bayraklarını sunmuyor. MCP araçları için tam adlarla
 > `enabled_tools` / `disabled_tools`, native kabuk için `features.shell_tool`

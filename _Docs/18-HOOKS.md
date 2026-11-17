@@ -1,6 +1,6 @@
 # 18 — Hooks (Araç + Yaşam Döngüsü) — Faz P4 + Lifecycle Parite
 
-> **Özet (2026-09-03):** Kullanıcı-tanımlı dış komutların (audit, güvenlik politikası,
+> **Özet (2026-11-17):** Kullanıcı-tanımlı dış komutların (audit, güvenlik politikası,
 > otomatik onay, sqz/rtk gibi araçlar) native araç döngüsünde ve oturum yaşam
 > döngüsünde çalışmasını sağlayan hook sistemi — Claude Code'un tam 9-olaylık hook
 > sözleşmesiyle (PreToolUse/PostToolUse/UserPromptSubmit/SessionStart/Stop/
@@ -8,7 +8,10 @@
 > olgun; native↔claude-cli arasında matcher (virgül→regex) ve komut (PowerShell↔
 > POSIX) lehçe köprüleri var, "interpreter hatası ≠ engelle" güvenlik düzeltmesi
 > uygulandı (sözdizimi hatası artık bir hook'u sessizce kilitli bırakmıyor). Ajan
-> kendi hook'larını `list/create/update/delete_hook` ile yönetebilir. Dayandığı
+> kendi hook'larını `list/create/update/delete_hook` ile yönetebilir. 2026-11-17:
+> TionHarness'in kendi kabuğu kaldırıldı; rtk (`rtk hook claude`, matcher `Bash`) ve sqz
+> yalnız claude-cli'nin native `Bash`'inde `--settings` ile iletilen hook olarak çalışır,
+> köprülü-kabuk matcher genişletmesi silindi. Dayandığı
 > dosyalar: `internal/agent/hooks.go`, `internal/db/models_hook.go`,
 > `internal/db/store_hook.go`, `internal/agent/toolloop.go`, `internal/climcp/matcher.go`,
 > `internal/climcp/hookcmd.go`.
@@ -111,10 +114,13 @@ hook'ları (`UserPromptSubmit`/`SessionStart`/…) ise turun `SystemDynamic`'ine
 enjekte ettiği veya turu gözlemlediği için **hem native hem claude-cli** yolunda
 çalışır (üstteki tabloya bak).
 
-> sqz'i claude-cli ajanlarında kullanmak için: `sqz init --global` (sqz kendini
-> Claude Code'un PreToolUse hook'u olarak kurar; TionHarness'te bir şey gerekmez).
-> Native ajanlarda kullanmak için: TionHarness'te bir PostToolUse hook olarak `sqz`
-> komutunu tanımlayın.
+> **rtk / sqz (2026-11-17):** TionHarness'in kendi kabuğu kaldırıldı; ajanlar komutu
+> CLI'nin **native** `Bash`'iyle koşturur. Bu yüzden rtk ve sqz yalnız bu yoldan, CLI
+> hook'u olarak çalışır: workspace'in PreToolUse/PostToolUse hook'ları `--settings` ile
+> claude-cli'ye iletilir. rtk tek-tık bağlantısı: PreToolUse, matcher `Bash`, komut
+> `rtk hook claude`; sqz: `sqz hook claude`. (Alternatif: `sqz init --global` sqz'i
+> kullanıcının global Claude Code ayarına kurar.) codex-cli/opencode-cli hook taşımaz →
+> bu ajanlarda rtk/sqz çalışmaz. Ayrıntı: [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md).
 
 ## Sözleşme (Claude Code paritesi)
 
@@ -169,25 +175,21 @@ CRUD: `internal/db/store_hook.go` (+ `ListEnabledHooksByEvent` filtresi).
 **Matcher:** araç adı glob'u (`filepath.Match`: `*`, `?`). Boş = tüm araçlar.
 **Virgülle ayrılmış alternatifler** desteklenir (`Bash,PowerShell`) — herhangi biri
 eşleşirse hook tetiklenir (Go'nun `filepath.Match`'i süslü parantez `{}` desteklemez;
-`hookMatches` virgülde bölüp her alternatifi dener). Bu, `shell` aracının `Bash` +
-`PowerShell` olarak bölünmesinden (2026-07-01) sonra tek hook'un iki shell aracını da
-kapsaması için gerekir — Windows'ta ajan `PowerShell` aracını kullanır, yalnız `Bash`
-matcher'ı **hiç eşleşmezdi**. Birden çok eşleşen hook **oluşturma sırasına göre**
-zincirlenir; ilk `block` kazanır.
+`hookMatches` virgülde bölüp her alternatifi dener). İhtiyaç, TionHarness'in eski
+`Bash` + `PowerShell` shell araç çiftinden (2026-07-01) doğdu; o araçlar 2026-11-17'de
+kaldırıldı, sözdizimi genel alternatif olarak kalır. Birden çok eşleşen hook **oluşturma
+sırasına göre** zincirlenir; ilk `block` kazanır.
 
 > **claude-cli köprüsü (2026-07-13):** Virgül-glob **TionHarness'in native** sözdizimidir.
 > Claude Code matcher'ı **REGEX** sayar (alternation `|`, virgül literal), o yüzden
 > `writeCLISettings` matcher'ı `cliMatcherRegex` ile çevirir: virgül→`|`, glob→regex
 > (`*`→`.*`), `^…$` ankraj (`internal/climcp/matcher.go`). **Önceden verbatim yazılıyordu → virgüllü
 > matcher CLI turlarında sessizce hiç ateşlenmiyordu** (sqz/rtk CLI ajanlarında ölüydü).
-> **Bridged-shell genişletme (2026-07-14):** built-in shell açıkken CLI, `Bash`/`PowerShell`
-> yerine köprülü `mcp__tionharness_interaction__Bash`/`__PowerShell`'i görür — o yüzden
-> `cliMatcherRegex`, matcher'daki `Bash`/`PowerShell` alternatiflerine köprülü formu da
-> **otomatik ekler** (deduplu). Böylece düz `Bash,PowerShell` matcher'ı (tek-tık şablonu +
-> tüm mevcut/gelecek workspace'ler) CLI'da veri düzenlemeden ateşlenir; aşağıdaki manuel
-> `Bash,PowerShell` uyarısı artık yalnız **native** yol için geçerli. **Canlı E2E ile
-> doğrulandı (2026-07-14):** düz `PowerShell` matcher'lı bir hook gerçek claude-cli turunda
-> `mcp__tionharness_interaction__PowerShell` çağrısında ateşlendi.
+> **Bridged-shell genişletme (2026-07-14 → kaldırıldı 2026-11-17):** köprülü
+> `mcp__tionharness_interaction__Bash`/`__PowerShell` varken `MatcherRegex` düz `Bash`/`PowerShell`
+> alternatiflerine köprülü formu da ekliyordu. Köprülü kabuk kaldırılınca genişletme de
+> silindi: CLI artık yalnız kendi native `Bash`'ini görür ve düz `Bash` matcher'ı doğrudan
+> ona eşleşir.
 >
 > **Hook yürütme kabuğu farkı (ÖNEMLİ):** Native yol hook'u **PowerShell** ile çalıştırır
 > (`execHook` → `powershell.exe -Command`), Claude Code ise Windows'ta **bash/sh** ile. Yani
@@ -199,10 +201,11 @@ zincirlenir; ilk `block` kazanır.
 >
 > **Kapatıldı (2026-07-31):** Bu uyarı yazılıydı ama **bozuk rtk şablonu gönderilmeye devam
 > ediyordu**; WS10/SES63'te ajanın her Bash çağrısı bloke oldu (başarısız PreToolUse hook'u
-> aracı durdurur). rtk hook şablonu **tamamen kaldırıldı** — rtk artık hook ile değil,
-> `shellCommandRewrite` **ayarıyla** bağlanıyor (in-process filtre; ölçülmüş beyaz liste +
-> `Degraded` koruması). Regresyon testi: `recommendations.test.ts` →
-> *"never offers an rtk HOOK…"*. Detay: [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md).
+> aracı durdurur). PowerShell tek-satırlık rtk şablonu **kaldırıldı**; rtk bir süre
+> in-process filtreyle (`shellCommandRewrite`) bağlandı. **2026-11-17:** o filtre kabukla
+> birlikte kaldırıldı ve rtk yeniden hook oldu — ama bu kez kabuk-bağımsız düz komut
+> `rtk hook claude` (rtk'nın kendi Claude Code hook işleyicisi; komutu yeniden yazıp
+> yazmamaya kendisi karar verir). Detay: [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md).
 >
 > Ders: bir riski **dokümante etmek yetmiyor** — riski üreten şablon kodda durdukça
 > kullanıcı ona tek tıkla ulaşıyor. Uyarıyı yazarken şablonu da düzeltmek gerekirdi.
@@ -226,10 +229,9 @@ zincirlenir; ilk `block` kazanır.
 
 
 
-> **sqz uyarısı (Windows):** Ayarlar ▸ Dış Araçlar'daki tek-tık "Bağla" `Bash,PowerShell`
-> matcher'ıyla hook kurar. Eski kurulumlarda matcher `Bash` kalmışsa PowerShell komutları
-> sıkıştırılmadan geçer — hook'u düzenleyip matcher'ı `Bash,PowerShell` yapın (veya
-> kaldırıp yeniden bağlayın). **rtk artık burada değil** — ayarla bağlanıyor (yukarı bak).
+> **sqz / rtk matcher'ı:** Ayarlar ▸ Dış Araçlar'daki tek-tık "Bağla" sqz'i `Bash,PowerShell`,
+> rtk'yı `Bash` matcher'ıyla kurar. TionHarness'in kendi `PowerShell` aracı artık yok;
+> claude-cli'de komutlar native `Bash`'ten geçtiği için `Bash` alternatifi yeterlidir.
 
 ## Akış (toolloop.go)
 

@@ -2,7 +2,6 @@
 # Shared CI gates. Release frontend bundling stays in build-release.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export TIONHARNESS_ENABLE_SHELL=1
 
 run_backend() {
   # Fresh checkouts need an embed placeholder before the frontend is built.

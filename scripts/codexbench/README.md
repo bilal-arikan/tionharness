@@ -53,7 +53,7 @@ MCP köprüsü, pano/worker akışları, plugin'ler, uzun oturum, resume ve comp
 Depo kökünden Git Bash ile, yolları kendi kurulumunuza göre verin:
 
 ```bash
-TIONHARNESS_ENABLE_SHELL=1 go run ./scripts/codexbench \
+go run ./scripts/codexbench \
   -bin 'C:/path/to/codex.exe' \
   -home 'C:/path/to/authenticated/codex-home' \
   -out 'C:/path/to/results.json'

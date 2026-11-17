@@ -1,5 +1,12 @@
 # 17 — Araç Çıktısı Token Optimizasyonu
 
+> **Not (2026-11-17): TionHarness'in kendi kabuğu kaldırıldı.** Ajanlar komutu her zaman
+> CLI'nin native kabuğuyla koşturur; in-process rtk komut filtresi, in-process sqz çıktı
+> filtresi, `shellOutputCompression`/`shellCommandRewrite` ayarları, `no_compress` argümanı ve
+> `TurnStep.optimizer` çipi gitti. rtk (`rtk hook claude`) ve sqz (`sqz hook claude`) yalnız
+> claude-cli'nin native `Bash`'inde PreToolUse hook'u olarak çalışır; codex-cli/opencode-cli'de
+> çalışmaz. Bkz. "rtk / sqz bugün" bölümü.
+
 > **Not (2026-10-18):** Varsayılanlar değişti: `maxContextTokens` tabanı 800000→64000, gpt/codex bütçe payı 0.35→0.6, `autoCompactMode` rolling→auto, `maxToolOutputKB` 100→50; stall yargıcı kaldırıldı.
 
 > Ajan araç çıktılarının (shell, dosya, MCP) LLM context'ine girmeden önce küçültülmesi.
@@ -9,7 +16,8 @@
 > general-purpose/claude tipleri `Agent(<tip>)` scoped deny ile kapalı, Explore/Plan
 > süreç içinde koşup transkripti ana çağrıya katlanıyor (yeni `claude -p` tabanı
 > ödenmez). Native `TodoWrite` ve codex `update_plan` progress dosyasına aynalanıyor.
-> Ajan-düzeyi `NativeShell` opt-in'i Bash ailesini köprüyle birlikte açar. Ayrıntı
+> (2026-11-17: ajan-düzeyi `NativeShell` alanı kaldırıldı; Bash ailesi artık her zaman
+> açıktır, yalnız araç filtresi `Bash`'i kabul etmeyen ajanda bastırılır.) Ayrıntı
 > `05-ILERLEME.md` "CLI yerleşik araçları: izleyerek serbest bırakma".
 >
 > **Not (2026-09-07):** token kalibrasyonu — claude-cli harness ek yükü artık gerçek
@@ -31,12 +39,13 @@
 > tasarruf sayaçları (`CompactSavedBytes` / `compactSavedBytes`) ve tüm bütçe/UI
 > hücreleriyle birlikte **çıkarıldı**. Bu iş artık tamamen **harici araçlara** devredildi:
 >
-> - **`rtk`** — komut-katmanında: workspace'te rtk bağlıysa runtime shell komutunu
->   çalıştırmadan önce `rtk` üzerinden yeniden yazar (`Runtime.rtkCommandFilter`, `internal/agent/rtk_optimizer.go`;
->   aşağıda). Ajan komutu elle sarmalamaz.
-> - **`sqz`** — çıktı katmanında: workspace'te sqz hook'u bağlıysa runtime shell çıktısını
->   modele dönmeden önce in-process sıkıştırır (`Runtime.sqzShellFilter`,
->   `internal/agent/shell_optimizer.go`; aşağıda).
+> - **`rtk`** — komut-katmanında: PreToolUse hook'u `rtk hook claude` claude-cli'nin
+>   native `Bash` komutunu çalıştırmadan önce `rtk` üzerinden yeniden yazar. Ajan komutu
+>   elle sarmalamaz. (2026-07-28 → 2026-11-17 arası bu iş in-process `rtkCommandFilter` ile
+>   yapılıyordu.)
+> - **`sqz`** — çıktı katmanında: PreToolUse hook'u `sqz hook claude` komutu çıktısı sqz'den
+>   geçecek şekilde yeniden yazar. (2026-07-25 → 2026-11-17 arası in-process
+>   `sqzShellFilter`.)
 >
 > Server-tarafı `clear_tool_uses` / API-native compaction (eskiyen/taşan sonuçlar) ve
 > retrieval katmanı zaten transcript-düzeyi baskıyı karşılıyordu; ham araç-çıktısı
@@ -46,12 +55,12 @@
 
 ## Neden harici?
 
-TionHarness'in native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
-`ToolResult` olarak konuşmaya eklenir ve sonraki model çağrısında **girdi token'ı** olarak ücretlenir.
-`Bash` gibi araçlar 64 KB'ye kadar ham çıktı döndürebilir. `git status`, test runner, `ls -R`, `grep`
-gibi komutlar context'i hızla şişirir. Bu baskıyı azaltmak artık **built-in bir katman değil**, harici
-araçların (`rtk` CLI / `sqz` PostToolUse hook) sorumluluğundadır — mevcut `internal/conversation`
-compaction'ı (transcript bütçesi) ve prompt-cache bu harici katmanı tamamlar.
+Her araç çağrısının çıktısı konuşmaya eklenir ve sonraki model çağrısında **girdi token'ı**
+olarak ücretlenir. `Bash` gibi araçlar büyük ham çıktı döndürebilir; `git status`, test runner,
+`ls -R`, `grep` gibi komutlar context'i hızla şişirir. Bu baskıyı azaltmak **built-in bir katman
+değil**, harici araçların (`rtk` / `sqz`, CLI hook'u olarak) sorumluluğundadır — mevcut
+`internal/conversation` compaction'ı (transcript bütçesi) ve prompt-cache bu harici katmanı
+tamamlar.
 
 Built-in tarafında geriye kalan tek koruma tool'ların kendi 64 KB hard-cap'idir; hata/boş sonuçlar
 her zaman olduğu gibi **hiç dokunulmadan** modele gider.
@@ -59,8 +68,8 @@ her zaman olduğu gibi **hiç dokunulmadan** modele gider.
 ## CLI sağlayıcılarında trace çıktı cap'i (2026-08-27)
 
 **Sorun:** `claude-cli` ve `codex-cli` araç döngüsünü kendileri koşturur; shell çağrısı
-`internal/tools/builtin_shell.go`'dan geçmez, dolayısıyla oradaki 64 KB cap **ve** sqz/rtk
-hook'ları hiç uygulanmaz. CLI ne bastıysa `TraceStep.Output`'a birebir yazılır ve transkripte
+TionHarness'in araç katmanından geçmez (2026-11-17'den beri TionHarness'in kendi kabuğu da
+yok), dolayısıyla oradaki çıktı cap'i uygulanmaz. CLI ne bastıysa `TraceStep.Output`'a birebir yazılır ve transkripte
 kalıcı olarak kaydedilir. Gerçek vaka (WS24/SES576): store'un `.jsonl` dosyaları üzerinde
 koşan tek bir `rg -n` çağrısı **20 satırda 1 MB** döndürdü (her satır tam bir mesaj JSON'u) ve
 tek asistan mesajını 1,88 MB'a çıkardı.
@@ -74,567 +83,116 @@ Kesme her zaman **görünürdür** (`…[line truncated at 4KB]`, `[output trunc
 UTF-8 rune sınırını bölmez. Bağlandığı noktalar: `codexcli_events.go` → `setStep` (her adım tek
 bir noktadan geçer), `claudecli_stream.go` → `tool_result` atama.
 
-## Bridged shell için in-process `sqz` (2026-07-25)
+## rtk / sqz bugün: CLI'nin native `Bash`'inde hook (2026-11-17)
 
-**Sorun:** `sqz hook claude` yalnız **native `Bash`** tool adını rewrite ediyor. TionHarness
-tüm shell'i bridged `mcp__tionharness_interaction__Bash` (ve `…__PowerShell`) üzerinden
-koşturduğu için sqz PostToolUse/PreToolUse hook'u bu araçları **tanımıyor** → hiç sıkıştırma
-olmuyordu (doğrulandı: aynı `cat` komutu native adla rewrite edilir, bridged adla passthrough).
+**Durum:** TionHarness'in kendi kabuğu (köprülü `Bash`/`PowerShell`, arka plan kabuğu,
+`monitor`) 2026-11-17'de kaldırıldı; ajanlar komutu her zaman CLI'nin **native** kabuğuyla
+koşturur (claude-cli `Bash` ailesi, codex-cli'nin kabuğu, opencode-cli `bash`). Bununla
+birlikte iki in-process katman da gitti:
 
-**Çözüm:** sıkıştırmayı **sunucu tarafında, in-process** uygula. Shell tool'ları opsiyonel bir
-çıktı filtresi taşır (`ShellTool/PowerShellTool.WithOutputFilter`, `internal/tools/builtin_shell.go`);
-foreground çalıştırmada, sonuç **modele dönmeden önce** ve yalnız `shellCompressMinBytes` (2 KB)
-üstündeyse filtreden geçer. Canlı UI stream'i (`onChunk`) **ham** kalır — kullanıcı tam çıktıyı görür,
-model sıkıştırılmış alır. Filtreyi `Runtime.sqzShellFilter` (`internal/agent/shell_optimizer.go`)
-kurar: sqz **opt-in** (workspace'te sqz hook wired) **ve** binary PATH'te ise, çıktıyı
-`sqz compress --cmd '<komut>'`'a stdin ile verir. Hata/eksiklikte **ham çıktı** döner + `Warn` log
-(fail-open; sıkıştırma optimizasyondur, doğruluk değil). Hem **native** (buildRegistry) hem **bridged**
-(NewShellRunner), hem **Bash** hem **PowerShell** aynı tek enjeksiyondan geçer.
+- **in-process sqz çıktı filtresi** (`Runtime.sqzShellFilter`, `shell_optimizer.go`,
+  `shellOutputCompression` ayarı, `no_compress` argümanı);
+- **in-process rtk komut filtresi** (`Runtime.rtkCommandFilter`, `rtk_optimizer.go`,
+  ölçülmüş beyaz liste `rtkRewriteWorthIt`, `Degraded` notu, `shellCommandRewrite` ayarı);
+- bunları kartta gösteren `TurnStep.optimizer` / `OptimizerChip` ve claude-cli yolunun
+  `optimizerLog`'u.
 
-**Workspace toggle:** `WSSettings.ShellOutputCompression` (`""`=auto → sqz-hook varlığını
-izler, `"on"`=zorla aç [binary yeterli, hook gerekmez], `"off"`=kapat). Runtime'a
-`SetShellCompression` ile push edilir; `sqzShellFilter` bunu okur. UI: Ayarlar ▸ Workspace ▸
-"Shell çıktısı sıkıştırma (sqz)" seçici + workspace-oluşturma sonrası öneri kartı
-(`recommendations.ts` `shell-compress`: sqz kurulu ama pasifse tek-tık `on`). Hook'u
-kaldırmak zaten doğal bir kapatma anahtarıdır (auto modda).
+İkisi de artık **yalnız CLI hook'u** olarak çalışır. Workspace'in PreToolUse/PostToolUse
+hook'ları her claude-cli turunda `--settings` dosyasına yazılır (`internal/climcp/settings.go`,
+matcher çevirisi `internal/climcp/matcher.go`) ve CLI kendi `Bash`'inde ateşler:
 
-**Ajan bilgilendirmesi `on` modunda da gider (fix 2026-07-28):** `tokenOptimizerCapability`
-eskiden yalnız hook'lara bakıyordu → `on` ile hook'suz sıkıştırılan workspace'te ajan
-uyarısız kalıyor, sqz'nin kısaltmalı çıktısını **truncation sanıp** komutu tekrar
-çalıştırabiliyor ya da derleyici/test çıktısını yanlış ayrıştırabiliyordu. Artık
-`Runtime.effectiveTokenOptimizers` hook tespitine in-process filtreyi de katıyor; `on`
-her shell çağrısını kapsadığı için `*` matcher'ı ile gelir (daraltıcı kapsam notu
-basılmaz). `off` bir gerçek sqz hook'unu **gizlemez** — o hook native araç adında hâlâ
-ateşlenir. API DTO'su da `shellOutputCompression`'ı geri yansıtır; eskiden
-yansıtmadığı için Ayarlar seçici gerçek değer ne olursa olsun daima "auto" gösteriyordu.
+| Araç | Bağlantı (Ayarlar ▸ Dış Araçlar, tek tık) | Ne yapar |
+|---|---|---|
+| `rtk` | PreToolUse, matcher `Bash`, komut `rtk hook claude` (`internal/exttools/catalog.go`) | rtk'nın kendi Claude Code hook işleyicisi: komutu kendi rewrite kayıt defterine göre `rtk <komut>`'a çevirir ya da dokunmaz |
+| `sqz` | PreToolUse, matcher `Bash,PowerShell` (Claude Code'un Windows'taki native PowerShell aracı da kapsansın diye), komut `sqz hook claude` | komutu çıktısı sqz'den geçecek şekilde yeniden yazar (kayıpsız kısaltma sözlüğü / `§ref:…§` dedup işaretçisi) |
 
-**Güvenlik/kayıpsızlık:** `sqz compress` kendi kendini gate'ler — küçük/precise çıktı (hash, key)
-"0% reduction" ile **verbatim** döner; asıl mekanizma **lossless n-gram kısaltma** (sözlük çıktının
-başına eklenir, model geri açabilir). `[sqz] N/N tokens` istatistik satırı **stderr**'e gider,
-döndürülmez. Agent ham çıktıya her zaman erişebilir: (a) shell tool'una **`no_compress: true`**
-argümanı (filtre aktifken şemada ilan edilir → o çağrıda byte-exact ham döner), veya (b)
-`komut > dosya` (stdout boş → filtre tetiklenmez) + `Read`/`Grep` file tool'u. Testler:
-`builtin_shell_test.go TestShellOutputFilter` (eşik + no_compress), `shell_optimizer_test.go
-TestSqzShellFilter_Gate`.
+`rtk hook claude` düz bir komut kelimesidir, yani claude-cli'nin hook'ları çalıştırdığı bash
+altında da geçerlidir (2026-07-31'de shell'i kilitleyen PowerShell tek-satırlık şablonun
+tersine — aşağıdaki tarihçeye bak).
 
-**sqz dedup önbelleği (2026-07-28):** sqz **kalıcı** bir dedup cache tutar; daha önce gördüğü
-bir içerik tekrar gelirse **tüm çıktıyı** `§ref:<hash>§` handle'ıyla değiştirir ve stderr'e
-`N/M tokens` yerine `[sqz] dedup hit: …` yazar. İki sonucu var:
+**Kapsam:** codex-cli ve opencode-cli workspace hook'larını taşımaz → bu ajanlarda rtk/sqz
+**çalışmaz**. Ajan bilgilendirmesi `tokenOptimizerCapability`
+(`internal/agent/capabilities_tokenopt.go`) ile sürer: hook komutunda `\brtk\b`/`\bsqz\b`
+görülürse statik prefix'e "# Token optimization active" bloğu girer (rtk = kayıplı ÖZET,
+geçen testler düşer; sqz = KAYIPSIZ, iki biçim; ikisi birlikte = istiflenir, rtk'nın küçülttüğü
+sonuç sqz eşiğinin altında kalır). Ham çıktı kaçışı artık `no_compress` değil:
+**`rtk proxy <komut>`** (rtk'yı atlar) ve sqz için **`sqz expand '§ref:<hash>§'`**.
 
-1. **Test:** `TestSqzShellFilter_Gate` sabit payload ile **ilk koşuda geçip sonrakilerde
-   düşüyordu** (ikinci koşuda istatistik satırı hiç yok). Test artık payload'a koşuya-özgü
-   bir marker ekliyor → dedup'a takılmadan gerçek sıkıştırma yolunu ölçer.
-2. **Ajan:** binlerce satır basan bir komut tek satırlık bir handle olarak dönebilir. Bunu
-   bilmeyen ajan sonucu boş/bozuk sanıp komutu tekrar çalıştırır ve **aynı handle'ı** alır →
-   döngü. `tokenOptimizerGuidance` artık iki çıktı biçimini de (`[Abbreviations]` sözlüğü ve
-   çıplak `§ref:…§`) açıklıyor.
+### Bilinen boşluklar (in-process katmanın sağladığı ve artık olmayanlar)
 
-   **Kurtarma: `sqz expand '§ref:<hash>§'`** — orijinali tam olarak geri basar (doğrulandı:
-   19.908 karakterlik çıktı birebir döndü). Rehber eskiden "geriye bak / `no_compress` ile
-   tekrar çalıştır" diyordu; ikisi de gereksiz dolambaçtı — `expand` tam ve ucuz yol.
-   İlgili: `sqz reset --cache-only` bayat `§ref:` token'ları temizler, `sqz tee list/get`
-   sıkıştırılmamış kayıtları tutar.
+- **Beyaz liste yok.** In-process filtre `rtk rewrite`'a yalnız ölçülmüş aileleri
+  (`go`/`cargo`/`npm`/`pytest`/… + `git status`/`git log`) veriyordu. `rtk hook claude` ise
+  rtk'nın kendi kayıt defterini uygular; ölçümde **yanlış ya da başka** sonuç üreten aileler
+  (`npx`/`lint`/`tsc` — rtk lint "2 errors" derken gerçekte 90 hata; `uv pip list` → sistem
+  python'u) artık rewrite edilebilir. Upstream karşılıkları: rtk
+  [#950](https://github.com/rtk-ai/rtk/issues/950) (Windows'ta `.cmd` sarmalayıcıları:
+  npm/npx/pnpm/tsc/corepack), [#1205](https://github.com/rtk-ai/rtk/issues/1205),
+  [#294](https://github.com/rtk-ai/rtk/issues/294). Gerekirse kullanıcı rtk'nın kendi
+  `[hooks] exclude_commands` ayarıyla (`%APPDATA%\rtk\config.toml`) bu aileleri muaf tutar —
+  bu makineye özeldir ve TionHarness tarafından testle kilitlenemez.
+- **`Degraded` uyarısı yok.** rtk gerçek hatayı yutabiliyor (ölçülen vaka: BOM'lu `go.mod` →
+  rtk 0.44.1'de **tamamen boş** çıktı, exit 1). Eskiden yeniden yazılmış komut başarısız
+  olunca çıktıya `[optimizer note: …]` ekleniyordu; şimdi yalnız prompt bloğu "özet hatayı
+  açıklamıyorsa `rtk proxy <komut>` ile tekrar çalıştır" der.
+- **Adım-başı tasarruf görünürlüğü yok.** sqz'nin stderr istatistiği (`[sqz] 57/841 tokens`)
+  artık okunmaz; kazanç yalnız input-token düşüşünde ve `rtk gain`/`sqz gain` raporunda görünür.
+- **2 KB eşiği** sqz'nin kendi davranışına kaldı (in-process `shellCompressMinBytes` gitti).
 
-`parseSqzStats` dedup satırını da tanır (`ShellOptimization{Kind:"sqz", Dedup:true}`) —
-token çifti yok ama çip "sqz · yinelenen" olarak görünür, çünkü **kırık gibi görünen kart
-tam olarak budur.**
-
-## In-process `rtk` komut filtresi (2026-07-28)
-
-**Sorun:** rtk hiç çalışmıyordu. SES14 + SES15'te **81 shell çağrısının 0'ı** rtk'dan
-geçmiş. Sebep sqz'de çözdüğümüzün aynısı: rtk'nın PreToolUse hook'u araç **adı** olarak
-`Bash`'i eşliyor, TionHarness ise her şeyi bridged `mcp__tionharness_interaction__Bash` ile
-koşturuyor → hook hiç ateşlenmiyor. Manuel sarmalama da olmuyor (talimat yetmiyor).
-
-**Çözüm:** sqz'nin çıktı filtresinin kardeşi olarak bir **komut** filtresi:
-`tools.ShellCommandFilter` (`func(cmd string) (string, *ShellOptimization)`), `runShell`
-içinde `build()`'den **önce** uygulanır. `Runtime.rtkCommandFilter`
-(`internal/agent/rtk_optimizer.go`) kurar. Hem native hem bridged, hem Bash hem PowerShell.
-
-```mermaid
-graph LR
-    A["komut (ajanin yazdigi)"] --> B{"rtkRewriteWorthIt?"}
-    B -->|hayir| D["komut aynen"]
-    B -->|evet| C["rtk rewrite"]
-    C --> D
-    D --> E["calistir"]
-    E --> F{"exit != 0 ve<br/>yeniden yazildi mi?"}
-    F -->|evet| G["Degraded + kurtarma notu"]
-    F -->|hayir| H["sqz cikti filtresi"]
-    G --> H
-```
-
-### Neden beyaz liste (kara liste değil)
-
-`rtk rewrite` her komuta bir karşılık üretmeye hazır, ama **sonucun daha kötü olduğu
-aileler var**. Bu repoda ölçüldü (2026-07-28, token sayıları sqz'nin tokenizer'ından):
+### Ölçümden kalan bilgi (rtk 0.44.1, 2026-07-28)
 
 | Komut | Ham | sqz | rtk | rtk+sqz | Sonuç |
 |---|---|---|---|---|---|
 | `go test -v ./internal/tools` | 6107 | 3209 | **12** | 12 | rtk ezici |
 | `git log -30` | 6595 | 2027 | 2157 | **1167** | istifleme |
 | `git status` | 1090 | 876 | 811 | **549** | istifleme |
-| `git diff _Docs` | 16184 | **7485** | 12556 | 10129 | **sqz kazanıyor** |
-| `cat big.txt` (karakter) | 172.200 | — | **176.201** | — | **rtk büyütüyor** |
+| `git diff _Docs` | 16184 | **7485** | 12556 | 10129 | sqz kazanıyor |
+| `npm run build` (vite) | 934 | 885 | 923 | **404** | istifleme |
+| `npx eslint src` | 18943 | 10483 | 49 | 64 | **sayı yanlış** (rtk lint) |
+| `npx tsc --noEmit` | 4500 | **1832** | 4534 | 1700 | rtk kazanç yok |
 
-> Tablo **rtk 0.44.1** ile yenilendi (ilk ölçüm 0.42.4'teydi; `go test` 110 → 12 token'a
-> indi, diğer kararlar aynı kaldı). Ham sütunlar repo o an ne durumdaysa ona göre değişir —
-> önemli olan mutlak sayılar değil, aynı girdi üzerinde **sütunlar arası sıralama**.
-
-Son iki satır yüzünden `rtk rewrite`'a körü körüne güvenilmiyor. `rtkRewriteWorthIt`
-yalnız **doğrudan** test/build koşucularını geçirir (`go`, `cargo`, `npm`, `pytest`,
-`jest`, `vitest`, `mvn`, …) + `git status`/`git log`. `git diff`, `cat` ve tüm
-**dispatcher** komutlar (`npx`, `lint`, `prettier`, `format`, `uv`, `tsc`, `pip`) kapsam
-dışı — gerekçeleri aşağıdaki ölçüm bölümünde. Ayrıca kabuk operatörü içeren satırlar
-(`|`, `&&`, `;`, `$(…)`) atlanır — orada ilk token artık neyin çalıştığını anlatmıyor.
-
-Listede olmayan bir aile "rtk başarısız olur" demek değil, **"henüz ölçülmedi"** demektir.
-Ölçüm scripti (`scripts/rtk_eval.py` + `.spec.tsv`) 2026-09-06'da kaldırıldı; yeni bir
-aile ölçülecekse komutu ham ve `rtk` ile koşup çıktıyı tiktoken ile saymak yeterlidir
-(tarihçe: `git log -- scripts/rtk_eval.py`).
-
-### Ölçüm sonuçları (2026-07-28, rtk 0.44.1)
-
-| Komut | Ham | sqz | rtk | rtk+sqz | Karar |
-|---|---|---|---|---|---|
-| `go test -v ./internal/tools` | 6107 | 3209 | **12** | 12 | ✅ listede |
-| `cargo test -p sample-rules` | 929 | 874 | **16** | 30 | ✅ listede |
-| `pytest -v` (182 test) | 3638 | 335 | **137** | 151 | ✅ listede |
-| `npm run build` (vite) | 934 | 885 | 923 | **404** | ✅ listede |
-| `npx vitest run` | 85 | 98 | 8 | 23 | ✅ (çıktı küçük, yön doğru) |
-| `npx tsc --noEmit` (180 hata) | 4500 | **1832** | 4534 | 1700 | ❌ **çıkarıldı** |
-| `npx eslint src` | 18943 | 10483 | 49 | 64 | ❌ **çıkarıldı — sayı YANLIŞ** |
-| `pip list` | 2352 | **1230** | 2344 | — | ❌ eklenmedi |
-| `uv pip list` | 55 | — | 2344 | — | ❌ **eklenmedi — farklı komut** |
-
-> **`npm run build` ilginç:** rtk tek başına nötr (923 vs 934), kazanç rtk'nın çıktısının
-> sqz tarafından **çok daha iyi sıkışmasından** geliyor (404). İki filtreyi ayrı ayrı
-> değerlendirmenin yanıltıcı olabileceğinin örneği.
-
-### Ölçümün zorla çıkarttığı üç aile
-
-Beyaz listenin ilk hâli `go test` dışında **ölçümsüzdü** — "aynı şekle sahip" varsayımıyla
-doldurulmuştu. Ölçünce varsayım 5 aileden 2'sinde çöktü ve biri **doğruluk hatası** çıktı:
-
-**1. `npx` / `lint` / `prettier` / `format` — yanlış sayı üretiyor.**
-
-```
-Ham eslint : ✖ 109 problems (90 errors, 19 warnings)
-rtk lint   : Lint: 2 errors, 0 warnings
-             npm error could not determine executable to run
-```
-
-rtk `npx` önekini düşürüp `rtk lint`'e çeviriyor, projenin **yerel** eslint'ini bulamıyor,
-ama yine de kendinden emin bir özet basıyor. Bu kayıplı değil, **yanlış**: ajan 90 hatalı
-bir kod tabanını "neredeyse temiz" okur. (Çıkış kodu 1 olduğu için `Degraded` koruması
-devreye giriyor — ama makul görünen yanlış bir sayı, beyaz listenin var oluş sebebidir.)
-
-**2. `uv` — farklı yorumlayıcı.** `uv pip list` → `rtk pip list`, yani uv'nin ortamı yerine
-**sistem python'u**. Daha kısa bir cevap değil, **başka** bir cevap.
-
-**3. `tsc` — hak etmedi.** Dispatcher değil, sadece kazanç yok: rtk tek başına ham çıktıdan
-**kötü** (4534 vs 4500), rtk+sqz ise sqz'den yalnız %7 iyi — eşiğin altında. sqz zaten
-hallediyor.
-
-Ortak desen: **dispatcher komutlar** (hangi aracı çalıştıracağına karar vermesi gerekenler)
-rtk'da kırılıyor; doğrudan araç çağrıları (`go`, `cargo`, `pytest`, `npm run`) sorunsuz.
-Bu ayrım `rtkWrapperPrograms` olarak kodda **gerekçesiyle** duruyor, ki "e canım lint de
-bir koşucu değil mi" sezgisiyle geri eklenmesin. Test: `TestRtkWrapperProgramsExcluded`.
-
-### Bunlar bize özgü değil — rtk'nın kendi issue'ları
-
-Ölçümle bulduğumuz her vakanın upstream'de karşılığı var; yani yanlış kullanım değil,
-bilinen sınırlar:
-
-Durum **2026-07-28** itibarıyla (rtk 0.44.1 en güncel sürüm):
-
-| Issue | Durum | Konu |
-|---|---|---|
-| [#950](https://github.com/rtk-ai/rtk/issues/950) | **AÇIK** | Windows'ta `.cmd`/shell sarmalayıcıları spawn edemiyor: **pnpm, npm, npx, tsc, tsserver, corepack**. Önerilen çözüm: Windows'ta `cmd.exe /c` ile çalıştırmak. Issue'nun kendi geçici çözümü de bizimkiyle aynı: *"bir PreToolUse hook bu komutlarda rtk'yı baypas ediyor"* |
-| [#1080](https://github.com/rtk-ai/rtk/issues/1080) | **KAPANDI** (2026-04-26) | `npx <bilinmeyen-paket>` → `npm run` → ENOENT |
-| [#1205](https://github.com/rtk-ai/rtk/issues/1205) | AÇIK | `uv run <araç>` / `uvx <araç>` registry aramasından önce açılmalı |
-| [#294](https://github.com/rtk-ai/rtk/issues/294) | AÇIK | Hook rewrite kapsamı: `uv run`, `pnpm exec`, Python yol varyantları |
-
-> **#1080 kapandı ama `npx` dışarıda kalmaya devam ediyor.** Bizim eslint hatamız
-> `npm error could not determine executable to run` diyordu — bu #1080'in (yanlış
-> dönüşüm → ENOENT) değil, **#950'nin** imzası. Yani `npx`'i dışarıda tutan gerekçe
-> hâlâ açık. Kapanan issue'yu gerekçe sanıp `npx`'i geri almak, düzelmemiş bir hataya
-> güvenmek olurdu.
-
-**#950'nin listesi uygulandı** (`npx`, `tsc`, `tsserver`, `corepack`, `pnpm`) — **tek
-istisna `npm`**. Kural şu oldu: *upstream'in listesi geçerlidir, doğrudan ölçüm onu
-çürütmediği sürece.*
-
-| Komut | Bu makinede ölçüldü mü? | Karar |
-|---|---|---|
-| `npx`, `tsc` | evet — kazanç yok / yanlış sayı | çıkarıldı |
-| `pnpm`, `tsserver`, `corepack` | **hayır** (pnpm kurulu bile değil) | çıkarıldı |
-| `npm` | **evet** — çalışıyor + kazanç doğrulandı | **kaldı** |
-
-> **`pnpm` neden gitti:** beyaz listede yalnızca "npm'e benziyor" diye duruyordu, burada
-> hiç ölçülmedi (kurulu değil), dolayısıyla hakkındaki **tek kanıt** upstream'inki ve o da
-> "bozuk" diyor. Ölçülmemiş bir girdinin aleyhine kanıt varsa onu ayakta tutan hiçbir şey
-> kalmaz — bu, "ölçülmemiş aileye dokunma" kuralının doğrudan sonucu.
-
-> **`npm` neden kaldı — iki gerekçe:**
-> 1. **Tekrar etmedi.** `rtk npm run build` gerçekten derledi (exit 0, 4497 modül, tam
->    vite çıktısı); 824 → 404 kazancı dedup cache'i her ölçümden önce temizlenerek yeniden
->    üretildi.
-> 2. **Hata modu gürültülü.** rtk'nın npm filtresi çıktıyı **özetlemiyor**, olduğu gibi
->    geçiriyor (rtk tek başına 924 token vs ham 842 — hiçbir şeyi küçültmüyor). Dolayısıyla
->    `lint` filtresinin "2 errors" uydurması gibi bir sayaç yok. #950 ısırırsa komut sadece
->    çalışmaz: exit≠0, `Degraded` notu, görünür.
->
-> **Kazancı rtk olmadan alamıyoruz.** Bariz teori — "rtk ANSI'yi temizliyor, sqz'ye o
-> yarıyor" — test edilip **çürütüldü**: hamdan ANSI'yi kendimiz temizleyince hiçbir şey
-> değişmedi (824 → 821), rtk'nın **daha büyük** çıktısı ise yine 404'e indi. sqz'nin rtk
-> formatında bulduğu şey her neyse, bizim taklit edebileceğimiz bir şey değil.
-
-Test: `TestRtkWrapperProgramsExcluded` hem çıkarılanları hem `npm`'in kalmasını kilitliyor,
-ki ileride "upstream listesini harfiyen uygula" geçişi doğrulanmış kazancı sessizce silmesin.
-
-> **`npm run build`'in kazancı nereden geliyor?** rtk çıktıyı özetlemiyor (921 vs ham 932) —
-> kazanç rtk'nın çıktısının sqz tarafından **iki kat iyi sıkışmasından** geliyor (404 vs 883).
-> Dedup cache'i her ölçümden önce temizlenerek iki kez doğrulandı.
-
-Referans: [Command Rewrite System](https://deepwiki.com/rtk-ai/rtk/3.5-command-rewrite-system)
-— `rtk rewrite`'ın registry kuralları ve `npx` passthrough listesi.
-
-### `rtk rewrite`'ın çıkış kodu tuzağı
-
-`rtk rewrite --help` "Exits 0 and prints the rewritten command if supported" diyor.
-**Gerçekte rtk 3.x başarıda 3 dönüyor** (doğrulandı: `rtk rewrite "go test ./..."` →
-stdout `rtk go test ./...`, exit **3**). Belgelenen koda göre kapı koymak özelliği
-sessizce tamamen devre dışı bıraktı. Filtre artık çıkış kodunu **yok sayıyor**, bunun
-yerine **çıktıyı doğruluyor**: boş olmayacak, değişmiş olacak ve `rtk ` ile başlayacak.
-Beklenmedik bir şey dönerse orijinal komut çalışır + `Warn` log.
-
-### Hata yutması koruması
-
-rtk kayıplı bir özetleyici ve **gerçek hatayı kaybedebiliyor.** Ölçülen üç vaka:
-
-| Vaka | rtk 0.42.4 | rtk 0.44.1 | Değerlendirme |
-|---|---|---|---|
-| Test başarısız | `[FAIL] TestX` + `fail_test.go:9: …` + tee log | aynı | ✅ tam korunuyor |
-| Derleme hatası | `broken.go:3:22: syntax error: …` | aynı | ✅ tam korunuyor |
-| **Bozuk `go.mod` (BOM)** | `Go test: No tests found` | **tamamen boş** | ❌ **gerçek hata kayıp** |
-
-Üçünde de exit kodu 1. Yani çıkış kodu güvenilir, **mesaj** değil.
-
-> **Sürüm yükseltmesi bu vakayı düzeltmedi, şekil değiştirdi** (0.44.1'de yanıltıcı metin
-> yerine sıfır çıktı — ajan açısından daha da kötü). Koruma bu yüzden **koşulsuz**: belirli
-> bir metni ("No tests found" gibi) yakalamaya çalışmıyor, "yeniden yazılmış komut
-> başarısız oldu" olgusuna bakıyor. Sürümler arası kayan bir hata desenine kalıp bağlamak
-> ilk yükseltmede sessizce kırılırdı.
-
-Ham çıktıyı kurtarmak için komutu yeniden koşmak **seçilmedi**: her başarısız build'in
-maliyetini ikiye katlar ve flaky bir testte **farklı** sonuç raporlayabilir. rtk'nın kendi
-tee dosyası da çözüm değil — yutma vakasında tee hiç oluşmuyor (doğrulandı).
-
-Bunun yerine **dürüst uyarı**: yeniden yazılmış bir komut başarısız olursa çıktının sonuna
-`[optimizer note: …]` eklenir ("bu ham çıktı değil, rtk özeti; açıklamıyorsa aynı komutu
-`no_compress: true` ile tekrar çalıştır") ve adım `Degraded` işaretlenir → kartta
-**`rtk özet — ham değil`** çipi. Not, sqz filtresinden **sonra** eklenir ki kurtarma
-talimatı kısaltılmadan ulaşsın. Tek çalıştırma, sıfır tahmin, kararı bilgiye en yakın olan
-verir.
+Sonuç: rtk ve sqz karşı uçlarda çalışır ve istiflemek çoğu vakada en iyisidir (bu yüzden
+eski `token-conflict` uyarı kartı 2026-07-28'de silindi). Dispatcher komutlar (`npx`, `lint`,
+`uv`) rtk'da kırılır; doğrudan koşucular (`go`, `cargo`, `pytest`, `npm run`) sorunsuzdur.
+`rtk rewrite` başarıda belgelenen 0 yerine **3** döner (rtk 3.x) — rtk'yı doğrudan çağıran bir
+araç çıkış koduna değil çıktıya bakmalıdır.
 
 ### Araçların kendi ayarları (TionHarness dışı)
-
-Her ikisinin de kendi yapılandırması var; TionHarness'in ayarlarıyla **karışmaz**, alt katmanda
-durur:
 
 | Araç | Yapılandırma | İşe yarayan anahtarlar |
 |---|---|---|
 | rtk | `%APPDATA%\rtk\config.toml` (`rtk config --create` ile oluşur) | `[hooks] exclude_commands` — belirli komutları rtk'dan muaf tut · `[tee] enabled/mode` (varsayılan `failures`) · `[limits] grep_max_results`, `status_max_files`, `passthrough_max_chars` · `[filters] ignore_dirs/ignore_files` · `[telemetry] enabled=false` |
 | sqz | `sqz init` ile kurulan preset'ler | `sqz reset --cache-only` (bayat `§ref:` token'ları) · `sqz expand` (ref → tam içerik) · `sqz tee list/get` · `sqz status`/`gain`/`stats` |
 
-> **Neden beyaz listeyi rtk'nın `exclude_commands`'ine devretmiyoruz:** o dosya makineye
-> özel ve sürüm kontrolünde değil. Kararı oraya taşımak, TionHarness'in davranışını
-> **makineden makineye değiştirir** ve testle kilitlenemez hale getirir. Kod tarafındaki
-> `rtkWrapperPrograms` gerekçesiyle birlikte repoda duruyor ve testi var.
-
 #### Bakım paneli — Ayarlar ▸ Harici Araçlar (2026-07-28)
 
-Aynı gerekçeyle bu araçların config **anahtarları** ayar olarak yansıtılmadı: onların
-yapılandırması makine geneli, TionHarness ayarları workspace başına — anahtarı buraya koymak,
-ayarın tutamayacağı bir kapsam sözü vermek olurdu. Bunun yerine iki **eylem**
-(rtk config'i Explorer'da açan üçüncü eylem 2026-08-12'de kaldırıldı; config yolu
-panelde hâlâ metin olarak gösterilir):
+Config anahtarları ayar olarak yansıtılmaz (makine geneli; TionHarness ayarları workspace
+başına). Bunun yerine iki parametresiz **eylem** (`internal/api/external_tools_maint.go`):
 
 | Eylem | Uç nokta | Ne yapar |
 |---|---|---|
-| Tasarruf raporu | `GET /api/external-tools/token-report` | `rtk gain` + `sqz gain` çıktısını **birebir** gösterir; TionHarness yeniden hesaplamaz, böylece araçların muhasebesinden sapamaz |
-| sqz dedup önbelleğini temizle | `POST /api/external-tools/sqz-reset-cache` | `sqz reset --cache-only` — bayat `§ref:…§` işaretçileri ajanı şaşırttığında sqz'nin kendi önerdiği işlem. İstatistikler korunur |
-
-Güvenlik: iki uç nokta da **parametre almaz**; komutlar sabit argv. Kabuğa ulaşan hiçbir
-istek alanı yok.
-
-Panel ayrıca eski *"rtk ve sqz'yi aynı anda açma"* uyarısını taşıyordu — o metin de
-ölçümle çeliştiği için düzeltildi: artık ikisini birden açmayı **öneriyor**.
-
-### Ayar
-
-`WSSettings.ShellCommandRewrite` — `ShellOutputCompression` ile birebir simetrik tri-state
-(`""`=auto → rtk-hook varlığını izler, `"on"`=zorla, `"off"`=kapat). Ayrı knob, çünkü ikisi
-karşı uçlarda çalışıyor ve bir workspace birini isteyip diğerini istemeyebilir. UI: Ayarlar
-▸ Workspace ▸ "Shell komutu yeniden yazma (rtk)".
-
-`no_compress: true` **ikisini birden** atlar — tek bayrak, tek kavram ("bu komutu bana
-dokunulmamış ver"). Degraded notunun işaret ettiği kaçış yolunun gerçekten ham çıktı
-vermesi buna bağlı.
-
-Testler: `rtk_optimizer_test.go` (beyaz liste, gate, canlı rewrite),
-`builtin_shell_cmdfilter_test.go` (rewrite gerçekten çalışıyor mu, degraded notu,
-no_compress opt-out, iki filtrenin tek kayda birleşmesi).
-
-> **Kaldırılan uyarı kartı:** `token-conflict` ("rtk ve sqz ikisi de komutu yeniden
-> yazıyor — birini kapatmalısın") **silindi**. Ölçüm bunun tersini gösteriyor: karşı
-> uçlarda çalışıyorlar ve istifleme her vakada en iyi sonucu veriyor. Kart kullanıcıyı
-> **en iyi konfigürasyonunu kapatmaya** yönlendiriyordu.
-
-## Tasarruf çipi — sohbet kartında görünür optimizasyon (2026-07-28)
-
-**Sorun:** sqz çıktıyı yeniden yazıyordu ama **hiçbir yerde görünmüyordu**. Kullanıcı
-kartta `«A1»` placeholder'ları ya da tek satırlık `§ref:…§` görüp bunu truncation/hata
-sanıyordu; ajan da aynı belirsizliği yaşıyordu.
-
-**Çözüm:** shell adımına `TurnStep.Optimizer` (`tools.ShellOptimization{Kind,InTokens,
-OutTokens,Dedup}`) eklendi; UI `OptimizerChip` ile `sqz −%93` / `sqz · yinelenen` / `rtk`
-çipi basar (hover'da `841 → 57 token`).
-
-Sayılar **tahmin değil**: sqz zaten stderr'e `[sqz] 57/841 tokens (93% reduction)` yazıyor,
-`parseSqzStats` onu okuyor. Ölçüm yoksa yüzde de yok — `rtk` komutu **sarmaladığı** için
-öncesi/sonrası çifti hiç oluşmaz, o yüzden çip yalnız adı gösterir (uydurma yüzde yerine).
-
-İki farklı yol, iki farklı mekanizma:
-
-```mermaid
-graph LR
-    A["runShell<br/>(internal/tools)"] -->|"sqz stderr parse<br/>+ rtk komut tespiti"| B["recordOptimization"]
-    B --> C["ctx sink<br/>optimizer.go"]
-    C -->|"native döngü"| D["toolloop.go<br/>st.Optimizer = opts.Take()"]
-    C -->|"claude-cli:<br/>NewShellRunner"| E["optimizerLog<br/>(çıktı-hash anahtarlı)"]
-    E -->|"trace→step"| F["Runtime.traceStepToTurnStep"]
-    D --> G["OptimizerChip"]
-    F --> G
-```
-
-- **Native yol** temiz: `WithOptimizerSink` çağrı-başı ctx sink'i, `diff.go` deseninin aynısı.
-- **claude-cli yolu** (WS16 worker'ları) ctx sink'e ulaşamaz: shell bizim bridge'imizde
-  koşar ama **adımlar sonradan CLI'nin stream-json trace'inden** kurulur — farklı çağrı
-  yığını. Bu yüzden `optimizerLog` (`internal/agent/optimizer_log.go`) devreye girer.
-  **Anahtar komut değil, çıktının SHA-256'sıdır:** komutla anahtarlamak FIFO defter
-  tutmayı gerektirirdi (aynı komut turda iki kez koşabilir) ve sıraya duyarlı olurdu;
-  çıktı ise runner'dan trace adımına giden şeyin ta kendisi → arama **idempotent**
-  (hem canlı `OnEvent` hem son toplu dönüşüm aynı adımı çözer, boşaltma gerekmez).
-  Ring 128 girdi ile sınırlı, yalnız hash tutulur. Eşleşmezse çip **çıkmaz** — bir
-  downstream hook sonucu yeniden yazarsa sessizce kaybolmak, yanlış rakam basmaktan iyidir.
-
-Testler: `optimizer_test.go` (sink, `isRTKWrapped`, `Measured()` dürüstlüğü),
-`optimizer_log_test.go` (round-trip, whitespace toleransı, ring sınırı),
-`shell_optimizer_parse_test.go` (`parseSqzStats`'ın beş stderr biçimi).
-
-## Ajan bağlamı — hangi optimizer aktifse ona göre (2026-07-28)
-
-`tokenOptimizerGuidance` artık **üç ayrı şekil** üretiyor; her biri o kombinasyonun
-kendine özgü "bu bozuk mu?" anını hedefliyor:
-
-| Aktif | Bloğun anlattığı asıl şey |
-|---|---|
-| **rtk** | Çıktı bir **ÖZET** — kayıp bilinçli, yalnız geçen testler düşer; hatalar `dosya:satır` ile tam. Kısa sonuç "komut çalışmadı" demek değil. Başarısızlıkta `[optimizer note: …]` gelirse takip et. |
-| **sqz** | Sıkıştırma **KAYIPSIZ**; iki biçim: `[Abbreviations]` sözlüğü ve çıplak `§ref:…§`. |
-| **ikisi** | Karşı uçlarda çalışıyorlar ve **istifleniyorlar**. Kritik: rtk bir test koşusunu birkaç satıra indirince sonuç sqz'nin ~2KB eşiğinin **altında** kalır → o kartta **hiç kısaltma sözlüğü görünmez.** Bu boru hattının çalışması, sqz'nin bozulması değil. |
-
-Son satır bu bloğun asıl varlık sebebi: "çıktın sıkıştırılıyor" denip sıkıştırılmamış
-çıktı gösterilen ajan, optimizer'ın bozulduğu sonucuna varıp **olmayan bir soruna**
-çözüm aramaya başlar.
-
-Blok sonunda tek ortak kaçış yolu duyurulur: `no_compress: true`.
-Test: `TestTokenOptimizerGuidance_PerCombination`.
-
-## Canlı LLM doğrulaması ve çıkan üç kusur (2026-07-31)
-
-Zincirin tamamı **yeni build + gerçek claude-cli turlarıyla** sınandı (`serve.ps1`,
-WS10/AGT1). Her tur bir kusur açığa çıkardı — hepsi düzeltildi.
-
-| # | Test | Sonuç |
-|---|---|---|
-| 1 | `cd … && go test ./internal/db/` | ✅ `cd … && rtk go test …` · `Go test: 78 passed` |
-| 2 | `cd … && go test ./internal/tools/ 2>&1` | İlk turda **rewrite kaçtı** → `2>&1` muafiyeti eklendi → ✅ `230 passed` |
-| 3 | Bozuk `go.mod` (Degraded yolu) | Not iletildi ama **kurtarma yolu kırıktı** → iki düzeltme → ✅ iki çağrıda çözüldü |
-
-### Kusur 1 — `2>&1` rewrite'ı düşürüyordu
-
-Ajanlar komuta refleks olarak `2>&1` ekliyor. Operatör kuralı bunu reddediyordu.
-`2>&1` **hiçbir yere yazmaz**, akış birleştirir; rtk da token'ı olduğu gibi korur
-(`go test ./x 2>&1` → `rtk go test ./x 2>&1`). Tek istisna olarak geçirildi
-(`stripMergeStderr`). `2>dosya`, `> out`, `2>&1x` hâlâ reddediliyor.
-
-### Kusur 2 — `no_compress` string olarak gelince reddediliyordu
-
-Degraded notu ajana *"`no_compress: true` ile tekrar çalıştır"* diyor. Ajan dedi —
-ve çağrı **reddedildi**:
-
-```
-cannot unmarshal string into Go struct field shellArgs.no_compress of type bool
-```
-
-Model `"true"` (string) göndermişti. `flexBool` eklendi (`builtin_ask.go`'daki
-`flexOptions` deseninin aynısı): `true`/`"true"`/`"1"`/`"yes"`/`1` kabul,
-`"maybe"` hâlâ **hata** — belirsizi sessizce `false` saymak, görünür bir hatayı
-görünmezle takas etmek olurdu.
-
-### Kusur 3 — bridged şema `no_compress`'i YASAKLIYORDU
-
-Asıl sorun buydu. Bridge şemayı **filtresiz** bir araçtan üretiyordu:
-
-```go
-defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())   // outFilter == nil
-```
-
-`Def()` ise `no_compress`'i yalnız `outFilter != nil` iken ilan ediyor — üstelik
-şemada `"additionalProperties": false` var. Yani parametre belgesiz değil,
-**yasaktı**. Oysa gerçek filtre tur başına `NewShellRunner` ile kuruluyor, dolayısıyla
-çağrı anında çalışıyordu.
-
-Sonuç: bir yerde önerilen kurtarma yolu başka bir yerde engelleniyordu. Ajan
-şemayı okuyup "bu seçenek yok" diye `> dosya 2>&1`'e düştü. `AdvertiseOptimizerFlag()`
-eklendi; bridge onu kullanıyor. Test: `TestBridgedShellAdvertisesNoCompress`.
-
-**Düzeltme öncesi/sonrası** (aynı senaryo, gerçek LLM):
-
-| | Çağrı sayısı | Nasıl |
-|---|---|---|
-| Önce | **4** | not → reddedilen `no_compress` → elle `ls`/`xxd` → elle `> dosya 2>&1` |
-| Sonra | **2** | not → aynı komut + `no_compress: true` → ham hata → kök neden |
-
-## `cd <dir> && …` kapsam boşluğu (2026-07-31)
-
-SES63'ün ikinci dersi. Hook engeli kalktıktan sonra Bash çalıştı ama **hiçbir adımda
-`optimizer` yoktu**. Sebep beklenmedik bir yerdeydi — komutların **şekli**:
-
-| Ölçüm (SES63, 11 shell komutu) | |
-|---|---|
-| İlk token `cd` olan | **10 / 11** |
-| Kabuk operatörü içeren | **10 / 11** |
-
-`rtkRewriteWorthIt` operatör içeren satırları topluca reddediyordu, dolayısıyla bu ajanın
-komutlarının **hiçbiri** yeniden yazılamazdı. Ajanlar dizini araç cwd'sine güvenmek yerine
-her çağrıda `cd <dir> &&` ile yeniden kuruyor — bu istisna değil, **baskın kalıp**. Sonuç:
-`go test` üzerinde ölçülen %99 kazanç pratikte hiç gerçekleşmiyordu.
-
-**rtk bu şekli zaten doğru işliyormuş** (doğrulandı):
-
-```
-cd /tmp && grep -rn foo .   →   cd /tmp && rtk grep -rn foo .
-```
-
-Yani boşluk tamamen bizim taraftaydı. `splitCdPrefix` eklendi: tek seviyeli `cd <dizin> &&`
-öneki ayrılır, **kuyruk** değerlendirilir, doğrulama `<aynı cd öneki> + "rtk "` bekler.
-
-Korunan sınırlar: kuyrukta operatör varsa yine reddedilir — `cd x && cmd > dosya` olsaydı
-rtk'nın **özeti dosyaya yazılırdı**. Çift `cd`, çıplak `cd`, `pushd` de kapsam dışı. Tırnaklı
-yol tek kelime sayılır (`cd "/c/My Proj" && npm run build` — Windows'ta kural, istisna değil).
-
-> **`grep` neden hâlâ listede değil:** aynı repoda ölçüldü — `rtk grep` çıktısı ham grep ile
-> **birebir aynı** (15 satır, 2152 bayt). Sonuç rtk'nın limitlerinin altında kaldığı için
-> passthrough oluyor. SES63'ün greplerini rtk kurtarmazdı; ölçüm bunu söylüyor.
-
-Test: `TestRtkCommandFilter_Gate` içinde **canlı binary'ye karşı** uçtan uca doğrulama —
-`cd /c/proj && go test ./...` → `cd /c/proj && rtk go test ./...`, ve kuyruktaki
-yönlendirmenin hâlâ reddedildiği.
-
-## rtk hook şablonu KALDIRILDI — shell'i bloke ediyordu (2026-07-31)
-
-**Belirti:** WS10/SES63'te ajanın **hiçbir Bash çağrısı** çalışmadı. İki denemede de:
-
-```
-PreToolUse:mcp__tionharness_interaction__Bash hook error:
-  [$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; ...]:
-  /usr/bin/bash: -c: line 1: syntax error near unexpected token `|'
-```
-
-Ajan pes edip PowerShell'e geçti. rtk hiç çalışmadı; **shell de çalışmadı.**
-
-**Kök neden:** Ayarlar ▸ Harici Araçlar'daki "rtk'yi bağla" butonu gövdesi **PowerShell
-tek satırlığı** olan bir PreToolUse hook'u yaratıyordu. TionHarness'in kendi hook runner'ı
-Windows'ta PowerShell olduğu için native yolda çalışıyordu — ama `writeCLISettings` bu
-hook'u claude-cli'ye devrettiğinde **CLI onu bash ile** çalıştırıyor ve ilk `|`'da ölüyor.
-Başarısız bir PreToolUse hook'u **araç çağrısını bloke ettiği** için sonuç: o workspace'te
-Bash tamamen kullanılamaz hale geliyor.
-
-Risk `climcp.go:280`'de zaten yazılıydı: *"CLI hooks run under the CLI's own hook
-runner/shell, which may differ from TionHarness's execHook (PowerShell on Windows)."*
-Şablon bu uyarıyı ihlal ediyordu. HOK4 (sqz) aynı workspace'te sorunsuz çalışıyor çünkü
-doğru deseni kullanıyor: `powershell -NoProfile -ExecutionPolicy Bypass -File "...ps1"` —
-hem bash hem PowerShell için geçerli bir komut satırı.
-
-**Çözüm — şablonu düzeltmek değil, kaldırmak.** Hook bash-uyumlu hale getirilebilirdi ama
-zaten **yanlış mekanizmaydı**: her komutun başına `rtk ` ekliyordu — `git diff` ve `cat`
-dahil, yani rtk'nın ölçümle kaybettiği yerler dahil. In-process filtre bunların hepsini
-çözüyor (ölçülmüş beyaz liste + `Degraded` koruması + hem native hem bridged yol).
-
-Yapılanlar:
-
-| Yer | Değişiklik |
-|---|---|
-| `external_tools.go` | rtk'nın `wire`'ı `"hook"` → **`"setting"`** |
-| `ExternalToolsPanel.tsx` | `TOOL_HOOK_TEMPLATES.rtk` **silindi**; `wire:'setting'` satırı `shellCommandRewrite`'ı aç/kapat eder |
-| `recommendations.ts` | `RTK_HOOK` **silindi**; "token" kartı yalnız sqz önerir |
-| `recommendations.test.ts` | `never offers an rtk HOOK…` + şablonun imzası (`ReadToEnd`) geri gelirse kırılan assert |
-| WS10 (canlı) | HOK3 silindi; `shellCommandRewrite="on"`, `shellOutputCompression="on"` |
-
-> **Ders:** iki farklı hook runner (TionHarness=PowerShell, claude-cli=bash) varken hook
-> gövdesi **ikisinde de geçerli** olmalı. Tek satırlık PowerShell yerine
-> `powershell -NoProfile -File <script.ps1>` deseni kullanılmalı — sqz'nin yaptığı gibi.
-
-## Canlı doğrulama — WS16 / claude-cli (2026-07-28)
-
-Zincirin tamamı gerçek bir turda, gerçek bir worker'da doğrulandı. WS16'da
-`shellCommandRewrite="on"` yapıldı (workspace'te yalnız sqz hook'u vardı, rtk hook'u
-yoktu → filtre `auto` modda nil kalıyordu) ve AGT1'e (claude-cli/opus) tek komutluk bir
-görev verildi: `cargo test -p sample-rules`.
-
-Persist edilen adım:
-
-```json
-{
-  "kind": "tool", "tool": "Bash",
-  "input":  { "command": "cargo test -p sample-rules" },
-  "optimizer": {
-    "kind": "rtk",
-    "command": "rtk cargo test -p sample-rules",
-    "degraded": true
-  }
-}
-```
-
-Dört şey birden kanıtlandı:
-
-1. **Komut filtresi ateşledi** — `cargo test …` → `rtk cargo test …`
-2. **Yeniden yazılan komut kaydedildi** → çip hover'ında gerçekte çalışan komut görünür
-3. **`Degraded` koruması çalıştı** — komut başarısız oldu, bayrak set edildi
-4. **claude-cli yolu tuttu** — bu **en riskli parçaydı**: adımlar CLI'nin stream-json
-   trace'inden kuruluyor, ctx sink oraya ulaşmıyor. `optimizerLog`'un çıktı-hash
-   eşleşmesi bridged runner ile trace adımını doğru bağladı.
-
-Ajana dönen çıktının sonu (not sqz'den **sonra** ekleniyor, kısaltılmadan ulaşıyor):
-
-```
-rtk: Failed to resolve 'cargo' via PATH, falling back to direct exec: Binary 'cargo' not found on PATH
-[exit error: exit status 1]
-
-[optimizer note: this command FAILED and the text above is a token-optimized SUMMARY
-produced by rtk, not the command's raw output. … re-run the SAME command with
-no_compress: true to get the byte-exact output.]
-```
-
-> **Turun ortaya çıkardığı ayrı bir sorun:** `cargo` bridged shell'in PATH'inde yok —
-> SES14/SES15'te üç çağrı harcatan israfın aynısı. git-bash normal bir kabuktan
-> çağrıldığında `<home>/.cargo/bin/cargo`'yu görüyor, yani sorun git-bash'te
-> değil: **TionHarness süreci dar bir PATH ile başlatılmış** ve tüm alt kabukları onu
-> miras alıyor. Bu, token optimizasyonundan bağımsız bir dağıtım/başlatma konusu;
-> `_Docs/17`'nin kapsamı dışında ama worker'ların Rust derleyememesine yol açıyor.
+| Tasarruf raporu | `GET /api/external-tools/token-report` | `rtk gain` + `sqz gain` çıktısını **birebir** gösterir; TionHarness yeniden hesaplamaz |
+| sqz dedup önbelleğini temizle | `POST /api/external-tools/sqz-reset-cache` | `sqz reset --cache-only` — bayat `§ref:…§` işaretçileri ajanı şaşırttığında |
+
+### Tarihçe (2026-07-25 → 2026-11-17)
+
+Kısa kronoloji; ayrıntı `05-ILERLEME.md` ve arşivlenmiş ilerleme kayıtlarında, kod
+`git log -- internal/agent/rtk_optimizer.go internal/agent/shell_optimizer.go` ile:
+
+1. **2026-07-25 — in-process sqz.** `sqz hook claude` yalnız native `Bash` adını tanıyordu;
+   TionHarness tüm kabuğu köprülü `mcp__tionharness_interaction__Bash`/`…__PowerShell`
+   üzerinden koşturduğu için hook hiç ateşlenmiyordu. Sıkıştırma sunucu tarafına
+   (`ShellTool.WithOutputFilter`) taşındı.
+2. **2026-07-28 — in-process rtk + çip.** Aynı sebeple rtk hiç çalışmıyordu (SES14/15: 81
+   shell çağrısının 0'ı). Ölçülmüş beyaz listeli komut filtresi, `Degraded` koruması ve
+   `OptimizerChip` eklendi.
+3. **2026-07-31 — rtk hook şablonu kaldırıldı.** Ayarlar'daki "rtk'yı bağla" PowerShell
+   tek-satırlık bir PreToolUse hook'u kuruyordu; claude-cli hook'ları bash ile çalıştırdığı için
+   ilk `|`'da ölüp WS10/SES63'te **her Bash çağrısını** bloke etti. rtk o zaman ayara
+   (`shellCommandRewrite`) taşındı. Ders: iki farklı hook runner varken hook gövdesi ikisinde
+   de geçerli olmalı (`powershell -NoProfile -File <script.ps1>` ya da düz komut kelimesi).
+4. **2026-11-17 — kendi kabuk kaldırıldı.** Köprülü kabuk gidince in-process filtrelerin
+   varlık sebebi de gitti: CLI'nin native `Bash`'i hook'ları doğrudan ateşler. rtk düz komut
+   `rtk hook claude` ile yeniden hook oldu.
 
 ## Kabuk ortamı ipucu — `/c/` vs `/mnt/c` (2026-07-28)
 
@@ -651,6 +209,11 @@ erişilebilirliği. Native Unix'te blok **basılmaz** (model zaten o düzeni var
 boşuna token). Diğer capability'ler gibi hem chat (`composeTurnRequest`) hem headless
 (`autonomousSystemPrompt`) yolundan geçer. Test: `TestShellEnvironmentGuidance`.
 
+**2026-11-17:** blok yalnız **claude-cli** ajanlarına basılır (Claude Code'un `Bash`'i
+ana makinenin POSIX kabuğunu — Windows'ta git-bash — kullanır); codex-cli ve opencode-cli
+kendi kabuklarını getirir ve bu blok onları anlatmaz. Eski `ShellEnabled()` kapısı kalktı;
+`POSIXShellFlavor` artık `internal/tools/posix_shell.go`'dadır.
+
 ## Harici araç tespiti (presence-only) — ana yol
 
 Ayarlar → **Hooks** ekranındaki "Kurulu mu kontrol et" butonu (panel açılışında otomatik de çalışır), bu
@@ -659,7 +222,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 
 | Kategori (`category`) | Araç | Kullanım (`wire`) |
 |---|---|---|
-| `token` (Token / bağlam optimizasyonu) | `rtk`, `sqz` | `hook` — tek tıkla PostToolUse hook'u bağlanır (`sqz`); `rtk` ise komut-katmanında agent tarafından Bash ile çağrılır |
+| `token` (Token / bağlam optimizasyonu) | `rtk`, `sqz` | `hook` — tek tıkla PreToolUse hook'u bağlanır (`rtk hook claude` / `sqz hook claude`); yalnız claude-cli'nin native `Bash`'inde ateşlenir |
 | `render` (Render / diyagram) | `mmdc` (mermaid-cli) | `cli` — yerelde mermaid→SVG/PNG dosya çıktısı |
 
 - Backend: `GET /api/external-tools` (`api/external_tools.go`) → `exec.LookPath` ile PATH'te arar.
@@ -670,18 +233,18 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
   göre rozet/buton gösterilir (`hook`→Bağla/Aktif toggle, `mcp`→MCP rozeti, `cli`→CLI rozeti) + repo linki.
 - Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; TionHarness bu araçları kendiliğinden çalıştırmaz.
   Araç-çıktısı sıkıştırması **artık yalnız bu harici yoldadır** (built-in `compact` alt sistemi
-  kaldırıldı): `sqz` PostToolUse hook'u olarak bağlanır, `rtk` agent tarafından Bash ile çağrılır.
-  `cli` araçları (`mmdc`) ajan tarafından geliştirme sırasında Bash ile kullanılır.
+  2026-07-10'da, in-process rtk/sqz filtreleri 2026-11-17'de kaldırıldı): `rtk` ve `sqz` CLI
+  hook'u olarak bağlanır. `cli` araçları (`mmdc`) ajan tarafından CLI'nin kabuğuyla kullanılır.
 
-### `sqz` PostToolUse hook entegrasyonu
+### `rtk` / `sqz` hook entegrasyonu
 
-- `sqz` `token` kategorisinde, `wire="hook"` olarak listelenir → Ayarlar → **Hooks** ekranında
-  tek tıkla **PostToolUse** hook'u olarak bağlanabilir (frontend `TOOL_HOOK_TEMPLATES`).
-- PostToolUse zincirinde araç çıktısı, modele/transkripte dönmeden önce `sqz`'e verilir; hook
-  kısaltılmış çıktıyı geri döndürür. TionHarness bu kazanımı **ölçmez** (Claude Code hook sözleşmesi
-  tasarruf sayacı sunmaz) — kazanç dolaylı olarak input-token düşüşünde görünür.
-- `rtk` için ayrı bir hook şablonu gerekmez; agent gürültülü komutları doğrudan `rtk <cmd>` ile
-  sarmalar (kullanıcı `CLAUDE.md`'sindeki manuel fallback listesi).
+- İkisi de `token` kategorisinde, `wire="hook"` olarak listelenir → Ayarlar ▸ Dış Araçlar'da
+  tek tıkla **PreToolUse** hook'u olarak bağlanır (frontend `TOOL_HOOK_TEMPLATES`): rtk
+  `Bash` + `rtk hook claude`, sqz `Bash,PowerShell` + `sqz hook claude`. Komutlar düz komut
+  kelimesidir (pipe/PowerShell sözdizimi yok) çünkü claude-cli hook'ları bash ile çalıştırır.
+- TionHarness kazanımı **ölçmez** (Claude Code hook sözleşmesi tasarruf sayacı sunmaz) —
+  kazanç dolaylı olarak input-token düşüşünde ve `rtk gain`/`sqz gain` raporunda görünür.
+- Ajan komutu elle `rtk` ile sarmalamaz; hook bunu yapar (prompt bloğu da bunu söyler).
 
 ## Sınırlar / Notlar
 
@@ -995,10 +558,8 @@ Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlıl�
 
 **Notlar / sınırlar:**
 - Hook'lar (`PreToolUse`/`PostToolUse`) tasarruf **ölçmez** (Claude Code sözleşmesi); kazanç
-  dolaylı olarak input-token düşüşünde görünür. **İstisna:** in-process sqz shell filtresi
-  (hook değil) sqz'nin kendi stderr istatistiğini okur → o **adım** için gerçek token çifti
-  bilinir ve sohbet kartında çip olarak gösterilir. Bu **adım-başı görünürlüktür**; bütçe
-  ekranındaki toplamlara **girmez** (orada tek gerçek tasarruf kalemi prompt-cache USD'sidir).
+  dolaylı olarak input-token düşüşünde görünür. (Eski istisna — in-process sqz filtresinin
+  stderr istatistiğinden beslenen adım-başı çip — 2026-11-17'de kabukla birlikte kaldırıldı.)
 - Bütçe ekranında gösterilen tek gerçek tasarruf **prompt-cache USD**'sidir; built-in bayt/token
   sıkıştırma ölçeri yoktur.
 - Geriye-uyumlu: eski usage dosyalarındaki artık-kullanılmayan `compactSavedBytes*` alanları yok sayılır
@@ -1289,12 +850,14 @@ Uygulanan kaldıraçlar (hepsi ayarlanabilir, varsayılan açık):
    `agent.cliNativeToolAllowlist`, `providers.Request.CLIRestrictNativeTools/
    CLINativeTools`, `nativeToolArgs`): köprülü her claude-cli turunda yerleşik
    menü Read/Edit/Write/Glob/Grep/NotebookEdit/ToolSearch + MCP resource
-   okuyucuları; WebSearch/WebFetch ajan toggle'ına, Bash ailesi "shell köprülü
-   değil"e, TodoWrite/Skill aileleri "köprü ilan edilmedi"ye (WS17
+   okuyucuları; WebSearch/WebFetch ajan toggle'ına, Bash ailesi (`Bash`, `BashOutput`,
+   `KillShell`, `TaskOutput`, `TaskStop`) **her zaman** menüdedir — 2026-11-17'den beri
+   ajanın tek kabuğu budur; yalnız araç filtresi `Bash`'i kabul etmeyen ajanda (read-only
+   explore/planner/reviewer profilleri) tüm aile bastırılır —, TodoWrite/Skill aileleri "köprü ilan edilmedi"ye (WS17
    invariantı), plan-mode araçları ask/read-only moduna bağlı. `--disallowedTools`
    olduğu gibi kalır (savunma derinliği). Persistent fingerprint kısıtı içerir.
-   Test: `TestCLINativeToolAllowlistDisjointFromSuppression` (allowlist ∩
-   disallow = ∅, iki shell durumu × üç mod).
+   Test: `TestNativeToolAllowlistDisjointFromSuppression` (`internal/climcp`;
+   allowlist ∩ disallow = ∅, kabuk izinli/izinsiz × üç mod).
 2. **Yardımcı çağrılar araçsız ve köprüsüz** (`isAuxiliaryKind`: title/summary/
    reflect/compact): `toolLoopTurn.aux` interaction endpoint'ini ve MCP
    config'ini atlar, `--tools ""` gönderir, persistent havuza **girmez** (aynı

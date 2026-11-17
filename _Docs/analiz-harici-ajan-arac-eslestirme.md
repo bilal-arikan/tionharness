@@ -116,7 +116,7 @@ Durum: `birebir` / `kısmi` / `TionHarness'te yok`.
 | `source_credential_prompt` | `secret_set` (+ `ask_user`) | kısmi | Secret vault var ama "güvenli credential giriş UI'ı" yok; ajan secret'ı kendisi yazar. |
 | `update_user_preferences` | `update_user_preferences` (builtin) | kısmi | Yapısal tercih alanları var; önceki serbest-metin core-memory yolu (memory alt sistemi) 2026-07-05'te kaldırıldı. |
 | `transform_data` | `Bash`/`Shell` + `Write` | kısmi | İzole subprocess + yapısal çıktı sözleşmesi yok; aynı sonuç shell ile elde edilebilir. |
-| `script_sandbox` | `Bash` (sandbox'lı PowerShell shell) | kısmi | Sandbox'lı shell var; ağ-izolasyonlu satır-içi script tanılama aracı ayrı değil. |
+| `script_sandbox` | `Bash` (sandbox'lı PowerShell shell) | kısmi | Sandbox'lı shell var; ağ-izolasyonlu satır-içi script tanılama aracı ayrı değil. **(2026-11-17: TionHarness'in kendi `Bash`/`PowerShell` aracı kaldırıldı; ajanlar CLI'nin native kabuğunu kullanır, TionHarness tarafındaki kod yürütme yolu yalnız `run_code`/`transform_data`.)** |
 | `render_template` | — | TionHarness'te yok | Mustache/HTML şablon render aracı yok. |
 | `send_developer_feedback` | — | TionHarness'te yok | Geliştiriciye geri bildirim kanalı yok. |
 | `call_llm` | `run_subagent` (sync, izole) | kısmi | `run_subagent` araçlı tam bir ajan (daha ağır); `call_llm` tek-completion/ucuz. En yakın karşılık. |

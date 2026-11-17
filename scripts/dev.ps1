@@ -268,9 +268,6 @@ try {
         }
         Write-Host "==> Backend baslatiliyor: bin\tionharness-dev.exe  (${bindHost}:$Port)" -ForegroundColor Cyan
         $env:TIONHARNESS_ADDR = "${bindHost}:$Port"
-        # Gated feature (see SKILL.md / Ortam Notlari): the built-in shell.
-        # (Self-management is ALWAYS installed since 2026-07-01 -- no env gate.)
-        $env:TIONHARNESS_ENABLE_SHELL = "1"
         # -RedirectStandardError: keeps Go runtime fatals (OOM, panic traces) on
         # disk. STDOUT is intentionally NOT redirected -- slog keeps streaming to
         # this console live, and the app mirrors it to ~/.tionharness/logs anyway.

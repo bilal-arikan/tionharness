@@ -464,7 +464,8 @@ enabled in this context."` ile reddeder ve model **hemen doğru adla yeniden den
 kendi kendine toparlanan bir yanlış-adresleme, onarılabilir bir hata değil — bu yüzden
 `permissionDenyMarkers`'a `"no such tool available"` + `"not enabled in this context"`
 eklendi; artık `tool-error` **atanmaz** (sahte auto-repair spawn'ı tetiklemez). Birim
-testi: `autotag_test.go` (bare-`PowerShell` reddi deny kümesinde).
+testi: `autotag_test.go` (bare-`PowerShell` reddi deny kümesinde). (Örnek tarihseldir: köprülü `PowerShell` 2026-11-17'de kaldırıldı; istisna
+çıplak adla çağrılan her köprülü araç için geçerlidir.)
 
 **Tetik noktaları:** `Runtime.AutoTagTurn(ctx, sessionID, steps, turnErr)` — chat
 (başarı + cerr hata yolu), spawn (başarı + hata), scheduler `deliverPrompt` +

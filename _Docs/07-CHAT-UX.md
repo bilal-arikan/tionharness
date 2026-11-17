@@ -437,20 +437,11 @@ kırpıldı:
   alanları); açınca gövde `<pre>` yerine `Markdown` ile biçimli
   render olur (`# Skill: <slug>` başlığı + md gövde), gereksiz "Girdi" (`{slug}`)
   bloğu skill'de gizlenir.
-- `OptimizerChip.tsx` (2026-07-28) — shell adımının çıktısı **modele girmeden önce**
-  bir token-optimize edici tarafından kısaltıldıysa başlığın sağında küçük çip:
-  `sqz −%93` (hover: `841 → 57 token`), `sqz · yinelenen` (sqz dedup: tüm çıktı
-  `§ref:…§` işaretçisiyle değişti — kart tek satır görünür ama komut düzgün çalıştı)
-  veya yalnız `rtk` (komutu sarmalar, ölçülebilir öncesi/sonrası yok → yüzde
-  gösterilmez). Veri `TurnStep.optimizer`; canlı UI stream'i (`onChunk`) **ham**
-  kaldığı için çip yalnız modele giden değerin kısaltıldığını söyler.
-  **`rtk özet — ham değil` (uyarı rengi):** yeniden yazılmış komut **başarısız**
-  oldu; metin rtk'nın özeti ve gerçek hatayı kaybetmiş olabilir (ölçülen vaka:
-  bozuk `go.mod` → "No tests found"). Bu durum diğer her şeyin önüne geçer —
-  gizli bir hatanın yanında "−%93" tasarruf yazmak yanlış şeyi kutlamak olur.
-  Komut yeniden yazıldıysa hover'da **çalıştırılan gerçek komut** görünür; sessiz
-  komut değişimi kabul edilmez. Mekanizma + claude-cli yolu →
-  [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md).
+- ~~`OptimizerChip.tsx`~~ (2026-07-28 → **kaldırıldı 2026-11-17**) — shell adımında
+  in-process rtk/sqz'nin kısalttığı çıktıyı gösteren `sqz −%93` / `rtk özet — ham değil`
+  çipiydi. TionHarness'in kendi kabuğu kaldırılınca `TurnStep.optimizer` alanı ve çip de
+  gitti; rtk/sqz artık yalnız CLI'nin native `Bash`'inde hook olarak çalışır ve kart CLI'nin
+  döndürdüğü çıktıyı olduğu gibi gösterir. Bkz. [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md).
 - `DiffCard.tsx` — `kind:diff` adımı için özel dosya-değişikliği kartı: ✏️ +
   eylem (Oluştur/Düzenle/Yaz) + tıklanabilir yol + `+N −M` satır sayıları
   (başlıkta), açınca `DiffView` ile birleşik patch. `Write`/`Edit`

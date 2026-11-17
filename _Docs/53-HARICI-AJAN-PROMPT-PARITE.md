@@ -1,10 +1,11 @@
 # 53 — the external agent project Sistem-Promptu Paritesi (karşılaştırma notu)
 
-> **Özet (2026-09-03):** the external agent project'ın tam sistem promptu ile TionHarness'in kendi prompt
+> **Özet (2026-09-03, güncelleme 2026-11-17):** the external agent project'ın tam sistem promptu ile TionHarness'in kendi prompt
 > kurgusunu karşılaştıran, **uygulanmış** bir parite dokümanıdır — TionHarness "lean prefix
 > → skill'e devret" ilkesini izler (the external agent project'ın ~28K karakterlik statik promptunun
-> aksine). Alınanlar: session self-management, environment marker, shell-tool gate
-> duyurusu (ajan-filtreli); bilinçli dışlananlar: datatable/spreadsheet, `_displayName`/
+> aksine). Alınanlar: session self-management, environment marker (2026-11-17'den beri
+> yalnız `<environment os=".." arch=".." />`; eski shell-tool gate duyurusu TionHarness'in
+> kendi kabuğuyla birlikte kalktı); bilinçli dışlananlar: datatable/spreadsheet, `_displayName`/
 > `_intent` metadata, `~/.external-agent/docs`. `render_template`/`html-preview` sonradan
 > TionHarness-native karşılığıyla uygulandı. Guard testi (`internal/workspace/
 > defaults_test.go`) desteklenmeyen the external agent project-ism'lerin geri sızmasını engeller.
@@ -32,8 +33,8 @@ sızmasını aktif engeller.
 | Web Search nudge · Diagrams · Diffs · Document Tools · Git · Permissions · User prefs · Interaction guidelines | **VAR** | Zaten karşılığı mevcut |
 | Session self-management (labels/status) | **EKLENDİ** (özet + skill pointer) | Tam açıklama `tionharness-self-management` |
 | "Confirm destructive" → geri-döndürülemez + dışa-dönük | **GENİŞLETİLDİ** | send/publish/push kapsandı |
-| Environment marker (`<environment>` OS/arch/shell) | **EKLENDİ** (dinamik tarafta) | `agent.EnvironmentContextBlock()` |
-| Shell-tool gate advertisement | **EKLENDİ** (dinamik tarafta) | `Runtime.ShellToolsContextBlock()` — **tek kaynak, hiç boş dönmez**: gate açık + backing shell varsa Bash/PowerShell'i adıyla duyurur; **kapalıysa "shell DISABLED" + ölü-araç kuralını** enjekte eder (bir araç "not enabled in this context" derse ölü kabul et, aynı çağrıyı tekrarlama, fs araçlarına geç ya da raporla — ayrıca terminal varsayan rehberlik `rtk`/`go test`/`npm` shell'siz oturumda geçersiz). Bu, ajanın bare `PowerShell` çağırıp tur zaman aşımına düşmesini keser (FND-9c9a52aa · FND-6095a777 · FND-e9c79d9a · FND-495575b8). Statik talimatlar shell'i "her zaman var" diye VAAT ETMEZ (yalnız fs araçları always-on). `tools.ShellToolNames()` kayıt koşullarıyla aynı resolver'ı paylaşır → prompt ↔ katalog drift yok. **Ajan filtresi (2026-08-17):** workspace gate'i tek başına yetmiyordu — allowlist'inde `Bash`/`PowerShell` olmayan bir ajana "ENABLED" deniyor, ajan Bash'i çağırıp her seferinde `No such tool available` alıyordu (makine genelinde 100 başarısız çağrı; Bash hata oranı %4.05'e karşı köprülü MCP shell'de %0.21). Blok artık host'un desteklediği shell adlarını **ajanın kendi tool filtresinden** geçirir (`availableShellToolNames` → `ToolAllowedFunc`, `ToolCatalog`'un kullandığı **aynı** kapı): ikisinden hiçbiri kalmıyorsa DISABLED varyantı, yalnız biri kalıyorsa **sadece o** duyurulur. Bu yüzden `ShellToolsContextBlock(ctx, agent, confined)` imzası ajan taşır. Testler: `shellcontext_test.go` (allowlist'siz / kısmi allowlist / denylist) |
+| Environment marker (`<environment>` OS/arch) | **EKLENDİ** (dinamik tarafta) | `agent.EnvironmentContextBlock()` → `<environment os=".." arch=".." />` (2026-11-17'den beri shell bilgisi yok; kabuk lehçesini CLI'nin kendi kabuk aracı belgeler, Windows git-bash yol rehberi yalnız claude-cli ajanlarına `shellEnvironmentCapability` ile gider) |
+| Shell-tool gate advertisement | **KALDIRILDI (2026-11-17)** | Eskiden `Runtime.ShellToolsContextBlock()` köprülü `Bash`/`PowerShell`'i adıyla duyuruyor ya da "Shell execution is DISABLED" + ölü-araç kuralını enjekte ediyordu (ajan-filtreli; FND-9c9a52aa · FND-6095a777 · FND-e9c79d9a · FND-495575b8). TionHarness'in kendi kabuğu kaldırılınca blok da silindi: ajan her zaman CLI'nin native kabuğunu kullanır; claude-cli'de etkin araç filtresi `Bash`'i kabul etmeyen ajanın tüm kabuk ailesi `--tools` menüsünden düşer, codex/opencode'da böyle ajan read-only izin modunda koşar. |
 | Structured Data (datatable/spreadsheet) · PDF/Markdown Preview · call_llm · Tool Metadata (`_displayName/_intent`) | **DIŞLANDI** | Frontend/araç desteği yok → prompta yazmak halüsinasyon; guard yasaklıyor |
 | Source Templates / `render_template` · `html-preview` | **UYGULANDI** (2026-07-06) | TionHarness-native karşılık: `internal/tools/builtin_render_template.go` + inline HTML önizleme (`frontend/src/shared/components/markdown/HtmlPreview.tsx`). Guard bu ikisini artık yasaklamaz. Detay: [63-SOURCE-TEMPLATES-RENDER.md](63-SOURCE-TEMPLATES-RENDER.md) |
 | Configuration Documentation tablosu (`~/.external-agent/docs/*`) | **DIŞLANDI** | TionHarness docs yerine skill'e devreder |

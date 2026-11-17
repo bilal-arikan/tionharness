@@ -232,7 +232,7 @@ if [ "$frontend_only" = 0 ]; then
   fi
   echo "==> Starting backend: bin/tionharness-dev  ($bind_host:$port)"
   # Only STDERR is captured; STDOUT (slog) stays live on this console.
-  TIONHARNESS_ADDR="$bind_host:$port" TIONHARNESS_ENABLE_SHELL=1 "$bin" 2>"$backend_err" &
+  TIONHARNESS_ADDR="$bind_host:$port" "$bin" 2>"$backend_err" &
   backend_pid=$!
   lifecycle "backend launched (pid=$backend_pid stderr=$backend_err)"
 fi

@@ -3,6 +3,10 @@
 > **Durum:** Faz 0 (baseline, §11) + Faz 1 PoC + Faz 2 (per-call izin +
 > gözlemlenebilirlik) + Settings/UI + **Faz 3 A/B ölçümü (§12)** + **built-in araç
 > binding'leri (§13)** tamamlandı. Açık kalan: büyük-çıktılı senaryo tekrarı.
+> **2026-11-17:** TionHarness'in kendi kabuğu (`Bash`/`PowerShell`, `shell_manage`,
+> `monitor`, `ShellEnabled` gate'i) kaldırıldı. `run_code` artık yalnız `enableCodeMode`
+> ile açılır (kabuk kapısı yok); `transform_data` koşulsuz kayıtlıdır. Aşağıdaki
+> kabuk/`git push` guard'ı anıları tarihtir.
 > **Tarih:** 2026-07-02 · **İlgili:** [17-TOKEN-OPTIMIZASYON](17-TOKEN-OPTIMIZASYON.md) ·
 > [19-LAZY-TOOL-LOADING](19-LAZY-TOOL-LOADING.md) · [24-SELF-MANAGEMENT](24-SELF-MANAGEMENT.md) ·
 > [25-SUBAGENT-ISOLATION](25-SUBAGENT-ISOLATION.md) · [38-SESSION-DEBUG](38-SESSION-DEBUG.md)
@@ -100,7 +104,7 @@ namespace'li MCP çağrı yolu, ve kod-dışı çağrı için `mcp.CallNamespace
 |-------|-------|---------------------------|
 | **`transform_data`** | `internal/tools/builtin_transform_data.go` | Zaten "modelin yazdığı script'i izole subprocess'te çalıştır, **data dosyada kalsın, yalnız stdout+path dönsün**" deseni. python3/node/bun; 30s timeout; 16KB log cap. Aranan desenin **prototipi**. |
 | **Stripped env** | `internal/tools/transform_data_env.go` | `minimalScriptEnv()` — **allowlist** tabanlı; `ANTHROPIC_API_KEY` dahil hiçbir secret script'e geçmez. |
-| **Shell (`Bash`/`PowerShell`)** | `internal/tools/builtin_shell.go` | RiskExec, `ShellEnabled` gate'i, 64KB cap, autonomous brake (`sb.Confined` → `git push` engeli). Genel kod yürütme kanalı. |
+| ~~**Shell (`Bash`/`PowerShell`)**~~ | ~~`internal/tools/builtin_shell.go`~~ | **Kaldırıldı (2026-11-17)** — genel kod yürütme kanalı artık CLI'nin native kabuğu (TionHarness dışında). |
 | **MCP çağrı yolu** | `internal/mcp/manager.go` (`CallNamespaced`, `NamespaceTool`, `nsSep="__"`) | `<server>__<tool>` namespace'i; kod API'sinin altına bağlanacak çağrı primitifi. |
 | **MCP havuzu** | `internal/mcp/pool.go` (+ `client.go` stdio, `http.go` streamable) | Kalıcı bağlantı — kod içinden tekrarlı çağrılar yeni süreç açmaz. |
 | **4-tier görünürlük** | `internal/tools/registry.go` (`VisibilityFull/Summary/NameOnly/Hidden`) | Kod moduyla birlikte yaşayacak; §8. |
@@ -182,9 +186,9 @@ Kod yürütme = keyfi host kodu. TionHarness'in mevcut sınırları ve boşlukla
 | Katman | Mevcut durum | Kod-execution için not |
 |--------|--------------|------------------------|
 | **Secret izolasyonu** | `minimalScriptEnv()` allowlist — API key'ler script'e geçmez | ✅ Devral. Loopback köprünün auth token'ı da script env'ine **girmemeli** (köprü ayrı kanaldan doğrulamalı). |
-| **Kaynak sınırı** | 30s timeout, 16KB log cap (`transform_data`) / 64KB (shell) | ✅ Devral; kod-modu için timeout ayarlanabilir yapılmalı. |
+| **Kaynak sınırı** | 30s timeout, 16KB log cap (`transform_data`) | ✅ Devral; kod-modu için timeout ayarlanabilir yapılmalı. |
 | **Path sınırı** | `Sandbox` default **unconfined** — izin katmanı (read-only/ask/auto) gerçek sınır | ⚠️ Kod içi fs erişimi izin modunu **atlar**; kod-modu için `NewConfinedSandbox` benzeri bir confine seçeneği düşünülmeli. |
-| **Otonom fren** | `sb.Confined` + `isNetworkMutatingGit` → `git push` engeli; `autonomousConfine` | ⚠️ Kod içinden `git push` substring guard'ı **atlar** (kod shell'i doğrudan çağırabilir). Kod-modunda ağ-mutasyon guard'ı köprü/subprocess seviyesine taşınmalı. |
+| **Otonom fren** | `autonomousConfine` → fs araçları `sb.Confined`; unattended turda claude-cli'ye `Bash(git push:*)` deny + üç CLI'ye gpg imzalama kapatma env'i (2026-11-17; eski `isNetworkMutatingGit` kabukla birlikte kalktı) | ⚠️ Kod (`run_code`/`transform_data` script'i) `git push`'u subprocess olarak doğrudan çağırabilir; claude-cli deny kuralı yalnız CLI'nin `Bash` aracına uygulanır, script'i **kapsamaz**. |
 | **Worktree izolasyonu** | ~~`ensureWorktree`~~ **kaldırıldı (2026-07-28)** | ⏳ Worktree izolasyonu yeniden eklendiğinde kod-modu da worktree içinde çalışmalı — dosya çakışması önlenir. |
 | **İzin (permission)** | Native: per-tool RiskExec gate; CLI: `--permission-prompt-tool` | ⚠️ **En kritik boşluk:** kod bloğu tek `run_code` çağrısı → içindeki N MCP/fs/shell çağrısı ayrı ayrı onaylanmaz. İzin ya (a) `run_code`'un tamamına bir kez, ya (b) köprü seviyesinde per-call verilmeli. |
 
@@ -302,7 +306,7 @@ Seçenek A'nın (native "MCP-as-code") ilk iki fazı uygulandı. Bileşenler:
 | Binding üreticisi | `internal/codemode/bindings.go` | `.tionharness/mcp/` altına `_bridge.py` + server-başına Python modülü; docstring = açıklama + normalize schema; her çağrıda sıfırdan regen |
 | `run_code` aracı | `internal/tools/builtin_runcode.go` | Boş script → discovery (modül/fonksiyon listesi); script → stripped env + `PYTHONPATH` + köprü env; yalnız stdout/stderr (16KB) + MCP çağrı özeti döner; 60s default / 300s max |
 | Risk sınıfı | `internal/tools/classify.go` | `run_code` = RiskExec → "ask" modda bütünüyle onay, "read-only"de blok |
-| Gate | `internal/agent/tunables.go` + `codemode_tunable.go` + `internal/app/app.go` | `TIONHARNESS_CODE_MODE=1` (default KAPALI) **VE** `ShellEnabled` **VE** MCP kataloğu dolu |
+| Gate | `internal/agent/tunables.go` + `codemode_tunable.go` + `internal/app/app.go` | `TIONHARNESS_CODE_MODE=1` (default KAPALI) **VE** MCP kataloğu dolu (Faz 1 hâli; bugün: `enableCodeMode` + çalışma dizini — `ShellEnabled` koşulu 2026-11-17'de kalktı) |
 | Kayıt | `internal/agent/toolsetup.go` (AttachMCP bloğu) | Köprüye ajanın kendi `toolFilter`'ı verilir; CLI köprüsüne verilmez (`bridgeExcluded`) |
 | **Per-call izin (Faz 2)** | `codemode.Config.Gate` + `toolsetup.go` closure | Script içi her MCP çağrısı, native loop'un aynı çağrıya uygulayacağı **`permGate`'in birebir kendisinden** geçer: "ask" modda per-call onay kartı (standing "always allow" grant'ları geçerli), "read-only"de blok, otonom ask-turlarında prompter yok → red. Red, script'e loud `MCPError` olarak döner; ayrı politika kodu yok — tam parite. |
 | **Per-call gözlemlenebilirlik (Faz 2)** | `codemode.Config.Observe` + `toolsetup.go` closure | Script içi her çağrı (dispatch edilen VEYA reddedilen) `debug.jsonl`'a `tool` tipi olay yazar (`Detail: "via run_code"` / `"permission denied (via run_code)"`, DurMs/OutBytes/Err) — per-message debug paneli köprü çağrılarını native araç çağrıları gibi listeler. Araç sonucundaki özet artık red sayısını da içerir. |
@@ -336,8 +340,8 @@ bypass denemesinin köprüde reddi).
   bloklanır; bekleme script'in wall-clock timeout'una sayılır (Python binding'in
   urllib timeout'u 125s). Araç açıklaması modeli uyarır: onay beklenen scriptlerde
   `timeout_sec` yükselt ya da kullanıcı "always allow" grant'ı versin.
-- **Otonom ağ-mutasyon guard'ı (plandaki §5-Faz 2 maddesi):** shell'deki `git push`
-  substring-guard'ının MCP karşılığı yok (annotation yok, çağrı semantiği opak) —
+- **Otonom ağ-mutasyon guard'ı (plandaki §5-Faz 2 maddesi):** o zamanki shell'deki `git push`
+  substring-guard'ının (2026-11-17'de kabukla birlikte kaldırıldı) MCP karşılığı yok (annotation yok, çağrı semantiği opak) —
   bunun yerine parite kuralı geçerli: otonom tur native yolda hangi MCP çağrısını
   yapabiliyorsa köprüden de aynısını yapabilir, fazlasını değil. Ayrı bir guard
   eklenmedi (eklenirse native yolla asimetri yaratırdı).
@@ -345,9 +349,9 @@ bypass denemesinin köprüde reddi).
 **UI + settings entegrasyonu (2026-07-02, Faz 5'ten öne alındı):**
 - **Settings toggle:** `enableCodeMode` alanı (settings.json, Ayarlar → Geçişli
   yetenekler ekranı, `AppToolsPanel`) — canlı uygulanır (`applySettings` →
-  `SetCodeMode`). `TIONHARNESS_CODE_MODE=1` artık doğrudan tunable değil, `EnableShell`
-  gibi **tek seferlik boot seed**'i; source of truth Settings ekranı. Kabuk yetkisi
-  kapalıyken UI uyarı gösterir (run_code kaydedilmez).
+  `SetCodeMode`). `TIONHARNESS_CODE_MODE=1` artık doğrudan tunable değil, **tek seferlik
+  boot seed**'i; source of truth Settings ekranı. (Eski "kabuk yetkisi kapalıyken
+  run_code kaydedilmez" uyarısı 2026-11-17'de `enableShell` ile birlikte kalktı.)
 - **Trace kartları:** `CallObservation`'a `Args` eklendi; `toolsetup` observer'ı her
   script-içi çağrıyı call-ctx'teki sub-step sink'ine `StepTool` olarak yazar → tool
   loop'un generic promotion'ı `run_code` kartını **katlanabilir `StepSubagent`**
@@ -510,12 +514,13 @@ kod yazarak yapmak — artık TionHarness'in kendi araçlarını da kapsar.
   aynı davranır. Gate hâlâ `permGate` (RiskWrite/Exec "ask"'te sorar), observe hâlâ
   debug-journal + nested trace.
 - **Eligibility** (`tools.CodeModeEligible`, hard-exclude): interaktif (ask_user/
-  request_confirmation), exec-in-exec (Bash/PowerShell/transform_data/run_code/
-  shell_manage), delegasyon/meta (run_subagent/use_skill/skill_search/activate/
+  request_confirmation, notify/focus_view), exec-in-exec (transform_data/run_code;
+  eski Bash/PowerShell/shell_manage/monitor araçları 2026-11-17'de kalktı), delegasyon/meta (run_subagent/use_skill/skill_search/activate/
   deactivate/tool_search/spawn_session) ve worker araçları binding'e girmez. Kalan
   her built-in ajan tool-filter'ından geçtiği sürece açılır → kod-modu ajanın direkt
   çağıramayacağı hiçbir aracı vermez.
-- **MCP'siz kullanım:** `run_code` artık yalnız `CodeMode+Shell+cwd` ile açılır
+- **MCP'siz kullanım:** `run_code` artık yalnız `CodeMode+cwd` ile açılır (2026-11-17'ye
+  dek `CodeMode+Shell+cwd`)
   (eski `len(entries)>0` koşulu kaldı); built-in'ler tek başına yeterli.
 
 **Testler:** `bindings_test` (built-in modül + collision guard), `builtin_runcode_test`

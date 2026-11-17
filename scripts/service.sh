@@ -140,7 +140,6 @@ case "$cmd" in
   <key>EnvironmentVariables</key>
   <dict>
     <key>TIONHARNESS_ADDR</key><string>$bind_host:$port</string>
-    <key>TIONHARNESS_ENABLE_SHELL</key><string>1</string>
     <key>PATH</key><string>$HOME/.docker/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>LANG</key><string>tr_TR.UTF-8</string>
   </dict>

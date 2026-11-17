@@ -55,7 +55,7 @@ graph LR
 **Anahtar mekanizmalar:**
 - Her ajan = goroutine; ajanlar arası mesaj = channel.
 - Zamanlama = `robfig/cron` (cron + tek seferlik wake timer'ları).
-- Paralel yürütme = düz goroutine + `sync` (orchestration parallel node). `errgroup` planlanmıştı ama gerekmedi; bağımlılıkların güncel listesi `go.mod` içindedir. `coder/websocket` monitor kaynaklarında, `golang.org/x/sys` Windows süreç ve dosya işlemlerinde kullanılır.
+- Paralel yürütme = düz goroutine + `sync` (orchestration parallel node). `errgroup` planlanmıştı ama gerekmedi; bağımlılıkların güncel listesi `go.mod` içindedir. `coder/websocket` yalnız `monitor` aracının WebSocket kaynağı içindi (araç 2026-11-17'de kaldırıldı, kodda kullanıcısı kalmadı); `golang.org/x/sys` Windows süreç ve dosya işlemlerinde kullanılır.
 - **Skill sistemi:** `internal/skills` — 2 katmanlı (global + workspace), frontmatter-only katalog sistem promptuna girer, `use_skill` ile lazy body yüklenir, `subskills` ile aşamalı yükleme. **Ölçek (SK-2):** `paths:` taşıyan **koşullu skill** katalogda görünmez (prompt şişmez), `skill_search` aracıyla bulunur. **Çok-dosyalı (SK-1):** gövdede `${SKILL_DIR}` ikamesi + skill klasöründeki ek dosyalar "Bundled files" footer'ıyla ilan edilir (`fs` ile on-demand). **SK-3:** `use_skill` skill'in `always_allow` desenlerini oturum grant'larına ekler. **SK-4:** `version`/`source_url`/`license`/`user_invocable` provenance. (CLI köprüsü: `skill_search`/use_skill auto-grant `mcp_interaction.go`'da.)
 - **Lazy tool loading:** Self-management suite + MCP araçları şemaları tura girmez; sistem promptunda özet katalog yayımlanır, `activate_tools` ile istenince tam şema gelir (`internal/tools/activetools.go`, `builtin_activate.go`).
 
@@ -121,7 +121,7 @@ TionHarness/
 │   ├── turnqueue/               # per-session tur kabul kuyruğu (tek FIFO, _Docs/58)
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
 │   ├── mcp/                     # SDK'sız JSON-RPC istemci: stdio + Streamable HTTP (client.go, manager.go, pool.go)
-│   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact + lazy-load meta) + MCP birleşik registry (registry.go, builtin_*.go, activetools.go, builtin_activate.go)
+│   ├── tools/                   # built-in (fs akan + todo_write/ask_user + artifact + lazy-load meta) + MCP birleşik registry (registry.go, builtin_*.go, activetools.go, builtin_activate.go)
 │   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.tionharness/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/) — internal/seed ile sürüm-farkında tazelenir + "Varsayılan"a döndürme
 │   ├── seed/                    # gömülü default ağaçlarının SÜRÜM-FARKINDA tazelenmesi (seed.go, manifest.go): .shipped-versions.json hash ledger'ı ile "kullanıcı düzenledi mi?" tahmin edilmez, kanıtlanır → dokunulmamış dosyalar yeni sürümü alır, düzenlenmişler korunur. Tüketiciler: skills, insight (bkz. _Docs\60 Faz 6.4)
 │   │                            # DİKKAT (SKILL.md): tazeleme yalnız GÖVDEYİ yayar; frontmatter kullanıcı config'i sayılır ve korunur (defaults.go::seedConfig Merge). Yani bir shipped skill'in `description`/`when_to_use` alanını repo default'unda düzeltmek KURULU kopyaya geçmez — kurulu SKILL.md'leri elle güncelle ya da "Varsayılan'a döndür" (RestoreDefault) kullan.

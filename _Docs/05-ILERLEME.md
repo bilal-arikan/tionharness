@@ -1,6 +1,6 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-10-18):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
+> **Özet (2026-11-17):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
 
 Önceki kayıtlar:
 
@@ -8,6 +8,94 @@
 - [Ağustos 2026](arsiv/05-ILERLEME-2026-08.md)
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
+
+## TionHarness'ın kendi shell'i kaldırıldı; ajanlar CLI'nin shell'ini kullanır (2026-11-17)
+
+Neden: üç sağlayıcının üçü de (claude-cli, codex-cli, opencode-cli) kendi kabuğunu getiriyor.
+TionHarness'in Interaction MCP üzerinden köprülediği `Bash`/`PowerShell` ise bunların yanında
+ikinci bir kabuk yüzeyiydi: ayrı izin/ayar katmanı (`enableShell`, zaman aşımları, ajan
+`nativeShell` opt-in'i), CLI hook'larının tanımadığı araç adları (rtk/sqz bu yüzden in-process
+yeniden yazılmıştı), arka plan kabuğu + `monitor` + iş nesnesi (job) bakımı ve CLI ile
+çakışan araç bastırma kuralları. Proje sadeleşsin diye kendi kabuk tamamen çıkarıldı; ajan artık
+her zaman CLI'nin native kabuğunu kullanır (claude-cli `Bash` ailesi, codex'in kabuğu +
+`apply_patch`, opencode `bash`).
+
+Kaldırılanlar:
+
+1. **Köprülü kabuk:** Interaction MCP'deki `Bash`/`PowerShell` (`callShell`, `NewShellRunner`),
+   arka plan kabuk yöneticisi + `shell_manage` (`run_in_background`), `monitor` aracı (kabuk/
+   dosya/URL/WebSocket kaynakları ve eşleşmede uyandırma — doküman `arsiv/85-MONITOR-SOZLESMESI.md`'ye
+   taşındı). Onlarla birlikte: süreç iş nesnesi (job) sınırlaması, kabuk içi `git push`/remote
+   freni (`isNetworkMutatingGit`), UTF-8 PowerShell prelude'u, betik-dosyası geri düşüşü,
+   `flexBool`. Dosyalar: `internal/tools/builtin_shell*.go`, `builtin_monitor.go`,
+   `monitor*.go`, `optimizer.go`, `flexbool.go`; `builtin_shell_posix.go` →
+   `posix_shell.go` (kabuk lehçesi tespiti kaldı).
+2. **In-process rtk/sqz:** `internal/agent/shell_optimizer.go`, `rtk_optimizer.go`,
+   `optimizer_log.go`, `TurnStep.optimizer` / optimizer çipi. rtk ve sqz artık yalnız CLI'nin
+   native `Bash`'inde hook olarak çalışır (workspace PreToolUse hook'ları `--settings` ile
+   claude-cli'ye iletilir). rtk dış aracı hook olarak bağlanır: PreToolUse, matcher `Bash`,
+   komut `rtk hook claude` (`internal/exttools/catalog.go`). `climcp.MatcherRegex`'in
+   köprülü-kabuk genişletmesi silindi.
+3. **Ayarlar:** `enableShell` (+ env `TIONHARNESS_ENABLE_SHELL`), `shellDefaultTimeoutSec`,
+   `shellMaxTimeoutSec`; workspace `shellOutputCompression`, `shellCommandRewrite`; ajan alanı
+   `nativeShell`; süreç defteri türleri `shell` / `shell_background`. `scripts/` altındaki
+   başlatıcılar (`dev`, `serve`, `service`, `tailscale-serve`, `test`, `ci`) env değişkenini
+   artık ayarlamıyor; kök `CLAUDE.md`'deki "elle koşarken ayarla" satırı silindi.
+4. **claude-cli:** `Bash, BashOutput, KillShell, TaskOutput, TaskStop` artık `--disallowedTools`'ta
+   değil, her zaman `--tools` menüsünde. İstisna: etkin araç filtresi `Bash`'i kabul etmeyen
+   ajan (salt okunur explore/planner/reviewer profilleri) bütün kabuk ailesini bastırır
+   (`climcp.shellFamily`, `cliHost.ShellAllowed`).
+5. **codex-cli / opencode-cli:** codex'e `[features] shell_tool = false` hiç yazılmaz ve köprülü
+   `Read/LS/Glob/Grep/Write/Edit` artık verilmez (2026-10-19'daki `BridgeTools` kararı geri
+   alındı; codex kendi kabuğu + `apply_patch` ile çalışır), köprülü `WebFetch`/`WebSearch` kalır.
+   opencode'un `bash`'i artık kapatılmaz. İki CLI de kabuğu araç bazında daraltamadığı için araç
+   filtresinde `Bash` olmayan ajan `read-only` izin moduna zorlanır (codex `-s read-only`;
+   opencode read-only bash/edit/write/patch'i reddeder) — `toolLoopTurn.prepare`.
+
+Yeni: **gözetimsiz turlar** (otonom VE `autonomousConfine` açık) üç CLI için de commit/tag gpg
+imzalamayı kapatan `GIT_CONFIG_*` env'i alır (`proc.DisableGitSigningEnv`,
+`internal/proc/env.go`); claude-cli ayrıca `Bash(git push:*)`, `Bash(git remote add:*)`,
+`Bash(git remote set-url:*)` deny kurallarını alır (`unattendedGitDeny`,
+`internal/agent/toolloop_phases.go`). Prompt'un ortam işaretçisi yalnız
+`<environment os=".." arch=".." />`; eski "Shell execution is ENABLED/DISABLED" bloğu yok.
+git-bash yol rehberi (`shell-environment` capability) yalnız claude-cli ajanlarına basılır.
+`transform_data` koşulsuz kayıtlı; `run_code` yalnız `enableCodeMode` ile açılır.
+
+Kalanlar: procwatch süreç defteri (CLI taşıyıcıları, MCP sunucuları, hook'lar, kod
+yorumlayıcıları, harici araçlar) ve `group:files` kategorisindeki `Bash` (izinli listesinde
+`group:files` olan ajan CLI kabuğunu yine alır).
+
+Bilinen boşluklar:
+
+- **codex/opencode'da push freni yok:** gözetimsiz turda git imzalama kapalı ama `git push` /
+  remote değişikliği engellenmez; deny kuralı yalnız claude-cli'de.
+- **Kimlik bilgisi ayıklama** artık TionHarness'in kabuk ortamında değil; CLI'ye verilen ortam
+  (`cliBaseEnv` ve CLI'nin kendi env işlemesi) belirleyicidir.
+- **Süreç sınırlaması yok:** CLI kabuk komutları taşıyıcının çocuğu olarak koşar, iş nesnesine
+  bağlanmaz ve defterde ayrı satır almaz; tur iptalinde yetim kalan torun süreçleri CLI'nin
+  kendi temizliğine kalır.
+- **`monitor` yok:** arka plan bekleme/izleme CLI'nin kendi araçlarıyla yapılır (claude-cli
+  `run_in_background` + `BashOutput`); eşleşmede ajanı uyandırma artık yok.
+- **rtk beyaz listesi yok:** `rtk hook claude` rtk'nın kendi kayıt defterini uygular; ölçümde
+  yanlış sonuç veren aileler (`npx`/`lint`/`tsc`/`uv`) rewrite edilebilir, `Degraded` notu yok.
+  Gerekirse rtk'nın `[hooks] exclude_commands` ayarı. rtk/sqz codex/opencode'da hiç çalışmaz.
+
+Dokümanlar: 17, 18, 54 (rtk/sqz hook yolu), 11, 09, 44, 53 (köprü/prompt), 26 (confine +
+gözetimsiz git), 88 (defter türleri), 69, 95 (codex/opencode), 00, 01, 03, 04, 07, 24, 25, 32,
+38, 41, 46, 48, INSIGHT-BACKLOG; 85 `arsiv/`'e taşındı.
+
+Sohbet ekranı: CLI'lerin kabuk komutları araç kartı olarak görünmeye devam eder (claude-cli
+`Bash`/`PowerShell`, codex `shell`, opencode `bash`). Codex'in `shell` adımı daha önce yerel
+kabuk kapalı olduğu için hiç görünmüyordu; `isShellTool` artık onu da tanır (program etiketi +
+satır sayısı). Kullanılmayan `internal/proc/job*.go` ve `flexBool` silindi, `go mod tidy`
+`coder/websocket`'i düşürdü.
+
+Doğrulama: `scripts/test.sh full` (vitest 1222/1222, depcheck, `git diff --check` temiz; Go'da
+yalnız `main`'de de düşen üç Windows testi: `TestHookExecutableMissing`,
+`TestCodexIdleWatchdogResumesAfterToolCompletes`, `TestCleanRoot_JunctionRootIsNotResolved`).
+Yeni test: `TestUnattendedTurnDeniesGitPublish`. Canlı: WS5'te Developer (claude-cli) turu
+`echo … && git --version`'ı yerel `Bash` ile çalıştırdı (trace'te araç adı `Bash`), workspace
+hook'u CLI ayar dosyasına geçti; deneme oturumu silindi.
 
 ## claude-cli kalıcı oturumu hiç ısınamıyordu: yanlış login + tur sonunda öldürülme (2026-10-27)
 

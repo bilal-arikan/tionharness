@@ -57,7 +57,7 @@ scheduler periyodik olarak `claude-cli`'ye shell-out yaptığından "ara ara" g�
 **Çözüm:** yeni **`internal/proc`** paketi — `Hide(cmd)` Windows'ta `CREATE_NO_WINDOW`
 (`0x08000000`) + `HideWindow` set eder (`hide_windows.go`), diğer platformlarda no-op
 (`hide_other.go`). Konsol açan **tüm** `exec.Command` çağrılarına eklendi: `providers/claudecli.go`
-(ana suçlu), `tools/builtin_shell.go`, `agent/hooks.go`,
+(ana suçlu), `tools/builtin_shell.go` (2026-11-17'de kaldırıldı), `agent/hooks.go`,
 `mcp/client.go` (stdio sunucu), `api/git.go`, `api/workdir_context.go`, `api/workspaces.go`
 (klasör seçici PowerShell — dialog yine görünür, yalnız konsol gizlenir). `explorer.exe` çağrıları
 zaten GUI olduğundan dokunulmadı. ✅ `go build ./...`/`vet` + `go test ./internal/...` (305) yeşil.
@@ -70,7 +70,7 @@ Not: başsız `tionharness.exe` zaten konsollu olduğundan etkilenmezdi; bayrak 
 args...)` — `exec.Command*`'ı sarıp `Hide`'ı baştan uygular (`command.go`). Konsol açan tüm
 siteler `exec.Command*` yerine `proc.Command*` kullanır → gizleme kuralı **tek yerde**, site başına
 **tek satır**, ve `exec.Command`'ı doğrudan çağırmadığın sürece gizlemeyi **unutmak imkânsız**.
-Dönüştürülen siteler: `providers/claudecli.go`, `tools/builtin_shell.go`, `agent/hooks.go`,
+Dönüştürülen siteler: `providers/claudecli.go`, `tools/builtin_shell.go` (kaldırıldı, 2026-11-17), `agent/hooks.go`,
 `mcp/client.go`, `api/git.go`, `workdir_context.go`,
 `workspaces.go`. `explorer.exe` siteleri (GUI, yanıp sönmez) `exec` olarak kaldı. Artık kullanılmayan
 `os/exec` importları temizlendi. ✅ `go build ./...`/`vet` + e2e-harici testler yeşil.
@@ -127,8 +127,8 @@ yeri `proc` üzerinden geçirildi:
 
 | Dosya | Süreç | Kullanılan yardımcı |
 |-------|-------|----------------------|
-| `internal/agent/rtk_optimizer.go` | `rtk rewrite` | `proc.CommandContext` |
-| `internal/agent/shell_optimizer.go` | `sqz compress` | `proc.CommandContext` |
+| ~~`internal/agent/rtk_optimizer.go`~~ | `rtk rewrite` | kaldırıldı (2026-11-17) |
+| ~~`internal/agent/shell_optimizer.go`~~ | `sqz compress` | kaldırıldı (2026-11-17) |
 | `internal/agent/capabilities.go` | codebase-memory `index_repository` | `proc.Command` |
 | `internal/agent/handoff.go` | `git` | `proc.CommandContext` |
 | `internal/api/external_tools_maint.go` | harici araç bakımı | `proc.CommandContext` |
@@ -138,7 +138,8 @@ yeri `proc` üzerinden geçirildi:
 | `cmd/tionharness-desktop/main.go` (`openBrowser`) | `rundll32` | `proc.HideConsole` |
 
 İlk ikisi en görünür olanlardı: `rtk` ve `sqz` her shell aracı çağrısında koşar, yani her komutta
-bir konsol yanıp sönüyordu.
+bir konsol yanıp sönüyordu. (2026-11-17: in-process rtk/sqz filtreleri TionHarness'in kendi kabuğuyla
+birlikte kaldırıldı; ikisi artık yalnız claude-cli'nin native `Bash`'inde CLI hook'u olarak koşar.)
 
 **Regresyon kapısı:** `internal/proc/console_policy_test.go` (`TestNoRawExecCommand`) depo
 ağacını tarar ve `exec.Command`/`exec.CommandContext` içerip `proc.Command*` / `proc.Hide*`

@@ -46,10 +46,9 @@ if ($LASTEXITCODE -ne 0) { throw "build failed (exit $LASTEXITCODE)" }
 $mb = [math]::Round((Get-Item $bin).Length / 1MB, 1)
 Write-Host "==> Build OK: $bin ($mb MB)" -ForegroundColor Green
 
-# 2) Free the port and set env (gated feature matches dev.ps1).
+# 2) Free the port and set env.
 Free-Port $Port "Backend" -NoKillPort:$NoKillPort
 $env:TIONHARNESS_ADDR = "${bindHost}:$Port"
-$env:TIONHARNESS_ENABLE_SHELL = "1"
 
 # 3) Run in the foreground -- Ctrl+C stops it (single binary, no children to reap).
 Write-Host "==> Running: $bin  (${bindHost}:$Port)  -- Ctrl+C to stop" -ForegroundColor Cyan

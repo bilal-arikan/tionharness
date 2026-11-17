@@ -9,8 +9,7 @@ description: >
 
 # Test runner
 
-Always go through `scripts/test.sh` (Git Bash on Windows; the native bash on macOS/Linux). It sets `TIONHARNESS_ENABLE_SHELL=1`,
-filters provider log noise, and ends with `git diff --check`.
+Always go through `scripts/test.sh` (Git Bash on Windows; the native bash on macOS/Linux). It filters provider log noise and ends with `git diff --check`.
 
 ```bash
 scripts/test.sh fast   # seconds: only packages touched since main + vitest if frontend changed

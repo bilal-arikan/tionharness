@@ -68,6 +68,5 @@ th_stop_pids "port $port / data dir" "$kill_port" $(th_port_pids "$port") $(th_l
 
 # 4) Run in the foreground -- Ctrl+C stops it.
 export TIONHARNESS_ADDR="${bind_host}:${port}"
-export TIONHARNESS_ENABLE_SHELL=1
 echo "==> Running: $bin  (${bind_host}:${port})  -- Ctrl+C to stop"
 exec "$bin"

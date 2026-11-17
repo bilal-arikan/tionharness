@@ -71,10 +71,12 @@ ajan bu optimizer'ların **hook ile otomatik** çalıştığını (kendisi çağ
 araç çıktısının kısaltılmış olabileceğini (veri kaybı değil) bilir. **Tespit hook
 KOMUTUNDANDIR**, yalnız PATH'ten değil (PATH'te duran ama hook'a bağlanmamış bir ikili
 hiçbir şey yapmaz → over-claim edilmez). Blok, hook'ların **matcher kapsamını** da
-belirtir: WS5'te iki hook da `matcher=Bash` olduğundan, `PowerShell` aracıyla çalışan
-komutlar optimize EDİLMEZ → blok "eşleşen aracı tercih et" der (kritik: bu yüzden bir
-`PowerShell`-ağırlıklı oturumda ikisi de hiç ateşlenmemişti). `rtk` agent-Bash ile,
-`sqz` PostToolUse çıkış sıkıştırmasıyla; ikisinin de mekaniği `17-TOKEN-OPTIMIZASYON.md`.
+belirtir: matcher `*` değilse blok "yalnız eşleşen araç optimize edilir, ağır komutlarda
+onu tercih et" der (tarihçe: WS5'te iki hook da `matcher=Bash` iken TionHarness'in kendi
+`PowerShell` aracıyla koşan komutlar hiç optimize edilmemişti). **2026-11-17:** kendi kabuk
+araçları kaldırıldı; rtk (`rtk hook claude`) ve sqz yalnız claude-cli'nin native `Bash`'inde
+CLI hook'u olarak çalışır — blok ajana bunları kendisinin çağırmamasını, ham çıktı için
+`rtk proxy <komut>` kullanmasını söyler. Mekanik: `17-TOKEN-OPTIMIZASYON.md`.
 Test: `capabilities_tokenopt_test.go` (WS5-şekli + kelime-sınırı + wildcard).
 
 ## zvec-grep capability — codebase-memory paritesi (2026-09-14)
@@ -294,10 +296,11 @@ Kurallar (sırayla — kartlar üstten alta yığılır):
 - **workdir**: `defaultWorkingDir` boş → "Bu Workspace" (path native picker ister).
 - **cbm-add**: codebase-memory-mcp kurulu ama MCP yok → `createMCPServer(...)`.
 - **cbm-enable**: MCP ekli ama `codebaseMemoryEnabled=false` → `updateWorkspaceSettings`.
-- **token**: sqz kurulu ama sqz hook'u yok → `createHook(...)`. (rtk artık hook
-  olarak ÖNERİLMEZ; `shellCommandRewrite` ayarıyla bağlanır.)
-- **shell-compress**: sqz kurulu, hook yok ve `shellOutputCompression` auto →
-  `updateWorkspaceSettings({ shellOutputCompression: 'on' })`.
+- **token**: sqz kurulu ama sqz hook'u yok → `createHook(...)`. (rtk bu karttan
+  önerilmez; kendi tek-tık hook bağlantısı Ayarlar ▸ Dış Araçlar'dadır: PreToolUse,
+  matcher `Bash`, `rtk hook claude`.)
+- ~~**shell-compress**~~ — **kaldırıldı (2026-11-17)**: `shellOutputCompression` ayarı
+  TionHarness'in kendi kabuğuyla birlikte silindi; sqz yalnız hook olarak bağlanır.
 - **terse-mode**: `terseMode=false` → `updateWorkspaceSettings({ terseMode: true })`.
 - **no-mcp**: hiç MCP yok (ve cbm bekleyen öneri değilse) → Market.
 - **backup-off**: `backupEnabled=false` → Yedekleme ayarları.

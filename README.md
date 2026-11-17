@@ -154,8 +154,7 @@ scripts/test.sh full  # delivery gate: Go + Vitest + dependency/diff checks
 ```
 
 Windows'ta test script'lerini Git Bash içinde, macOS/Linux'ta yerel bash ile çalıştırın
-(macOS'un `/bin/bash` 3.2'si yeterlidir). Script, kabuk testleri için
-`TIONHARNESS_ENABLE_SHELL=1` ayarlar. UI derlemesi ayrıca `cd frontend && npm run build`
+(macOS'un `/bin/bash` 3.2'si yeterlidir). UI derlemesi ayrıca `cd frontend && npm run build`
 ile doğrulanır; tanıtım sitesi için `website/` içinde `npm run check` ve `npm run build`
 çalıştırılır. `full` bu derleme adımlarını içermez.
 

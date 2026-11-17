@@ -390,6 +390,8 @@ veri hazırlığı `flowVizData.ts`):
   DEĞİL, aktivite göstergesi** — rtk/sqz PreToolUse komut-rewrite olduğundan
   TionHarness sıkışmamış baseline'ı hiç görmez; ayrıca yalnız **native** turlar
   sayılır (claude-cli turlarında hook'lar CLI içinde çalışır, journal'a düşmez).
+  *(2026-11-17: TionHarness'in kendi kabuğu kaldırıldı; rtk/sqz artık yalnız CLI'nin
+  native `Bash`'inde hook olarak çalıştığından bu sayaç onların ateşlemesini göstermez.)*
 
 ## Anomali → bildirim ✅ (2026-07-24)
 
