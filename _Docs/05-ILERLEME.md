@@ -1,6 +1,6 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-11-17):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
+> **Özet (2026-11-18):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
 
 Önceki kayıtlar:
 
@@ -8,6 +8,42 @@
 - [Ağustos 2026](arsiv/05-ILERLEME-2026-08.md)
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
+
+## opencode-cli: opencode 2.x desteği (2026-11-18)
+
+Makinedeki tek opencode, masaüstü uygulamasının paketlediği 2.2.5 CLI'si; sağlayıcı 1.19'a
+göre yazılmıştı ve onu bulamıyordu. Canlı sondalarla bulunan ve düzeltilenler
+(ayrıntı `95-OPENCODE-CLI-SAGLAYICI.md` §3.8):
+
+1. **Arama:** `%APPDATA%\ai.opencode.desktop\cli\<sürüm>\opencode-cli.exe` aday yollara
+   eklendi (en yeni sürüm önce; `opencodelookup.go`).
+2. **Sürüm kapısı:** `--version` ile ana sürüm okunur ve önbelleklenir
+   (`opencode_version.go`). 1.x yolu aynen kalır; 2.x yeni argv/config/ayrıştırma alır.
+3. **argv (2.x):** `--dir`/`--variant` kalktı (varyant `-m model#v`), `--standalone`
+   eklendi: varsayılan `run` paylaşılan arka plan servisine bağlanır ve turun
+   `OPENCODE_CONFIG`/ev ortamı orada geçerli olmaz.
+4. **Native alt ajan sessizce açıktı (hata).** 2.x eski config'i göç ettirirken
+   `tools.task=false` gibi kapatmaları `"*":"allow"`'dan önceye diziyor, kurallar son
+   eşleşen kazanır ilkesiyle çalıştığı için hepsi eziliyordu: canlıda `subagent` ve `shell`
+   menüdeydi. 2.x artık kendi şemasında, sıralı `permissions` dizisiyle yazılır
+   (`opencodecli_config_v2.go`); `subagent` en sonda deny, menüden düştüğü ölçüldü.
+5. **Code Mode:** 2.x MCP araçlarını `execute` aracının içinden sunar; kapatılırsa ilk
+   adımda MCP araçları yok. Code Mode açık kaldı, ayrıştırıcı tek çağrılı `execute`'u
+   `mcp__<server>__<tool>` adımına çevirir.
+6. **Bekçi:** 2.x araç parçasını yalnız bitince yazdığı için uzun bir araç sessiz bir açık
+   adımdır; açık adım artık "araç uçuşta" sayılır, 90 sn'lik stdout bekçisi uzun aracı
+   öldürmez.
+7. **Hata şekli:** 2.x `error` olayı `{type, message, status}` taşır; eskiden "unknown
+   error" görünüyordu, artık metin okunur ve ücretsiz kota (429) quota sınıfına düşer.
+
+Doğrulama: `go test ./internal/providers -run 'OpenCode'` (yeni `opencodecli_v2_test.go`,
+2.2.5 akışından fikstürler); gerçek sağlayıcı koduyla canlı tur (`opencode/big-pickle`,
+mini stdio MCP sunucusu): ikili bulundu, major=2, 10 sn'ye düşürülmüş bekçiyle 20 sn'lik
+kabuk aracı tamamlandı, MCP çağrısı `mcp__tionharness_interaction__ping_tool` olarak
+izlendi, menüde `subagent` ve (web kapalıyken) `websearch/webfetch` yoktu. Yardımcı çağrı
+(`* deny`) config'i LLM çağrısına kadar ulaştı; araçsız menü, ücretsiz kota dolduğu için
+canlı gözlenemedi. Açık: 2.x kimlik bilgilerini `opencode.db`'de tuttuğu için giriş
+durumu ekranı (`auth.json` okuyan) 2.x girişini göstermeyebilir.
 
 ## CLI güncellemesi: claude-cli 2.1.326, codex-cli 0.169.0 (2026-11-17)
 

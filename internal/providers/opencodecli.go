@@ -33,8 +33,9 @@ type OpenCodeCLI struct {
 	// configDir is the opencode home. Must exist before a turn runs; "" inherits
 	// the user's ambient ~/.local/share/opencode + ~/.config/opencode.
 	configDir string
-	// effortVariant passes the agent's thinking level as `--variant` (only for
-	// vendors whose variant names are known; see opencodeVariant).
+	// effortVariant passes the agent's thinking level as opencode's model
+	// variant (only for vendors whose variant names are known; see
+	// opencodeVariant).
 	effortVariant bool
 
 	mcpServers map[string]CLIMCPServer
@@ -81,9 +82,10 @@ func (c *OpenCodeCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
 	c.mcpServers = spec.Servers
 }
 
-// opencodeVariant maps the product's reasoning tier onto opencode's `--variant`
-// for the vendors whose variant vocabulary is known. "" means "do not pass the
-// flag": an unknown variant fails the whole turn inside opencode, so nothing is
+// opencodeVariant maps the product's reasoning tier onto opencode's model
+// variant (1.x `--variant`, 2.x `-m provider/model#variant`) for the vendors
+// whose variant vocabulary is known. "" means "do not pass the variant": an
+// unknown variant fails the whole turn inside opencode, so nothing is
 // guessed for other vendors or the empty (home-default) model.
 func opencodeVariant(model, effort string, disableThinking bool) string {
 	if disableThinking {
@@ -121,23 +123,42 @@ func opencodeVariant(model, effort string, disableThinking bool) string {
 	return ""
 }
 
-// buildArgs assembles the `opencode run` invocation, kept pure for testing. The
-// prompt is NOT an argument — it goes on stdin (verified: a piped message is
-// read when no positional message is given), because Windows caps a process
-// command line at ~32 KB and a full turn prompt overflows that.
-func (c *OpenCodeCLI) buildArgs(req Request, model string) []string {
+// buildArgs assembles the `opencode run` invocation for API generation major,
+// kept pure for testing. The prompt is NOT an argument — it goes on stdin
+// (verified on 1.19.0 and 2.2.5: a piped message is read when no positional
+// message is given), because Windows caps a process command line at ~32 KB and
+// a full turn prompt overflows that.
+//
+// 2.x differences (verified on 2.2.5): `--dir` and `--variant` are gone — the
+// working directory is the process cwd (runAttempt sets cmd.Dir) and the
+// variant is a `#suffix` on the model id; `--standalone` runs a private server
+// for this process instead of attaching to the shared background service,
+// whose environment (opencode home, the turn's OPENCODE_CONFIG) is not this
+// turn's and which the desktop app also uses.
+func (c *OpenCodeCLI) buildArgs(req Request, model string, major int) []string {
 	args := []string{"run", "--format", "json", "--agent", opencodeAgentName}
-	if model != "" {
-		args = append(args, "-m", model)
+	if major != 1 {
+		args = append(args, "--standalone")
 	}
+	variant := ""
 	if c.effortVariant {
-		if v := opencodeVariant(model, req.CLIEffortLevel, req.DisableThinking); v != "" {
-			args = append(args, "--variant", v)
+		variant = opencodeVariant(model, req.CLIEffortLevel, req.DisableThinking)
+	}
+	if model != "" {
+		if major != 1 && variant != "" {
+			args = append(args, "-m", model+"#"+variant)
+		} else {
+			args = append(args, "-m", model)
 		}
 	}
-	if req.WorkDir != "" {
-		if fi, err := os.Stat(req.WorkDir); err == nil && fi.IsDir() {
-			args = append(args, "--dir", req.WorkDir)
+	if major == 1 {
+		if variant != "" {
+			args = append(args, "--variant", variant)
+		}
+		if req.WorkDir != "" {
+			if fi, err := os.Stat(req.WorkDir); err == nil && fi.IsDir() {
+				args = append(args, "--dir", req.WorkDir)
+			}
 		}
 	}
 	if req.ResumeSessionID != "" && req.CLIResumeScope != "" && safeOpenCodeSessionID(req.ResumeSessionID) {
@@ -150,7 +171,7 @@ func (c *OpenCodeCLI) buildArgs(req Request, model string) []string {
 // prompt rides in the agent prompt file; the volatile per-turn context stays in
 // the stdin prompt, exactly as on the claude/codex paths, so it does not churn
 // the cached prefix.
-func (c *OpenCodeCLI) buildConfig(req Request) opencodeConfig {
+func (c *OpenCodeCLI) buildConfig(req Request, major int) opencodeConfig {
 	aux := req.CLIRestrictNativeTools && len(req.CLINativeTools) == 0
 	return opencodeConfig{
 		SystemPrompt:          strings.TrimSpace(joinNonEmpty(req.System, interactionSystemNote)),
@@ -158,6 +179,7 @@ func (c *OpenCodeCLI) buildConfig(req Request) opencodeConfig {
 		DisableNativeWeb:      !req.NativeWebSearch,
 		DisableAllNativeTools: aux,
 		Servers:               c.mcpServers,
+		APIMajor:              major,
 	}
 }
 
@@ -206,13 +228,14 @@ func (c *OpenCodeCLI) Complete(ctx context.Context, req Request) (*Response, err
 	if model == "" {
 		model = c.model
 	}
-	return c.completeWithArgs(ctx, c.buildArgs(req, model), c.buildPrompt(req), model, req)
+	major := c.apiMajor(ctx)
+	return c.completeWithArgs(ctx, major, c.buildArgs(req, model, major), c.buildPrompt(req), model, req)
 }
 
 // completeWithArgs writes the turn's config and runs the subprocess, retrying
 // once on a clean crash (died before any step event, ran no tool). args and
 // prompt are parameters so tests can drive the path with a fake binary.
-func (c *OpenCodeCLI) completeWithArgs(ctx context.Context, args []string, prompt, model string, req Request) (*Response, error) {
+func (c *OpenCodeCLI) completeWithArgs(ctx context.Context, major int, args []string, prompt, model string, req Request) (*Response, error) {
 	if c.configDir == "" && len(c.mcpServers) > 0 {
 		return nil, fmt.Errorf("opencode CLI: MCP servers configured but no opencode home set — cannot write opencode.json")
 	}
@@ -223,7 +246,7 @@ func (c *OpenCodeCLI) completeWithArgs(ctx context.Context, args []string, promp
 	defer cleanup()
 	configPath := ""
 	if turnDir != "" {
-		configPath, err = writeOpenCodeConfig(turnDir, c.buildConfig(req))
+		configPath, err = writeOpenCodeConfig(turnDir, c.buildConfig(req, major))
 		if err != nil {
 			return nil, fmt.Errorf("opencode CLI: %w", err)
 		}
@@ -231,7 +254,7 @@ func (c *OpenCodeCLI) completeWithArgs(ctx context.Context, args []string, promp
 
 	var failed []error
 	for range 2 {
-		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req, configPath)
+		resp, retryable, err := c.runAttempt(ctx, major, args, prompt, model, req, configPath)
 		if err == nil {
 			foldFailedAttempts(resp, failed)
 			if req.CLIResumeScope != "" && resp.SessionID != "" {
@@ -329,7 +352,7 @@ func opencodeIdleOutputWindow() time.Duration {
 // runAttempt runs the subprocess once and parses its stream. retryable is true
 // only when re-running is free of duplicate side effects: no terminal
 // classified failure, no salvageable content, no tool ran.
-func (c *OpenCodeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request, configPath string) (resp *Response, retryable bool, err error) {
+func (c *OpenCodeCLI) runAttempt(ctx context.Context, major int, args []string, prompt, model string, req Request, configPath string) (resp *Response, retryable bool, err error) {
 	ctx, stopCLI, watch := watchCLI(ctx, "opencode-cli", c.binPath, args)
 	defer stopCLI()
 	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
@@ -364,6 +387,9 @@ func (c *OpenCodeCLI) runAttempt(ctx context.Context, args []string, prompt, mod
 	watch.Started(cmd)
 
 	p := newOpenCodeParser(model, c.serverKeys(), req.OnEvent)
+	// 2.x streams a tool part only once it finished, so a running tool is
+	// invisible; the parser treats an open step as busy instead.
+	p.silentTools = major != 1
 	rd := bufio.NewReader(stdout)
 	var tail []string
 	const tailMax = 12
@@ -443,8 +469,9 @@ readLoop:
 			break readLoop
 		case <-idle.C:
 			// A tool is running (a bridged run_subagent waiting on its child, a
-			// slow command): silence is expected. The turn's semantic watchdog, the
-			// hard cap and a human stop still end it through ctx.
+			// slow command) or, on 2.x, a step is still open: silence is expected.
+			// The turn's semantic watchdog, the hard cap and a human stop still end
+			// it through ctx.
 			if p.toolInFlight() {
 				if idleWindow > 0 {
 					idle.Reset(idleWindow)
