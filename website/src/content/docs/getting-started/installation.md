@@ -5,7 +5,7 @@ order: 2
 ---
 
 Kaynaktan derleme, yayımlanmış binary bulunmasına bağlı olmayan kurulum yoludur.
-Go 1.26.4+ ve Node.js 20.19+ (20.x) veya 22.12+ gerekir; geliştirme ortamında
+Go 1.26.4+ ve Node.js 22.22.2+ (22.x) veya 24.15+ gerekir (Node 20 artık desteklenmez); geliştirme ortamında
 Node.js 24 kullanılır. Git ve npm komutları erişilebilir olmalıdır.
 
 ## Windows

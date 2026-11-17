@@ -1,6 +1,6 @@
 # TionHarness Tanıtım ve Dokümantasyon Sitesi
 
-Astro 5 + Tailwind CSS v4 ile üretilen statik site; ana sayfa, kullanıcı kılavuzu,
+Astro 7 + Tailwind CSS v4 ile üretilen statik site; ana sayfa, kullanıcı kılavuzu,
 sürüm notları ve sürüm akışını sunar. Uygulamanın Go binary'sine gömülmez.
 Tasarım kararları: [72-TANITIM-SITESI.md](../_Docs/72-TANITIM-SITESI.md).
 

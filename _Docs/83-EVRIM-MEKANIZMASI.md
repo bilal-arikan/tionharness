@@ -63,7 +63,7 @@ Kod haritası (2026-09-04). Depo dosya tabanlı: "tablo" = `store/` altında diz
 | ~~**Reçete optimizer** (Rota F4)~~ — **kaldırıldı 2026-10-18** | `internal/agent/recipe_optimizer.go`, `internal/db/store_optimizer.go` | ≥3 yeni koşu / failed / elle tetik; LLM 9 eylemden öneri üretir; kanıt/sayı yoksa **kodda atılır**; büyüme bütçesi; `AutoPrune` ile budama sınıfı otomatik uygulanır (`skills.ApplyRecipeProposal`, sürüm artar, yeniden ayrıştırıp doğrular) | Doğrudan şablon. Genel optimizer bunun çok-yüzeyli hali |
 | **İçgörü taraması** (`_Docs/60`) | `internal/insight/*`, `internal/agent/insightscan.go` | Lens dosyaları, inkremental ledger, üç kanal (`app-fix`, `workspace-opt`, `recipe-opt`), `Finding` yaşam döngüsü, **`Regressed`** (kapanan bulgu geri gelirse işaret), **`ErrAppliedNeedsEvidence`** (applied için `AppliedEntity` zorunlu) | Öneri kuyruğu + yaşam döngüsü + regresyon tespiti hazır. `workspace-tuning` lensi zaten skill > agent > tools-config > hook/automation > insight > CLAUDE.md öncelik sırasıyla öneri üretiyor |
 | **Küratör** (Rota F3; reçete kuralları kaldırıldı 2026-10-18) | `internal/db/store_curator.go` | LLM'siz haftalık geçiş; `CuratorAction{Kind, Entity, Reason, Evidence, Applied}` | Deterministik, kanıtlı, provenance'lı eylem kaydı deseni |
-| **Ajan kalıtımı** (`_Docs/82`) | `internal/db/agent_inherit.go:50-115` | 16 kalıtılabilir alan (`soul, identity, provider, model, thinkingLevel, nativeWebSearch, permissionMode, inboundPolicy, avatar, color, tools, allowedTools, skills` — koordinatör alanları 2026-10-18'de çıkarıldı), `derive`, `restore-default` | **Hazır genom şeması + varyant sistemi.** Türet → 1-2 alanı override et → ölç → geri al. Ajan için ayrı sürümleme tablosu gerekmez |
+| **Ajan kalıtımı** (`_Docs/82`) | `internal/db/agent_inherit.go:51-104` | 12 kalıtılabilir alan (`soul, identity, provider, model, thinkingLevel, nativeWebSearch, permissionMode, avatar, color, tools, allowedTools, skills` — koordinatör alanları 2026-10-18'de çıkarıldı), `derive`, `restore-default` | **Hazır genom şeması + varyant sistemi.** Türet → 1-2 alanı override et → ölç → geri al. Ajan için ayrı sürümleme tablosu gerekmez |
 
 ### 2.2 Fitness sinyali olarak kullanılabilir telemetri (hepsi LLM'siz)
 
@@ -231,7 +231,7 @@ UI (FindingsTab/FindingModal) olduğu gibi kullanılır.
   - kanıt (oturum id + sayı) yoksa at; genel olumsuz yargı at;
   - hedef dışı yüzeye dokunan öneri at (scope);
   - **düzenlenemez alanlar**: hedefin kendisi, guardrail'ler, yargıç rubriği, hook'lar,
-    `permissionMode`, `inboundPolicy`, kilitli sistem ajanları — evolver bunları **göremez
+    `permissionMode`, kilitli sistem ajanları — evolver bunları **göremez
     bile** (autoresearch #322: editable/readonly/hidden ACL);
   - büyüme bütçeleri: soul karakter tavanı, ajan başına araç sayısı, skill sayısı,
     otomasyon sayısı — ekleme `Removes` adlandırmalı;

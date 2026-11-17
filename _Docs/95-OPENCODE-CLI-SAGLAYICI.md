@@ -101,7 +101,7 @@ opencode run --format json --agent tionharness [-m <vendor/model>] [--variant <v
 | `agent.tionharness` | `mode: primary`, `prompt: {file:system.md}` (statik sistem promptu + interaction notu) |
 | `agent.general.disable` | `true` (opencode'un görünmez alt-ajanı kapalı) |
 | `permission` | auto → `{"*":"allow"}`; ask → `edit/bash: ask` (otomatik reddedilir, köprü araçları gerçek onayla çalışır); read-only → `edit/bash/webfetch: deny` |
-| `tools` | `task: false` daima; `bash` hiçbir zaman kapatılmaz (2026-11-17'den beri TionHarness'in köprülü kabuğu yok, kabuk daima opencode'un kendi `bash`'i); `NativeWebSearch` kapalıysa `websearch/webfetch: false`; read-only'de mutasyon araçları kapalı; yardımcı (araçsız) çağrıda **tüm** yerleşikler kapalı; MCP `DisabledTools` → `<server>_<tool>: false` |
+| `tools` | `task: false` daima; `bash` hiçbir zaman kapatılmaz (2026-11-17'den beri TionHarness'in köprülü kabuğu yok, kabuk daima opencode'un kendi `bash`'i); `NativeWebSearch` kapalıysa `websearch/webfetch: false` (köprülü web aracı da verilmez, ajan web erişimsiz kalır); read-only'de mutasyon araçları kapalı; yardımcı (araçsız) çağrıda **tüm** yerleşikler kapalı; MCP `DisabledTools` → `<server>_<tool>: false` |
 | `mcp` | Interaction köprüsü iki girdi (`tionharness_interaction` `/core?full=1`, `tionharness_extended` `/extended?full=1`, Bearer başlığı) + etkin harici MCP sunucuları (remote `url/headers` ya da local `command/environment`) |
 | `share` / `autoupdate` | `disabled` / `false` |
 

@@ -16,8 +16,9 @@ gibi zaten giriş yapılmış bir abonelik CLI'ı yeterlidir.
 ## Hızlı Başlangıç
 
 Henüz etiketlenmiş bir sürüm (release) yok; kurulum yolu **kaynaktan derlemektir**.
-Derleme gereksinimleri: Go 1.26.4+ ve Node.js 20.19+ (20.x) veya 22.12+; yerel
-geliştirmede Node.js 24 kullanılır. Ajan çalıştırmak için giriş yapılmış bir sağlayıcı
+Derleme gereksinimleri: Go 1.26.4+ ve Node.js 22.22.2+ (22.x) veya 24.15+ (Node 20 artık
+desteklenmez: vitest 5, jsdom 31 ve i18next 27 Node 22 ister; `website/` için Astro 7
+22.23.4+ ister); yerel geliştirmede Node.js 24 kullanılır. Ajan çalıştırmak için giriş yapılmış bir sağlayıcı
 CLI'ı, API sağlayıcısı hesabı veya yerel model sunucusu yapılandırılır.
 
 **Windows**

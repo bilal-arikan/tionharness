@@ -858,8 +858,11 @@ eskiden claude-cli'de `Bash`'i bastırma gerekçesi ("kendi sandbox'ımızdan ge
 Codex'te **Codex'in kendi OS sandbox'ı** tarafından zaten karşılanıyordu. 2026-11-17'den
 beri TionHarness kendi kabuğunu hiç sunmuyor; claude-cli de native `Bash`'ini kullanıyor.
 
-Yani gerçek etkisi: **`todo_write` / `ask_user` / `WebSearch` köprüleri
-korunabiliyor (kapatılabilir), dosya-shell tarafı native kalıyor.**
+Yani gerçek etkisi: **`todo_write` / `ask_user` köprüleri korunabiliyor
+(kapatılabilir), dosya-shell tarafı native kalıyor.** (`WebSearch` satırı tarihseldir:
+2026-11-17'den beri codex'e köprülü web aracı verilmez, tek web yolu kendi
+`web_search`'üdür; `[tools] web_search = false` yazımı da 2026-09-10'da etkisiz
+bulunup üst-düzey `web_search = "live"|"disabled"` moduna taşındı.)
 
 > **Kaldırıldı (2026-11-17):** codex'e köprülenen `WebFetch`/`WebSearch` çıkarıldı.
 > Bu köprü, codex'in kendi aramasının kapalı olduğu döneme aitti; bugün ajan web

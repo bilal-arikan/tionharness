@@ -36,9 +36,9 @@ uygulamak on ayrı düzenleme demekti.
 
 Kalıtım birimleri (`internal/db/agent_inherit.go`, `inheritableFields` tablosu tek kaynaktır):
 `soul`, `identity`, `provider` (kind + instance birlikte), `model`, `thinkingLevel`,
-`nativeWebSearch`, `permissionMode`, `inboundPolicy`, `avatar`, `color`, `tools`
+`nativeWebSearch`, `permissionMode`, `avatar`, `color`, `tools`
 (`mcpEnabled` + `toolOverrides` + türetilmiş `blockedTools` birlikte), `allowedTools`,
-`skills`. (`coordinatorMode`, `coordinatorWorkflow`, `coordinatorPrompt` 2026-10-18'de koordinatör modu ile birlikte kalıtım listesinden çıkarıldı.)
+`skills`. (`coordinatorMode`, `coordinatorWorkflow`, `coordinatorPrompt` 2026-10-18'de koordinatör modu ile birlikte kalıtım listesinden çıkarıldı; `inboundPolicy` alanı ajan modelinden tamamen kaldırıldı, `nativeShell` 2026-11-17'de TionHarness'in kendi kabuğuyla birlikte gitti.)
 
 **Devralınmayan** kimlik alanları: `id`, `name`, `system`/`systemKey`, `disabled`,
 `locked`, `parentId`, `overrides`, `createdBy`, `deleted`, zaman damgaları.
@@ -186,6 +186,5 @@ değerleri dondurulmuş bağımsız bir kök, çocuğun klonu aynı ebeveyn + ay
 - Market/şablon paketleri `parentId` taşımıyor; paketten kurulan ajan kök gelir.
 - Self-management araçları (`create_agent`/`update_agent`) türetme sunmuyor; kilitli
   ajana yazma denemesi hata döner.
-- `inboundPolicy` kalıtım birimi var ama ayar formunda editörü yok.
 - Boot'ta tohumlanan otomasyonlar hedefi `FindAgentBySystemKey` ile o anki sağlayıcıya
   sabitler; sonradan türetilen özelleştirme mevcut otomasyonun hedefini değiştirmez.

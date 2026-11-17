@@ -1,6 +1,6 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-11-17):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
+> **Özet (2026-11-18):** 2026-09-28 ve sonrası için yakın dönem değişiklik günlüğüdür. En yeni tarih üstte, aynı günün kayıtları önceki sırasındadır. Önceki ayların kayıtları aşağıdaki arşivlere taşınmıştır; konu sözleşmeleri ilgili rehberlerde, açık işler [yol haritasında](03-YOL-HARITASI.md) tutulur.
 
 Önceki kayıtlar:
 
@@ -8,6 +8,26 @@
 - [Ağustos 2026](arsiv/05-ILERLEME-2026-08.md)
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
+
+## Doküman düzeltmesi: web toggle'ı, Node sürümü, kalıtım alanları (2026-11-18)
+
+16–17 Kasım commit'lerinden sonra eskiyen yerler düzeltildi (davranış değişmedi):
+
+- **`nativeWebSearch` kapalı:** 11, 69, 95, 00 ve ajan formundaki yardım metni (en/tr)
+  hâlâ "kapalıyken köprülü TionHarness `WebSearch`/`WebFetch`'i tek yol olur" diyordu.
+  `54b41f47`'den beri hiçbir CLI'ye web aracı köprülenmez; toggle'ı kapatılan CLI ajanının
+  web erişimi kalmaz. Aynı ifade `db.Agent`, `providers.Request`, opencode config ve
+  `frontend/src/types/agent.ts` yorumlarında da düzeltildi.
+- **Node sürümü:** `81d1270d` yükseltmesinden sonra (vitest 5, jsdom 31, i18next 27,
+  Astro 7) Node 20 yetmez. README ve site kurulum sayfası artık Node 22.22.2+ (22.x) veya
+  24.15+ diyor; `website/` Astro 7 ile 22.23.4+ ister. 72, 00 ve `website/README.md`
+  "Astro 5" yerine "Astro 7" der.
+- **Kalıtım alanları:** 82 ve 83 kaldırılmış `inboundPolicy` alanını hâlâ sayıyordu;
+  `inheritableFields` bugün 12 alandır (83'teki "16" ve satır aralığı düzeltildi).
+
+CI iş akışları da (`.github/workflows/pages.yml`, `release.yml`, `.gitea/workflows/ci.yml`,
+`release.yml`) `node-version: '20'` → `'22'` yapıldı (en güncel 22.x, Astro 7'nin 22.23.4+
+şartını karşılar). CI'da henüz koşturulmadı.
 
 ## CLI güncellemesi: claude-cli 2.1.326, codex-cli 0.169.0 (2026-11-17)
 

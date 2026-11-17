@@ -14,7 +14,7 @@ sunar.
 
 | Konu | Karar | Gerekçe |
 |---|---|---|
-| Stack | Astro 5 + Tailwind v4 | Statik çıktı; `/docs` içerik koleksiyonundan üretilir |
+| Stack | Astro 7 + Tailwind v4 (2026-11-16'da Astro 5'ten yükseltildi; `z` artık `astro/zod`'dan gelir; Node 22.23.4+ gerekir) | Statik çıktı; `/docs` içerik koleksiyonundan üretilir |
 | Konum | `website/` (repo içinde) | Özellik değişince site metni **aynı commit'te** güncellenir |
 | Dil | Tanıtım metinleri EN, doküman dosyaları TR | Kullanıcı kılavuzları `src/content/docs/` altında Türkçedir; çok dilli rota/seçici henüz yoktur |
 | Kapsam | Tek sayfa + `/releases` + `/404` + `/docs` | Doküman sayfaları içerik koleksiyonundan üretilir (`website/src/pages/docs/[...slug].astro`) |

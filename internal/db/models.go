@@ -86,9 +86,9 @@ type Agent struct {
 	//
 	// NIL (field absent on disk, e.g. every agent written before this toggle
 	// existed) MEANS ENABLED — that is the product default: an agent can search
-	// the web out of the box. An explicit false switches the natives off, leaving
-	// TionHarness's bridged WebSearch/WebFetch tools as the only path (their calls
-	// are the ones that carry trace and usage accounting). Read it through
+	// the web out of the box. An explicit false switches the natives off; no CLI
+	// receives TionHarness's WebSearch/WebFetch over the bridge, so such an agent
+	// has no web access at all. Read it through
 	// NativeWebSearchEnabled, never as a bare bool: the zero value of a plain bool
 	// would silently mean "off" for every pre-existing agent. Ignored by non-CLI
 	// providers, which get their web tools from the request itself.

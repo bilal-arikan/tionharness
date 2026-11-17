@@ -255,8 +255,12 @@ Regresyon kilidi: `internal/db/agent_native_web_search_test.go`.
 - **Açık (varsayılan):** hiçbir kısıt yazılmaz, native araç menüde kalır.
 - **Kapalı (açık `false`):** `climcp.go` `disallowed` listesine `WebSearch` +
   `WebFetch` ekler (aynı liste `writeCLISettings` üzerinden `permissions.deny`'a da
-  düşer), böylece tek yol TionHarness'in köprülenen `WebSearch`/`WebFetch`
-  araçları olur — izleme ve kullanım sayacı yalnız orada çalışır.
+  düşer). codex-cli'de `web_search = "disabled"`, opencode-cli'de
+  `websearch`/`webfetch: false` yazılır. **2026-11-17'den beri** hiçbir CLI'ye
+  TionHarness'in `WebSearch`/`WebFetch`'i köprülenmez (ikisi de her CLI için
+  `cliLazyBridgeExcluded`'da, yalnız native araç döngüsüne hizmet eder); yani
+  toggle'ı kapatılan CLI ajanının **hiç web erişimi kalmaz**. Önceki "kapalıyken
+  tek yol köprülenen web araçlarıdır" davranışı codex'e özgü köprüyle birlikte kalktı.
 
 Bu suppress **`inter.URL != ""` bloğunun dışındadır**: toggle ajan düzeyindedir,
 interaction endpoint'i olmayan bir turda da geçerli olmalıdır. Varsayılan açık

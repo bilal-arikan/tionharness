@@ -44,7 +44,7 @@ type opencodeConfig struct {
 	// PermissionMode is TionHarness's "" | "auto" | "ask" | "read-only".
 	PermissionMode string
 	// DisableNativeWeb switches websearch/webfetch off (Request.NativeWebSearch
-	// false) so the bridged TionHarness web tools are the only path.
+	// false). No bridged web tool replaces them: the agent has no web access.
 	DisableNativeWeb bool
 	// DisableAllNativeTools empties the built-in menu (auxiliary calls: title,
 	// summary, judge) — the prompt is the whole request.
