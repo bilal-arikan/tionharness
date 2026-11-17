@@ -29,6 +29,20 @@ const (
 	// blocks (default: only their tool_use/tool_result), so the folded transcript
 	// is complete rather than tool-calls-only.
 	envForwardSubagentText = "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1"
+	// envNoAgentProgressSummaries turns off the periodic progress summaries the
+	// CLI writes for running subagents (2.1.318+). Each summary is an extra model
+	// request, and TionHarness renders the forwarded transcript instead, so they
+	// would be paid for and never shown.
+	envNoAgentProgressSummaries = "CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES=1"
+	// envNoBackgroundTasks keeps every subagent in the foreground. Measured on
+	// 2.1.326: Explore launches ASYNC by default ("Async agent launched
+	// successfully"), and when it finishes the CLI starts a second turn on its own
+	// and emits a second `result` (result_index 1, origin task-notification). The
+	// turn loops stop at the first result, so the real answer would leak into the
+	// next turn. With this set the Agent call blocks and returns its report as the
+	// tool_result, one result per turn. It also keeps Bash from backgrounding, which
+	// has the same second-result shape.
+	envNoBackgroundTasks = "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1"
 )
 
 // nativeSubagentEnv returns the env entries a claude-cli launch needs when the
@@ -37,7 +51,7 @@ func nativeSubagentEnv(req Request) []string {
 	if !req.CLINativeSubagents {
 		return nil
 	}
-	return []string{envSubagentDepth, envForwardSubagentText}
+	return []string{envSubagentDepth, envForwardSubagentText, envNoAgentProgressSummaries, envNoBackgroundTasks}
 }
 
 // subRef locates a nested tool step: the parent's index in resp.Trace and the

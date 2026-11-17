@@ -119,7 +119,8 @@ func TestNativeSubagentEnvAndNote(t *testing.T) {
 		t.Fatalf("env off = %v, want nil", env)
 	}
 	env := nativeSubagentEnv(Request{CLINativeSubagents: true})
-	if len(env) != 2 || env[0] != "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1" || env[1] != "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1" {
+	if len(env) != 4 || env[0] != "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1" || env[1] != "CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1" ||
+		env[2] != "CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES=1" || env[3] != "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1" {
 		t.Fatalf("env on = %v", env)
 	}
 	if note := interactionNote(true); !strings.Contains(note, "subagent_type Explore or Plan") || strings.Contains(note, "never use the built-in Task or Agent") {

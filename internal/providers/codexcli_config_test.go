@@ -470,7 +470,7 @@ func TestCodexConfigDisablesNativeMultiAgent(t *testing.T) {
 		DisableUpdatePlan:       true,
 	})
 	want := "model_reasoning_effort = \"high\"\n" +
-		"\n[features]\nmulti_agent = false\nmulti_agent_v2 = false\n" +
+		"\n[features]\nmulti_agent_v2 = false\n" +
 		"\n[tools]\nupdate_plan = { enabled = false }\n"
 	if got != want {
 		t.Fatalf("features block mismatch\n got: %q\nwant: %q", got, want)
@@ -499,8 +499,12 @@ func TestCodexBuildConfigDisablesNativeMultiAgentAndKeepsBridge(t *testing.T) {
 	}
 
 	rendered := renderCodexConfig(cfg)
+	// codex 0.168 deprecated features.multi_agent and warns on every turn that
+	// sets it; the renderer must not write it.
+	if strings.Contains(rendered, "\nmulti_agent = ") {
+		t.Fatalf("rendered production config must not set the deprecated multi_agent key:\n%s", rendered)
+	}
 	for _, want := range []string{
-		"multi_agent = false\n",
 		"multi_agent_v2 = false\n",
 		"[mcp_servers.tionharness_interaction]\n",
 	} {
@@ -522,7 +526,7 @@ func TestCodexConfigDisablesSubAgents(t *testing.T) {
 		DisableUpdatePlan:       true,
 	})
 	want := "model_reasoning_effort = \"high\"\n" +
-		"\n[features]\nmulti_agent = false\nmulti_agent_v2 = false\n" +
+		"\n[features]\nmulti_agent_v2 = false\n" +
 		"\n[agents]\nenabled = false\n" +
 		"\n[tools]\nupdate_plan = { enabled = false }\n"
 	if got != want {

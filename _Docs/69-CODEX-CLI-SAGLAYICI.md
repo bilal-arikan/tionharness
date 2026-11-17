@@ -822,14 +822,16 @@ experimental_request_user_input = { enabled = false }
 enabled = false                           # → native spawn_agent'ı GERÇEKTEN kapatan tek anahtar
 
 [features]
-multi_agent = false                       # legacy, ETKİSİZ (bkz. 47 §18)
-multi_agent_v2 = false                    # legacy, ETKİSİZ
+multi_agent_v2 = false                    # koruma: açık kalırsa [agents] enabled'ı ezer
 ```
 
 > `[features] multi_agent` / `multi_agent_v2` `--strict-config` altında kabul
 > edilir ama **davranışı değiştirmez**: `spawn_agent` katalogda kalır ve gerçek
 > turda çalışır. Native alt-ajanları kapatan tek anahtar `[agents] enabled = false`
 > (`-c agents.enabled=false`). A/B ölçümü: `_Docs/arsiv/47-KOORDINATOR-COKLU-AJAN.md` §18 (arşiv).
+> **2026-11-17 (codex 0.168+):** `multi_agent` kullanımdan kalktı ve onu yazan her turda
+> bir `error` uyarı öğesi üretiyor; artık yazılmıyor. `multi_agent_v2 = false` koruma
+> olarak kalır (v2 açıkken `[agents] enabled` yok sayılır).
 
 Codex'in native araç seti (`codex-rs/core/src/tools/handlers/`):
 `shell` / `unified_exec`, `apply_patch`, `view_image`, `plan`,
@@ -859,8 +861,6 @@ beri TionHarness kendi kabuğunu hiç sunmuyor; claude-cli de native `Bash`'ini 
 Yani gerçek etkisi: **`todo_write` / `ask_user` / `WebSearch` köprüleri
 korunabiliyor (kapatılabilir), dosya-shell tarafı native kalıyor.**
 
-**Web araçları codex'e köprüleniyor (2026-08-28).** claude-cli'nin aksine codex'in
-**native `WebFetch`'i hiç yok** ve kendi `web_search`'ü varsayılan **kapalı** — ikisi
 > **Kaldırıldı (2026-11-17):** codex'e köprülenen `WebFetch`/`WebSearch` çıkarıldı.
 > Bu köprü, codex'in kendi aramasının kapalı olduğu döneme aitti; bugün ajan web
 > aramasını açıkken `web_search = "live"` yazılır ve codex bununla hem arar hem
@@ -869,6 +869,8 @@ korunabiliyor (kapatılabilir), dosya-shell tarafı native kalıyor.**
 > `WebFetch`/`WebSearch` artık her CLI için `cliLazyBridgeExcluded`'dadır. Aşağıdaki
 > paragraf tarihsel kayıttır.
 
+**Web araçları codex'e köprüleniyor (2026-08-28).** claude-cli'nin aksine codex'in
+**native `WebFetch`'i hiç yok** ve kendi `web_search`'ü varsayılan **kapalı** — ikisi
 birden verilmeyince ajan web erişimsiz kalıp kaynak uyduruyordu. Bu yüzden
 `Runtime.BridgeTools` codex-cli için `WebFetch` + `WebSearch`'ü Interaction MCP
 köprüsüne açıkça ekliyor (`internal/agent/runtime.go`); claude-cli'de ikisi de

@@ -25,6 +25,10 @@
 > deny, derinlik 1). Stream parser alt-ajanın `parent_tool_use_id`'li olaylarını
 > ana çağrının `SubSteps`'ine katlar ve aynı `StepSubagent` kartı olarak gösterir;
 > yazan / belirli TionHarness ajanına giden delegasyon `run_subagent`'ta kalır.
+> **2026-11-17 düzeltmesi:** CLI başlatıcıyı hâlâ `Task` adıyla kaydettiği için açık
+> yolda gönderilen çıplak `Task` deny kuralı `Agent`'ı tamamen siliyordu; bu yolda
+> artık `Task` yazılmaz. Alt ajanlar `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` ile ön
+> planda tutulur (arka plandaki Explore ikinci bir `result` üretiyordu).
 > Codex'in `spawn_agent`'ı `codex exec`'te sonuç döndüremediği için kapalı. koordinatör modu/`spawn_worker`/`stop_worker`/peer mesajları kaldırıldı; arka plan iş için `spawn_session` kullanılır.
 
 ## Amaç

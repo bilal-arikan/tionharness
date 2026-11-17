@@ -241,9 +241,9 @@ func (c *CodexCLI) buildConfig(req Request) codexConfig {
 		// `[agents] enabled = false` is the real block: measured on codex 0.148.0 it
 		// removes spawn_agent from the tool catalog, drops the collaboration
 		// instruction block from the prompt and lets no sub-agent thread start.
-		// The [features] multi_agent/multi_agent_v2 pair is legacy and was measured
-		// to be ineffective on the same version — spawn_agent survived both keys —
-		// but is kept for forward/backward compatibility.
+		// [features] multi_agent_v2 = false guards it (a v2 gate left on would
+		// override agents.enabled); the deprecated multi_agent key is no longer
+		// written, since codex 0.168 warns on it every turn.
 		// Because this turn runs with --strict-config, if a future codex drops any
 		// of these keys, strict-config rejects it and EVERY turn fails. Re-check all
 		// of them whenever the codex version is bumped.

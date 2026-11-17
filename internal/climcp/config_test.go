@@ -138,8 +138,9 @@ func TestWriteConfigTwoTierInteraction(t *testing.T) {
 // TestWriteConfigNativeSubagentsScopedDeny pins the opt-in shape of the native
 // Agent launcher: the tool itself stays available (no bare "Agent" rule) while
 // the non-research built-in types are denied with scoped Agent(<type>) rules;
-// the old Task launcher and the output reader stay off. The agent keeps the
-// whole native Bash family.
+// the output reader stays off. A bare "Task" rule must be absent too: the CLI
+// registers the launcher under that legacy name, so denying it removes Agent.
+// The agent keeps the whole native Bash family.
 func TestWriteConfigNativeSubagentsScopedDeny(t *testing.T) {
 	h := &fakeHost{nativeSubagents: true}
 	res, err := WriteConfig(context.Background(), h, false, db.Agent{}, bridgedInter, "auto")
@@ -148,10 +149,12 @@ func TestWriteConfigNativeSubagentsScopedDeny(t *testing.T) {
 	}
 	defer res.Cleanup()
 	dis := toSet(res.Disallowed)
-	if dis["Agent"] {
-		t.Errorf("native subagents on: bare Agent must not be suppressed; got %v", res.Disallowed)
+	for _, w := range []string{"Agent", "Task"} {
+		if dis[w] {
+			t.Errorf("native subagents on: bare %q must not be suppressed (it removes the launcher); got %v", w, res.Disallowed)
+		}
 	}
-	for _, w := range []string{"Agent(general-purpose)", "Agent(claude)", "Task", "AgentOutputTool"} {
+	for _, w := range []string{"Agent(general-purpose)", "Agent(claude)", "AgentOutputTool"} {
 		if !dis[w] {
 			t.Errorf("expected %q suppressed; got %v", w, res.Disallowed)
 		}

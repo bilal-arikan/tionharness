@@ -292,14 +292,17 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 		// no bridge round-trip) and are the cheapest way to gather facts. Everything
 		// that writes or targets a TionHarness agent still goes through run_subagent,
 		// so the built-in general-purpose/claude launchers are denied with SCOPED rules
-		// (Agent(<name>) leaves the tool available and denies only those calls). The
-		// old `Task` launcher name is always off (no scoped form), and so is
-		// AgentOutputTool: -p mode waits for a subagent and hands its result back as
-		// the tool_result, so the reader alias has nothing extra to read.
+		// (Agent(<name>) leaves the tool available and denies only those calls).
+		// `Task` must NOT be denied here: the CLI still registers the launcher under
+		// the legacy name (system/init lists "Task" while tool_use blocks say
+		// "Agent", measured on 2.1.310 and 2.1.326), so a bare "Task" rule removes
+		// the Agent launcher outright and the Explore/Plan opt-in silently dies.
+		// AgentOutputTool stays off: -p mode waits for a subagent and hands its
+		// result back as the tool_result, so the reader alias has nothing to read.
 		// With the opt-in off the whole family is suppressed as before — same
 		// shadowing class as Skill above.
 		if h.NativeSubagentsEnabled() {
-			disallowed = append(disallowed, "Task", "AgentOutputTool")
+			disallowed = append(disallowed, "AgentOutputTool")
 			disallowed = append(disallowed, deniedNativeSubagentTypes...)
 		} else {
 			disallowed = append(disallowed, "Task", "Agent", "AgentOutputTool")

@@ -36,10 +36,12 @@ type codexConfig struct {
 	// ReasoningEffort becomes `model_reasoning_effort` when non-empty. Codex
 	// accepts none|minimal|low|medium|high|xhigh|max|ultra.
 	ReasoningEffort string
-	// DisableNativeMultiAgent emits `multi_agent = false` and
-	// `multi_agent_v2 = false` under [features]. Both keys are legacy: on codex
-	// 0.148.0 they were measured to have no effect. DisableSubAgents is the key
-	// that actually turns codex's own agent spawning off.
+	// DisableNativeMultiAgent emits `multi_agent_v2 = false` under [features].
+	// It is a guard, not the switch: `[agents] enabled` is honoured unless
+	// multi_agent_v2 is on, so pinning it off keeps DisableSubAgents effective.
+	// The older `multi_agent` key is NOT written: codex 0.168 deprecated it and
+	// warns on every turn that sets it (the warning arrives as an exec `error`
+	// item). DisableSubAgents is the key that turns agent spawning off.
 	DisableNativeMultiAgent bool
 	// DisableSubAgents emits `enabled = false` under [agents]. This is the
 	// effective switch: with it set, codex 0.148.0 emits no spawn_agent call, no
@@ -118,12 +120,10 @@ func renderCodexConfig(cfg codexConfig) string {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
-		// Write both native collaboration feature keys for compatibility. On codex
-		// 0.148.0 they are accepted but were measured to have no behavioral effect:
-		// collaboration.spawn_agent remains available and can still spawn an agent.
-		// The actual enforcement is `[agents] enabled = false` below.
+		// Only multi_agent_v2: it would override `[agents] enabled` when on. The
+		// deprecated `multi_agent` key is left out (codex 0.168+ warns on it each
+		// turn). The actual enforcement is `[agents] enabled = false` below.
 		b.WriteString("[features]\n")
-		b.WriteString("multi_agent = false\n")
 		b.WriteString("multi_agent_v2 = false\n")
 	}
 

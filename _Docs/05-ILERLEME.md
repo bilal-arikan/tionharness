@@ -9,6 +9,39 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## CLI güncellemesi: claude-cli 2.1.326, codex-cli 0.169.0 (2026-11-17)
+
+claude-cli 2.1.310 → 2.1.326 (`claude update`), codex-cli 0.159.1 → 0.169.0 (npm). opencode
+güncellenmedi: PATH'te opencode yok; makinedeki tek kopya masaüstü uygulamasının içindeki 2.2.5
+CLI'si, o da uygulamayla güncellenir ve sağlayıcının arama yolları onu bulmuyor (npm `latest`
+hâlâ 1.19.6). Değişiklik notları ve canlı denemelerle bulunan etkiler:
+
+1. **Native `Agent` hiç çalışmıyordu (hata, sürümden bağımsız).** claude-cli alt ajan
+   başlatıcısını hâlâ eski `Task` adıyla kaydediyor (`system/init` "Task" listeler, `tool_use`
+   "Agent" der; 2.1.310 ve 2.1.326'da ölçüldü). `ClaudeCLINativeSubagents` açıkken de
+   gönderilen çıplak `Task` deny kuralı bu yüzden `Agent`'ı menüden tamamen siliyordu;
+   Explore/Plan opt-in'i sessizce ölüydü. `climcp.WriteConfig` artık açık yolda `Task`
+   yazmaz (kapsamlı `Agent(<tip>)` kuralları ve `AgentOutputTool` kalır). Ölçüm:
+   `Agent(general-purpose)` reddediliyor, `Explore` çalışıyor.
+2. **Explore varsayılan olarak arka planda başlıyor (2.1.326).** Bitince CLI kendiliğinden
+   ikinci bir tur açıp ikinci bir `result` gönderiyor; tur döngüleri ilk `result`'ta durduğu
+   için gerçek cevap sonraki tura sızardı. Native alt ajan açıkken
+   `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` verilir: `Agent` çağrısı bloklar ve raporu
+   tool_result olarak döner (tek `result`). Aynı ayar `Bash`'in arka plana geçmesini de kapatır.
+3. **Alt ajan ilerleme özetleri kapatıldı.** `CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES=1`
+   (2.1.318+): her özet ayrı bir model isteğiydi ve TionHarness bunları göstermiyordu.
+4. **codex `features.multi_agent` kullanımdan kalktı (0.168).** Bu anahtarı yazan her tur bir
+   `error` uyarı öğesi alıyordu. Config artık yalnız `multi_agent_v2 = false` (açık kalırsa
+   `[agents] enabled`'ı ezer) ve `[agents] enabled = false` yazar.
+
+Değişmeyenler: codex `--strict-config` ile üretilen config 0.169.0'da kabul ediliyor, exec
+JSONL şeması aynı; claude-cli'de kullanılan bayraklar ve stream-json biçimi uyumlu (canlı
+resume, kalıcı oturum ve codex taşıma testleri geçti). İzlenecekler: claude 2.1.319'dan beri
+eksik MCP sunuculu `--resume` exit 1 ile kilitleniyor (mesaj metni henüz yakalanmadı, yeni
+oturum geri düşüşü yok); 2.1.323'ten beri alt ajan sıkıştırma hook'ları `agent_id` taşıyor ve
+ayrıştırıcı bunları ana oturum sıkıştırması sayabilir; codex 0.169 güvenilmeyen dizinde proje
+`.codex/config.toml`'unu yok sayıyor.
+
 ## TionHarness'ın kendi shell'i kaldırıldı; ajanlar CLI'nin shell'ini kullanır (2026-11-17)
 
 Neden: üç sağlayıcının üçü de (claude-cli, codex-cli, opencode-cli) kendi kabuğunu getiriyor.
