@@ -13,7 +13,9 @@ import (
 // hands to its subprocess through OPENCODE_CONFIG. Unlike codex's config.toml it
 // is plain JSON, so encoding/json does the escaping; the shape is the subset of
 // opencode's documented config the bridge needs (agent prompt, permission,
-// tools on/off, MCP servers). Verified live on opencode 1.19.0.
+// tools on/off, MCP servers). Two schemas: the 1.x document below (verified
+// live on opencode 1.19.0) and the 2.x one in opencodecli_config_v2.go;
+// renderOpenCodeConfig picks by opencodeConfig.APIMajor.
 
 // opencodeAgentName is the primary agent every TionHarness turn runs as. Its
 // prompt REPLACES opencode's built-in "build" persona; opencode still appends
@@ -25,8 +27,8 @@ const opencodeAgentName = "tionharness"
 // environment variable (Windows caps both around 32 KB).
 const opencodeSystemFile = "system.md"
 
-// opencodeNativeTools lists every opencode built-in tool the config can switch
-// off through the `tools` block. Kept explicit so an auxiliary (tool-less) call
+// opencodeNativeTools lists every opencode 1.x built-in tool the config can
+// switch off through the `tools` block. Kept explicit so an auxiliary (tool-less) call
 // can disable all of them and a read-only turn its mutating subset.
 var opencodeNativeTools = []string{
 	"bash", "edit", "write", "patch", "read", "glob", "grep", "list",
@@ -51,6 +53,9 @@ type opencodeConfig struct {
 	DisableAllNativeTools bool
 	// Servers renders the `mcp` block, keyed by server key.
 	Servers map[string]CLIMCPServer
+	// APIMajor selects the document schema: 1 renders the legacy 1.x shape,
+	// anything else the 2.x shape.
+	APIMajor int
 }
 
 // opencodeConfigDoc is the JSON shape written to disk.
@@ -128,11 +133,20 @@ func opencodeToolsBlock(cfg opencodeConfig) map[string]bool {
 	return off
 }
 
-// renderOpenCodeConfig renders cfg as the opencode.json document. systemPath is
-// the absolute path of the prompt file the agent references (ignored when the
-// prompt is empty). Map iteration order is irrelevant: encoding/json sorts map
-// keys, so identical input yields byte-identical output.
+// renderOpenCodeConfig renders cfg as the opencode.json document for its API
+// generation. systemPath is the absolute path of the prompt file the agent
+// references (ignored when the prompt is empty).
 func renderOpenCodeConfig(cfg opencodeConfig, systemPath string) ([]byte, error) {
+	if cfg.APIMajor != 1 {
+		return renderOpenCodeConfigV2(cfg, systemPath)
+	}
+	return renderOpenCodeConfigV1(cfg, systemPath)
+}
+
+// renderOpenCodeConfigV1 renders the 1.x document. Map iteration order is
+// irrelevant: encoding/json sorts map keys, so identical input yields
+// byte-identical output.
+func renderOpenCodeConfigV1(cfg opencodeConfig, systemPath string) ([]byte, error) {
 	doc := opencodeConfigDoc{
 		Schema:     "https://opencode.ai/config.json",
 		Share:      "disabled",

@@ -11,7 +11,8 @@ import (
 	"testing"
 )
 
-// Fixture lines captured live from `opencode run --format json` on 1.19.0.
+// Fixture lines captured live from `opencode run --format json` on 1.19.0
+// (2.x fixtures: opencodecli_v2_test.go).
 const (
 	ocStepStart  = `{"type":"step_start","timestamp":1,"sessionID":"ses_abc123","part":{"id":"prt_1","messageID":"msg_1","sessionID":"ses_abc123","type":"step-start"}}`
 	ocToolRead   = `{"type":"tool_use","timestamp":2,"sessionID":"ses_abc123","part":{"type":"tool","tool":"read","callID":"call-1","state":{"status":"completed","input":{"filePath":"/tmp/note.txt"},"output":"hello from probe file","metadata":{}},"id":"prt_2","sessionID":"ses_abc123","messageID":"msg_1"}}`
@@ -115,46 +116,46 @@ func TestOpenCodeParserParseDropIsNoted(t *testing.T) {
 	}
 }
 
-func TestOpenCodeBuildArgs(t *testing.T) {
+func TestOpenCodeBuildArgsV1(t *testing.T) {
 	c := NewOpenCodeCLI("/bin/opencode", "", t.TempDir())
-	args := c.buildArgs(Request{WorkDir: t.TempDir(), ResumeSessionID: "ses_Abc9", CLIResumeScope: "scope"}, "anthropic/claude-sonnet-5-5")
+	args := c.buildArgs(Request{WorkDir: t.TempDir(), ResumeSessionID: "ses_Abc9", CLIResumeScope: "scope"}, "anthropic/claude-sonnet-5-5", 1)
 	want := []string{"run", "--format", "json", "--agent", "tionharness", "-m", "anthropic/claude-sonnet-5-5"}
 	if !slices.Equal(args[:len(want)], want) || args[len(args)-2] != "-s" || args[len(args)-1] != "ses_Abc9" || !slices.Contains(args, "--dir") {
 		t.Fatalf("args: %v", args)
 	}
 	// An unsafe session id or a scope-less request never reaches the command line.
-	if args := c.buildArgs(Request{ResumeSessionID: "ses_x; rm", CLIResumeScope: "scope"}, ""); slices.Contains(args, "-s") {
+	if args := c.buildArgs(Request{ResumeSessionID: "ses_x; rm", CLIResumeScope: "scope"}, "", 1); slices.Contains(args, "-s") {
 		t.Fatalf("unsafe id passed: %v", args)
 	}
-	if args := c.buildArgs(Request{ResumeSessionID: "ses_ok"}, ""); slices.Contains(args, "-s") || slices.Contains(args, "-m") {
+	if args := c.buildArgs(Request{ResumeSessionID: "ses_ok"}, "", 1); slices.Contains(args, "-s") || slices.Contains(args, "-m") {
 		t.Fatalf("scope-less resume or empty model passed: %v", args)
 	}
 	// --variant only when the instance opted in AND the vendor vocabulary is known.
-	if args := c.buildArgs(Request{CLIEffortLevel: "max"}, "openai/gpt-5.5"); slices.Contains(args, "--variant") {
+	if args := c.buildArgs(Request{CLIEffortLevel: "max"}, "openai/gpt-5.5", 1); slices.Contains(args, "--variant") {
 		t.Fatalf("variant without opt-in: %v", args)
 	}
 	c.effortVariant = true
-	if args := c.buildArgs(Request{CLIEffortLevel: "max"}, "openai/gpt-5.5"); !slices.Contains(args, "xhigh") {
+	if args := c.buildArgs(Request{CLIEffortLevel: "max"}, "openai/gpt-5.5", 1); !slices.Contains(args, "xhigh") {
 		t.Fatalf("openai max→xhigh: %v", args)
 	}
-	if args := c.buildArgs(Request{CLIEffortLevel: "ultra"}, "anthropic/claude-opus-5-5"); !slices.Contains(args, "max") {
+	if args := c.buildArgs(Request{CLIEffortLevel: "ultra"}, "anthropic/claude-opus-5-5", 1); !slices.Contains(args, "max") {
 		t.Fatalf("anthropic ultra→max: %v", args)
 	}
-	if args := c.buildArgs(Request{CLIEffortLevel: "high"}, "opencode/big-pickle"); slices.Contains(args, "--variant") {
+	if args := c.buildArgs(Request{CLIEffortLevel: "high"}, "opencode/big-pickle", 1); slices.Contains(args, "--variant") {
 		t.Fatalf("unknown vendor must not get a variant: %v", args)
 	}
-	if args := c.buildArgs(Request{CLIEffortLevel: "high", DisableThinking: true}, "openai/gpt-5.5"); slices.Contains(args, "--variant") {
+	if args := c.buildArgs(Request{CLIEffortLevel: "high", DisableThinking: true}, "openai/gpt-5.5", 1); slices.Contains(args, "--variant") {
 		t.Fatalf("thinking off must not get a variant: %v", args)
 	}
 }
 
-func TestOpenCodeConfigRender(t *testing.T) {
+func TestOpenCodeConfigRenderV1(t *testing.T) {
 	c := NewOpenCodeCLI("/bin/opencode", "", t.TempDir())
 	c.ConfigureCLIMCP(CLIMCPSpec{Servers: map[string]CLIMCPServer{
 		"tionharness_interaction": {Transport: "http", URL: "http://127.0.0.1:1/core?full=1", Headers: map[string]string{"Authorization": "Bearer t"}, DisabledTools: []string{"noisy"}},
 		"local":                   {Command: "srv", Args: []string{"--x"}, Env: map[string]string{"K": "V"}},
 	}})
-	cfg := c.buildConfig(Request{System: "persona", PermissionMode: "read-only", NativeWebSearch: false})
+	cfg := c.buildConfig(Request{System: "persona", PermissionMode: "read-only", NativeWebSearch: false}, 1)
 	dir := t.TempDir()
 	path, err := writeOpenCodeConfig(dir, cfg)
 	if err != nil {
@@ -200,7 +201,7 @@ func TestOpenCodeConfigRender(t *testing.T) {
 	}
 
 	// Auxiliary call: every native tool off, no prompt file when System is empty.
-	aux := c.buildConfig(Request{CLIRestrictNativeTools: true, NativeWebSearch: true})
+	aux := c.buildConfig(Request{CLIRestrictNativeTools: true, NativeWebSearch: true}, 1)
 	if !aux.DisableAllNativeTools {
 		t.Fatal("aux must disable all natives")
 	}
@@ -276,7 +277,7 @@ func TestOpenCodeCleanCrashRetriesOnce(t *testing.T) {
 	t.Setenv("OPENCODE_TEST_COUNTER", counter)
 	c := &OpenCodeCLI{binPath: self, configDir: home}
 	var live []TraceStep
-	resp, err := c.completeWithArgs(context.Background(), []string{"-test.run=TestOpenCodeHelperFixture", "-test.v=false"}, "prompt", "m", Request{OnEvent: func(st TraceStep) { live = append(live, st) }, CLIResumeScope: "scope"})
+	resp, err := c.completeWithArgs(context.Background(), opencodeDefaultMajor, []string{"-test.run=TestOpenCodeHelperFixture", "-test.v=false"}, "prompt", "m", Request{OnEvent: func(st TraceStep) { live = append(live, st) }, CLIResumeScope: "scope"})
 	if err != nil {
 		t.Fatalf("second attempt should succeed: %v", err)
 	}
@@ -307,7 +308,7 @@ func TestOpenCodeAuthErrorIsPermanentAndNotRetried(t *testing.T) {
 	t.Setenv("OPENCODE_TEST_FIXTURE", "auth-error")
 	t.Setenv("OPENCODE_TEST_COUNTER", counter)
 	c := &OpenCodeCLI{binPath: self, configDir: home}
-	_, err := c.completeWithArgs(context.Background(), []string{"-test.run=TestOpenCodeHelperFixture", "-test.v=false"}, "prompt", "m", Request{})
+	_, err := c.completeWithArgs(context.Background(), opencodeDefaultMajor, []string{"-test.run=TestOpenCodeHelperFixture", "-test.v=false"}, "prompt", "m", Request{})
 	if err == nil || !strings.Contains(err.Error(), "authentication failed") {
 		t.Fatalf("auth classification: %v", err)
 	}

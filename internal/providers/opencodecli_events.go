@@ -26,6 +26,13 @@ import (
 //	                            "cache":{"read":N,"write":N}}, "cost":F}}
 //	error        → {"error": {"name":"UnknownError", "data":{"message":"…"}}}
 //
+// 2.x (verified on 2.2.5) keeps these event types with three differences the
+// parser absorbs: a tool part is streamed ONCE, when it completed or failed (no
+// pending/running line, so a long tool is a silent open step); its "id" is the
+// provider call id ("callID" is gone, "partID" holds the part id); and bridged
+// MCP tools run inside Code Mode as the native "execute" tool, whose
+// state.metadata.metadata.toolCalls names the real call ("<server>.<tool>").
+//
 // Every event carries the top-level "sessionID" (the opencode session, stable
 // across `-s` resumes). Token counters are DISJOINT: "input" excludes the
 // cached prefix (measured: input 152 + cache.read 6659 on a warm step), so the
@@ -47,6 +54,34 @@ type opencodeToolState struct {
 	Output string          `json:"output"`
 	Error  string          `json:"error"`
 	Title  string          `json:"title"`
+	// Metadata is tool-specific; kept raw so an unexpected shape can never
+	// drop the whole line (see opencodeCodeModeCalls).
+	Metadata json.RawMessage `json:"metadata"`
+}
+
+// opencodeCodeModeCall is one tool call made from inside a 2.x Code Mode
+// `execute` run.
+type opencodeCodeModeCall struct {
+	Tool   string          `json:"tool"`
+	Status string          `json:"status"`
+	Input  json.RawMessage `json:"input"`
+}
+
+// opencodeCodeModeCalls reads state.metadata.metadata.toolCalls of a 2.x
+// `execute` tool part; nil when absent or malformed.
+func opencodeCodeModeCalls(meta json.RawMessage) []opencodeCodeModeCall {
+	if len(meta) == 0 {
+		return nil
+	}
+	var m struct {
+		Metadata struct {
+			ToolCalls []opencodeCodeModeCall `json:"toolCalls"`
+		} `json:"metadata"`
+	}
+	if json.Unmarshal(meta, &m) != nil {
+		return nil
+	}
+	return m.Metadata.ToolCalls
 }
 
 type opencodePart struct {
@@ -64,9 +99,15 @@ type opencodeErrorData struct {
 	Message string `json:"message"`
 }
 
+// opencodeError covers both error shapes: 1.x {"name", "data":{"message"}} and
+// 2.x {"type":"provider.free-limit", "message", "status":429, ...} (verified
+// on 2.2.5).
 type opencodeError struct {
-	Name string            `json:"name"`
-	Data opencodeErrorData `json:"data"`
+	Name    string            `json:"name"`
+	Data    opencodeErrorData `json:"data"`
+	Type    string            `json:"type"`
+	Message string            `json:"message"`
+	Status  int               `json:"status"`
 }
 
 type opencodeEvent struct {
@@ -109,6 +150,11 @@ type opencodeStreamParser struct {
 	// stdout watchdog asks toolInFlight before reading that as a hang (same
 	// contract as the codex parser).
 	toolsActive map[string]bool
+	// silentTools marks a 2.x stream, which never reports a tool as running:
+	// there an open step (step_start without its step_finish) counts as busy,
+	// since the silence is either the model generating or a tool executing.
+	silentTools bool
+	stepOpen    bool
 }
 
 func newOpenCodeParser(model string, serverKeys []string, onEvent func(TraceStep)) *opencodeStreamParser {
@@ -123,8 +169,11 @@ func newOpenCodeParser(model string, serverKeys []string, onEvent func(TraceStep
 	}
 }
 
-// toolInFlight reports whether a tool part has started and not yet finished.
-func (p *opencodeStreamParser) toolInFlight() bool { return len(p.toolsActive) > 0 }
+// toolInFlight reports whether a tool part has started and not yet finished,
+// or — on a 2.x stream, which cannot tell — whether a step is still open.
+func (p *opencodeStreamParser) toolInFlight() bool {
+	return len(p.toolsActive) > 0 || (p.silentTools && p.stepOpen)
+}
 
 func (p *opencodeStreamParser) emit(i int) {
 	if p.onEvent == nil || p.emitted[i] || i < 0 || i >= len(p.resp.Trace) {
@@ -173,8 +222,10 @@ func (p *opencodeStreamParser) feed(line string) {
 	switch ev.Type {
 	case "step_start":
 		p.sawStep = true
+		p.stepOpen = true
 	case "step_finish":
 		p.sawStep = true
+		p.stepOpen = false
 		p.steps++
 		if ev.Part != nil && ev.Part.Tokens != nil {
 			t := ev.Part.Tokens
@@ -212,11 +263,22 @@ func (p *opencodeStreamParser) feed(line string) {
 		}
 	case "error":
 		p.hadError = true
-		if ev.Error != nil {
-			p.errName = ev.Error.Name
-			p.errText = ev.Error.Data.Message
+		p.stepOpen = false
+		if e := ev.Error; e != nil {
+			p.errName = e.Name
+			if p.errName == "" {
+				p.errName = e.Type
+			}
+			if e.Status > 0 {
+				// The HTTP status feeds classification ("429", "401").
+				p.errName = strings.TrimSpace(fmt.Sprintf("%s %d", p.errName, e.Status))
+			}
+			p.errText = e.Data.Message
 			if p.errText == "" {
-				p.errText = ev.Error.Name
+				p.errText = e.Message
+			}
+			if p.errText == "" {
+				p.errText = p.errName
 			}
 		}
 	}
@@ -251,6 +313,9 @@ func (p *opencodeStreamParser) feedTool(part *opencodePart) {
 	final := false
 	if st := part.State; st != nil {
 		step.Input = st.Input
+		if part.Tool == "execute" {
+			p.unwrapCodeMode(&step, st)
+		}
 		switch st.Status {
 		case "completed":
 			final = true
@@ -280,13 +345,41 @@ func (p *opencodeStreamParser) feedTool(part *opencodePart) {
 	p.setPart(key, final, step)
 }
 
+// unwrapCodeMode renders a 2.x Code Mode `execute` part that made exactly one
+// call to a configured MCP server as that bridged tool, so the trace shows
+// "mcp__<server>__<tool>" with the tool's own input instead of a JavaScript
+// snippet. Multi-call or opencode-internal runs stay "execute".
+func (p *opencodeStreamParser) unwrapCodeMode(step *TraceStep, st *opencodeToolState) {
+	calls := opencodeCodeModeCalls(st.Metadata)
+	if len(calls) != 1 {
+		return
+	}
+	ns, name, ok := strings.Cut(calls[0].Tool, ".")
+	if !ok || name == "" {
+		return
+	}
+	for _, key := range p.serverKeys {
+		if opencodeSanitizeID(key) != ns {
+			continue
+		}
+		step.Tool = mcp.NamespaceTool("mcp", mcp.NamespaceTool(key, name))
+		if len(calls[0].Input) > 0 {
+			step.Input = calls[0].Input
+		}
+		if calls[0].Status == "error" {
+			step.IsError = true
+		}
+		return
+	}
+}
+
 // toolName maps an opencode tool id onto the trace's naming conventions:
 // bridged MCP tools regain the mcp__<server>__ prefix, opencode's checklist tool
 // takes the shared "todo_list" name so the agent layer promotes it to a
 // checklist card and mirrors it into the progress sink.
 func (p *opencodeStreamParser) toolName(name string) string {
 	for _, key := range p.serverKeys {
-		if rest, ok := strings.CutPrefix(name, key+"_"); ok && rest != "" {
+		if rest, ok := strings.CutPrefix(name, opencodeSanitizeID(key)+"_"); ok && rest != "" {
 			return mcp.NamespaceTool("mcp", mcp.NamespaceTool(key, rest))
 		}
 	}

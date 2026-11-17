@@ -31,7 +31,7 @@ func init() {
 			Fields: []FieldSpec{
 				{Key: FieldKeyCLIPath, Label: "CLI Yolu", Type: "path", Placeholder: "otomatik (PATH'te ara)", Help: "Bos birakilirsa PATH'teki opencode ikili dosyasi kullanilir."},
 				{Key: FieldKeyConfigDir, Label: "Config Dizini", Type: "dir", Help: "Bos birakilirsa uygulamanin opencode-home dizini kullanilir; doldurulursa bu ornege ozel, izole bir opencode evi (auth + oturum veritabani) kullanilir."},
-				{Key: FieldKeyEffortVariant, Label: "Efor Varyantı", Type: "select", Options: []string{"", "auto"}, Help: "auto: ajanin dusunme seviyesi `--variant` olarak gecirilir (yalniz anthropic/ ve openai/ modelleri). Bos: gecirilmez."},
+				{Key: FieldKeyEffortVariant, Label: "Efor Varyantı", Type: "select", Options: []string{"", "auto"}, Help: "auto: ajanin dusunme seviyesi model varyanti olarak gecirilir (opencode 1.x `--variant`, 2.x `-m model#varyant`; yalniz anthropic/ ve openai/ modelleri). Bos: gecirilmez."},
 			},
 			Models: []ModelInfo{
 				{ID: "", Label: "opencode varsayılan modeli", Description: "opencode evinin kendi varsayılan modelini kullanır (opencode.json `model`)"},

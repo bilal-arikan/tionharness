@@ -1,6 +1,6 @@
 # 95 — OpenCode CLI Sağlayıcı ve Native Anthropic'in Kaldırılması
 
-> **Özet (2026-11-17):** TionHarness'in üçüncü CLI taşıyıcısı `opencode-cli`
+> **Özet (2026-11-18):** TionHarness'in üçüncü CLI taşıyıcısı `opencode-cli`
 > ([anomalyco/opencode](https://github.com/anomalyco/opencode)) eklendi ve native
 > Anthropic HTTP istemcisi (`anthropic.go`) ile ona dayanan kind'lar (`anthropic`,
 > `anthropic-compat`, `minimax-anthropic`, `deepseek-anthropic`, `zai`) kaldırıldı.
@@ -14,6 +14,9 @@
 > **2026-11-17:** TionHarness'in kendi kabuğu kaldırıldı; opencode'un `bash`'i artık hiç
 > kapatılmaz, `Bash`'siz araç filtresi `read-only` izin moduna zorlanır, gözetimsiz
 > turlarda git imzalama kapatılır ama `git push` freni yoktur (§3.2).
+> **2026-11-18:** opencode 2.x desteği (§3.8): ikili sürümüne göre 1.x/2.x argv, config
+> şeması ve akış ayrıştırması seçilir; masaüstü uygulamasının paketlediği CLI bulunur;
+> 2.x'te native `subagent` sıralı izin kuralıyla gerçekten kapalıdır.
 > Dayandığı paketler:
 > `internal/providers` (`opencodecli*.go`, `kind_opencodecli.go`), `internal/agent`
 > (`codexhome.go`, `codexmcp.go`, `toolloop_phases.go`), `internal/api`
@@ -41,7 +44,7 @@ kullanabilir miyiz?"* Değerlendirme (sohbet kaydı, 2026-10-13):
 
 | Kaynak | Konum |
 |---|---|
-| OpenCode CLI | `opencode 1.19.0` — `npm i -g opencode-ai` (bu Mac'te `/opt/homebrew/bin/opencode`) |
+| OpenCode CLI | `opencode 1.19.0` — `npm i -g opencode-ai` (bu Mac'te `/opt/homebrew/bin/opencode`); 2.x için §3.8 (`2.2.5`, Windows masaüstü uygulamasının CLI'si) |
 | Dokümanlar | `https://opencode.ai/docs/{cli,config,agents,providers,server,sdk}/` |
 | Canlı sondalar | `opencode run --format json` ile ücretsiz `opencode/big-pickle` modeli; stdin prompt, XDG izolasyonu, dosya tabanlı config, `-s` resume, izin reddi |
 
@@ -90,9 +93,15 @@ Canlı doğrulanan davranışlar:
 ### 3.2 Komut satırı ve config
 
 ```
+# 1.x
 opencode run --format json --agent tionharness [-m <vendor/model>] [--variant <v>]
              [--dir <workdir>] [-s <ses_...>]      # prompt stdin'den
+# 2.x (§3.8): --dir/--variant yok; çalışma dizini sürecin cwd'si
+opencode run --format json --agent tionharness --standalone [-m <vendor/model>[#<v>]]
+             [-s <ses_...>]
 ```
+
+Aşağıdaki tablo 1.x belgesidir; 2.x belgesi §3.8'de.
 
 Üretilen `opencode.json` (`opencodecli_config.go`):
 
@@ -168,6 +177,55 @@ yalnız örnekte `effortVariant=auto` seçiliyse ve model `openai/` (low|medium|
 ya da `anthropic/` (low|medium|high|max) ile başlıyorsa geçirilir; `DisableThinking`
 hiç geçirmez. Diğer vendor'lar için ajanın düşünme seviyesi yok sayılır.
 
+### 3.8 opencode 2.x (2026-11-18)
+
+opencode 2.x, 1.x ile uyumsuz biçimde değişti. Taşıyıcı ikilinin `--version` çıktısından
+ana sürümü okur (`opencode_version.go`; ikili yolu + boyut + mtime anahtarlı önbellek,
+okunamazsa 2 varsayılır) ve argv, config ve ayrıştırıcıyı ona göre seçer. Ölçümler
+2.2.5 üzerinde, ücretsiz `opencode/*` modelleriyle canlı yapıldı.
+
+- **Arama:** PATH ve npm/`Programs` yollarından sonra masaüstü uygulamasının paketlediği
+  CLI denenir: `%APPDATA%\ai.opencode.desktop\cli\<sürüm>\opencode-cli.exe`, en yeni
+  sürüm önce (`opencodelookup.go`). macOS/Linux için aynı düzen uygulama veri dizininde
+  aranır (yalnız Windows'ta doğrulandı).
+- **argv:** `--dir` ve `--variant` kalktı; varyant `-m vendor/model#varyant` olarak gider,
+  çalışma dizini `cmd.Dir`'dir (ölçüldü). `run` varsayılanda paylaşılan arka plan
+  servisine bağlanır; servisin ortamı (ev, turun `OPENCODE_CONFIG`'i) turunki değildir ve
+  masaüstü uygulaması da onu kullanır. Bu yüzden her tur `--standalone` ile kendi özel
+  sunucusunu açar (~3 sn açılış).
+- **Config şeması** (`opencodecli_config_v2.go`): `permissions` sıralı kural dizisi
+  (`{action, resource, effect}`, **son eşleşen kazanır**), `agents` (`disabled`,
+  `system: {file:…}`), `mcp.servers` (`disabled`), `update: "disable"`. 1.x belgesi 2.x'te
+  hâlâ yüklenir ama göç `tools: {x:false}` girdilerini `permission` bloğunun
+  `"*":"allow"` kuralından **önceye** koyar; sonuç olarak tüm kapatmalar ezilir. Canlı
+  ölçüm: eski config ile `subagent` ve `shell` menüdeydi ve `shell` çalıştı.
+- **İzin eşlemesi:** `*: allow`, sonra mod kuralları (read-only → `edit/shell/webfetch`
+  deny; ask → `edit/shell` ask, `run` bunları "This non-interactive run cannot ask the
+  user for permission" ile reddeder), `NativeWebSearch` kapalıysa `websearch/webfetch`
+  deny, en sonda daima `subagent` deny ve MCP `DisabledTools` → `<server>_<tool>` deny.
+  2.x adları: `bash` → `shell`, `task` → `subagent`, `write/patch` → `edit`. Herkese deny
+  edilen araç menüden düşer (shell ve subagent için ölçüldü). Yardımcı (araçsız) çağrı
+  tek `* deny` kuralı alır (gelecek sürümlerin yeni araçlarını da kapsar).
+- **Code Mode:** 2.x MCP araçlarını varsayılan olarak yerel `execute` aracının içinden
+  (`tools["<server>"].<tool>(…)` JS çağrısı) sunar. Kapatılabilir (sunucu başına
+  `codemode: false` ya da `execute` deny) ama o zaman MCP araçları taze bir
+  `run --standalone`'un **ilk adımında yoktur**, ancak 2. adımdan itibaren görünür
+  (canlı ölçüldü). Bu yüzden Code Mode açık bırakıldı; ayrıştırıcı, tek çağrılı bir
+  `execute` parçasını `state.metadata.metadata.toolCalls[0]` üzerinden köprü aracına
+  (`mcp__<server>__<tool>`, aracın kendi girdisiyle) çevirir. Çok çağrılı ya da
+  opencode-iç (`opencode.*`) çalıştırmalar `execute` adıyla kalır.
+- **Akış farkları:** araç parçası yalnız bittiğinde **bir kez** gelir (pending/running
+  satırı yok); `id` sağlayıcı çağrı kimliğidir, `callID` yok. 2.x akışında açık bir adım
+  (`step_start` var, `step_finish` yok) stdout bekçisi için meşgul sayılır; 25 sn'lik bir
+  `sleep` adımın içinde tamamen sessiz geçti, 10 sn'ye indirilmiş bekçiyle 20 sn'lik
+  kabuk aracı öldürülmeden bitti. Sınırsız asılı bir adımı yine anlamsal bekçi, sert
+  üst sınır ve insan durdurması keser. `error` olayının şekli de değişti:
+  `{type, message, status}` (ör. `provider.free-limit`, 429); ayrıştırıcı iki şekli de
+  okur, durum kodu sınıflandırmaya katılır (ücretsiz kota → quota).
+- **Diğer:** MCP araç çağrıları için 5 sn'lik varsayılan istek zaman aşımı uzun
+  çağrıları kesmiyor (65 sn'lik çağrı geçti). `opencode run` kullanıcının
+  `~/.claude/skills` ve `~/.agents/skills` dizinlerini de izliyor (ev izolasyonu dışında).
+
 ## 4. Canlı doğrulama (2026-10-13, scratch sunucu 8091)
 
 1. `PUT /api/providers` ile `opencode-cli` örneği oluşturuldu; `configDir`
@@ -224,6 +282,13 @@ Davranış notları:
    openai anahtarlı bir evde canlı doğrulanmadı (ücretsiz model varyant almıyor).
 5. **Fiyat tahmini.** Yalnız `anthropic/` ve `openai/` önekleri liste fiyatına
    eşlenir; `openrouter/...` ve diğer vendor'lar "fiyatsız" görünür.
+6. **2.x giriş durumu (açık).** 2.x kimlik bilgilerini `auth.json`'dan `opencode.db`'ye
+   taşıyor (`import_legacy_credentials` göçü); `provider_auth.go`/`catalog_opencodecli.go`
+   hâlâ `auth.json` anahtarlarını okuduğu için 2.x evinde yapılan bir girişi
+   göstermeyebilir. Tur çalışmasını etkilemez.
+7. **2.x yardımcı çağrı menüsü (kısmen doğrulandı).** `* deny` config'i yüklenip LLM
+   çağrısına kadar ulaştı; boş araç menüsü ücretsiz kota dolduğu için canlı
+   gözlenemedi.
 
 ## 7. İkinci adım: HTTP ailesi ve karar katmanı (2026-10-13)
 
