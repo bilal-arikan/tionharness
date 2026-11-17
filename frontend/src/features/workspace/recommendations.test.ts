@@ -35,7 +35,6 @@ function healthyCtx(over: Partial<RecContext> = {}): RecContext {
     ws: {
       defaultWorkingDir: 'C:/work',
       codebaseMemoryEnabled: true,
-      shellOutputCompression: 'on',
       terseMode: true,
     },
     settings: { backupEnabled: true },
@@ -117,11 +116,10 @@ describe('token-optimizer rules', () => {
     expect(keys).not.toContain('token')
   })
 
-  // rtk is NOT offered as a hook any more. Its PowerShell one-liner template was
-  // executed by claude-cli through bash, failed on the first `|`, and a failing
-  // PreToolUse hook BLOCKS the tool — so this card used to brick Bash for the whole
-  // workspace (2026-07-31, WS10/SES63). rtk is wired by the shellCommandRewrite
-  // setting instead. This test locks the card away from rtk for good.
+  // This card offers sqz only; rtk has its own hook toggle in Settings ▸ External
+  // Tools. An older rtk template here was a PowerShell one-liner that claude-cli
+  // ran through bash, failed on the first `|`, and — a failing PreToolUse hook
+  // BLOCKS the tool — bricked Bash for the whole workspace (2026-07-31, WS10/SES63).
   it('never offers an rtk HOOK, even when rtk is the only optimizer installed', async () => {
     const ctx = healthyCtx({ hooks: [] } as unknown as Partial<RecContext>) // tools: rtk only
     const recs = runRules(ctx)
@@ -143,64 +141,12 @@ describe('token-optimizer rules', () => {
   })
 })
 
-describe('shell-output compression rule', () => {
-  const sqzInstalled = { name: 'sqz', found: true, path: 'C:/sqz.exe', wire: 'hook' }
-
-  it('offers to turn on in-process compression when sqz is installed but unhooked and unset', () => {
-    const keys = keysOf(
-      healthyCtx({
-        tools: [sqzInstalled],
-        hooks: [],
-        ws: {
-          defaultWorkingDir: 'C:/work',
-          codebaseMemoryEnabled: true,
-          shellOutputCompression: 'auto',
-        },
-      } as unknown as Partial<RecContext>),
-    )
-    expect(keys).toContain('shell-compress')
-  })
-
-  // 'off' is an explicit user choice and 'on' already forces it — nagging in
-  // either case would make the card un-dismissible by doing the obvious thing.
-  it.each(['on', 'off'])('respects an explicit shellOutputCompression=%s', (mode) => {
-    const keys = keysOf(
-      healthyCtx({
-        tools: [sqzInstalled],
-        hooks: [],
-        ws: {
-          defaultWorkingDir: 'C:/work',
-          codebaseMemoryEnabled: true,
-          shellOutputCompression: mode,
-        },
-      } as unknown as Partial<RecContext>),
-    )
-    expect(keys).not.toContain('shell-compress')
-  })
-
-  it('stays quiet when a sqz hook is already live', () => {
-    const keys = keysOf(
-      healthyCtx({
-        tools: [sqzInstalled],
-        hooks: [{ enabled: true, command: 'sqz hook claude' }],
-        ws: {
-          defaultWorkingDir: 'C:/work',
-          codebaseMemoryEnabled: true,
-          shellOutputCompression: 'auto',
-        },
-      } as unknown as Partial<RecContext>),
-    )
-    expect(keys).not.toContain('shell-compress')
-  })
-})
-
 describe('terse-mode rule', () => {
   const wsWith = (terseMode: unknown) =>
     healthyCtx({
       ws: {
         defaultWorkingDir: 'C:/work',
         codebaseMemoryEnabled: true,
-        shellOutputCompression: 'on',
         terseMode,
       },
     } as unknown as Partial<RecContext>)
@@ -251,7 +197,6 @@ describe('codebase-memory rules', () => {
         ws: {
           defaultWorkingDir: 'C:/work',
           codebaseMemoryEnabled: false,
-          shellOutputCompression: 'on',
         },
       } as unknown as Partial<RecContext>),
     )
@@ -309,7 +254,6 @@ describe('zvec-grep rules', () => {
           defaultWorkingDir: 'C:/work',
           codebaseMemoryEnabled: true,
           zvecGrepEnabled: false,
-          shellOutputCompression: 'on',
           terseMode: true,
         },
       } as unknown as Partial<RecContext>),
@@ -341,7 +285,7 @@ describe('workspace-setup rules', () => {
   it.each(['', '   ', undefined])('flags a blank default working dir (%p)', (dir) => {
     const keys = keysOf(
       healthyCtx({
-        ws: { defaultWorkingDir: dir, codebaseMemoryEnabled: true, shellOutputCompression: 'on' },
+        ws: { defaultWorkingDir: dir, codebaseMemoryEnabled: true },
       } as unknown as Partial<RecContext>),
     )
     expect(keys).toContain('workdir')

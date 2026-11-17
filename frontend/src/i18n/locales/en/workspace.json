@@ -136,8 +136,6 @@
       "timedOut": "Timed out"
     },
     "kind": {
-      "shell": "Shell",
-      "shellBackground": "Background shell",
       "code": "Code",
       "provider": "Provider",
       "mcp": "MCP",
@@ -338,12 +336,6 @@
         "summary": "sqz is installed, but its output-compression hook is not connected.",
         "desc": "sqz is installed on this device but is not connected. Add it as a hook to compress tool output without losing information and save tokens.",
         "action": "Connect sqz"
-      },
-      "shell-compress": {
-        "title": "Enable shell output compression",
-        "summary": "sqz is installed, but in-process shell output compression is inactive because no hook is connected and automatic mode is disabled.",
-        "desc": "sqz is installed, but shell output compression is inactive in this workspace. Enable it to shorten shell output losslessly with in-process sqz before it reaches the model. It does not require a hook; the hook path does not run for bridged tools.",
-        "action": "Enable"
       },
       "terse-mode": {
         "title": "Enable Terse Mode",

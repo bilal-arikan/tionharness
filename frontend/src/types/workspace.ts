@@ -151,12 +151,6 @@ export interface WorkspaceSettings {
   codexPluginsEnabled: boolean
   codexMarketplaces: CodexMarketplace[]
   codexPlugins: string[]
-  // In-process shell-output compression (sqz) override: '' = auto (follow sqz-hook
-  // detection), 'on' = force on (needs the sqz binary), 'off' = disable.
-  shellOutputCompression: '' | 'on' | 'off'
-  // In-process shell-COMMAND rewrite (rtk) override, same tri-state. Separate
-  // knob: rtk reshapes the command before it runs, sqz compresses the output after.
-  shellCommandRewrite: '' | 'on' | 'off'
   boardColumns: BoardColumnDef[]
   // User-created saved board views. Always present (possibly empty); the
   // built-in views are client-side and never round-trip through here.
@@ -200,8 +194,6 @@ export type WorkspaceSettingsPatch = Partial<
     | 'codexPluginsEnabled'
     | 'codexMarketplaces'
     | 'codexPlugins'
-    | 'shellOutputCompression'
-    | 'shellCommandRewrite'
     | 'boardColumns'
     | 'boardViews'
     | 'ignoredRecommendations'

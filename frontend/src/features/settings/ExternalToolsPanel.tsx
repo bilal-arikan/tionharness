@@ -20,7 +20,6 @@ import type {
   ExternalToolUpdate,
   MCPServer,
   TokenToolReport,
-  WorkspaceSettings,
 } from '@/types'
 import type { HookInput } from '@/api/hooks'
 import { displayPath } from '@/shared/lib/paths'
@@ -47,29 +46,28 @@ interface Props {
 // PreToolUse/PostToolUse hook. Only tools whose `wire` is 'hook' (from
 // /api/external-tools) need an entry here; 'mcp'/'cli' tools render an info badge
 // instead of a toggle (driven by ExternalToolStatus.wire, not this map).
-// NOTE — there is deliberately NO `rtk` entry here any more.
 //
-// It used to ship a PreToolUse hook whose body was a PowerShell one-liner
-// (`$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; …`). TionHarness's own hook runner
-// is PowerShell on Windows, so it worked on the native path — but claude-cli runs
-// hooks through BASH, which died on the first `|` with
-// `syntax error near unexpected token '|'`. A failing PreToolUse hook BLOCKS the
-// tool call, so clicking "Bağla" made every Bash call in the workspace fail
-// (observed 2026-07-31 in WS10/SES63, where the agent gave up and switched to
-// PowerShell).
-//
-// It is not replaced with a bash-safe rewrite, because the hook was also the wrong
-// mechanism: it prefixed `rtk ` onto EVERY command, including `git diff` and `cat`
-// where rtk measurably loses to sqz. rtk is now wired by the ShellCommandRewrite
-// setting (`wire: 'setting'`), which applies the measured allowlist and the
-// Degraded guard on both the native and bridged paths. See _Docs/17.
+// Both token optimizers hook the CLI's OWN shell tool — TionHarness no longer has a
+// shell of its own, so there is no in-process rewrite to fall back on. Each command
+// is a plain command word (no pipes, no PowerShell syntax), because claude-cli runs
+// hooks through bash: an earlier rtk template was a PowerShell one-liner that died
+// on the first `|` under bash, and a failing PreToolUse hook BLOCKS the tool call.
 const TOOL_HOOK_TEMPLATES: Record<string, HookInput> = {
+  // rtk `rtk hook claude` is rtk's Claude Code hook handler: a PreToolUse rewriter
+  // for the native Bash tool that applies rtk's own command allowlist, so commands
+  // it does not help (e.g. `cat`) pass through unchanged.
+  rtk: {
+    event: 'PreToolUse',
+    matcher: 'Bash',
+    command: 'rtk hook claude',
+    timeoutSec: 30,
+    enabled: true,
+  },
   // sqz (v1.3.0) `sqz hook claude` is a PreToolUse rewriter: it reads the tool-call
   // JSON from stdin and rewrites shell commands to pipe through sqz, then emits the
   // modified JSON. sqz ignores tool_name and rewrites any payload carrying
-  // `.command` (Bash + PowerShell alike), so the matcher covers both. Unlike the
-  // removed rtk template this is a plain command word, valid in bash and PowerShell
-  // alike, so it survives whichever runner executes it.
+  // `.command`, so the matcher covers Bash and Claude Code's native PowerShell tool
+  // on Windows alike.
   sqz: {
     event: 'PreToolUse',
     matcher: 'Bash,PowerShell',
@@ -112,9 +110,6 @@ export function ExternalToolsPanel({ onError }: Props) {
   const [report, setReport] = useState<TokenToolReport | null>(null)
   const [maintBusy, setMaintBusy] = useState<string | null>(null)
   const [maintMsg, setMaintMsg] = useState<string | null>(null)
-
-  // Workspace settings, for tools wired by a setting rather than a hook (rtk).
-  const [ws, setWs] = useState<WorkspaceSettings | null>(null)
 
   // Upstream release check, keyed by tool name. Empty until the user asks for
   // it — the check hits GitHub, so it never runs on open.
@@ -172,31 +167,6 @@ export function ExternalToolsPanel({ onError }: Props) {
     }
   }
 
-  const loadWs = () =>
-    api
-      .getWorkspaceSettings()
-      .then(setWs)
-      .catch((e) => onError((e as Error).message))
-
-  // Toggle the setting that wires a `wire: 'setting'` tool. Tri-state on disk
-  // ('' = auto), but from here it is a plain on/off: '' would mean "follow hook
-  // detection", and the whole point of this row is that rtk no longer HAS a hook.
-  const toggleSettingTool = async (toolName: string) => {
-    if (toolName !== 'rtk' || !ws) return
-    setToolBusy(toolName)
-    try {
-      setWs(
-        await api.updateWorkspaceSettings({
-          shellCommandRewrite: ws.shellCommandRewrite === 'on' ? 'off' : 'on',
-        }),
-      )
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setToolBusy(null)
-    }
-  }
-
   const loadReport = () =>
     systemApi
       .tokenToolReport()
@@ -250,7 +220,6 @@ export function ExternalToolsPanel({ onError }: Props) {
     loadServers()
     checkTools()
     loadReport()
-    loadWs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -305,12 +274,14 @@ export function ExternalToolsPanel({ onError }: Props) {
   // Wired token-optimizer hooks whose matcher omits PowerShell — on Windows the
   // agent uses the PowerShell tool, so a Bash-only matcher means the hook silently
   // never fires. Surfaced with a one-click repair in the token callout. Off
-  // Windows there is no PowerShell tool, so nothing needs fixing.
+  // Windows there is no PowerShell tool, so nothing needs fixing. Only templates
+  // that target PowerShell themselves are checked: rtk's hook handles Bash alone.
   const tokenHooksNeedingFix = (): Hook[] =>
     !needsPowerShellMatcher
       ? []
-      : Object.keys(TOOL_HOOK_TEMPLATES)
-          .map((name) => wiredHook(name))
+      : Object.entries(TOOL_HOOK_TEMPLATES)
+          .filter(([, tpl]) => coversPowerShell(tpl.matcher))
+          .map(([name]) => wiredHook(name))
           .filter((h): h is Hook => !!h && !coversPowerShell(h.matcher))
 
   // Repair one hook's matcher: merge PowerShell into the existing matcher (or set
@@ -523,26 +494,6 @@ export function ExternalToolsPanel({ onError }: Props) {
                                   : wiredHook(t.name)
                                     ? translate('shared.inactive')
                                     : translate('externalTools.connect')}
-                            </button>
-                          )}
-                          {t.found && t.wire === 'setting' && (
-                            <button
-                              data-testid="tool-setting-toggle"
-                              data-tool={t.name}
-                              disabled={toolBusy === t.name || !ws}
-                              onClick={() => toggleSettingTool(t.name)}
-                              className={`rounded px-2 py-0.5 text-xs disabled:opacity-50 ${
-                                ws?.shellCommandRewrite === 'on'
-                                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                                  : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
-                              }`}
-                              title={translate('externalTools.settingWireHint')}
-                            >
-                              {toolBusy === t.name
-                                ? '…'
-                                : ws?.shellCommandRewrite === 'on'
-                                  ? translate('shared.active')
-                                  : translate('externalTools.connect')}
                             </button>
                           )}
                           {t.found && t.wire === 'mcp' && (

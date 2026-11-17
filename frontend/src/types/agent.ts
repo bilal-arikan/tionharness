@@ -29,10 +29,6 @@ export interface Agent {
   // explicit false switches the natives off and leaves the bridged TionHarness
   // web tools as the single path.
   nativeWebSearch?: boolean
-  // claude-cli only: keep Claude Code's OWN Bash family next to the bridged
-  // shell. OPT-IN — undefined/false means the bridged shell alone; the native
-  // calls still show in the activity trace.
-  nativeShell?: boolean
   // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.
   permissionMode?: string
   // Visual identity for the roster avatar. Both optional — when empty the UI
@@ -82,7 +78,6 @@ export type AgentOverrideKey =
   | 'model'
   | 'thinkingLevel'
   | 'nativeWebSearch'
-  | 'nativeShell'
   | 'permissionMode'
   | 'avatar'
   | 'color'
@@ -104,7 +99,6 @@ export interface AgentPatch {
   model?: string
   thinkingLevel?: string
   nativeWebSearch?: boolean
-  nativeShell?: boolean
   permissionMode?: string
   avatar?: string
   color?: string

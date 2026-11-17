@@ -207,38 +207,6 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       )}
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        {t('workspace.sqzTitle')}
-      </div>
-      <Field label={t('workspace.sqzLabel')} hint={t('workspace.sqzHint')}>
-        <select
-          value={ws.shellOutputCompression || ''}
-          onChange={(e) =>
-            setWsField('shellOutputCompression', e.target.value as '' | 'on' | 'off')
-          }
-          className={inputCls}
-        >
-          <option value="">{t('workspace.sqzAuto')}</option>
-          <option value="on">{t('workspace.forceOn')}</option>
-          <option value="off">{t('workspace.off')}</option>
-        </select>
-      </Field>
-
-      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        {t('workspace.rtkTitle')}
-      </div>
-      <Field label={t('workspace.rtkLabel')} hint={t('workspace.rtkHint')}>
-        <select
-          value={ws.shellCommandRewrite || ''}
-          onChange={(e) => setWsField('shellCommandRewrite', e.target.value as '' | 'on' | 'off')}
-          className={inputCls}
-        >
-          <option value="">{t('workspace.rtkAuto')}</option>
-          <option value="on">{t('workspace.forceOn')}</option>
-          <option value="off">{t('workspace.off')}</option>
-        </select>
-      </Field>
-
-      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         {t('common.delete')}
       </div>
 

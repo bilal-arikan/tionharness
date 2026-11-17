@@ -20,16 +20,6 @@
     "filePresent": "File present",
     "fileMissing": "File missing, empty, or unavailable"
   },
-  "optimizer": {
-    "degradedTitle": "{{kind}}: the command FAILED and the text above is a {{kind}} summary, not raw output. Test/build errors are preserved, but setup errors (a broken go.mod or missing toolchain) may collapse into a meaningless summary. Run the same command again with no_compress to see the real cause.",
-    "command": "Executed: {{command}}",
-    "deduplicatedTitle": "{{kind}}: this output is identical to output already seen in this session, so it was replaced with a \"§ref:…§\" marker. The command completed successfully and the output was not lost.",
-    "measuredTitle": "{{kind}}: {{input}} → {{output}} tokens ({{percent}}% saved) — shortened output entered the context; it was not truncated",
-    "optimizedTitle": "{{kind}}: the command ran through a token optimizer",
-    "degradedBadge": "summary — not raw",
-    "deduplicatedBadge": "duplicate",
-    "savingBadge": "−{{percent}}%"
-  },
   "pending": {
     "headerFailed": "Waiting — one message could not start",
     "header": "Waiting — you can remove messages before they are processed",

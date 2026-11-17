@@ -23,7 +23,7 @@ const NOW = Date.UTC(2026, 8, 23, 12, 0, 0)
 
 const running: ProcessEntry = {
   id: 'p1',
-  kind: 'shell',
+  kind: 'code',
   command: 'go test ./...',
   pid: 4242,
   status: 'running',

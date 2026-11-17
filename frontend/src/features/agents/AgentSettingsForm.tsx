@@ -94,7 +94,6 @@ const FORM_OVERRIDE_KEYS: AgentOverrideKey[] = [
   'model',
   'thinkingLevel',
   'nativeWebSearch',
-  'nativeShell',
   'permissionMode',
   'avatar',
   'color',
@@ -169,8 +168,6 @@ export function AgentSettingsForm({
   // undefined = the agent never stored the flag, which means ENABLED (see
   // Agent.nativeWebSearch) — the checkbox must start checked, not cleared.
   const [nativeWebSearch, setNativeWebSearch] = useState(agent.nativeWebSearch ?? true)
-  // Opt-IN (see Agent.nativeShell): undefined means the bridged shell alone.
-  const [nativeShell, setNativeShell] = useState(agent.nativeShell ?? false)
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   // Which inheritable fields this agent PINS. Seeded from the server; editing a
@@ -237,9 +234,6 @@ export function AgentSettingsForm({
       case 'nativeWebSearch':
         setNativeWebSearch(parent.nativeWebSearch ?? true)
         break
-      case 'nativeShell':
-        setNativeShell(parent.nativeShell ?? false)
-        break
       case 'permissionMode':
         setPermissionMode(parent.permissionMode || 'auto')
         break
@@ -278,7 +272,6 @@ export function AgentSettingsForm({
       model !== (agent.model ?? '') ||
       thinkingLevel !== (agent.thinkingLevel || 'off') ||
       nativeWebSearch !== (agent.nativeWebSearch ?? true) ||
-      nativeShell !== (agent.nativeShell ?? false) ||
       permissionMode !== (agent.permissionMode || 'auto') ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills ?? []) ||
       overridesDirty,
@@ -292,7 +285,6 @@ export function AgentSettingsForm({
       model,
       thinkingLevel,
       nativeWebSearch,
-      nativeShell,
       permissionMode,
       skills,
       overridesDirty,
@@ -322,7 +314,6 @@ export function AgentSettingsForm({
     model: model.trim(),
     thinkingLevel,
     nativeWebSearch,
-    nativeShell,
     permissionMode,
     skills,
   })
@@ -342,7 +333,6 @@ export function AgentSettingsForm({
     pin('model', 'model')
     pin('thinkingLevel', 'thinkingLevel')
     pin('nativeWebSearch', 'nativeWebSearch')
-    pin('nativeShell', 'nativeShell')
     pin('permissionMode', 'permissionMode')
     pin('avatar', 'avatar')
     pin('color', 'color')
@@ -808,23 +798,6 @@ export function AgentSettingsForm({
               options={BOOLEAN_OPTIONS}
               ariaLabel={t('settings.fields.nativeWebSearch')}
               testid="agent-native-web-search"
-            />
-          </OptionField>
-
-          <OptionField
-            label={t('settings.fields.nativeShell')}
-            info={t('settings.nativeShellHelp')}
-            trailing={badge('nativeShell')}
-          >
-            <OptionPills
-              value={nativeShell ? 'on' : 'off'}
-              onChange={(value) => {
-                setNativeShell(booleanFromOption(value))
-                mark('nativeShell')
-              }}
-              options={BOOLEAN_OPTIONS}
-              ariaLabel={t('settings.fields.nativeShell')}
-              testid="agent-native-shell"
             />
           </OptionField>
 

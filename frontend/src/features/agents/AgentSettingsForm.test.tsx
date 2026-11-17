@@ -63,18 +63,6 @@ describe('AgentSettingsForm boolean option pills', () => {
     )
   })
 
-  it('defaults an unstored native shell setting to Kapalı (opt-in)', () => {
-    const { container } = renderForm({ ...baseAgent, nativeShell: undefined })
-
-    expect(option(container, 'agent-native-shell', 'off').getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('renders an explicit true native shell setting as Açık', () => {
-    const { container } = renderForm({ ...baseAgent, nativeShell: true })
-
-    expect(option(container, 'agent-native-shell', 'on').getAttribute('aria-checked')).toBe('true')
-  })
-
   it('saves booleans when Kapalı is selected', async () => {
     const { container, onSave } = renderForm({ ...baseAgent, nativeWebSearch: true })
 

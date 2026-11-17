@@ -3,8 +3,6 @@
 
 // ProcessKind names the call site that started the process.
 export type ProcessKind =
-  | 'shell' // foreground Bash/PowerShell tool call
-  | 'shell_background' // detached background shell (run_in_background)
   | 'code' // run_code / transform_data interpreter run
   | 'provider' // agentic CLI subprocess (claude-cli, codex-cli) + its probes
   | 'mcp' // stdio MCP server for the workspace tool pool

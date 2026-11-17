@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toolMeta } from './tools'
+import { isShellTool, toolMeta } from './tools'
 
 describe('toolMeta', () => {
   it('strips a shell host from string input', () => {
@@ -53,5 +53,12 @@ describe('toolMeta', () => {
 
   it('stays blank when the input carries only paging fields', () => {
     expect(toolMeta('list_tasks', { limit: 20, offset: 0 }).summary).toBe('')
+  })
+})
+
+describe('isShellTool', () => {
+  it('covers every CLI shell: claude Bash/PowerShell, opencode bash, codex shell', () => {
+    for (const name of ['Bash', 'PowerShell', 'bash', 'shell']) expect(isShellTool(name)).toBe(true)
+    for (const name of ['Read', 'Edit', 'shell_manage']) expect(isShellTool(name)).toBe(false)
   })
 })

@@ -5,7 +5,7 @@ import { categoryPatch, dirtyCategories, rebaseSettingsDraft } from './settingsF
 const original = {
   userName: 'Ada',
   keepAwake: false,
-  enableShell: false,
+  enableCodeMode: false,
   desktopNotifications: false,
   toolGuardWarnings: true,
   enableCliHooks: false,
@@ -43,7 +43,7 @@ describe('settings draft ownership', () => {
   })
 
   it('updates immediate notifications without committing or losing a form draft', () => {
-    const current = { ...original, enableShell: true }
+    const current = { ...original, enableCodeMode: true }
     const updated = { ...original, desktopNotifications: true }
     const next = rebaseSettingsDraft(current, original, { desktopNotifications: true }, updated)
     expect(next.desktopNotifications).toBe(true)

@@ -39,8 +39,6 @@ const STATUS_TONE: Record<ProcessStatus, BadgeTone> = {
 }
 
 const KIND_LABEL_KEY: Record<ProcessKind, string> = {
-  shell: 'process.kind.shell',
-  shell_background: 'process.kind.shellBackground',
   code: 'process.kind.code',
   provider: 'process.kind.provider',
   mcp: 'process.kind.mcp',
@@ -49,15 +47,7 @@ const KIND_LABEL_KEY: Record<ProcessKind, string> = {
 }
 
 const STATUS_OPTIONS: ProcessStatus[] = ['running', 'succeeded', 'failed', 'killed', 'timed_out']
-const KIND_OPTIONS: ProcessKind[] = [
-  'shell',
-  'shell_background',
-  'code',
-  'provider',
-  'mcp',
-  'hook',
-  'external',
-]
+const KIND_OPTIONS: ProcessKind[] = ['code', 'provider', 'mcp', 'hook', 'external']
 
 // The "no session is linkable" verdict, shared so render-time fallbacks keep a
 // stable identity.

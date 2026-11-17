@@ -61,9 +61,9 @@ vi.mock('./appPanels', async () => {
       set: (key: string, value: boolean) => void
     }) => (
       <Toggle
-        label="Shell"
-        checked={draft.enableShell}
-        onChange={(value) => set('enableShell', value)}
+        label="Code mode"
+        checked={draft.enableCodeMode}
+        onChange={(value) => set('enableCodeMode', value)}
       />
     ),
     NotificationsPanel,
@@ -95,7 +95,7 @@ beforeEach(() => {
   localStorage.clear()
   saved = {
     userName: 'Ada',
-    enableShell: false,
+    enableCodeMode: false,
     desktopNotifications: false,
     keepAwake: false,
     autoTitleEnabled: false,
@@ -147,7 +147,7 @@ describe('settings navigation and persistence', () => {
   it('marks and saves only the current category while retaining other drafts', async () => {
     await render()
     await click('Tool permissions')
-    await toggle('Shell')
+    await toggle('Code mode')
     expect(markedCategories()).toEqual(['Tool permissions'])
     await click('General')
     await toggle('Keep screen awake')
@@ -155,11 +155,11 @@ describe('settings navigation and persistence', () => {
     expect(api.updateSettings).toHaveBeenCalledWith({ keepAwake: true })
     expect(markedCategories()).toEqual(['Tool permissions'])
     await click('Tool permissions')
-    expect(container.querySelector('[aria-label="Shell"]')?.getAttribute('aria-checked')).toBe(
+    expect(container.querySelector('[aria-label="Code mode"]')?.getAttribute('aria-checked')).toBe(
       'true',
     )
     await click('Save')
-    expect(api.updateSettings).toHaveBeenLastCalledWith({ enableShell: true })
+    expect(api.updateSettings).toHaveBeenLastCalledWith({ enableCodeMode: true })
     expect(markedCategories()).toEqual([])
   })
 
@@ -193,7 +193,7 @@ describe('settings navigation and persistence', () => {
   it('saves notifications immediately without losing another category draft', async () => {
     await render()
     await click('Tool permissions')
-    await toggle('Shell')
+    await toggle('Code mode')
     await click('Sound & notifications')
     expect(
       [...container.querySelectorAll('button')].some((button) => button.textContent === 'Save'),

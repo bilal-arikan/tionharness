@@ -38,7 +38,7 @@ export const CATEGORY_FIELDS: Partial<Record<Cat, (keyof AppSettings)[]>> = {
     'maxOutputTokens',
     'maxProviderRetries',
   ],
-  tools: ['enableShell', 'enableCodeMode'],
+  tools: ['enableCodeMode'],
   execution: [
     'delegationMaxDepth',
     'delegationMaxCalls',
@@ -49,8 +49,6 @@ export const CATEGORY_FIELDS: Partial<Record<Cat, (keyof AppSettings)[]>> = {
     'turnIdleTimeoutMin',
     'codexStdoutIdleSec',
     'idleResumeMax',
-    'shellDefaultTimeoutSec',
-    'shellMaxTimeoutSec',
     'maxToolOutputKB',
     'autonomousConfine',
     'autonomousBootSeq',

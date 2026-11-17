@@ -267,10 +267,6 @@
     }
   },
   "toolLimits": {
-    "defaultTimeout": "Varsayılan shell zaman aşımı (saniye)",
-    "defaultTimeoutHint": "Shell komutu süre belirtmediğinde kullanılan zaman aşımı.",
-    "maxTimeout": "En yüksek shell zaman aşımı (saniye)",
-    "maxTimeoutHint": "Komuta özel shell zaman aşımının üst sınırı.",
     "outputLimit": "Araç çıktı sınırı (KB)",
     "outputLimitHint": "MCP çıktısı dahil olmak üzere bu boyutu aşan araç çıktısını kısalt."
   },
@@ -443,16 +439,6 @@
     "awarenessNoteCountHint": "Brifin satır içi sunduğu hafıza notu sayısı.",
     "awarenessStaleCardDays": "Bayat kart eşiği (gün)",
     "awarenessStaleCardDaysHint": "Bundan eski bir devam eden pano kartı açık uç sayılır.",
-    "sqzTitle": "Shell çıktısı sıkıştırma (sqz)",
-    "sqzLabel": "Büyük shell çıktısını sqz ile sıkıştır",
-    "sqzHint": "Bash ya da PowerShell komut çıktısını modele gitmeden önce süreç içinde sıkıştırır. Canlı arayüz ham çıktıyı korur. Otomatik konumu sqz hook'unu izler; Açık için sqz binary gerekir; Kapalı devre dışı bırakır.",
-    "sqzAuto": "Otomatik (sqz hook bağlıysa)",
-    "rtkTitle": "Shell komutu yeniden yazma (rtk)",
-    "rtkLabel": "Test ve build komutlarını rtk ile çalıştır",
-    "rtkHint": "Ölçülmüş test, build, lint ve seçili Git komutlarını çalıştırmadan önce daha az çıktı üretecek biçimde yeniden yazar. Ajan, hataları dosya ve satır konumlarıyla koruyan bir özet alır. Otomatik konumu rtk hook'unu izler; Açık için rtk binary gerekir; Kapalı devre dışı bırakır.",
-    "rtkAuto": "Otomatik (rtk hook bağlıysa)",
-    "forceOn": "Açık (zorla)",
-    "off": "Kapalı",
     "deleteHint": "Bu workspace'i ve tüm verisini kalıcı olarak sil.",
     "delete": "Workspace'i sil"
   },

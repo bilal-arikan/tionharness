@@ -7,22 +7,6 @@ export function ToolExecutionLimits({ draft, set }: PanelProps) {
   return (
     <>
       <NumberField
-        label={t('toolLimits.defaultTimeout')}
-        hint={t('toolLimits.defaultTimeoutHint')}
-        min={1}
-        max={3600}
-        value={draft.shellDefaultTimeoutSec}
-        onChange={(v) => set('shellDefaultTimeoutSec', v)}
-      />
-      <NumberField
-        label={t('toolLimits.maxTimeout')}
-        hint={t('toolLimits.maxTimeoutHint')}
-        min={1}
-        max={3600}
-        value={draft.shellMaxTimeoutSec}
-        onChange={(v) => set('shellMaxTimeoutSec', v)}
-      />
-      <NumberField
         label={t('toolLimits.outputLimit')}
         hint={t('toolLimits.outputLimitHint')}
         min={1}

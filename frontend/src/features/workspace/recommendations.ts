@@ -59,12 +59,10 @@ const SQZ_HOOK: HookInput = {
   timeoutSec: 30,
   enabled: true,
 }
-// There is deliberately no RTK_HOOK. The template that used to live here was a
-// PowerShell one-liner; claude-cli runs hooks through BASH, so it failed with
-// `syntax error near unexpected token '|'`, and a failing PreToolUse hook BLOCKS
-// the tool call — clicking this card bricked Bash for the whole workspace
-// (2026-07-31, WS10/SES63). rtk is now wired by the shellCommandRewrite SETTING,
-// which additionally limits rewriting to the commands measured to benefit.
+// rtk is not offered from here: it has its own one-click hook toggle in Settings ▸
+// External Tools. (An older rtk template here was a PowerShell one-liner that
+// claude-cli ran through bash, failed on the first `|`, and — being a PreToolUse
+// hook — blocked every Bash call in the workspace; 2026-07-31, WS10/SES63.)
 
 type RecVariant = 'accent' | 'warning'
 
@@ -239,9 +237,8 @@ export const RULES: Rule[] = [
   {
     meta: ruleMeta('token', Zap),
     detect: (ctx) => {
-      // Only sqz is offered here now. rtk is wired by a workspace SETTING, not a
-      // hook (see the note on RTK_HOOK's removal above), and it has its own toggle
-      // in Settings ▸ External Tools.
+      // Only sqz is offered here; rtk is wired from Settings ▸ External Tools
+      // (see the note under SQZ_HOOK above).
       const sqz = ctx.tools.find((t) => t.name === 'sqz' && t.found)
       if (!sqz || tokenHookLive(ctx.hooks, 'sqz')) return null
       return {
@@ -249,25 +246,6 @@ export const RULES: Rule[] = [
         actionLabel: recText('recommendations.rules.token.action'),
         act: async () => {
           await api.createHook(SQZ_HOOK)
-        },
-      }
-    },
-  },
-  {
-    meta: ruleMeta('shell-compress', Zap),
-    detect: (ctx) => {
-      const sqz = ctx.tools.find((t) => t.name === 'sqz' && t.found)
-      if (!sqz) return null
-      // 'on' zaten zorluyor; 'off' kullanıcının açık tercihi — ikisine de dokunma.
-      if (ctx.ws.shellOutputCompression === 'on' || ctx.ws.shellOutputCompression === 'off')
-        return null
-      // Otomatik mod yalnız bir sqz hook bağlıyken aktiftir; bağlıysa sıkıştırma zaten çalışıyor.
-      if (tokenHookLive(ctx.hooks, 'sqz')) return null
-      return {
-        desc: recText('recommendations.rules.shell-compress.desc'),
-        actionLabel: recText('recommendations.rules.shell-compress.action'),
-        act: async () => {
-          await api.updateWorkspaceSettings({ shellOutputCompression: 'on' })
         },
       }
     },

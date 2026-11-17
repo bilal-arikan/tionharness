@@ -34,10 +34,11 @@ export function isReadTool(name: string): boolean {
   return base === 'read' || base === 'read_file'
 }
 
-/** True for shell tools whose stdout/stderr is fed back into the context. */
+/** True for shell tools whose stdout/stderr is fed back into the context:
+ *  claude-cli `Bash` / `PowerShell`, opencode `bash` and codex `shell`. */
 export function isShellTool(name: string): boolean {
   const base = toolBase(name)
-  return base === 'bash' || base === 'powershell'
+  return base === 'bash' || base === 'powershell' || base === 'shell'
 }
 
 /** A readable label: "Memory Recall", "server · tool" for MCP. */

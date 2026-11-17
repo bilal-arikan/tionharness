@@ -267,10 +267,6 @@
     }
   },
   "toolLimits": {
-    "defaultTimeout": "Default shell timeout (seconds)",
-    "defaultTimeoutHint": "Timeout used when a shell command does not specify one.",
-    "maxTimeout": "Maximum shell timeout (seconds)",
-    "maxTimeoutHint": "Upper limit for a command-specific shell timeout.",
     "outputLimit": "Tool output limit (KB)",
     "outputLimitHint": "Truncate tool output beyond this size, including MCP output."
   },
@@ -443,16 +439,6 @@
     "awarenessNoteCountHint": "How many memory notes the brief serves inline.",
     "awarenessStaleCardDays": "Stale card threshold (days)",
     "awarenessStaleCardDaysHint": "An in-progress board card older than this counts as an open loop.",
-    "sqzTitle": "Shell output compression (sqz)",
-    "sqzLabel": "Compress large shell output with sqz",
-    "sqzHint": "Compresses Bash or PowerShell command output in process before it reaches the model. The live UI keeps the raw output. Automatic follows the sqz hook; On requires the sqz binary; Off disables it.",
-    "sqzAuto": "Automatic (when the sqz hook is connected)",
-    "rtkTitle": "Shell command rewriting (rtk)",
-    "rtkLabel": "Run test and build commands through rtk",
-    "rtkHint": "Rewrites measured test, build, lint, and selected Git commands before execution to produce less output. The agent receives a summary that preserves failures with file and line locations. Automatic follows the rtk hook; On requires the rtk binary; Off disables it.",
-    "rtkAuto": "Automatic (when the rtk hook is connected)",
-    "forceOn": "On (force)",
-    "off": "Off",
     "deleteHint": "Permanently delete this workspace and all of its data.",
     "delete": "Delete workspace"
   },

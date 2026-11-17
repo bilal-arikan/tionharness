@@ -115,7 +115,6 @@
       "thinking": "Thinking level",
       "permission": "Permission mode (tool use)",
       "nativeWebSearch": "Provider-native web search",
-      "nativeShell": "Provider-native shell",
       "soul": "Character / system prompt (soul)",
       "identity": "Identity",
       "skills": "Skills:"
@@ -131,9 +130,8 @@
     "thinkingHelp": "Extended reasoning applies to tool-free chat with the anthropic provider. Under claude-cli, the selected level is passed to the subprocess and mapped to CLI effortLevel. High+ and Max deep-work tiers reach the CLI. Max is applied with CLAUDE_CODE_EFFORT_LEVEL=max because settings.json rejects it. Thinking disables parallel tool batches (think XOR batch). Off disables thinking entirely with MAX_THINKING_TOKENS=0.",
     "thinkingOffHelp": "Off + claude-cli: Claude Code 2.1.203 and newer do not make parallel tool calls while thinking is enabled. This setting restores parallel batches, making runs faster and cheaper at the cost of deep reasoning.",
     "permissionHelp": "Read-only permits only reading tools. Ask shows an approval dialog for write and command tools; autonomous runs reject these actions when nobody can approve. For claude-cli, these modes map to plan, acceptEdits, and bypass.",
-    "bridgeApprovalNote": "Bridge approval: {{provider}} cannot show an approval dialog in headless mode, so its own edit and shell tools are auto-rejected under Ask. Only the TionHarness bridge tools (shell, files via the Interaction server) go through real approval.",
+    "bridgeApprovalNote": "Bridge approval: {{provider}} cannot show an approval dialog in headless mode, so its own edit and shell tools are auto-rejected under Ask. Only the TionHarness bridge tools (files via the Interaction server) go through real approval.",
     "nativeWebSearchHelp": "Allow the CLI provider to use its own web search. This is enabled by default and provider searches still appear in the activity trace. Turning it off disables Codex web_search and Claude CLI WebSearch/WebFetch; searches then use the bridged TionHarness tools so tracking and usage counts apply.",
-    "nativeShellHelp": "Off by default: Claude Code and Codex use the TionHarness shell when the shell bridge is enabled. Turn this on to also allow the provider's own shell. Native commands use the provider's permissions and run outside TionHarness shell approval and background process management.",
     "toolsTitle": "Tool overrides",
     "toolsHelp": "This agent can access every workspace-active tool by default. Change visibility or block only the tools you want to treat differently here. Only active workspace tools are listed. Changes are saved immediately{{inheritance}}.",
     "toolsInheritance": " and override this section",

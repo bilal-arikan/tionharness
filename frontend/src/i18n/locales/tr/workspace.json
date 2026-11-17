@@ -136,8 +136,6 @@
       "timedOut": "Zaman aşımı"
     },
     "kind": {
-      "shell": "Kabuk",
-      "shellBackground": "Arka plan kabuk",
       "code": "Kod",
       "provider": "Sağlayıcı",
       "mcp": "MCP",
@@ -338,12 +336,6 @@
         "summary": "sqz kuruluyken çıktı sıkıştırma hook’u bağlı değilse.",
         "desc": "sqz bu cihazda kurulu ama bağlı değil. Hook olarak bağlarsan araç çıktıları kayıpsız sıkışır ve token tasarrufu sağlar.",
         "action": "sqz’i bağla"
-      },
-      "shell-compress": {
-        "title": "Shell çıktısı sıkıştırmayı aç",
-        "summary": "sqz kuruluyken süreç içi shell çıktısı sıkıştırma pasifse; hook yoktur ve otomatik mod devre dışıdır.",
-        "desc": "sqz kurulu ama bu workspace’te shell çıktısı sıkıştırma pasif. Açarsan ajanın shell çıktısı modele dönmeden süreç içi sqz ile kayıpsız kısaltılır. Hook gerekmez; köprülenmiş araçlarda hook yolu zaten çalışmaz.",
-        "action": "Aç"
       },
       "terse-mode": {
         "title": "Terse Mode’u aç",

@@ -20,16 +20,6 @@
     "filePresent": "Dosya mevcut",
     "fileMissing": "Dosya eksik, boş veya erişilemiyor"
   },
-  "optimizer": {
-    "degradedTitle": "{{kind}}: komut BAŞARISIZ oldu ve yukarıdaki metin ham çıktı değil, {{kind}} özeti. Test/derleme hataları korunur ama kurulum hataları (bozuk go.mod, eksik toolchain) anlamsız bir özete inebilir. Gerçek nedeni görmek için aynı komutu no_compress ile tekrar çalıştır.",
-    "command": "Çalıştırılan: {{command}}",
-    "deduplicatedTitle": "{{kind}}: bu çıktı oturumda daha önce görülenle birebir aynı — tekrar edilmek yerine \"§ref:…§\" işaretçisiyle değiştirildi. Komut düzgün çalıştı, çıktı kaybolmadı.",
-    "measuredTitle": "{{kind}}: {{input}} → {{output}} token (%{{percent}} tasarruf) — çıktı kısaltılmış olarak bağlama girdi, kırpılmadı",
-    "optimizedTitle": "{{kind}}: komut token-optimize edici üzerinden çalıştı",
-    "degradedBadge": "özet — ham değil",
-    "deduplicatedBadge": "yinelenen",
-    "savingBadge": "−%{{percent}}"
-  },
   "pending": {
     "headerFailed": "Bekleyenler — başlatılamayan mesaj var",
     "header": "Bekleyenler — işleme alınmadan silebilirsin",

@@ -11,7 +11,6 @@ import { DiffView } from '@/shared/components/markdown/DiffView'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { PathText } from './PathText'
 import { CommandProgramTag } from './CommandProgramTag'
-import { OptimizerChip } from './OptimizerChip'
 import { agentActionTone, type AgentActionTone } from './agentActionTone'
 import { useTranslation } from 'react-i18next'
 
@@ -47,7 +46,7 @@ interface Props {
 }
 
 // programHint returns a string to resolve the program (brand icon + name) from, so
-// it can sit next to the tool icon: the command for a Bash/PowerShell step, or the
+// it can sit next to the tool icon: the command for a shell step, or the
 // interpreter language for a transform_data/run_code step (e.g. "python3" → Python).
 // Else null.
 function programHint(step: TurnStep): string | null {
@@ -55,7 +54,7 @@ function programHint(step: TurnStep): string | null {
   const input = step.input
   const objectInput =
     input && typeof input === 'object' ? (input as { command?: unknown; language?: unknown }) : null
-  if (base === 'bash' || base === 'powershell') {
+  if (isShellTool(step.tool || '')) {
     const command = typeof input === 'string' ? input : objectInput?.command
     return typeof command === 'string' ? stripShellHost(command) : null
   }
@@ -169,15 +168,8 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
         {step.isError && (
           <span className="shrink-0 text-[var(--color-danger)]">{t('activity.error')}</span>
         )}
-        {/* The chip is the first of the right-aligned group, so it carries the
-            ml-auto that pushes the group to the edge; the badge then just spaces. */}
-        {step.optimizer && (
-          <span className="ml-auto">
-            <OptimizerChip optimizer={step.optimizer} />
-          </span>
-        )}
-        {badge && <span className={step.optimizer ? 'ml-1' : 'ml-auto'}>{badge}</span>}
-        <span className={`${badge || step.optimizer ? 'ml-1' : 'ml-auto'} shrink-0 opacity-50`}>
+        {badge && <span className="ml-auto">{badge}</span>}
+        <span className={`${badge ? 'ml-1' : 'ml-auto'} shrink-0 opacity-50`}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
       </button>

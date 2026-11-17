@@ -76,10 +76,9 @@ export interface AppSettings {
   autoTitleEnabled: boolean
 
   // Gated tool capabilities (off by default).
-  enableShell: boolean
   enableCliHooks: boolean
-  // Code execution with MCP (run_code + generated python bindings); also
-  // requires enableShell to take effect. Native path only. _Docs/44.
+  // Code execution with MCP (run_code + generated python bindings). Native path
+  // only. _Docs/44.
   enableCodeMode: boolean
   claudeResume: boolean
   claudePersistentSession: boolean
@@ -109,8 +108,6 @@ export interface AppSettings {
   idleResumeMax: number
 
   // Tool execution guards (process-global tool behaviour).
-  shellDefaultTimeoutSec: number
-  shellMaxTimeoutSec: number
   maxToolOutputKB: number
 
   // Working-directory guards for the (unconfined) fs/shell tools.
@@ -257,7 +254,6 @@ export interface UpdateStatus {
 // version by invoking only the tool's version flag (side-effect free, 3s cap).
 // `category` groups tools in the panel; `wire` tells how it is used once present:
 //   'hook'    → one-click PreToolUse/PostToolUse toggle
-//   'setting' → wired by a workspace setting rather than a hook (rtk)
 //   'mcp'     → wired via Settings ▸ MCP (info badge)
 //   'cli'     → agent calls it directly via Bash (info badge)
 //   'provider'→ runs an LLM provider, configured in Settings ▸ Providers (info badge)
@@ -266,7 +262,7 @@ export interface ExternalToolStatus {
   desc: string
   url: string
   category: string
-  wire: 'hook' | 'setting' | 'mcp' | 'cli' | 'provider'
+  wire: 'hook' | 'mcp' | 'cli' | 'provider'
   found: boolean
   path?: string
   /** Installed version, normalised to `major.minor.patch`. */

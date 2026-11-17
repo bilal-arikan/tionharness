@@ -72,15 +72,9 @@
     "empty": "Ajan atamak için bir workspace oluştur."
   },
   "tools": {
-    "shell": {
-      "label": "Shell erişimi",
-      "hint": "Ajanların uygulama shell'i üzerinden komut çalıştırmasına izin ver. Kaydettikten sonra tüm workspace'lere uygulanır."
-    },
     "codeMode": {
       "label": "Yerel kod modu",
-      "hint": "Native ajan döngüsünün üretilmiş Python bağları üzerinden MCP araçlarını çağırmasına izin ver. Shell erişimi gerekir; araç izinleri uygulanmaya devam eder.",
-      "warningTitle": "Kod modu shell erişimi gerektirir.",
-      "warningBody": "Bu yeteneği kullanmak için yukarıdaki Shell erişimini etkinleştir."
+      "hint": "Native ajan döngüsünün üretilmiş Python bağları üzerinden MCP araçlarını çağırmasına izin ver. Araç izinleri uygulanmaya devam eder."
     }
   },
   "appearance": {
@@ -559,7 +553,6 @@
     "toggleHookHint": "TionHarness hook bağlantısını aç veya kapat",
     "createHookHint": "Bu araç için TionHarness hook'u oluştur ve etkinleştir",
     "connect": "Bağla",
-    "settingWireHint": "Bu araç workspace ayarıyla bağlanır. Yalnız ölçülmüş kazanç veren test ve build komutları yeniden yazılır.",
     "mcpHint": "MCP tabanlı — Ayarlar ▸ MCP'den eklenir",
     "providerHint": "LLM sağlayıcısı çalıştırır — Ayarlar ▸ Sağlayıcılar'dan yapılandırılır",
     "provider": "Sağlayıcı",
@@ -587,7 +580,7 @@
     },
     "token": {
       "title": "Token optimizasyonu entegrasyonu:",
-      "description": "rtk veya sqz bağlandığında TionHarness ajana çıktının otomatik kısaltıldığını bildirir. Hook matcher'ları Bash ve PowerShell'i kapsamalıdır.",
+      "description": "rtk veya sqz bağlandığında TionHarness ajana çıktının otomatik kısaltıldığını bildirir. sqz hook'unun matcher'ı Bash ve PowerShell'i kapsamalıdır.",
       "descriptionPosix": "rtk veya sqz bağlandığında TionHarness ajana çıktının otomatik kısaltıldığını bildirir. Hook matcher'ları Bash'i (macOS/Linux'taki kabuk aracı) kapsamalıdır.",
       "enableBoth": "İkisini birden açmak önerilir",
       "enableBothDetail": "— rtk komutu çalışmadan önce şekillendirir, sqz çıktıyı sonra sıkıştırır; ölçümde birlikte kullanım en iyi sonucu verir.",

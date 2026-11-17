@@ -72,15 +72,9 @@
     "empty": "Create a workspace to assign agents."
   },
   "tools": {
-    "shell": {
-      "label": "Shell access",
-      "hint": "Allow agents to run commands through the application shell. Applies to all workspaces after saving."
-    },
     "codeMode": {
       "label": "Local code mode",
-      "hint": "Let the native agent loop call MCP tools through generated Python bindings. Requires shell access; tool permission checks still apply.",
-      "warningTitle": "Code mode requires shell access.",
-      "warningBody": "Enable Shell access above to make this capability available."
+      "hint": "Let the native agent loop call MCP tools through generated Python bindings. Tool permission checks still apply."
     }
   },
   "appearance": {
@@ -559,7 +553,6 @@
     "toggleHookHint": "Toggle the TionHarness hook connection",
     "createHookHint": "Create and enable a TionHarness hook for this tool",
     "connect": "Connect",
-    "settingWireHint": "This tool is connected through a workspace setting. Only measured test and build commands are rewritten.",
     "mcpHint": "MCP-based — add it under Settings ▸ MCP",
     "providerHint": "Runs an LLM provider — configure it under Settings ▸ Providers",
     "provider": "Provider",
@@ -587,7 +580,7 @@
     },
     "token": {
       "title": "Token optimization integration:",
-      "description": "When rtk or sqz is connected, TionHarness tells the agent that output is shortened automatically. Hook matchers must cover Bash and PowerShell.",
+      "description": "When rtk or sqz is connected, TionHarness tells the agent that output is shortened automatically. The sqz hook matcher must cover Bash and PowerShell.",
       "descriptionPosix": "When rtk or sqz is connected, TionHarness tells the agent that output is shortened automatically. Hook matchers must cover Bash (the shell tool on macOS/Linux).",
       "enableBoth": "Enabling both is recommended",
       "enableBothDetail": "— rtk shapes the command before execution and sqz compresses the output afterwards; measurements show that stacking performs best.",
