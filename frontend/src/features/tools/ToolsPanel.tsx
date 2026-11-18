@@ -354,7 +354,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
           listOpen={listOpen}
           onToggleList={toggleList}
         />
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
           {selected ? (
             <ToolDetail
               tool={selected}

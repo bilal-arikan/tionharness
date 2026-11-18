@@ -9,6 +9,38 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Arayüz sadeleştirmesi: diğer ekranlarda ilk beş bulgu (2026-11-18)
+
+Kalan 17 ekranın telefon (375×812) ve masaüstü (1280×800) incelemesinden çıkan ilk beş
+bulgu uygulandı. Listenin geri kalanı (Panel, Ajanlar, Harita, Akışlar, Artifactlar,
+Bütçe, Promptlar, Notlar ve ekranlar arası büyük harfli etiketler) açık duruyor.
+
+- **Araçlar & MCP:** sunucu satırı `sm` altında üç satıra yığılıyor (ad ve rozetler,
+  komut/URL, eylemler); ad harf harf kırılmıyor. Bölüm başlığı telefonda alt alta. "Yeni
+  MCP sunucusu" formundaki `col-span-2` tek sütunlu ızgarada ikinci sütun açıp yatay
+  kaydırma yaratıyordu, `sm:col-span-2` oldu (`features/tools/ServerRow.tsx`).
+- **Skills:** listede ad kendi satırında tam genişlikte; rozetler açıklamanın altındaki
+  satırda ve tek nötr stilde (`SkillRowBody`, `SkillBadges`). Telefonda detay başlığında ad
+  ilk satırın tamamını alıyor, eylemler ikon olarak alt satırda (`PaneHeader`
+  `stackRightOnNarrow`).
+- **İçgörü:** hiç bulgu yokken altı sıfırlı sayaç ve beş boş sütun yerine tek boş durum
+  gösteriliyor. Filtre hiçbir şeyle eşleşmezse cümle panonun üstünde. Seçim kutuları
+  telefonda tek düğmenin arkasında katlanıyor; arama kutusu hep görünür.
+- **Telefonda filtre çubukları:** `useFilterDisclosure` kayıtlı tercih yoksa dar ekranda
+  kapalı, geniş ekranda açık başlıyor (Rota, Görevler, Notlar, Günlükler, Araçlar). Rota
+  başlığındaki yakınlık/pencere/anahtar grubu telefonda "Görünüm" düğmesinin arkasında,
+  `md` ve üstünde eskisi gibi satır içinde. Rota'da sayısı 0 olan çip nötr.
+- **Otomasyon:** sütun başlığı kendi satırında tam okunuyor, açıklama altında gri satır.
+  Adsız zamanlama "Adsız zamanlama" başlığıyla gösteriliyor, cron kendi satırında. Boş
+  etiket kutusu yerine "+ etiket" eylemi (`CardTags`). Sütun ve kartlardaki renkli şeritler
+  kalktı. Kart düğmeleri ve anahtar `md` altında 36 px (`EnableToggle`).
+
+Doğrulama: `tsc -b`, vitest 1285/1285, `depcheck` ve `git diff --check` temiz;
+tarayıcıda beş ekran telefon ve masaüstü genişliğinde. `go test ./...` içindeki aynı üç
+test (bir alttaki kayıtta adları var) yine başarısız; bu turda da Go dosyası değişmedi. Ölçümler: Rota başlığı telefonda dört satırdan ikiye,
+Görevler araç çubuğu dörtten ikiye indi; Araçlar'da 375 px'te yatay kaydırma yok;
+Otomasyon'da 34 px altı düğme sayısı 38'den 5'e indi (kalanlar ekran başlığında).
+
 ## Arayüz sadeleştirmesi: sohbet ekranı ve kabuk (2026-11-18)
 
 Canlı arayüz incelemesinin sohbet ekranı ve genel kabuk bulguları uygulandı. Yazı boyutu

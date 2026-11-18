@@ -2,9 +2,10 @@ import { RotateCcw, Pencil, LayoutGrid, Archive, MoveRight, Pin, PinOff } from '
 import { useTranslation } from 'react-i18next'
 import type { Agent, Automation, BoardColumnDef } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
-import { TagEditor } from '@/shared/components'
 import { CardAction } from './pickers'
-import { COLUMN_ACCENT, boardOpLabel } from './automationMeta'
+import { boardOpLabel } from './automationMeta'
+import { CardTags } from './CardTags'
+import { EnableToggle } from './EnableToggle'
 import { fmtTime, isPast } from './timeUtils'
 import { AutomationFires } from './AutomationFires'
 
@@ -55,28 +56,16 @@ export function AutomationCard({
     <div
       data-testid="automation-row"
       data-automation-id={a.id}
-      className="rounded-lg border border-l-4 border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-sm"
-      style={{
-        borderLeftColor: isBoardKind ? COLUMN_ACCENT.board : COLUMN_ACCENT.tag,
-      }}
+      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-sm"
     >
       <div className="flex items-start gap-2">
         <div className="flex shrink-0 flex-col items-center gap-1.5">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={a.enabled}
-            aria-label={a.enabled ? t('common.enabled') : t('common.disabled')}
-            onClick={onToggle}
-            className={`h-4 w-8 rounded-full transition ${
-              a.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
-            }`}
-            title={a.enabled ? t('common.enabled') : t('common.disabled')}
-          >
-            <span
-              className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${a.enabled ? 'translate-x-4' : ''}`}
-            />
-          </button>
+          <EnableToggle
+            enabled={a.enabled}
+            onToggle={onToggle}
+            labelOn={t('common.enabled')}
+            labelOff={t('common.disabled')}
+          />
           {isTargetlessRule ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
@@ -240,14 +229,13 @@ export function AutomationCard({
         </div>
       ) : (
         <div className="mt-1">
-          <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+          <span className="block text-[11px] text-[var(--color-text-dim)]">
             {t('automationCard.spawnTags')}
           </span>
-          <TagEditor
+          <CardTags
             tags={a.spawnTags ?? [a.triggerTag]}
             onChange={onSpawnTags}
             placeholder={t('automationCard.spawnTagsPlaceholder')}
-            className="py-1"
           />
         </div>
       )}

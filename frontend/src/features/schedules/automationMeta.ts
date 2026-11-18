@@ -187,7 +187,8 @@ export const STUCK_TEMPLATE = {
     'When you finish successfully, the stuck tag and counter are cleared automatically.',
 }
 
-// Per-column accent colors, shared by the column headers and the card left border.
+// Per-kind accent colors: the quiet tint of a lane's header icon and the accent
+// of that kind's edit popup. Lane frames and cards themselves are neutral.
 export const COLUMN_ACCENT = {
   schedules: '#6b8e23',
   tag: '#8b5cf6',

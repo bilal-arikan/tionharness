@@ -44,6 +44,7 @@ export function RotaChipFilter({ chipSet, counts, onClickChip, onReset, offCount
       {open &&
         SESSION_CHIPS.map((f) => {
           const on = chipSet.has(f.key)
+          const count = counts.get(f.key) ?? 0
           const Icon = f.key === ARCHIVED_CHIP ? Archive : f.key === SUBAGENT_CHIP ? Sparkles : null
           return (
             <button
@@ -58,14 +59,18 @@ export function RotaChipFilter({ chipSet, counts, onClickChip, onReset, offCount
               aria-pressed={on}
               data-chip={f.key}
               className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] transition ${
-                on
+                // The accent marks a chip that is on AND has lanes to show; an
+                // empty kind stays neutral so a row of zeros is not a row of colour.
+                on && count > 0
                   ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-                  : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
+                  : on
+                    ? 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                    : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
               }`}
             >
               {Icon && <Icon size={11} />}
               {f.label}
-              <span className="opacity-60">{counts.get(f.key) ?? 0}</span>
+              <span className="opacity-60">{count}</span>
             </button>
           )
         })}

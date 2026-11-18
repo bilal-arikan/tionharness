@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LayoutGrid, Trash2 } from 'lucide-react'
+import { LayoutGrid, SearchCheck, Trash2, TriangleAlert } from 'lucide-react'
 import { api } from '@/api'
 import type { AppliedEntity, InsightFinding, InsightLens } from '@/types'
-import { SelectionBar, SelectionBarButton } from '@/shared/components'
+import { EmptyState, SelectionBar, SelectionBarButton } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SummaryHeader } from './SummaryHeader'
 import { FilterBar } from './FilterBar'
@@ -145,12 +145,32 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
 
   const modalFinding = modalId ? (findings.find((f) => f.id === modalId) ?? null) : null
 
+  // Nothing has been found yet: an empty board (six zero counters, five empty
+  // columns) says less than one sentence does, so the frame shows that instead.
+  if (findings.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+        <EmptyState
+          icon={SearchCheck}
+          title={t('findings.emptyTitle')}
+          hint={t('findings.emptyHint')}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SummaryHeader summary={summary} onPick={(patch) => setFilter({ ...patch })} />
       <div className="my-2">
         <FilterBar filter={filter} setFilter={setFilter} lenses={lenses} />
       </div>
+      {/* Filters match nothing: say so above the board, where it is read first. */}
+      {filtered.length === 0 && (
+        <div className="mb-2 text-sm text-[var(--color-text-dim)]">
+          {t('findings.noFilterMatch')}
+        </div>
+      )}
 
       {/* Kanban */}
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
@@ -176,7 +196,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
               }}
               className="flex min-h-0 w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
             >
-              <div className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+              <div className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium text-[var(--color-text-dim)]">
                 <span>{col.label}</span>
                 <span className="rounded bg-[var(--color-surface-2)] px-1.5">{cards.length}</span>
               </div>
@@ -203,7 +223,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
                       <ChannelBadge channel={f.channel} />
                       {f.severity && <SeverityBadge severity={f.severity} />}
                       {f.regressed && (
-                        <span className="text-xs font-semibold text-[var(--color-danger)]">⚠</span>
+                        <TriangleAlert size={12} className="text-[var(--color-danger)]" />
                       )}
                       {f.occurrences > 1 && (
                         <span className="text-[11px] text-[var(--color-text-dim)]">
@@ -222,12 +242,6 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
           )
         })}
       </div>
-
-      {filtered.length === 0 && (
-        <div className="mt-2 text-sm text-[var(--color-text-dim)]">
-          {findings.length === 0 ? t('findings.empty') : t('findings.noFilterMatch')}
-        </div>
-      )}
 
       <SelectionBar
         count={sel.count}

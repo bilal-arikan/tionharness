@@ -60,6 +60,24 @@ describe('FilterToggle + useFilterDisclosure', () => {
     expect(again.querySelector('[data-testid="chips"]')).toBeNull()
   })
 
+  it('starts folded on a phone-width viewport unless a preference is stored', () => {
+    const width = window.innerWidth
+    try {
+      Object.defineProperty(window, 'innerWidth', { value: 375, configurable: true })
+      const view = render(<Strip />)
+      expect(view.querySelector('[data-testid="chips"]')).toBeNull()
+      // Nothing is written until the user actually toggles.
+      expect(localStorage.getItem('tionharness.filtersOpen.test')).toBeNull()
+
+      // A stored "open" wins over the viewport default.
+      localStorage.setItem('tionharness.filtersOpen.test', '1')
+      const again = render(<Strip />)
+      expect(again.querySelector('[data-testid="chips"]')).not.toBeNull()
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: width, configurable: true })
+    }
+  })
+
   it('badges active filters so a folded strip still says it is narrowing', () => {
     const view = render(<Strip active={3} />)
     const button = view.querySelector<HTMLButtonElement>('[data-testid="toggle"]')!

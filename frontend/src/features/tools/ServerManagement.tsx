@@ -7,7 +7,8 @@ import type {
   WorkspaceTool,
   ImportableMCPServer,
 } from '@/types'
-import { parseArgs, serverToImportJson, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
+import { parseArgs, serverToImportJson, toolSource, toolServer } from './toolMeta'
+import { ServerRow } from './ServerRow'
 import { EmptyState, InfoPopover, ModalOverlay, PaneHeader, toast } from '@/shared/components'
 import { useTranslation } from 'react-i18next'
 
@@ -116,16 +117,18 @@ export function ServerManagement(props: {
   }
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1 text-sm font-semibold">
-          {tr('server.title')}
+      {/* Stacks below `sm` (title, description, button) so a phone never
+          squeezes the three into one row. */}
+      <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="flex min-w-0 flex-col gap-0.5 text-sm font-semibold sm:flex-row sm:items-center sm:gap-1">
+          <span className="shrink-0">{tr('server.title')}</span>
           <InfoPopover text={tr('server.intro')} />
         </h2>
         <button
           data-testid="mcp-importable-open"
           onClick={openImportable}
           title={tr('server.otherServersHint')}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium hover:opacity-90"
+          className="shrink-0 self-start rounded-lg border sm:self-auto border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium hover:opacity-90"
         >
           {tr('server.otherServers')}
         </button>
@@ -138,147 +141,21 @@ export function ServerManagement(props: {
             (t) => toolSource(t) === 'mcp' && (toolServer(t) || 'MCP') === s.name,
           )
           return (
-            <div
+            <ServerRow
               key={s.id}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{s.name}</span>
-                    <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
-                      {s.transport}
-                    </span>
-                    {s.scope === 'scoped' && (
-                      <span
-                        data-testid="mcp-server-scope-badge"
-                        className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--color-accent)]"
-                        title={tr('server.scopedBadgeHint')}
-                      >
-                        {tr('server.scopedBadge')}
-                      </span>
-                    )}
-                    {(() => {
-                      // Live-connection / reaper indicator from the pool snapshot.
-                      const st = poolStats?.servers.find((x) => x.server === s.name)
-                      if (!st || st.live === 0) return null
-                      const idleMin = poolStats ? Math.round(poolStats.idleSec / 60) : 0
-                      return (
-                        <span
-                          data-testid="mcp-server-live-badge"
-                          className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]"
-                          title={
-                            st.scoped
-                              ? tr('server.liveScopedHint', {
-                                  live: st.live,
-                                  total: st.total,
-                                  minutes: idleMin,
-                                })
-                              : tr('server.liveSharedHint', { live: st.live })
-                          }
-                        >
-                          🔗 {st.live}
-                          {st.scoped ? tr('server.sessionSuffix') : ''}
-                        </span>
-                      )
-                    })()}
-                    {!s.enabled && (
-                      <span className="text-xs text-[var(--color-text-dim)]">
-                        {tr('status.disabledParenthetical')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="truncate text-xs text-[var(--color-text-dim)]">
-                    {s.transport === 'stdio'
-                      ? `${s.command} ${parseArgs(s.args).join(' ')}`.trim()
-                      : s.url}
-                  </div>
-                </div>
-                <div className="flex flex-shrink-0 items-center gap-2">
-                  <button
-                    data-testid="mcp-server-test"
-                    data-server-id={s.id}
-                    onClick={() => onTest(s)}
-                    disabled={testing === s.id}
-                    className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
-                  >
-                    {tr('actions.test')}
-                  </button>
-                  <button
-                    data-testid="mcp-server-copy"
-                    data-server-id={s.id}
-                    onClick={() => copyServer(s)}
-                    title={tr('server.copyJsonHint')}
-                    className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
-                  >
-                    {tr('server.json')}
-                  </button>
-                  <button
-                    data-testid="mcp-server-toggle"
-                    data-server-id={s.id}
-                    role="switch"
-                    aria-checked={s.enabled}
-                    onClick={() => onToggle(s)}
-                    title={s.enabled ? tr('actions.disable') : tr('actions.enable')}
-                    className={`relative h-5 w-9 flex-shrink-0 rounded-full transition ${
-                      s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--color-text)] transition-all ${
-                        s.enabled ? 'left-4' : 'left-0.5'
-                      }`}
-                    />
-                  </button>
-                  <button
-                    data-testid="mcp-server-edit"
-                    data-server-id={s.id}
-                    onClick={() => onEdit(s)}
-                    title={tr('server.editHint')}
-                    className={`rounded px-2 py-1 text-xs hover:opacity-90 ${
-                      editingId === s.id
-                        ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
-                        : 'bg-[var(--color-surface-2)]'
-                    }`}
-                  >
-                    {tr('actions.edit')}
-                  </button>
-                  <button
-                    data-testid="mcp-server-delete"
-                    data-server-id={s.id}
-                    onClick={() => onRemove(s)}
-                    className="rounded px-2 py-1 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
-                  >
-                    {tr('actions.delete')}
-                  </button>
-                </div>
-              </div>
-              {serverTools.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-2">
-                  <span className="text-xs text-[var(--color-text-dim)]">
-                    {tr('server.allToolsArrow', { count: serverTools.length })}
-                  </span>
-                  {VISIBILITY_TIERS.map((tier) => (
-                    <button
-                      key={tier.value}
-                      data-testid="mcp-server-visibility-all"
-                      data-server-id={s.id}
-                      data-tier={tier.value}
-                      onClick={() => onServerVisibility(s.name, tier.value)}
-                      title={tier.hint}
-                      className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
-                    >
-                      {tier.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {testResult[s.id] && (
-                <div className="mt-2 break-words text-xs text-[var(--color-text-dim)]">
-                  {testResult[s.id]}
-                </div>
-              )}
-            </div>
+              server={s}
+              toolCount={serverTools.length}
+              poolStats={poolStats}
+              testing={testing === s.id}
+              testResult={testResult[s.id]}
+              editing={editingId === s.id}
+              onTest={() => onTest(s)}
+              onCopy={() => copyServer(s)}
+              onToggle={() => onToggle(s)}
+              onEdit={() => onEdit(s)}
+              onRemove={() => onRemove(s)}
+              onVisibility={(tier) => onServerVisibility(s.name, tier)}
+            />
           )
         })}
         {servers.length === 0 && (
@@ -297,13 +174,13 @@ export function ServerManagement(props: {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={tr('server.namePlaceholder')}
-            className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+            className="min-w-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
           />
           <select
             data-testid="mcp-server-transport-select"
             value={transport}
             onChange={(e) => setTransport(e.target.value as MCPTransport)}
-            className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+            className="min-w-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
           >
             <option value="stdio">{tr('server.transportStdio')}</option>
             <option value="http">{tr('server.transportHttp')}</option>
@@ -315,14 +192,14 @@ export function ServerManagement(props: {
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
                 placeholder={tr('server.commandPlaceholder')}
-                className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+                className="min-w-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
               <input
                 data-testid="mcp-server-args-input"
                 value={argsText}
                 onChange={(e) => setArgsText(e.target.value)}
                 placeholder={tr('server.argsPlaceholder')}
-                className="rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+                className="min-w-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
               />
             </>
           ) : (
@@ -332,7 +209,7 @@ export function ServerManagement(props: {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder={tr('server.urlPlaceholder')}
-                className="col-span-2 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
+                className="min-w-0 rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none sm:col-span-2"
               />
               <textarea
                 data-testid="mcp-server-headers-input"
@@ -340,11 +217,11 @@ export function ServerManagement(props: {
                 onChange={(e) => setHeadersText(e.target.value)}
                 spellCheck={false}
                 placeholder={tr('server.headersPlaceholder')}
-                className="col-span-2 h-20 resize-y rounded bg-[var(--color-surface-2)] px-3 py-2 font-mono text-xs outline-none"
+                className="h-20 resize-y rounded bg-[var(--color-surface-2)] px-3 py-2 font-mono text-xs outline-none sm:col-span-2"
               />
             </>
           )}
-          <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
+          <label className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-dim)] sm:col-span-2">
             <span className="shrink-0">{tr('server.connectionScope')}</span>
             {scope === 'scoped' && poolStats && (
               <InfoPopover
@@ -359,7 +236,7 @@ export function ServerManagement(props: {
               data-testid="mcp-server-scope-select"
               value={scope}
               onChange={(e) => setScope(e.target.value as 'shared' | 'scoped')}
-              className="rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none"
+              className="min-w-0 max-w-full rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none"
             >
               <option value="shared">{tr('server.scopeShared')}</option>
               <option value="scoped">{tr('server.scopeScoped')}</option>

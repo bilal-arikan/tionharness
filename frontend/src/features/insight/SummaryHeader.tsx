@@ -1,4 +1,5 @@
 import type { FindingSummary } from './insightHelpers'
+import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -21,7 +22,7 @@ export function SummaryHeader({ summary, onPick }: Props) {
     },
     { label: t('severity.high'), value: summary.high, onClick: () => onPick({ severity: 'high' }) },
     {
-      label: `⚠ ${t('filters.regression')}`,
+      label: t('filters.regression'),
       value: summary.regressed,
       danger: true,
       onClick: () => onPick({ regressedOnly: true }),
@@ -40,6 +41,7 @@ export function SummaryHeader({ summary, onPick }: Props) {
           }`}
         >
           <span className="font-semibold">{c.value}</span>
+          {c.danger && <TriangleAlert size={13} className="shrink-0 opacity-80" />}
           <span className="text-[var(--color-text-dim)]">{c.label}</span>
         </button>
       ))}

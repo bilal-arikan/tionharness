@@ -92,7 +92,8 @@
     "bulkDeleteConfirm_one": "Delete {{count}} finding?",
     "bulkDeleteConfirm_other": "Delete {{count}} findings?",
     "appliedEvidenceNeeded": "Application evidence is required for “Applied”: enter the entity type + ID.",
-    "empty": "No findings yet. Start a scan.",
+    "emptyTitle": "No findings yet",
+    "emptyHint": "Findings are listed here once you run a scan with the Scan button.",
     "noFilterMatch": "No findings match the filter.",
     "changeSelectedStatus": "Change the status of selected findings",
     "statusPlaceholder": "Status…"

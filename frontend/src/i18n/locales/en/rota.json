@@ -58,6 +58,7 @@
     "capacity": "spawn {{active}}/{{max}} · queue {{queue}}/{{queueMax}}",
     "autonomyPaused": "autonomy paused",
     "revisionTitle": "Stream seq / store revision",
+    "viewOptions": "View",
     "revision": "#{{head}} · r{{revision}}",
     "loadingLanes": "Loading lanes…",
     "noLanes": "No lanes in this window",

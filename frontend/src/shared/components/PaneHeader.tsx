@@ -35,6 +35,11 @@ interface Props {
   // width), instead of only wrapping on narrow screens. Title + right actions
   // stay on the first row at all widths.
   secondaryAlwaysWrap?: boolean
+  // With `secondary`: below `sm` the title takes the whole first row and the
+  // right actions drop to a row of their own (title · actions · secondary).
+  // For detail headers whose actions would otherwise squeeze the name away on
+  // a phone. No effect from `sm` up.
+  stackRightOnNarrow?: boolean
 }
 
 // PaneHeader is the standard top bar for every list screen (Agents, Flows,
@@ -52,6 +57,7 @@ export function PaneHeader({
   right,
   secondary,
   secondaryAlwaysWrap,
+  stackRightOnNarrow,
 }: Props) {
   const { t } = useTranslation('sharedUi')
   const hamburger = onToggleList && (
@@ -90,7 +96,9 @@ export function PaneHeader({
         }`}
       >
         <div
-          className={`order-1 flex min-w-0 items-center gap-2 ${secondaryAlwaysWrap ? 'flex-1' : 'max-md:flex-1'}`}
+          className={`order-1 flex min-w-0 items-center gap-2 ${secondaryAlwaysWrap ? 'flex-1' : 'max-md:flex-1'} ${
+            stackRightOnNarrow ? 'max-sm:basis-full' : ''
+          }`}
         >
           {hamburger}
           {titleContent}
@@ -104,7 +112,9 @@ export function PaneHeader({
         </div>
         {right && (
           <div
-            className={`order-2 flex shrink-0 items-center gap-2 ${secondaryAlwaysWrap ? '' : 'md:order-3'}`}
+            className={`order-2 flex shrink-0 items-center gap-2 ${secondaryAlwaysWrap ? '' : 'md:order-3'} ${
+              stackRightOnNarrow ? 'max-sm:shrink max-sm:basis-full' : ''
+            }`}
           >
             {right}
           </div>

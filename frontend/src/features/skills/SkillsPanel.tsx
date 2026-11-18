@@ -16,13 +16,16 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react'
-import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '@/types'
+import type { Skill, SkillDetail, ToolVisibility } from '@/types'
 import { api } from '@/api'
-import { VISIBILITY_TIERS, visibilityMeta } from '@/features/tools/toolMeta'
+import { VISIBILITY_TIERS } from '@/features/tools/toolMeta'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { InfoToast } from '@/shared/components/InfoToast'
 import { SkillEditor } from './SkillEditor'
+import { RestrictedBadge, SourceBadge, VisibilityChip } from './SkillBadges'
+import { skillVisibility } from './skillVisibility'
+import { SkillRowBody } from './SkillRowBody'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
 import { useGroupDnD } from '@/shared/hooks/useGroupDnD'
@@ -76,66 +79,6 @@ function sortSkillGroups(a: string, b: string): number {
   if (a === UNGROUPED) return 1
   if (b === UNGROUPED) return -1
   return compareText(a, b)
-}
-
-function SourceBadge({ source }: { source: SkillSource }) {
-  const { t } = useTranslation('skills')
-  const tone =
-    source === 'workspace'
-      ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
-  return (
-    <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}
-    >
-      {t(`source.${source}`)}
-    </span>
-  )
-}
-
-// RestrictedBadge marks a skill that is NOT on-demand: only agents it is
-// explicitly assigned to can see/use it. On-demand (shared) skills are the
-// default case and carry no badge.
-function RestrictedBadge() {
-  const { t } = useTranslation('skills')
-  return (
-    <span
-      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-danger)_18%,transparent)] text-[var(--color-danger)]"
-      title={t('access.restrictedHint')}
-    >
-      {t('access.restricted')}
-    </span>
-  )
-}
-
-// skillVisibility resolves a skill's 4-way tier, preferring the backend-computed
-// `visibility` and falling back to the raw frontmatter flags for older payloads.
-function skillVisibility(sk: Skill): ToolVisibility {
-  if (sk.visibility) return sk.visibility
-  if (sk.autoSummary === false) return 'hidden'
-  if (sk.nameOnly) return 'name-only'
-  if (sk.summaryOnly) return 'summary'
-  return 'full'
-}
-
-// VisibilityChip shows which of the four catalog-visibility tiers a skill is on
-// (Tam / Özet / İsim / Gizli) as a single colored chip, sharing VISIBILITY_TIERS
-// metadata with the tier selector. Replaces the older per-flag badges so every
-// tier — including full/summary — reads at a glance from the list.
-function VisibilityChip({ v }: { v: ToolVisibility }) {
-  const meta = visibilityMeta(v)
-  return (
-    <span
-      className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-      style={{
-        backgroundColor: `color-mix(in srgb, ${meta.color} 18%, transparent)`,
-        color: meta.color,
-      }}
-      title={meta.hint}
-    >
-      {meta.label}
-    </span>
-  )
 }
 
 // SkillVisibilitySelector is the 4-way segmented control for a skill's catalog
@@ -647,31 +590,7 @@ export function SkillsPanel({ onError }: Props) {
                                 : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
                           } ${dnd.dragIds.has(sk.slug) ? 'opacity-50' : ''}`}
                         >
-                          <span className="mt-0.5 shrink-0 text-base leading-none">
-                            {sk.icon || '✨'}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-1.5">
-                              <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
-                              {!sk.shared && <RestrictedBadge />}
-                              <VisibilityChip v={skillVisibility(sk)} />
-                              <SourceBadge source={sk.source} />
-                              <SeedDefaultBadge state={sk.defaultState} />
-                            </span>
-                            <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
-                              {sk.description || sk.slug}
-                            </span>
-                            {sk.modifiedAt ? (
-                              <span
-                                className="mt-0.5 block text-[10px] text-[var(--color-text-dim)] opacity-70"
-                                title={t('panel.lastModifiedFull', {
-                                  date: fullDateTime(sk.modifiedAt),
-                                })}
-                              >
-                                {t('panel.modified')}: {relativeTime(sk.modifiedAt)}
-                              </span>
-                            ) : null}
-                          </span>
+                          <SkillRowBody skill={sk} />
                         </button>
                       )
                     })}
@@ -795,12 +714,17 @@ export function SkillsPanel({ onError }: Props) {
           // Chips + the Tam/Özet/İsim/Gizli selector always live on their own second
           // row (every width), so the first row stays compact.
           secondaryAlwaysWrap
+          // Phones: the name keeps the first row to itself and the actions drop
+          // to their own row, instead of squeezing the name down to its icon.
+          stackRightOnNarrow
           title={active ? undefined : t('panel.title')}
           titleSlot={
             active ? (
               <span className="flex min-w-0 items-center gap-2">
                 <span className="text-lg leading-none">{active.icon || '✨'}</span>
-                <h2 className="truncate text-base font-semibold">{active.name}</h2>
+                <h2 className="truncate text-base font-semibold" title={active.name}>
+                  {active.name}
+                </h2>
               </span>
             ) : undefined
           }
@@ -841,6 +765,7 @@ export function SkillsPanel({ onError }: Props) {
                   data-testid="skill-detail-edit"
                   onClick={() => setEditor({ mode: 'edit', initial: active })}
                   title={t('detail.editHint')}
+                  aria-label={t('detail.editHint')}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                 >
                   <Pencil size={14} />
@@ -852,10 +777,13 @@ export function SkillsPanel({ onError }: Props) {
                   title={
                     active.shared ? t('detail.makeRestrictedHint') : t('detail.makeSharedHint')
                   }
+                  aria-label={active.shared ? t('access.restrict') : t('access.share')}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
                 >
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
-                  {active.shared ? t('access.restrict') : t('access.share')}
+                  <span className="hidden sm:inline">
+                    {active.shared ? t('access.restrict') : t('access.share')}
+                  </span>
                 </button>
                 <button
                   data-testid="skill-detail-archive"
@@ -866,10 +794,13 @@ export function SkillsPanel({ onError }: Props) {
                       ? t('archive.restoreDetailHint')
                       : t('archive.archiveDetailHint')
                   }
+                  aria-label={active.archived ? t('archive.restore') : t('archive.archive')}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
                 >
                   {active.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                  {active.archived ? t('archive.restore') : t('archive.archive')}
+                  <span className="hidden sm:inline">
+                    {active.archived ? t('archive.restore') : t('archive.archive')}
+                  </span>
                 </button>
                 <CopyPathButton path={active.dir} />
                 {/* Shipped skills only. The automatic re-seed refreshes a skill
@@ -889,9 +820,11 @@ export function SkillsPanel({ onError }: Props) {
                   onClick={removeActive}
                   disabled={deleteBusy}
                   title={t('detail.deleteHint')}
+                  aria-label={t('actions.delete')}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
                 >
-                  <Trash2 size={14} /> {t('actions.delete')}
+                  <Trash2 size={14} />
+                  <span className="hidden sm:inline">{t('actions.delete')}</span>
                 </button>
               </div>
             ) : undefined

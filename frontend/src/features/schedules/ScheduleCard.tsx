@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { Play, Hourglass, Pencil } from 'lucide-react'
 import type { Agent, Schedule } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
-import { TagEditor } from '@/shared/components'
 import { CardAction } from './pickers'
-import { COLUMN_ACCENT } from './automationMeta'
+import { CardTags } from './CardTags'
+import { EnableToggle } from './EnableToggle'
 import { fmtTime, isPast } from './timeUtils'
 
 interface Props {
@@ -36,32 +36,22 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
       ref={ref}
       data-testid="schedule-row"
       data-schedule-id={s.id}
-      className={`rounded-lg border border-l-4 bg-[var(--color-surface)] px-2.5 py-2 text-sm transition ${
+      className={`rounded-lg border bg-[var(--color-surface)] px-2.5 py-2 text-sm transition ${
         highlighted
           ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]'
           : 'border-[var(--color-border)]'
       }`}
-      style={{ borderLeftColor: COLUMN_ACCENT.schedules }}
     >
       <div className="flex items-start gap-2">
         <div className="flex shrink-0 flex-col items-center gap-1.5">
-          <button
-            data-testid="schedule-enable-toggle"
-            data-schedule-id={s.id}
-            type="button"
-            role="switch"
-            aria-checked={s.enabled}
-            aria-label={s.enabled ? t('common.enabled') : t('common.disabled')}
-            onClick={onToggle}
-            className={`h-4 w-8 rounded-full transition ${
-              s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
-            }`}
-            title={s.enabled ? t('common.enabled') : t('common.disabled')}
-          >
-            <span
-              className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${s.enabled ? 'translate-x-4' : ''}`}
-            />
-          </button>
+          <EnableToggle
+            enabled={s.enabled}
+            onToggle={onToggle}
+            labelOn={t('common.enabled')}
+            labelOff={t('common.disabled')}
+            testId="schedule-enable-toggle"
+            entityId={s.id}
+          />
           {owner ? (
             <AgentAvatar agent={owner} size={28} />
           ) : (
@@ -72,15 +62,19 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
         </div>
 
         <div className="min-w-0 flex-1">
-          {s.name ? (
-            <div className="truncate text-[13px] font-medium text-[var(--color-text)]">
-              {s.name}
-            </div>
-          ) : null}
+          {/* An unnamed rule gets a readable fallback title; its cron expression
+              stays on the mono line below, as on a named card. */}
+          <div
+            data-testid="schedule-title"
+            className="truncate text-[13px] font-medium text-[var(--color-text)]"
+          >
+            {s.name || t('scheduleCard.untitled')}
+          </div>
           {/* A one-shot wake has no cron expression — printing it raw left an empty
               line, so show its single fire time instead. */}
           <div
-            className={`font-mono text-[13px] ${s.name ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'}`}
+            data-testid="schedule-cron"
+            className="font-mono text-[13px] text-[var(--color-text-dim)]"
           >
             {s.oneShot ? t('scheduleCard.oneShotAt', { time: fmtTime(s.fireAt) }) : s.cronExpr}
           </div>
@@ -147,7 +141,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
       </div>
 
       <div className="mt-1">
-        <TagEditor tags={s.tags ?? []} onChange={onTags} className="py-1" />
+        <CardTags tags={s.tags ?? []} onChange={onTags} />
       </div>
     </div>
   )

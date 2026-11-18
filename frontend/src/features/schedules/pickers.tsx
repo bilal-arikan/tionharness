@@ -2,7 +2,8 @@ import { FieldHint, InfoPopover } from '@/shared/components/InfoPopover'
 
 // CardAction is the prominent icon button used on board cards. Unlike the old
 // bare icons it carries a border + surface fill so "run" and "edit" read as real
-// buttons at a glance; `tone` colors the hover state.
+// buttons at a glance; `tone` colors the hover state. Below `md` it is a 36px
+// touch target; from `md` up it keeps the compact 28px footprint.
 export function CardAction({
   icon: Icon,
   label,
@@ -33,7 +34,7 @@ export function CardAction({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex h-7 w-7 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] transition disabled:opacity-40 ${hover}`}
+      className={`flex h-9 w-9 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] transition disabled:opacity-40 md:h-7 md:w-7 ${hover}`}
     >
       <Icon size={15} />
     </button>

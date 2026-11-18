@@ -82,7 +82,8 @@
     "bulkDeleteConfirm_one": "{{count}} bulgu silinsin mi?",
     "bulkDeleteConfirm_other": "{{count}} bulgu silinsin mi?",
     "appliedEvidenceNeeded": "“Uygulandı” için uygulama kanıtı gerekiyor: varlık türü + kimlik gir.",
-    "empty": "Henüz bulgu yok. Bir tarama başlat.",
+    "emptyTitle": "Henüz bulgu yok",
+    "emptyHint": "Tara ile bir tarama başlatınca bulgular burada listelenir.",
     "noFilterMatch": "Filtreyle eşleşen bulgu yok.",
     "changeSelectedStatus": "Seçili bulguların statüsünü değiştir",
     "statusPlaceholder": "Statü…"

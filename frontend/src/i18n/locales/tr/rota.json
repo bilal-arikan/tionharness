@@ -58,6 +58,7 @@
     "capacity": "spawn {{active}}/{{max}} · kuyruk {{queue}}/{{queueMax}}",
     "autonomyPaused": "otonomi duraklatıldı",
     "revisionTitle": "Akış seq / depo revizyonu",
+    "viewOptions": "Görünüm",
     "revision": "#{{head}} · r{{revision}}",
     "loadingLanes": "Şeritler yükleniyor…",
     "noLanes": "Bu pencerede şerit yok",

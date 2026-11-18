@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next'
 import { MessageSquare, Waypoints, X } from 'lucide-react'
 import { api } from '@/api'
-import { EmptyState, InfoPopover } from '@/shared/components'
+import { EmptyState, FilterToggle, InfoPopover, useFilterDisclosure } from '@/shared/components'
 import { useLanes, connectLanes, seedLanes, resetLanes } from '@/shared/lib/laneStore'
 import { seedLiveness, seedSessions } from '@/shared/lib/laneReducer'
 import { useServerNow } from './useServerNow'
@@ -38,6 +38,7 @@ const SEED_LIMIT = 200
 
 export function RotaPanel({ workspaceId, onError, onOpenSession }: Props) {
   const { t } = useTranslation('rota')
+  const [viewOpen, toggleView] = useFilterDisclosure('rota-view')
   const lanes = useLanes()
   const now = useServerNow(5000)
   const [selected, setSelected] = useState<RotaSelection | null>(null)
@@ -249,16 +250,31 @@ export function RotaPanel({ workspaceId, onError, onOpenSession }: Props) {
             {lanes.capacity.autonomyPaused ? ` · ${t('panel.autonomyPaused')}` : ''}
           </span>
         )}
-        <RotaZoomControl zoom={zoom} onZoom={setZoom} />
-        <RotaToolbar
-          cutoff={cutoff}
-          onCutoff={setCutoff}
-          collapseGaps={collapseGaps}
-          onCollapseGaps={setCollapseGaps}
-          normalizeBars={normalizeBars}
-          onNormalizeBars={setNormalizeBars}
+        {/* View controls (zoom, idle window, gap/duration switches). Always inline
+            from `md:` up; on a phone they fold behind one toggle so the header
+            stays one or two rows instead of four. */}
+        <FilterToggle
+          open={viewOpen}
+          onToggle={toggleView}
+          label={t('panel.viewOptions')}
+          className="md:hidden"
+          testId="rota-view-toggle"
         />
-        <span className="ml-auto text-[var(--color-text-dim)]" title={t('panel.revisionTitle')}>
+        <div className={`${viewOpen ? 'contents' : 'hidden'} md:contents`}>
+          <RotaZoomControl zoom={zoom} onZoom={setZoom} />
+          <RotaToolbar
+            cutoff={cutoff}
+            onCutoff={setCutoff}
+            collapseGaps={collapseGaps}
+            onCollapseGaps={setCollapseGaps}
+            normalizeBars={normalizeBars}
+            onNormalizeBars={setNormalizeBars}
+          />
+        </div>
+        <span
+          className="ml-auto text-[var(--color-text-dim)] max-md:hidden"
+          title={t('panel.revisionTitle')}
+        >
           {t('panel.revision', { head: lanes.head, revision: lanes.revision })}
         </span>
       </header>
