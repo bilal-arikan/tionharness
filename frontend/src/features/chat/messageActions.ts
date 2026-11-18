@@ -6,8 +6,10 @@
 // background — so there is a single palette and no per-surface variants.
 //
 // The actions used to be hover-only ghosts (`opacity-0 group-hover:opacity-100`),
-// which made them easy to miss. They now stay visible at rest, so each needs a
-// real chip look that reads as a button.
+// which made them easy to miss, so they stay visible at rest. At rest they are
+// bare dim icons (a row of four boxed chips under every message was louder than
+// the message meta it sits beside); the chip frame appears on hover/focus and
+// stays on for a toggled-on action.
 //
 // Why a module instead of inline classes: the same chip is used by five call sites,
 // and Tailwind conflict resolution is by stylesheet order (NOT class-string order) —
@@ -20,12 +22,14 @@ export type ActionIntent = 'default' | 'danger' | 'positive'
 const BASE =
   'inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-medium leading-none transition'
 
-// Resting look: visible but quiet — a real affordance that does not compete with
-// the message text.
-const REST = 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+// Resting look: visible but quiet — a bare icon that does not compete with the
+// message text. The border stays in the box model (transparent) so the hover
+// frame does not shift the row.
+const REST =
+  'border-transparent text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] focus-visible:bg-[var(--color-surface-2)]'
 
 const HOVER: Record<ActionIntent, string> = {
-  default: 'hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]',
+  default: 'hover:border-[var(--color-border)] hover:text-[var(--color-text)]',
   danger: 'hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]',
   positive: 'hover:border-[var(--color-success)] hover:text-[var(--color-success)]',
 }

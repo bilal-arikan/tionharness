@@ -1,6 +1,16 @@
 import { memo, useMemo, useState } from 'react'
-import { tokens as fmtTok } from '@/shared/lib/format'
-import { RotateCcw, ThumbsUp, ThumbsDown } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Loader2,
+  RotateCcw,
+  Square,
+  ThumbsDown,
+  ThumbsUp,
+  TriangleAlert,
+  Wrench,
+} from 'lucide-react'
 import type { Message } from '@/types'
 import type { AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { api } from '@/api'
@@ -8,7 +18,8 @@ import { Markdown } from '@/shared/components/markdown/Markdown'
 import { TurnSteps } from './TurnSteps'
 import { parseSteps, stepTruncated } from './turnStepUtils'
 import { ThinkingBlock } from './ThinkingBlock'
-import { MessageTime, TurnDuration, LiveTimer, CacheWarmthDot } from './MessageMeta'
+import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
+import { TurnUsageMeta } from './TurnUsageMeta'
 import { AgentHeader } from './AgentHeader'
 import { DirectionBadge } from './DirectionBadge'
 import { WorkingDots } from './WorkingDots'
@@ -17,7 +28,6 @@ import { CopyButton } from './CopyButton'
 import { MessageDebugPanel } from './MessageDebugPanel'
 import { ChangesButton } from './ChangesButton'
 import { hasFileChanges } from '@/shared/lib/fileChanges'
-import { modelDisplayName } from '@/shared/lib/modelLabel'
 import {
   ACTION_CLUSTER,
   META_CLUSTER,
@@ -26,10 +36,6 @@ import {
   actionChipActive,
 } from './messageActions'
 import { useTranslation } from 'react-i18next'
-
-const UP_ARROW = String.fromCharCode(0x2191)
-const DOWN_ARROW = String.fromCharCode(0x2193)
-const LIGHTNING = String.fromCharCode(0x26a1)
 
 interface Props {
   message: Message
@@ -171,14 +177,15 @@ export const AssistantTurn = memo(function AssistantTurn({
                 title={toolsHidden ? t('assistant.showTools') : t('assistant.hideTools')}
                 className="flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
               >
-                <span>🔧</span>
+                <Wrench size={11} className="shrink-0" />
                 <span>
                   {toolCount > 0
                     ? t('assistant.tools', { count: toolCount })
                     : t('assistant.steps', { count: steps.length })}
                 </span>
-                <span className="opacity-70">
-                  {toolsHidden ? `▸ ${t('assistant.show')}` : `▾ ${t('assistant.hide')}`}
+                <span className="inline-flex items-center gap-0.5 opacity-70">
+                  {toolsHidden ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+                  {toolsHidden ? t('assistant.show') : t('assistant.hide')}
                 </span>
               </button>
               {/* The transcript arrives with long tool payloads cut server-side
@@ -191,9 +198,12 @@ export const AssistantTurn = memo(function AssistantTurn({
                   title={t('assistant.fullTraceDescription')}
                   className="flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] underline decoration-dotted underline-offset-2 transition hover:text-[var(--color-accent)] disabled:opacity-50"
                 >
-                  {loadingFull
-                    ? `⏳ ${t('assistant.loadingTrace')}`
-                    : `⤓ ${t('assistant.fullTrace')}`}
+                  {loadingFull ? (
+                    <Loader2 size={11} className="shrink-0 animate-spin" />
+                  ) : (
+                    <Download size={11} className="shrink-0" />
+                  )}
+                  {loadingFull ? t('assistant.loadingTrace') : t('assistant.fullTrace')}
                 </button>
               )}
               {fullError && (
@@ -228,30 +238,29 @@ export const AssistantTurn = memo(function AssistantTurn({
           {/* Reply recovered from a mid-stream server crash: flag it as cut off. */}
           {m.interrupted && (
             <div className="mt-2 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-              <span>⚠</span>
+              <TriangleAlert size={13} className="shrink-0 text-[var(--color-warning)]" />
               <span>{t('assistant.interrupted')}</span>
             </div>
           )}
           {/* Reply the user stopped mid-stream (intentional, not a crash). */}
           {m.cancelled && (
             <div className="mt-2 flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-              <span>⏹</span>
+              <Square size={12} className="shrink-0" />
               <span>{t('assistant.cancelled')}</span>
             </div>
           )}
           {/* Stop-reason warning (truncation / refusal). */}
           {stopNote && (
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[var(--color-warning)]">
-              <span>⚠</span>
+              <TriangleAlert size={12} className="shrink-0" />
               <span>{stopNote}</span>
             </div>
           )}
         </div>
       </div>
-      {/* Footer BELOW the bubble: passive meta (time, duration, model, token spend)
-          on the LEFT, action chips (rating, retry, delete) on the
-          RIGHT. The chips are visible at rest, not hover-only — see
-          messageActions.ts. */}
+      {/* Footer BELOW the bubble: passive meta (time, duration, model) on the
+          LEFT, actions (rating, retry, delete) on the RIGHT. The actions are
+          visible at rest as bare icons, not hover-only — see messageActions.ts. */}
       <div className={TURN_FOOTER}>
         <div className={META_CLUSTER}>
           <MessageTime unixSec={m.createdAt} />
@@ -260,39 +269,8 @@ export const AssistantTurn = memo(function AssistantTurn({
           ) : (
             <TurnDuration ms={workedMs} derived={workedDerived} />
           )}
-          {/* Per-turn metadata: model + token usage (the per-turn cost). */}
-          {(m.model || m.usage) && (
-            <span
-              className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]"
-              title={t('assistant.modelUsage')}
-            >
-              {/* Named, not mono: this is the model people talk about, while the
-                  numbers beside it stay mono. The exact id lives in the title. */}
-              {m.model && (
-                <span className="opacity-80" title={m.model}>
-                  {modelDisplayName(m.model)}
-                </span>
-              )}
-              {m.usage && (
-                <span className="font-mono">
-                  {UP_ARROW}
-                  {fmtTok(m.usage.in)} {DOWN_ARROW}
-                  {fmtTok(m.usage.out)}
-                  {!!m.usage.cacheRead && (
-                    <span className="opacity-60">
-                      {' '}
-                      {LIGHTNING}
-                      {fmtTok(m.usage.cacheRead)}
-                    </span>
-                  )}
-                </span>
-              )}
-              {/* Warm/cold at a glance, so scanning a transcript shows WHICH turns
-                  paid a cold prefix without opening each debug panel. Derived from
-                  the usage already persisted on the message — no fetch. */}
-              <CacheWarmthDot usage={m.usage} />
-            </span>
-          )}
+          {/* Per-turn metadata: model at rest, token spend in the tooltip. */}
+          <TurnUsageMeta model={m.model} usage={m.usage} />
         </div>
         {hasActions && (
           <div className={ACTION_CLUSTER}>

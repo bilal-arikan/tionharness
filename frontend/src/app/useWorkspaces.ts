@@ -7,6 +7,8 @@ import { api, setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace } fro
 import { toast } from '@/shared/components'
 import type { Workspace } from '@/types'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
+import { reloadApp } from './reloadApp'
+import { useRetryingLoad } from './useRetryingLoad'
 
 // The unread-activity badge set is SHARED across every browser window of the same
 // origin via localStorage + the 'storage' event. TionHarness is single-user, so a
@@ -47,10 +49,6 @@ function writeSharedUnread(set: Set<string>) {
 
 export function useWorkspaces(setError: (msg: string) => void) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  // True until the initial workspace list resolves. Drives the first-run splash
-  // and the "zero workspaces → onboarding" decision in App (we must not show the
-  // onboarding screen until we actually know the list is empty).
-  const [loading, setLoading] = useState(true)
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(getActiveWorkspace())
   // Raw shared unread set (cross-window union, mirrored to localStorage). The
   // displayed set (`unreadWs` below) filters out this window's active workspace.
@@ -109,38 +107,43 @@ export function useWorkspaces(setError: (msg: string) => void) {
     return next
   }, [unreadRaw, activeWorkspaceId])
 
-  // Initial load: pick the active workspace (saved or first).
-  useEffect(() => {
-    api
-      .listWorkspaces()
-      .then((list) => {
-        setWorkspaces(list)
-        const saved = getActiveWorkspace()
-        const valid = list.find((w) => w.id === saved)
-        // Cold start (no in-app pointer yet) → favorite wins; otherwise keep the
-        // last-active. A URL-deep-linked workspace is applied afterwards by the
-        // route machinery, so explicit links still override the favorite.
-        const fav = readFavorite()
-        const favValid = fav && list.some((w) => w.id === fav) ? fav : null
-        // Last-resort fallback (no saved pointer, no favorite): take the first
-        // OPENABLE workspace. The list is in creation order, so the oldest entry
-        // leads it — and if that one is degraded, picking it lands a fresh browser
-        // on a workspace whose every request fails. A saved or starred pointer is
-        // an explicit user choice and is NOT overridden, degraded or not. With
-        // nothing healthy at all we keep the old behaviour (first entry) so the
-        // switcher still has a selection to show.
-        const firstHealthy = list.find((w) => !w.degraded)?.id
-        const chosen =
-          (!saved && favValid) || valid?.id || favValid || firstHealthy || list[0]?.id || null
-        if (chosen) {
-          setActiveWorkspace(chosen)
-          setActiveWorkspaceId(chosen)
-        }
-      })
-      .catch((e) => setError((e as Error).message))
-      .finally(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Initial load: pick the active workspace (saved or first). A failed request
+  // is retried with backoff and reported through `loadError` — App shows a
+  // connection-error screen for it, never the onboarding screen: only a list the
+  // server actually answered with can be "zero workspaces".
+  const initialLoad = useRetryingLoad(
+    () => api.listWorkspaces(),
+    (list, recovered) => {
+      // The backend came back after the boot requests failed: every other hook
+      // already ran against the dead server, so restart the client cleanly.
+      if (recovered) {
+        reloadApp()
+        return
+      }
+      setWorkspaces(list)
+      const saved = getActiveWorkspace()
+      const valid = list.find((w) => w.id === saved)
+      // Cold start (no in-app pointer yet) → favorite wins; otherwise keep the
+      // last-active. A URL-deep-linked workspace is applied afterwards by the
+      // route machinery, so explicit links still override the favorite.
+      const fav = readFavorite()
+      const favValid = fav && list.some((w) => w.id === fav) ? fav : null
+      // Last-resort fallback (no saved pointer, no favorite): take the first
+      // OPENABLE workspace. The list is in creation order, so the oldest entry
+      // leads it — and if that one is degraded, picking it lands a fresh browser
+      // on a workspace whose every request fails. A saved or starred pointer is
+      // an explicit user choice and is NOT overridden, degraded or not. With
+      // nothing healthy at all we keep the old behaviour (first entry) so the
+      // switcher still has a selection to show.
+      const firstHealthy = list.find((w) => !w.degraded)?.id
+      const chosen =
+        (!saved && favValid) || valid?.id || favValid || firstHealthy || list[0]?.id || null
+      if (chosen) {
+        setActiveWorkspace(chosen)
+        setActiveWorkspaceId(chosen)
+      }
+    },
+  )
 
   const switchWorkspace = useCallback((id: string) => {
     setActiveWorkspace(id)
@@ -292,7 +295,13 @@ export function useWorkspaces(setError: (msg: string) => void) {
 
   return {
     workspaces,
-    loading,
+    // True until the initial workspace list request settles. Drives the
+    // first-run splash; with `loadError` it separates "request failed" from
+    // "zero workspaces" (see resolveBootScreen).
+    loading: initialLoad.loading,
+    loadError: initialLoad.error,
+    loadRetrying: initialLoad.retrying,
+    retryLoad: initialLoad.retry,
     activeWorkspaceId,
     unreadWs,
     favoriteWorkspaceId,

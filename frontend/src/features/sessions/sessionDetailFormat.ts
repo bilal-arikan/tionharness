@@ -1,4 +1,3 @@
-import { roleColor } from '@/shared/lib/palette'
 import { formatDateTime } from '@/shared/lib/intl'
 import { tokens } from '@/shared/lib/format'
 import { i18next } from '@/i18n'
@@ -47,10 +46,6 @@ export function formatCountdown(sec: number): string {
   const r = s % 60
   return `${m}:${String(r).padStart(2, '0')}`
 }
-
-// fillerColor maps a context bucket role to a stable segment colour for the
-// usage bar and legend (hues live in the shared categorical palette).
-export const fillerColor = roleColor
 
 export function formatDate(unixSec: number): string {
   if (!unixSec) return '—'

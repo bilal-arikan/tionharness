@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Mic, Square, Loader2 } from 'lucide-react'
-import { BTN_ICON } from './buttonStyles'
+import { BTN_ICON, BTN_ICON_BUSY, BTN_ICON_DANGER } from './buttonStyles'
 import { useSpeechToText } from './useSpeechToText'
 import { useServerStt } from './useServerStt'
 import { playMicStart, playMicStop } from '@/shared/lib/sounds'
@@ -120,9 +120,7 @@ export function MicButton({ disabled, onTranscript }: Props) {
         aria-label={listening ? t('mic.stopRecording') : t('mic.voiceTypeLabel')}
         aria-pressed={listening}
         data-testid="composer-mic"
-        className={`${BTN_ICON} ${
-          listening ? 'animate-pulse border-[var(--color-danger)] text-[var(--color-danger)]' : ''
-        } ${transcribing ? 'text-[var(--color-accent)]' : ''}`}
+        className={listening ? BTN_ICON_DANGER : transcribing ? BTN_ICON_BUSY : BTN_ICON}
       >
         {transcribing ? (
           <Loader2 size={18} className="animate-spin" />

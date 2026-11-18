@@ -3,6 +3,7 @@ import type { Agent } from '@/types'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { useTranslation } from 'react-i18next'
+import { TRIGGER_FRAME, TRIGGER_SET } from './buttonStyles'
 
 interface Props {
   agents: Agent[]
@@ -41,10 +42,8 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
             ? t('agentSelect.messageTarget', { name: selected.name })
             : t('agentSelect.selectAgent')
         }
-        className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-3 text-sm transition disabled:opacity-40 ${
-          selected
-            ? 'border-[var(--color-accent)] text-[var(--color-text)]'
-            : 'border-[var(--color-danger)] text-[var(--color-danger)]'
+        className={`${TRIGGER_FRAME} gap-1.5 disabled:opacity-40 ${
+          selected ? TRIGGER_SET : '!border-[var(--color-danger)] text-[var(--color-danger)]'
         }`}
       >
         {selected ? (
@@ -68,7 +67,7 @@ export function AgentSelect({ agents, value, onChange, disabled }: Props) {
           data-testid="agent-select-menu"
           className="absolute bottom-full left-0 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl"
         >
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+          <div className="px-2 py-1 text-xs text-[var(--color-text-dim)]">
             {t('agentSelect.sendMessage')}
           </div>
           {agents.length === 0 && (

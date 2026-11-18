@@ -292,7 +292,9 @@
       "ignore": "Yok say"
     },
     "toast": {
-      "ignoreTitle": "Yok say (bir daha gösterme)"
+      "ignoreTitle": "Yok say (bir daha gösterme)",
+      "ignore": "Bir daha gösterme",
+      "closeTitle": "Şimdilik kapat"
     },
     "rules": {
       "no-agents": {

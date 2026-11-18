@@ -78,7 +78,7 @@ export function PendingTray({
   return (
     <ComposerCard tone="muted" className="flex flex-col gap-1.5 px-3 py-2">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+        <span className="text-xs font-medium  text-[var(--color-text-dim)]">
           {visible.some((it) => it.kind === 'failed')
             ? t('pending.headerFailed')
             : t('pending.header')}

@@ -13,6 +13,7 @@ import { InteractionPrompts } from './InteractionPrompts'
 import { PendingTray } from './PendingTray'
 import { WakeWaitBanner } from './WakeWaitBanner'
 import { CacheWarmthStrip } from './CacheWarmthStrip'
+import { ComposerStatusLine } from './ComposerStatusLine'
 import { TodoPanel } from './TodoPanel'
 import { RunStatusStrip } from './RunStatusStrip'
 import {
@@ -265,13 +266,6 @@ export function ChatView({
           ref={bottomStackRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-1 px-4 pb-2 [&>*]:pointer-events-auto"
         >
-          {/* Prompt-cache warmth also matters in a read-only log: a run parked
-              on an ask/permission (below) is answered as a suspend-point resolve,
-              and that reply reads the still-warm prefix — so the countdown is
-              actionable here too. Same gate as the writable stack. */}
-          {!chat.activeStreaming && (
-            <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
-          )}
           {/* VISIBILITY (A): a durable ask/permission/plan that the run parked
               on. Hidden here before, this made a run silently block on input
               with no on-screen cue. Answering resolves a suspend point (not a new
@@ -298,6 +292,16 @@ export function ChatView({
               schedule and flow runs included: the server stops an autonomous turn
               through Runtime.CancelSession when it has no live chat run. */}
           {chat.activeStreaming && <RunStatusStrip onStop={chat.stopTurn} />}
+          {/* Prompt-cache warmth also matters in a read-only log: a run parked
+              on an ask/permission (above) is answered as a suspend-point resolve,
+              and that reply reads the still-warm prefix — so the countdown is
+              actionable here too. Same gate as the writable stack. Opaque, since
+              no composer sits under it. */}
+          <ComposerStatusLine opaque>
+            {!chat.activeStreaming && (
+              <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
+            )}
+          </ComposerStatusLine>
         </div>
       ) : (
         /* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
@@ -307,27 +311,6 @@ export function ChatView({
           ref={bottomStackRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
         >
-          {/* Prompt-cache warmth: the one cache surface that can still change the
-              outcome — it counts down the warm window BEFORE the next turn is sent.
-              Sits at the TOP of the bottom stack so it stays visible above any
-              transient panel (todo checklist, pending
-              tray, ask/permission prompts). Hidden while a turn streams (the
-              countdown is about to reset anyway) and on an empty session (nothing
-              is cached yet). */}
-          {!chat.activeStreaming && (
-            <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
-          )}
-          {(chat.activePresence > 1 || chat.activeTyping) && (
-            <div className="flex justify-center pb-1">
-              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
-                {chat.activeTyping
-                  ? t('chatView.anotherWindowTyping')
-                  : chat.activeAsk
-                    ? t('chatView.windowsOpenAsk', { count: chat.activePresence })
-                    : t('chatView.windowsOpen', { count: chat.activePresence })}
-              </span>
-            </div>
-          )}
           <InteractionPrompts asks={chat.activeAsks} onAnswer={chat.answerAsk} />
           <TodoPanel todos={currentTodos} dismissed={todoDismissed} onDismiss={dismissTodo} />
           <PendingTray
@@ -377,6 +360,27 @@ export function ChatView({
             selectableAgents={selectableAgents}
             commands={chat.chatCommands}
             artifacts={artifacts}
+            footer={
+              <ComposerStatusLine>
+                {/* Prompt-cache warmth: the one cache surface that can still change
+                    the outcome — it counts down the warm window BEFORE the next
+                    turn is sent. Hidden while a turn streams (the countdown is
+                    about to reset anyway) and on an empty session (nothing is
+                    cached yet). */}
+                {!chat.activeStreaming && (
+                  <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
+                )}
+                {(chat.activePresence > 1 || chat.activeTyping) && (
+                  <span>
+                    {chat.activeTyping
+                      ? t('chatView.anotherWindowTyping')
+                      : chat.activeAsk
+                        ? t('chatView.windowsOpenAsk', { count: chat.activePresence })
+                        : t('chatView.windowsOpen', { count: chat.activePresence })}
+                  </span>
+                )}
+              </ComposerStatusLine>
+            }
           />
         </div>
       )}

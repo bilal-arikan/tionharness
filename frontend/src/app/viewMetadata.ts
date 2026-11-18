@@ -22,6 +22,8 @@ import {
 
 // One destination list for the rail, mobile strip, titles and shell layout.
 // Panel components stay in lazyPanels so importing metadata never loads them.
+// `overflow` marks the less frequently used destinations: the desktop rail keeps
+// them behind a single "More" disclosure so the list fits without scrolling.
 const VIEWS = [
   {
     key: 'dashboard',
@@ -62,8 +64,22 @@ const VIEWS = [
     primary: true,
     headerless: true,
   },
-  { key: 'skills', labelKey: 'navigation.skills', icon: Sparkles, primary: true, headerless: true },
-  { key: 'tools', labelKey: 'navigation.tools', icon: Plug, primary: true, headerless: true },
+  {
+    key: 'skills',
+    labelKey: 'navigation.skills',
+    icon: Sparkles,
+    primary: true,
+    headerless: true,
+    overflow: true,
+  },
+  {
+    key: 'tools',
+    labelKey: 'navigation.tools',
+    icon: Plug,
+    primary: true,
+    headerless: true,
+    overflow: true,
+  },
   // Preserve the existing command palette order as well as the rail order.
   {
     key: 'market',
@@ -71,6 +87,7 @@ const VIEWS = [
     icon: Store,
     primary: true,
     headerless: true,
+    overflow: true,
     titleOrder: 14,
   },
   {
@@ -79,6 +96,7 @@ const VIEWS = [
     icon: Wallet,
     primary: true,
     headerless: true,
+    overflow: true,
     titleOrder: 11,
   },
   {
@@ -87,6 +105,7 @@ const VIEWS = [
     icon: FileText,
     primary: true,
     headerless: true,
+    overflow: true,
     titleOrder: 12,
   },
   {
@@ -95,6 +114,7 @@ const VIEWS = [
     icon: Lightbulb,
     primary: true,
     headerless: true,
+    overflow: true,
     titleOrder: 13,
   },
   {
@@ -103,6 +123,7 @@ const VIEWS = [
     icon: NotebookPen,
     primary: true,
     headerless: true,
+    overflow: true,
   },
   {
     key: 'workspace',
@@ -132,6 +153,9 @@ export const VIEW_METADATA = VIEWS.map((item, index) => ({
 
 export const PRIMARY_NAV = VIEW_METADATA.filter((item) => item.primary)
 export const PINNED_NAV = VIEW_METADATA.filter((item) => !item.primary)
+// Desktop rail split: always-visible destinations vs the "More" group.
+export const MAIN_NAV = PRIMARY_NAV.filter((item) => !('overflow' in item && item.overflow))
+export const MORE_NAV = PRIMARY_NAV.filter((item) => 'overflow' in item && item.overflow)
 
 export const VIEW_TITLE = Object.defineProperties(
   {},

@@ -72,3 +72,62 @@ describe('SessionContextUsage localization', () => {
     expect(html).not.toContain('4 tur')
   })
 })
+
+describe('SessionContextUsage bar', () => {
+  beforeEach(async () => {
+    await i18next.changeLanguage('en')
+  })
+
+  function mount(node: React.ReactElement): HTMLElement {
+    const host = document.createElement('div')
+    host.innerHTML = renderToStaticMarkup(node)
+    return host
+  }
+
+  it('prints figures without a tilde and states the estimate once', () => {
+    const host = mount(
+      <SessionContextUsage info={info} ctxWindow={1_000} ctxUsed={620} ctxFree={380} ctxPct={62} />,
+    )
+    expect(host.textContent).not.toContain('~')
+    expect(host.innerHTML).not.toContain('~')
+    expect(host.textContent?.split('Figures that were not measured are approximate.')).toHaveLength(
+      2,
+    )
+  })
+
+  it('folds buckets under 1% into one "Other" row that names them in its tooltip', () => {
+    const host = mount(
+      <SessionContextUsage
+        info={info}
+        ctxWindow={100_000}
+        ctxUsed={620}
+        ctxFree={99_380}
+        ctxPct={1}
+      />,
+    )
+    const other = host.querySelector<HTMLElement>('[data-testid="context-usage-row-other"]')!
+    expect(other.textContent).toContain('Other')
+    expect(other.textContent).toContain('·6')
+    expect(other.querySelector('[title]')?.getAttribute('title')).toContain('System prompt: 180')
+    expect(host.querySelector('[data-testid="context-usage-row-system"]')).toBeNull()
+  })
+
+  it('draws each legend swatch in the colour of its bar segment, three tones at most', () => {
+    const host = mount(
+      <SessionContextUsage info={info} ctxWindow={1_000} ctxUsed={620} ctxFree={380} ctxPct={62} />,
+    )
+    const segments = [
+      ...host.querySelectorAll<HTMLElement>('[data-testid="context-usage-bar"] > div'),
+    ]
+    const swatches = [
+      ...host.querySelectorAll<HTMLElement>(
+        '[data-testid^="context-usage-row-"] > span:first-child',
+      ),
+    ]
+    expect(segments).toHaveLength(info.fillers.length)
+    expect(swatches.map((s) => s.style.backgroundColor)).toEqual(
+      segments.map((s) => s.style.backgroundColor),
+    )
+    expect(new Set(segments.map((s) => s.dataset.tone)).size).toBeLessThanOrEqual(3)
+  })
+})

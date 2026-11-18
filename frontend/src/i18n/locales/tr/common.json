@@ -132,6 +132,14 @@
     "otherWorkspaceActivity": "Başka workspace’te yeni etkinlik",
     "collapse": "Daralt",
     "collapseNavigation": "Navbarı daralt",
+    "moreNavigation": "Daha fazla",
+    "backendUnreachable": {
+      "title": "Sunucuya ulaşılamıyor",
+      "description": "Workspace listesi alınamadı. Verilerin yerinde duruyor; sunucu yanıt verdiğinde uygulama kendiliğinden açılır.",
+      "retrying": "Yeniden deneniyor…",
+      "autoRetry": "Bağlantı kendiliğinden yeniden denenecek.",
+      "retry": "Şimdi yeniden dene"
+    },
     "mainNavigation": "Ana gezinme",
     "workspaceList": "Workspace listesi",
     "untitled": "İsimsiz",

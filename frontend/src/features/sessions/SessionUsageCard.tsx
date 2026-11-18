@@ -23,7 +23,7 @@ export function SessionUsageCard({ sessionUsage }: { sessionUsage: SessionUsageD
       </div>
       {/* Savings breakdown: prompt-cache USD */}
       <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-success)_6%,transparent)] px-2.5 py-2">
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-success)]">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-success)]">
           <PiggyBank size={12} /> {t('usage.savings')}
         </div>
         {sessionUsage.savingsUSD > 0 && (

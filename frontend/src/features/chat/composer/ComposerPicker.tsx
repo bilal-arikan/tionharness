@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import type { PickerOption } from './pickerOptions'
+import { PickerGlyph } from './PickerGlyph'
+import { TRIGGER_DEFAULT, TRIGGER_FRAME, TRIGGER_SET } from './buttonStyles'
 
 interface Props {
   value: string
@@ -22,7 +24,8 @@ interface Props {
 // ComposerPicker is the shared compact dropdown used by the composer's per-turn
 // selectors (reasoning level, permission mode): a small trigger button that opens
 // an option menu above it. The choice applies to the next message; the menu closes
-// on select or outside click. Active (non-default) selections get an accent look.
+// on select or outside click. A non-default selection is shown in full-ink text;
+// the accent stays reserved for the send action.
 export function ComposerPicker({
   value,
   onChange,
@@ -36,27 +39,23 @@ export function ComposerPicker({
   const [open, setOpen] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
   const current = options.find((o) => o.value === value) ?? options[0]
-  const leading = triggerIcon ?? (current.icon ? <span>{current.icon}</span> : null)
+  const leading = triggerIcon ?? <PickerGlyph option={current} size={18} />
 
   return (
-    // Labelled triggers stack the label under the glyph in small type and stretch
-    // to the toolbar row's height, so they keep the icon-button footprint.
-    <div ref={rootRef} className={`relative shrink-0 ${iconOnly ? '' : 'flex self-stretch'}`}>
+    // Every trigger shares the toolbar's one control height; a labelled trigger
+    // puts its label beside the glyph rather than under it.
+    <div ref={rootRef} className="relative shrink-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         title={title(current)}
-        className={`flex items-center rounded-xl border px-2.5 text-sm transition ${
-          iconOnly ? 'gap-1 py-3' : 'flex-col justify-center py-1'
-        } ${
-          value
-            ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-            : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-        }`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`${TRIGGER_FRAME} gap-1.5 ${value ? TRIGGER_SET : TRIGGER_DEFAULT}`}
       >
         {leading}
         {!iconOnly && (
-          <span className="hidden text-[10px] leading-none sm:inline">{current.label}</span>
+          <span className="hidden text-xs leading-none sm:inline">{current.label}</span>
         )}
       </button>
 
@@ -64,9 +63,7 @@ export function ComposerPicker({
         <div
           className={`absolute bottom-full left-0 mb-2 ${menuWidthClass} rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl`}
         >
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            {header}
-          </div>
+          <div className="px-2 py-1 text-xs text-[var(--color-text-dim)]">{header}</div>
           {options.map((o) => (
             <button
               key={o.value || 'default'}
@@ -88,7 +85,7 @@ export function ComposerPicker({
               }`}
             >
               <span className="flex items-center gap-1.5 font-medium text-[var(--color-text)]">
-                {o.icon && <span>{o.icon}</span>}
+                <PickerGlyph option={o} size={14} />
                 {o.label}
               </span>
               <span className="truncate text-xs opacity-60">{o.hint}</span>

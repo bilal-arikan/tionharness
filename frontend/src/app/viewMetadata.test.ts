@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NAV, PINNED_NAV } from './navItems'
+import { MAIN_NAV, MORE_NAV, NAV, PINNED_NAV } from './navItems'
 import { HEADERLESS_VIEWS, VIEW_TITLE } from './viewRegistry'
 
 describe('navigation destinations', () => {
@@ -23,6 +23,28 @@ describe('navigation destinations', () => {
       'notes',
     ])
     expect(PINNED_NAV.map((item) => item.key)).toEqual(['workspace', 'settings'])
+    // The desktop rail splits the same list: always-visible vs the "More" group.
+    expect(MAIN_NAV.map((item) => item.key)).toEqual([
+      'dashboard',
+      'chat',
+      'agents',
+      'rota',
+      'explorer',
+      'board',
+      'schedules',
+      'flows',
+      'artifacts',
+    ])
+    expect(MORE_NAV.map((item) => item.key)).toEqual([
+      'skills',
+      'tools',
+      'market',
+      'budget',
+      'prompts',
+      'insights',
+      'notes',
+    ])
+    expect([...MAIN_NAV, ...MORE_NAV]).toEqual(NAV)
     const destinations = [...NAV, ...PINNED_NAV].map((item) => item.key)
     expect(new Set(destinations).size).toBe(destinations.length)
     expect(destinations.every((key) => key in VIEW_TITLE)).toBe(true)

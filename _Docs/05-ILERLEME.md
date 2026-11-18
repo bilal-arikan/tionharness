@@ -9,6 +9,66 @@
 - [Eylül 2026, 27 Eylül ve öncesi](arsiv/05-ILERLEME-2026-09.md)
 - [Haziran 2026 ve öncesi](05-ARSIV.md)
 
+## Arayüz sadeleştirmesi: sohbet ekranı ve kabuk (2026-11-18)
+
+Canlı arayüz incelemesinin sohbet ekranı ve genel kabuk bulguları uygulandı. Yazı boyutu
+ölçeği ve araç listesi (düşünce satırları) bilerek bu turun dışında; diğer ekranlar
+(Panel, Görevler, Rota, Ajanlar) da sonraya bırakıldı.
+
+Sohbet:
+
+- Düz yazı transkriptte `72ch` ile sınırlı (`styles/layout.css`, `.th-transcript`); kod
+  blokları, tablolar ve araç satırları tam genişlikte kalıyor.
+- Cache sıcaklığı ve "N pencerede açık" bilgisi artık transkriptin üstünde yüzen hap değil;
+  composer kartının altında, opak zeminde tek satır (`ComposerStatusLine`). Salt okunur
+  koşu günlüğünde aynı satır yığının sonunda.
+- Workspace öneri kartları: X artık yalnız "şimdilik kapat" (kalıcı kayıt yok); kalıcı yok
+  sayma ayrı "Bir daha gösterme" metin eylemi. Kartlar nötr zeminli, yalnız ikon tonlu.
+- Composer araç çubuğu: bütün kontroller tek yükseklikte (`CONTROL_H`), vurgu rengi yalnız
+  Gönder'de ve açık durumdaki düğmede. İzin modu ile araç bilgisi tek "tur ayarları"
+  düğmesinin arkasında; varsayılan dışı izin modu veya açık araç paneli grubu görünür tutar.
+- Ajan kaynaklı gelen mesaj (`PeerTurn`): markdown işleniyor, düz metnin satır sonları ve
+  Windows yollarındaki ters eğik çizgiler korunuyor (`hardBreaks.ts`), asistan kartıyla aynı
+  genişlikte ve uzunsa katlanıyor (`CollapsibleBody`).
+- Satır içi kod ve yol bağlantıları nötr mürekkep renginde; amber yalnız birincil eylem ve
+  seçili durumda.
+- Mesaj altı: token sayıları ipucu balonunda (`TurnUsageMeta`), aksiyonlar çerçevesiz ikon.
+  Aksiyonlar bilerek hover'a gizlenmedi: 2026-07-23 kararı (görünürlük) korunuyor.
+- Sabit emoji glifleri (araç, süre, uyarı, izin modu, yapılacaklar) ikon setine geçti.
+  Kullanıcının seçtiği ajan/workspace emojileri ve oturum başlıkları veri olduğu için aynı.
+- Oturum listesi: sayısı 0 olan filtre çipi nötr, filtre bloğu varsayılan kapalı; satırda
+  başlık tam genişlik, altında tek gri satır, SES numarası yalnız hover/odakta.
+- Oturum detay paneli: bağlam çubuğu 8 renk yerine 3 ton, pencerenin %1'inin altındaki
+  kovalar "Diğer" satırında, rakamlardaki "~" yerine tek not; yükleme metni panel
+  çerçevesinde ortalı.
+- Bölüm etiketleri büyük harf yerine normal yazım (sohbet, oturum sütunu, detay paneli ve
+  ortak `SidebarHeader`).
+
+Kabuk:
+
+- Sol menü: Skills, Araçlar, Market, Bütçe, Promptlar, İçgörü ve Notlar "Daha fazla"
+  altında (etiketli menüde kalıcı açılır grup, ikon şeridinde açılır menü). Şerit yaklaşık
+  590 px yükseklikten itibaren kaydırmasız sığıyor.
+- Rota düzeyi yükleme: boş ekranda spinner yerine çerçeveyi koruyan `RouteSkeleton`.
+- `/api/workspaces` başarısız olursa karşılama ekranı yerine "Sunucuya ulaşılamıyor" ekranı
+  (yeniden dene düğmesi, 1/2/4/8/15 sn otomatik deneme, sunucu dönünce tam yenileme).
+  Karşılama yalnız sunucu gerçekten boş liste döndüğünde (`bootScreen.ts`).
+- Zemindeki amber parıltı (`body::before`) kaldırıldı.
+
+Dikey ekran denetimi (375×812 telefon, 768×1024 tablet) iki kusur çıkardı, ikisi de
+düzeltildi: composer'daki açık/kapalı düğmeler vurgu rengini almıyordu (`BTN_ICON` üstüne
+eklenen renk sınıfı stil sırasında kaybediyordu; artık `BTN_ICON_ON` gibi tam sınıf
+setleri var) ve telefonda etiketsiz tetikleyiciler diğer düğmelerden dardı (hepsi artık
+en az 44 px). Çok satırlı yol bağlantıları da sola hizalı.
+
+Doğrulama: `tsc -b`, vitest 1262/1262, `depcheck` ve `git diff --check` temiz. Tarayıcıda
+1024 ve 1440 genişlikte: composer kontrolleri 40 px, düz yazı 624–636 px, durum satırı
+composer altında, "Daha fazla" menüsü, detay paneli; backend durdurulup açılarak kesinti
+ekranı ve kendiliğinden toparlanma denendi. `go test ./...` içinde üç test bu makinede
+(Go 1.27.1) başarısız: `climcp` `TestHookExecutableMissing`, `providers`
+`TestCodexIdleWatchdogResumesAfterToolCompletes`, `tools`
+`TestCleanRoot_JunctionRootIsNotResolved`. Bu turda Go dosyası değişmedi.
+
 ## Doküman düzeltmesi: web toggle'ı, Node sürümü, kalıtım alanları (2026-11-18)
 
 16–17 Kasım commit'lerinden sonra eskiyen yerler düzeltildi (davranış değişmedi):

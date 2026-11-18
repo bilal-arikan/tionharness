@@ -125,27 +125,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Subtle ambient depth — a faint accent glow anchored to the top corners.
-   Sits behind all content so the flat canvas reads less plain. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      60rem 40rem at 100% -10%,
-      color-mix(in srgb, var(--color-accent) 9%, transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      50rem 36rem at -10% 0%,
-      color-mix(in srgb, var(--color-accent) 6%, transparent),
-      transparent 55%
-    );
-}
-
+/* The page ground is flat: no accent glow behind the content, in any theme. */
 #root {
   position: relative;
   z-index: 1;

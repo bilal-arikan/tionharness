@@ -26,7 +26,7 @@ export function ErrorStep({ step }: Props) {
     <div className="flex items-start gap-2 rounded-md border border-[color-mix(in_srgb,var(--color-danger)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] px-3 py-1.5 text-xs text-[var(--color-danger)]">
       <HeaderIcon size={14} className="mt-0.5 shrink-0" />
       <div className="min-w-0 flex-1">
-        {limitTitle && <div className="mb-0.5 font-semibold">⛔ {limitTitle}</div>}
+        {limitTitle && <div className="mb-0.5 font-semibold">{limitTitle}</div>}
         <span className="whitespace-pre-wrap break-words">{step.text || t('error.generic')}</span>
         {limitTitle && <div className="mt-1 opacity-80">{t('error.retryHint')}</div>}
       </div>

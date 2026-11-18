@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Flame, Snowflake } from 'lucide-react'
+import { Flame, Snowflake, Timer } from 'lucide-react'
 import type { MessageUsage } from '@/types'
 import { clockTime, fullDateTime, formatDuration, formatDurationMs } from '@/shared/lib/time'
 import { serverNow } from '@/shared/lib/serverClock'
@@ -62,9 +62,10 @@ export function TurnDuration({ ms, derived = false }: { ms: number; derived?: bo
   return (
     <span
       title={derived ? t('messageMeta.durationDerived') : t('messageMeta.durationMeasured')}
-      className="text-[10px] text-[var(--color-text-dim)] opacity-70"
+      className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] opacity-70"
     >
-      ⏱ {formatDurationMs(ms)}
+      <Timer size={10} className="shrink-0" />
+      {formatDurationMs(ms)}
       {derived && <span className="opacity-60"> ~</span>}
     </span>
   )
@@ -86,9 +87,10 @@ export function LiveTimer({ startUnixSec }: { startUnixSec: number }) {
   return (
     <span
       title={t('messageMeta.liveTimer')}
-      className="text-[10px] text-[var(--color-accent)] opacity-80"
+      className="inline-flex items-center gap-1 text-[10px] text-[var(--color-accent)] opacity-80"
     >
-      ⏱ {formatDuration(now - startUnixSec)}
+      <Timer size={10} className="shrink-0" />
+      {formatDuration(now - startUnixSec)}
     </span>
   )
 }

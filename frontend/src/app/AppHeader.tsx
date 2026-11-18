@@ -79,7 +79,11 @@ export function AppHeader({
         {view === 'chat' ? (
           // Show the session's own title (not "Sohbet · Ajan"); fall back to
           // the agent name, then a generic label for a fresh untitled chat.
-          <span className="truncate text-sm font-semibold">
+          // The full title stays reachable on hover when the column is too narrow.
+          <span
+            className="truncate text-sm font-semibold"
+            title={activeSession?.title || undefined}
+          >
             {activeSession?.title ||
               agents.find((a) => a.id === activeAgentId)?.name ||
               t('shell.newChat')}

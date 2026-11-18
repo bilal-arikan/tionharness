@@ -1,5 +1,6 @@
 import { Loader2, ChevronDown, type LucideIcon } from 'lucide-react'
 import { InfoPopover } from '@/shared/components'
+import { SECTION_LABEL } from './sessionLabelStyles'
 
 // ---- presentational helpers ----
 
@@ -15,8 +16,8 @@ export function Section({
 }) {
   return (
     <section>
-      <div className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <span className="opacity-70">{title}</span>
+      <div className={`mb-2 flex items-center gap-1 ${SECTION_LABEL}`}>
+        <span>{title}</span>
         {info && <InfoPopover text={info} label={title} />}
       </div>
       {children}

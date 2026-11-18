@@ -130,6 +130,9 @@ describe.each([
     await act(() => i18next.changeLanguage(locale))
     const { nav, workspace } = renderNavigation()
 
+    // Prompts lives in the rail's "More" group, closed by default.
+    expect(nav.querySelector('[data-testid="nav-prompts"]')).toBeNull()
+    act(() => nav.querySelector<HTMLButtonElement>('[data-testid="nav-more"]')?.click())
     expect(nav.querySelector('[data-testid="nav-prompts"]')?.textContent).toBe(prompts)
     expect(
       [...workspace.querySelectorAll('button')].some((button) => button.textContent === logs),

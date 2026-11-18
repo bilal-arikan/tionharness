@@ -37,7 +37,12 @@
     "multipleQuestions_other": "Several questions ({{count}})",
     "send": "Send"
   },
+  "collapsible": {
+    "showAll": "Show all",
+    "showLess": "Show less"
+  },
   "assistant": {
+    "cacheRead": "Cache read",
     "badResponse": "This response is poor",
     "cancelled": "This response was stopped manually. Content produced up to that point was preserved.",
     "fullTrace": "full trace",

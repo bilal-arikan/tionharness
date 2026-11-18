@@ -3,13 +3,15 @@
 // successful create/attach (NOT on chat-open, so the user is never nagged mid-work).
 //
 // The rule catalog + engine live in ./recommendations (shared with the "Öneriler"
-// workspace tab). This file is just the toast presentation + ignore persistence:
-// dismissing a card (X) records its key in the workspace's ignoredRecommendations so
-// it is never re-offered; the workspace tab can review and un-ignore later.
+// workspace tab). This file is just the toast presentation + ignore persistence.
+// A card can be put away two ways: X closes it for now (it may be offered again
+// after the next create/attach), while "don't show again" records its key in the
+// workspace's ignoredRecommendations so it is never re-offered; the workspace tab
+// can review and un-ignore later.
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
-import { Lightbulb, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { api } from '@/api'
 import { fetchRecommendationData, runRules, type Rec } from './recommendations'
 
@@ -82,6 +84,10 @@ export function WorkspaceRecommendations({
     }
   }
 
+  // Close for now: nothing is persisted, so the card can come back on a later
+  // create/attach if its condition still holds.
+  const closeForNow = (key: string) => setRecs((r) => r.filter((x) => x.key !== key))
+
   const run = async (rec: Rec) => {
     setBusy(rec.key)
     try {
@@ -101,45 +107,52 @@ export function WorkspaceRecommendations({
   return (
     <div
       data-testid="workspace-recommendations"
-      className="pointer-events-none fixed bottom-24 right-4 z-40 flex max-h-[70vh] max-w-md flex-col gap-2 overflow-y-auto"
+      className="pointer-events-none fixed bottom-36 right-4 z-40 flex max-h-[60vh] w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto"
     >
       {recs.map((rec) => {
         const Icon = rec.icon
         const warn = rec.variant === 'warning'
-        const border = warn
-          ? 'border-[color-mix(in_srgb,var(--color-warning)_45%,transparent)]'
-          : 'border-[color-mix(in_srgb,var(--color-accent)_40%,transparent)]'
-        const bg = warn
-          ? 'bg-[color-mix(in_srgb,var(--color-warning)_14%,var(--color-surface))]'
-          : 'bg-[color-mix(in_srgb,var(--color-accent)_10%,var(--color-surface))]'
-        const iconColor = warn ? 'text-[var(--color-warning)]' : 'text-[var(--color-accent)]'
+        // Neutral card; only the icon carries the tone, so a stack of cards does
+        // not read as a block of warning colour over the transcript.
+        const iconColor = warn ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-dim)]'
         return (
           <div
             key={rec.key}
             data-testid={`workspace-rec-${rec.key}`}
-            className={`pointer-events-auto flex items-start gap-2 rounded-lg border ${border} ${bg} px-3 py-2.5 text-sm shadow-[var(--shadow-md)]`}
+            className="pointer-events-auto flex items-start gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5 text-sm shadow-[var(--shadow-md)]"
           >
             <Icon size={16} className={`mt-0.5 shrink-0 ${iconColor}`} />
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1.5 font-medium text-[var(--color-text)]">
-                {!warn && <Lightbulb size={12} className="text-[var(--color-accent)]" />}
-                {rec.title}
-              </p>
+              <p className="font-medium text-[var(--color-text)]">{rec.title}</p>
               <p className="mt-0.5 break-words text-xs text-[var(--color-text-dim)]">{rec.desc}</p>
-              <button
-                onClick={() => run(rec)}
-                disabled={busy === rec.key}
-                data-testid={`workspace-rec-act-${rec.key}`}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs font-medium hover:border-[var(--color-accent)] disabled:opacity-50"
-              >
-                {busy === rec.key ? '…' : rec.actionLabel}
-              </button>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <button
+                  type="button"
+                  onClick={() => run(rec)}
+                  disabled={busy === rec.key}
+                  data-testid={`workspace-rec-act-${rec.key}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs font-medium hover:border-[var(--color-text-dim)] disabled:opacity-50"
+                >
+                  {busy === rec.key ? '…' : rec.actionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => ignore(rec.key)}
+                  title={t('recommendations.toast.ignoreTitle')}
+                  data-testid={`workspace-rec-ignore-${rec.key}`}
+                  className="text-xs text-[var(--color-text-dim)] underline-offset-2 hover:text-[var(--color-text)] hover:underline"
+                >
+                  {t('recommendations.toast.ignore')}
+                </button>
+              </div>
             </div>
             <button
-              onClick={() => ignore(rec.key)}
-              title={t('recommendations.toast.ignoreTitle')}
-              data-testid={`workspace-rec-ignore-${rec.key}`}
-              className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+              type="button"
+              onClick={() => closeForNow(rec.key)}
+              title={t('recommendations.toast.closeTitle')}
+              aria-label={t('recommendations.toast.closeTitle')}
+              data-testid={`workspace-rec-close-${rec.key}`}
+              className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
             >
               <X size={14} />
             </button>

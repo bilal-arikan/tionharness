@@ -24,7 +24,6 @@ import type { Agent, Session, SearchHit } from '@/types'
 import { api } from '@/api'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { relativeTime, bucketOf, bucketLabel, BUCKET_ORDER, type Bucket } from '@/shared/lib/time'
-import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import {
   ArchiveViewBanner,
@@ -43,20 +42,19 @@ import { useStableCallback } from '@/shared/lib/useStableCallback'
 import {
   kindMeta,
   type ChipClickMode,
-  SESSION_LIST_CHIPS,
   sessionMatchesChips,
   sessionLiveScope,
-  SUBAGENT_CHIP,
   sessionChipKey,
 } from './sessionKindMeta'
-import { RunStateBadge, StatusPill } from './sessionKindBadges'
+import { SessionFilterChips } from './SessionFilterChips'
+import { SessionRowMeta } from './SessionRowMeta'
+import { SECTION_LABEL } from './sessionLabelStyles'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
 import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 import { sessionMatchesQuery } from './sessionSearch'
 import { sessionListModel } from './sessionListModel'
 import { SESSION_GROUPS, sessionGroupOf, type SessionGroup } from './sessionGroup'
 import { useTranslation } from 'react-i18next'
-import { modKeyLabel } from '@/shared/lib/platform'
 
 const SIDEBAR_WIDTH_KEY = 'tionharness.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 200
@@ -173,7 +171,7 @@ export function SessionsSidebar({
     const mode: ChipClickMode = e.ctrlKey || e.metaKey ? 'solo' : e.shiftKey ? 'invert' : 'toggle'
     onClickChip(key, mode)
   }
-  const [filtersOpen, toggleFilters] = useFilterDisclosure('sessions')
+  const [filtersOpen, toggleFilters] = useFilterDisclosure('sessions', false)
   const [query, setQuery] = useState('')
   // Cross-session message-content search (CG-16). The same box filters session
   // titles locally AND, when the query is long enough, full-text searches every
@@ -336,7 +334,7 @@ export function SessionsSidebar({
       className="th-col relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] max-md:w-[85vw] max-md:max-w-sm"
     >
       <div className="flex items-center justify-between px-3 pt-4 pb-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+        <span className={SECTION_LABEL}>
           {showArchived ? t('sidebar.archive') : t('sidebar.title')}
         </span>
         <div className="flex shrink-0 items-center gap-1">
@@ -443,8 +441,9 @@ export function SessionsSidebar({
       </div>
 
       {/* Multi-select chips: every session kind plus the live scope.
-          All start selected — unticking a chip hides that slice. The strip folds
-          behind its toggle; the badge keeps unticked chips visible when folded. */}
+          All start selected — unticking a chip hides that slice. The strip is
+          folded behind its toggle until the user opens it (the choice is
+          remembered); the badge keeps unticked chips visible when folded. */}
       <div className="px-3 pb-1">
         <FilterToggle
           open={filtersOpen}
@@ -455,34 +454,7 @@ export function SessionsSidebar({
         />
       </div>
       {filtersOpen && (
-        <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
-          {SESSION_LIST_CHIPS.map((f) => {
-            const on = chipSet.has(f.key)
-            const Icon = f.key === SUBAGENT_CHIP ? Sparkles : null
-            return (
-              <button
-                key={f.key}
-                onClick={(e) => clickChip(f.key, e)}
-                title={t('sidebar.filterTitle', {
-                  label: f.label,
-                  count: chipCounts.get(f.key) ?? 0,
-                  mod: modKeyLabel(),
-                })}
-                aria-pressed={on}
-                data-chip={f.key}
-                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
-                  on
-                    ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-                    : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
-                }`}
-              >
-                {Icon && <Icon size={11} />}
-                {f.label}
-                <span className="opacity-60">{chipCounts.get(f.key) ?? 0}</span>
-              </button>
-            )
-          })}
-        </div>
+        <SessionFilterChips chipSet={chipSet} chipCounts={chipCounts} onClickChip={clickChip} />
       )}
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -495,9 +467,7 @@ export function SessionsSidebar({
         {!loading &&
           groups.map(({ bucket, items }) => (
             <div key={bucket} className="mb-1">
-              <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-                {bucketLabel(bucket)}
-              </div>
+              <div className={`px-3 pt-3 pb-1 ${SECTION_LABEL}`}>{bucketLabel(bucket)}</div>
               {items.map((s) => {
                 // Sessions outlive their agent, so resolve rather than find:
                 // a deleted owner still renders (badged) instead of vanishing.
@@ -513,9 +483,9 @@ export function SessionsSidebar({
                   (streamingSessionIds?.has(s.id) ?? false) || (runtime?.running ?? false)
                 const hasDraft = draftIds.has(s.id)
                 const meta = kindMeta(sessionChipKey(s))
-                const KindIcon = meta.icon
                 const isSelected = sel.isSelected(s.id)
                 const displayedModel = sessionListModel(s.model, owner?.model, isStreaming)
+                const rowLabel = sessionRowLabel(agents, s)
                 return (
                   <div
                     key={s.id}
@@ -528,6 +498,7 @@ export function SessionsSidebar({
                     }`}
                   >
                     <button
+                      title={`${rowLabel} · ${s.id}`}
                       onClick={(e) => {
                         // Ctrl/Cmd or Shift turns the click into a selection
                         // gesture; a plain click opens the session as before.
@@ -581,64 +552,17 @@ export function SessionsSidebar({
                           <span
                             className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}
                           >
-                            {sessionRowLabel(agents, s)}
-                          </span>
-                          {s.kind === 'spawned' && (
-                            <span
-                              className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
-                              title={
-                                s.parentSessionId
-                                  ? t('sidebar.createdByHandoff')
-                                  : t('sidebar.createdBySpawn')
-                              }
-                            >
-                              {s.parentSessionId
-                                ? `↩ ${t('sidebar.handoff')}`
-                                : `✦ ${t('sidebar.spawn')}`}
-                            </span>
-                          )}
-                          {/* Finished task/flow runs carry a pass/fail pill. */}
-                          {!isStreaming && runtime?.lastStatus && (
-                            <StatusPill status={runtime.lastStatus} />
-                          )}
-                          {/* How the last BACKGROUND turn ended (spawn/
-                              schedule runs). Independent of the archive filter:
-                              this is the run outcome, `state` is visibility.
-                              Hidden while a turn is live — the pulsing dot and
-                              "yazıyor…" already say what is happening now, and a
-                              stale outcome next to them reads as contradictory. */}
-                          {!isStreaming && <RunStateBadge runState={s.runState} />}
-                        </span>
-                        {/* Meta row: kind badge + status/time on the left, the
-                            session ID on a row of its own below the title. */}
-                        <span className="flex items-center gap-1.5 text-[10px]">
-                          <KindIcon size={11} className="shrink-0 opacity-60" />
-                          <span className="shrink-0 opacity-60">{meta.label}</span>
-                          {displayedModel && (
-                            <span
-                              className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[9px] text-[var(--color-text-dim)]"
-                              title={t('sidebar.model', { model: displayedModel })}
-                            >
-                              {modelDisplayName(displayedModel)}
-                            </span>
-                          )}
-                          {isStreaming ? (
-                            <span className="truncate font-medium text-[var(--color-success)]">
-                              {t('sidebar.writing')}
-                            </span>
-                          ) : (
-                            <span className="truncate opacity-60">
-                              · {relativeTime(s.updatedAt)} ·{' '}
-                              {t('sidebar.messages', { count: s.messageCount })}
-                            </span>
-                          )}
-                          <span
-                            className="ml-auto shrink-0 font-mono opacity-50"
-                            title={t('sidebar.sessionId')}
-                          >
-                            {s.id}
+                            {rowLabel}
                           </span>
                         </span>
+                        <SessionRowMeta
+                          session={s}
+                          kindLabel={meta.label}
+                          kindIcon={meta.icon}
+                          displayedModel={displayedModel}
+                          isStreaming={isStreaming}
+                          lastStatus={runtime?.lastStatus}
+                        />
                       </span>
                     </button>
                   </div>
@@ -681,8 +605,8 @@ export function SessionsSidebar({
         {/* Cross-session message matches (CG-16) — shown whenever a search is active. */}
         {query.trim().length >= 2 && (
           <div className="mt-2 border-t border-[var(--color-border)] pt-2">
-            <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-              <MessageSquareText size={11} />
+            <div className={`flex items-center gap-1.5 px-3 pb-1 ${SECTION_LABEL}`}>
+              <MessageSquareText size={12} />
               {t('sidebar.inMessages')}
               {searching ? '…' : hits.length ? ` (${hits.length})` : ''}
             </div>
@@ -698,7 +622,7 @@ export function SessionsSidebar({
                 className="mb-0.5 flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left transition hover:bg-[var(--color-surface-2)]"
               >
                 <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
-                  <span className="rounded bg-[var(--color-surface-2)] px-1 py-px text-[9px] uppercase tracking-wide">
+                  <span className="rounded bg-[var(--color-surface-2)] px-1 py-px">
                     {h.role === 'assistant'
                       ? t('sidebar.role.agent')
                       : h.role === 'user'

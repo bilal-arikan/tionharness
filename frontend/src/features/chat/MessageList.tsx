@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { RefreshCw } from 'lucide-react'
 import type { Agent, Artifact, Message } from '@/types'
 import { useStableCallback } from '@/shared/lib/useStableCallback'
 import { MessageTime, LiveTimer } from './MessageMeta'
@@ -483,7 +484,7 @@ export function MessageList({
         role="log"
         aria-live="polite"
         aria-label={t('messageList.history')}
-        className="th-measure h-full overflow-y-auto pb-6 pt-2"
+        className="th-measure th-transcript h-full overflow-y-auto pb-6 pt-2"
         style={{ paddingBottom: bottomInset || undefined, overflowAnchor: 'none' }}
       >
         <div className="w-full">
@@ -679,7 +680,10 @@ function CLIColdStartDivider() {
       title={t('messageList.cliRestartDescription')}
     >
       <span className="h-px flex-1 bg-[var(--color-border)]" />
-      <span className="shrink-0 opacity-80">🔄 {t('messageList.cliRestart')}</span>
+      <span className="inline-flex shrink-0 items-center gap-1 opacity-80">
+        <RefreshCw size={10} />
+        {t('messageList.cliRestart')}
+      </span>
       <span className="h-px flex-1 bg-[var(--color-border)]" />
     </div>
   )

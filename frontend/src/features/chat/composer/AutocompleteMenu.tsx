@@ -25,9 +25,7 @@ export function AutocompleteMenu({ mode, items, sel, onHover, onChoose }: Props)
   const { t } = useTranslation('chatControls')
   return (
     <div className="absolute bottom-full left-6 mb-2 max-h-64 w-80 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1 shadow-xl">
-      <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-        {t(HEADING_KEYS[mode])}
-      </div>
+      <div className="px-2 py-1 text-xs text-[var(--color-text-dim)]">{t(HEADING_KEYS[mode])}</div>
       {items.map((it, i) => (
         <button
           key={it.key}

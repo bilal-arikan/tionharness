@@ -215,11 +215,13 @@
     "you": "you"
   },
   "contextUsage": {
+    "approxNote": "Figures that were not measured are approximate.",
     "explanation": "This is the estimated size of the next request. Lifetime token usage adds up every model call and is not the amount currently held in the context window.",
     "estimated": "Character-based estimate",
     "exact": "Exact count / measured",
     "exceeded": "Window exceeded — older turns will be compressed into a summary on the next turn.",
     "free": "Free space",
+    "other": "Other",
     "filler": {
       "artifacts": "Artifacts",
       "assistant": "Assistant",
@@ -238,8 +240,8 @@
       "tools": "Tools",
       "user": "User"
     },
-    "summarized_one": "The first {{count}} message was folded into the summary (~{{tokens}} tokens).",
-    "summarized_other": "The first {{count}} messages were folded into the summary (~{{tokens}} tokens).",
+    "summarized_one": "The first {{count}} message was folded into the summary (about {{tokens}} tokens).",
+    "summarized_other": "The first {{count}} messages were folded into the summary (about {{tokens}} tokens).",
     "title": "Context window · {{used}}/{{window}} ({{percent}}%)"
   },
   "debug": {

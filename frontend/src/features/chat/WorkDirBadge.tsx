@@ -6,6 +6,7 @@ import { api } from '@/api'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import type { WorkdirInfo, BrowseResp } from '@/types'
 import { Button } from '@/shared/components'
+import { TRIGGER_DEFAULT, TRIGGER_FRAME, TRIGGER_SET } from './composer/buttonStyles'
 
 // basename returns the last path segment for a compact badge label, handling
 // both Windows ("\\") and POSIX ("/") separators.
@@ -96,10 +97,8 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
             ? `${t('workdir.current', { path: info.effective })}${info.branch ? ` (${info.branch})` : ''}`
             : t('workdir.select')
         }
-        className={`flex max-w-[220px] items-center gap-1 rounded-xl border px-2.5 py-3 text-sm transition disabled:opacity-30 ${
-          isOverride
-            ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-            : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+        className={`${TRIGGER_FRAME} max-w-[220px] gap-1.5 disabled:opacity-30 ${
+          isOverride ? TRIGGER_SET : TRIGGER_DEFAULT
         }`}
       >
         <FolderOpen size={15} className="shrink-0" />
@@ -110,7 +109,7 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
         <span className="hidden min-w-0 flex-col items-start gap-0 leading-tight sm:flex">
           <span className="max-w-full truncate text-xs">{label}</span>
           {info?.branch && (
-            <span className="flex max-w-full items-center gap-0.5 text-[10px] opacity-70">
+            <span className="flex max-w-full items-center gap-0.5 text-[11px] opacity-70">
               <GitBranch size={10} className="shrink-0" />
               <span className="truncate">{info.branch}</span>
             </span>
@@ -121,9 +120,7 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
       {open && (
         <div className="absolute bottom-full left-0 mb-2 w-80 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 shadow-xl">
           <div className="mb-1 flex items-center justify-between px-1">
-            <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-              {t('workdir.heading')}
-            </span>
+            <span className="text-xs text-[var(--color-text-dim)]">{t('workdir.heading')}</span>
             {info?.dir && (
               <button
                 onClick={() => apply('')}

@@ -8,6 +8,13 @@ import { Badge, KeyValueRow as Row, TagEditor } from '@/shared/components'
 import { ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
 import { Section, ActionBtn } from './SessionDetailBits'
+import { SECTION_LABEL } from './sessionLabelStyles'
+import {
+  SESSION_DETAIL_DEFAULT_WIDTH,
+  SESSION_DETAIL_MAX_WIDTH,
+  SESSION_DETAIL_MIN_WIDTH,
+  SESSION_DETAIL_WIDTH_KEY,
+} from './sessionDetailWidth'
 import { SessionTitleBlock } from './SessionTitleBlock'
 import { SessionProcessCard } from './SessionProcessCard'
 import { SessionContextUsage } from './SessionContextUsage'
@@ -70,10 +77,10 @@ export function SessionDetailPanel({
   // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
   // is on the LEFT edge and the drag direction is inverted (drag left = wider).
   const { width, startDrag } = useResizableSidebar({
-    storageKey: 'tionharness.sessionInfoWidth',
-    defaultWidth: 320,
-    min: 280,
-    max: 640,
+    storageKey: SESSION_DETAIL_WIDTH_KEY,
+    defaultWidth: SESSION_DETAIL_DEFAULT_WIDTH,
+    min: SESSION_DETAIL_MIN_WIDTH,
+    max: SESSION_DETAIL_MAX_WIDTH,
     invert: true,
     // Docked only on wide/ultra (a drawer elsewhere), so no tier cap.
     capToTier: false,
@@ -299,9 +306,7 @@ export function SessionDetailPanel({
       <div className="flex h-full flex-col overflow-y-auto">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-              {t('detail.title')}
-            </span>
+            <span className={SECTION_LABEL}>{t('detail.title')}</span>
             {/* Machine-written transcripts (insight scans, run logs) take
                 no new user turns, so the composer is hidden. Say so here, or the
                 missing composer looks like a bug. */}
@@ -369,7 +374,7 @@ export function SessionDetailPanel({
 
             {/* Tags — free-form labels (also drive tag-triggered automations) */}
             <section>
-              <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+              <div className={`mb-2 flex items-center gap-1.5 ${SECTION_LABEL}`}>
                 <span>{t('detail.tags')}</span>
               </div>
               <TagEditor

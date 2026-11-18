@@ -1,5 +1,5 @@
 // Categorical colors: stable hues that distinguish *data categories* (call
-// kinds, context-bucket roles, ...). Unlike the theme tokens in index.css, these
+// kinds, ...). Unlike the theme tokens in index.css, these
 // are intentionally fixed — they identify a category rather than express UI
 // chrome, so they deliberately do NOT track the light/dark theme. Centralised
 // here so the same category reads with the same hue everywhere it appears.
@@ -24,35 +24,4 @@ export const KIND_COLORS: Record<string, string> = {
 
 export function kindColor(kind: string): string {
   return KIND_COLORS[kind] ?? CATEGORY_FALLBACK
-}
-
-// Context-bucket role colors — used by the session context-usage bar + legend.
-// `user` intentionally maps to the live accent token so the user's own share
-// matches the app accent.
-const ROLE_COLORS: Record<string, string> = {
-  summary: '#f59e0b', // amber — folded history
-  user: 'var(--color-accent)',
-  // Machine-injected prompts that ride the "user" role on the wire but are not
-  // the human typing: wake/schedule auto-resumes. Split out so an autonomous
-  // session's context does not read as if the user wrote hundreds of KB.
-  // Deliberately NOT accent-coloured — the accent is reserved for the human's
-  // own share.
-  'auto-prompt': '#eab308', // yellow — schedule_wake / scheduled routine prompts
-  assistant: '#10b981', // emerald
-  tool: '#8b5cf6', // violet — tool-result messages
-  tools: '#a855f7', // purple — tool/MCP schemas (always-sent catalog)
-  skills: '#0ea5e9', // sky — Available Skills catalog block
-  'lazy-tools': '#c084fc', // light purple — load-on-demand tool catalog (names only)
-  // Recent-tool-activity recap: the bounded "- Tool(arg) → result" lines rendered
-  // from past turns' Steps traces and injected into the volatile suffix.
-  'tool-activity': '#7c3aed', // deep violet — kin to `tool`/`tools`, distinct hue
-  artifacts: '#ec4899', // pink — session artifact context block
-  // CLI-wrapper harness (claude-cli's own system prompt + built-in tools + MCP
-  // bridge): billed every call, invisible in the composed request.
-  'cli-harness': '#f43f5e', // rose
-  system: '#64748b', // slate
-}
-
-export function roleColor(role: string): string {
-  return ROLE_COLORS[role] ?? CATEGORY_FALLBACK
 }

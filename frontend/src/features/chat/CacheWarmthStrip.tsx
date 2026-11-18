@@ -15,8 +15,8 @@ interface Props {
 const SOON_SEC = 5 * 60
 const MIDDLE_DOT = String.fromCharCode(0xb7)
 
-// CacheWarmthStrip sits above the composer and is the only PREVENTIVE cache
-// surface in the chat: it shows whether the session's prompt cache is still warm
+// CacheWarmthStrip is an inline item of the ComposerStatusLine and the only
+// PREVENTIVE cache surface in the chat: it shows whether the session's prompt cache is still warm
 // and how long is left, so the user can choose to answer now rather than pay a
 // full cold prefix later. Everything else about caching in the chat reports a
 // cost already incurred.
@@ -51,40 +51,38 @@ export function CacheWarmthStrip({ messages, summary }: Props) {
   if (!lastAt) return null
 
   return (
-    <div className="flex justify-center pb-1">
-      <span
-        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[10px] shadow-[var(--shadow-sm)]"
-        title={warm ? t('cache.warmDescription') : t('cache.coldDescription')}
-      >
-        {warm ? (
-          <>
-            <Flame size={11} className="shrink-0 text-[var(--color-warning)]" />
-            <span
-              className={
-                remaining <= SOON_SEC
-                  ? 'font-mono text-[var(--color-warning)]'
-                  : 'font-mono text-[var(--color-text-dim)]'
-              }
-            >
-              {t('cache.warm', { remaining: formatCountdown(remaining) })}
-            </span>
-          </>
-        ) : (
-          <>
-            <Snowflake size={11} className="shrink-0 text-[var(--color-text-dim)]" />
-            <span className="text-[var(--color-text-dim)]">{t('cache.cold')}</span>
-          </>
-        )}
-        {coldTurns > 0 && (
+    <span
+      className="inline-flex items-center gap-1.5"
+      title={warm ? t('cache.warmDescription') : t('cache.coldDescription')}
+    >
+      {warm ? (
+        <>
+          <Flame size={11} className="shrink-0 text-[var(--color-warning)]" />
           <span
-            className="text-[var(--color-text-dim)] opacity-70"
-            title={t('cache.coldTurnsDescription')}
+            className={
+              remaining <= SOON_SEC
+                ? 'font-mono text-[var(--color-warning)]'
+                : 'font-mono text-[var(--color-text-dim)]'
+            }
           >
-            {MIDDLE_DOT} {t('cache.coldTurns', { count: coldTurns })}
+            {t('cache.warm', { remaining: formatCountdown(remaining) })}
           </span>
-        )}
-      </span>
-    </div>
+        </>
+      ) : (
+        <>
+          <Snowflake size={11} className="shrink-0 text-[var(--color-text-dim)]" />
+          <span className="text-[var(--color-text-dim)]">{t('cache.cold')}</span>
+        </>
+      )}
+      {coldTurns > 0 && (
+        <span
+          className="text-[var(--color-text-dim)] opacity-70"
+          title={t('cache.coldTurnsDescription')}
+        >
+          {MIDDLE_DOT} {t('cache.coldTurns', { count: coldTurns })}
+        </span>
+      )}
+    </span>
   )
 }
 

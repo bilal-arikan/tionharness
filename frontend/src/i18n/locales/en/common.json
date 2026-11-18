@@ -132,6 +132,14 @@
     "otherWorkspaceActivity": "New activity in another workspace",
     "collapse": "Collapse",
     "collapseNavigation": "Collapse navigation",
+    "moreNavigation": "More",
+    "backendUnreachable": {
+      "title": "Can't reach the server",
+      "description": "The workspace list could not be loaded. Your data is still in place; the app opens by itself once the server answers.",
+      "retrying": "Retrying…",
+      "autoRetry": "The connection is retried automatically.",
+      "retry": "Retry now"
+    },
     "mainNavigation": "Main navigation",
     "workspaceList": "Workspace list",
     "untitled": "Untitled",

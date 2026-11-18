@@ -92,7 +92,7 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                   cache_break journal event this turn produced. */}
                   {!!data.cacheBreakReason && (
                     <div className="rounded bg-[var(--color-surface-2)] px-2 py-1.5">
-                      <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                      <div className="text-xs text-[var(--color-text-dim)]">
                         {t('debug.breakReason')}
                       </div>
                       <div className="mt-0.5 font-mono text-[10px]">
@@ -223,7 +223,7 @@ function Row({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded bg-[var(--color-surface-2)] px-1.5 py-1">
-      <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">{label}</div>
+      <div className="text-xs text-[var(--color-text-dim)]">{label}</div>
       <div className="font-mono text-[11px]">{value}</div>
     </div>
   )

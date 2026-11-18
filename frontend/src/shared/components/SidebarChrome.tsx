@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 export const SELECTED_ITEM_CLS = 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
 export const SELECTED_ITEM_RING = 'ring-1 ring-[var(--color-accent)]'
 
-// SidebarHeader is the top row of a list column: an uppercase title on the left
+// SidebarHeader is the top row of a list column: a quiet sentence-case title on the left
 // and optional actions (typically a RefreshButton) on the right. Pass `onCollapse`
 // (the useCollapsibleList toggle) to get the standard in-panel collapse button:
 // on md+ it folds the docked column into the reopen rail, on narrow it closes
@@ -29,7 +29,7 @@ export function SidebarHeader({
 }) {
   return (
     <div className="flex items-center justify-between px-4 pt-4 pb-1">
-      <span className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+      <span className="min-w-0 truncate text-xs font-medium text-[var(--color-text-dim)]">
         {title}
       </span>
       {(children || onCollapse) && (

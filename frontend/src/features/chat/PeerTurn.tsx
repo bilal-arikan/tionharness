@@ -5,6 +5,9 @@ import { AgentHeader } from './AgentHeader'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
 import { DirectionBadge } from './DirectionBadge'
+import { CollapsibleBody } from './CollapsibleBody'
+import { plainTextToMarkdown } from './hardBreaks'
+import { Markdown } from '@/shared/components/markdown/Markdown'
 
 // PeerTurn renders an INCOMING agent-authored message: another agent wrote it and
 // it landed in this transcript. Although it is stored with role "user" (providers
@@ -15,7 +18,9 @@ import { DirectionBadge } from './DirectionBadge'
 // right-aligned accent bubble reserved for the human's own turns. A "→ <recipient>"
 // cue below states whom it was addressed to. Falls back
 // to the raw author id when the sender agent is not in the roster, so attribution
-// is never silently dropped.
+// is never silently dropped. The body is rendered as markdown (briefs use lists,
+// code spans and fences) with its plain line breaks kept, spans the column like
+// an assistant card, and folds when it runs long.
 export const PeerTurn = memo(function PeerTurn({
   message,
   sender,
@@ -35,7 +40,7 @@ export const PeerTurn = memo(function PeerTurn({
   return (
     <div className="group flex flex-col gap-1">
       <div className="flex w-full justify-start">
-        <div className="max-w-[80%] min-w-0 rounded-2xl border border-[var(--color-sender-bubble-border)] bg-[var(--color-sender-bubble)] px-4 py-3 text-[var(--color-on-sender-bubble)]">
+        <div className="w-full min-w-0 rounded-2xl border border-[var(--color-sender-bubble-border)] bg-[var(--color-sender-bubble)] px-4 py-3 text-[var(--color-on-sender-bubble)]">
           {sender ? (
             <AgentHeader agent={sender} onOpenAgent={onOpenAgent} />
           ) : m.authorId ? (
@@ -43,8 +48,10 @@ export const PeerTurn = memo(function PeerTurn({
               {m.authorId}
             </div>
           ) : null}
-          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--color-on-sender-bubble)]">
-            {m.text}
+          <div className="break-words text-[var(--color-on-sender-bubble)]">
+            <CollapsibleBody>
+              <Markdown>{plainTextToMarkdown(m.text)}</Markdown>
+            </CollapsibleBody>
           </div>
         </div>
       </div>

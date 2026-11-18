@@ -189,7 +189,7 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
             step.input != null &&
             !isSkill && (
               <div>
-                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                <div className="mb-1 text-xs text-[var(--color-text-dim)]">
                   {t('activity.input')}
                 </div>
                 <pre className="overflow-x-auto rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
@@ -208,14 +208,14 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
           {!isCollab &&
             (diffText ? (
               <div>
-                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                <div className="mb-1 text-xs text-[var(--color-text-dim)]">
                   {t('activity.change')}
                 </div>
                 <DiffView text={diffText} />
               </div>
             ) : isSkill && output.trim() ? (
               <div>
-                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                <div className="mb-1 text-xs text-[var(--color-text-dim)]">
                   {t('activity.skill')}
                 </div>
                 <div className="rounded bg-[var(--color-bg)] p-2">
@@ -225,7 +225,7 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
             ) : (
               output && (
                 <div>
-                  <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  <div className="mb-1 text-xs text-[var(--color-text-dim)]">
                     {t('activity.output')}
                   </div>
                   <pre

@@ -292,7 +292,9 @@
       "ignore": "Ignore"
     },
     "toast": {
-      "ignoreTitle": "Ignore (do not show again)"
+      "ignoreTitle": "Ignore (do not show again)",
+      "ignore": "Don't show again",
+      "closeTitle": "Close for now"
     },
     "rules": {
       "no-agents": {

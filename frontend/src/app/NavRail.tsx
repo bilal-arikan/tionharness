@@ -5,9 +5,15 @@ import { ChevronLeft } from 'lucide-react'
 import type { Workspace } from '@/types'
 import { WorkspaceSwitcher } from '@/features/workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
-import { NAV, PINNED_NAV } from './navItems'
+import { MAIN_NAV, PINNED_NAV } from './navItems'
 import { useTranslation } from 'react-i18next'
 import type { View } from './viewMetadata'
+import { NavItemButton } from './NavItemButton'
+import { NavMoreGroup } from './NavMoreGroup'
+import { NavMoreMenu } from './NavMoreMenu'
+import { navItemClass } from './navItemClass'
+import { ActiveBar, NavDots } from './navRailParts'
+import { useNavMoreOpen } from './useNavMoreOpen'
 
 export type { View } from './viewMetadata'
 
@@ -41,84 +47,7 @@ interface Props {
   onCreateWorkspace: (data: NewWorkspaceData) => void
 }
 
-// NAV is the primary view list. Exported so the mobile bottom bar renders the
-// same set from a single source of truth.
 const COLLAPSE_KEY = 'tionharness.navCollapsed'
-
-// navItemClass renders the shared look for a nav button. The active state is a
-// soft accent tint with an accent left indicator (instead of a heavy solid
-// fill), which reads as more modern and less visually loud.
-function navItemClass(active: boolean, collapsed: boolean): string {
-  return [
-    'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition',
-    collapsed ? 'justify-center' : '',
-    active
-      ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-      : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]',
-  ].join(' ')
-}
-
-// ActiveBar is the 2px accent indicator on the left edge of the active item.
-function ActiveBar() {
-  return (
-    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-[var(--color-accent)]" />
-  )
-}
-
-// NavDots renders the per-item notification cluster: an amber dot for unsaved
-// edits (dirty) plus an accent dot for activity — pulsing when busy, solid when
-// merely unread. Collapsed rail uses corner dots; expanded uses a right cluster.
-function NavDots({
-  busy,
-  unread,
-  dirty,
-  collapsed,
-}: {
-  busy?: boolean
-  unread?: boolean
-  dirty?: boolean
-  collapsed?: boolean
-}) {
-  const { t } = useTranslation()
-  if (!busy && !unread && !dirty) return null
-  const accentTitle = busy ? t('shell.busy') : t('shell.newActivity')
-  if (collapsed) {
-    return (
-      <>
-        {dirty && (
-          <span
-            className="absolute left-1 top-1 h-2 w-2 rounded-full bg-[var(--color-warning)] ring-2 ring-[var(--color-surface)]"
-            title={t('shell.unsaved')}
-          />
-        )}
-        {(busy || unread) && (
-          <span
-            className={`absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface)] ${
-              busy ? 'animate-pulse' : ''
-            }`}
-            title={accentTitle}
-          />
-        )}
-      </>
-    )
-  }
-  return (
-    <span className="ml-auto flex items-center gap-1.5">
-      {dirty && (
-        <span
-          className="h-2 w-2 rounded-full bg-[var(--color-warning)]"
-          title={t('shell.unsaved')}
-        />
-      )}
-      {(busy || unread) && (
-        <span
-          className={`h-2 w-2 rounded-full bg-[var(--color-accent)] ${busy ? 'animate-pulse' : ''}`}
-          title={accentTitle}
-        />
-      )}
-    </span>
-  )
-}
 
 // NavRail is the leftmost column: brand, workspace switcher, and the primary
 // view navigation. It collapses to an icon-only rail to maximise content space.
@@ -176,6 +105,8 @@ export function NavRail({
     onSelectView(v)
   }
   const navRef = useOutsideClick<HTMLElement>(() => setPeek(false), compact && peek)
+  const more = useNavMoreOpen(view)
+  const signals = { busyViews, unreadViews, dirtyViews }
 
   const active = workspaces.find((w) => w.id === activeWorkspaceId)
 
@@ -269,34 +200,29 @@ export function NavRail({
 
         {/* View navigation */}
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
-          {NAV.map((item) => {
-            const label = t(item.labelKey)
-            const Icon = item.icon
-            const isActive = view === item.key
-            const busy = busyViews?.has(item.key) ?? false
-            const unread = unreadViews?.has(item.key) ?? false
-            const dirty = dirtyViews?.has(item.key) ?? false
-            return (
-              <button
-                key={item.key}
-                onClick={() => selectView(item.key)}
-                data-testid={`nav-${item.key}`}
-                aria-label={label}
-                aria-current={isActive ? 'page' : undefined}
-                title={
-                  collapsed
-                    ? `${label}${busy ? ` · ${t('shell.busy')}` : unread ? ` · ${t('shell.newActivity')}` : ''}`
-                    : undefined
-                }
-                className={navItemClass(isActive, collapsed)}
-              >
-                {isActive && <ActiveBar />}
-                <Icon size={18} strokeWidth={2} className="shrink-0" />
-                {!collapsed && <span>{label}</span>}
-                <NavDots busy={busy} unread={unread} dirty={dirty} collapsed={collapsed} />
-              </button>
-            )
-          })}
+          {MAIN_NAV.map((item) => (
+            <NavItemButton
+              key={item.key}
+              item={item}
+              active={view === item.key}
+              collapsed={collapsed}
+              onSelect={selectView}
+              {...signals}
+            />
+          ))}
+          {/* Less frequently used destinations: a disclosure in the labelled
+              rail, a popover menu in the icon-only rail. */}
+          {collapsed ? (
+            <NavMoreMenu view={view} onSelect={selectView} {...signals} />
+          ) : (
+            <NavMoreGroup
+              view={view}
+              open={more.open}
+              onToggle={more.toggle}
+              onSelect={selectView}
+              {...signals}
+            />
+          )}
         </div>
 
         {/* Workspace + Settings (pinned at the bottom, separate from primary nav) */}

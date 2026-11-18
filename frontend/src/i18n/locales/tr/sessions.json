@@ -215,11 +215,13 @@
     "you": "siz"
   },
   "contextUsage": {
+    "approxNote": "Ölçülmemiş değerler yaklaşık tahmindir.",
     "explanation": "Bu, sıradaki isteğin tahmini büyüklüğüdür. Oturumun toplam token kullanımı tüm model çağrılarını toplar; bağlam penceresinde şu anda tutulan miktar değildir.",
     "estimated": "Karakter tabanlı tahmin",
     "exact": "Kesin sayım / ölçülmüş",
     "exceeded": "Pencere aşıldı — sonraki turda eski turlar özete sıkıştırılır.",
     "free": "Boş alan",
+    "other": "Diğer",
     "filler": {
       "artifacts": "Artifactlar",
       "assistant": "Asistan",
@@ -238,8 +240,8 @@
       "tools": "Araçlar",
       "user": "Kullanıcı"
     },
-    "summarized_one": "İlk {{count}} mesaj özete katlandı (~{{tokens}} token).",
-    "summarized_other": "İlk {{count}} mesaj özete katlandı (~{{tokens}} token).",
+    "summarized_one": "İlk {{count}} mesaj özete katlandı (yaklaşık {{tokens}} token).",
+    "summarized_other": "İlk {{count}} mesaj özete katlandı (yaklaşık {{tokens}} token).",
     "title": "Bağlam penceresi · {{used}}/{{window}} (%{{percent}})"
   },
   "debug": {

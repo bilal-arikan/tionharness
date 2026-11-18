@@ -8,15 +8,18 @@ import { api } from '@/api'
 import {
   Backdrop,
   CollapsibleListShell,
-  LoadingState,
   Toaster,
   toast,
   CommandPalette,
   type Command,
 } from '@/shared/components'
 import { NavRail, type View } from './NavRail'
+import { SessionDetailFallback } from '@/features/sessions/SessionDetailFallback'
 import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
+import { BackendUnreachableScreen } from './BackendUnreachableScreen'
+import { RouteSkeleton } from './RouteSkeleton'
+import { resolveBootScreen } from './bootScreen'
 import { AppHeader } from './AppHeader'
 import { UpdateBanner } from './UpdateBanner'
 import { ConnectionNotice } from './ConnectionNotice'
@@ -100,6 +103,9 @@ export default function App() {
   const {
     workspaces,
     loading: wsLoading,
+    loadError: wsLoadError,
+    loadRetrying: wsLoadRetrying,
+    retryLoad: retryWorkspaceLoad,
     activeWorkspaceId,
     unreadWs,
     favoriteWorkspaceId,
@@ -572,14 +578,31 @@ export default function App() {
   })
 
   // ---- First-run gating (must stay AFTER every hook above) ----
-  // Fresh install → splash while the list is loading AND until the minimum
-  // duration elapses (only when no prior setup). Returning users skip it.
-  if (!hadSetupAtBoot && (wsLoading || !minSplashElapsed)) {
+  // The splash / unreachable / onboarding decision lives in resolveBootScreen.
+  const bootScreen = resolveBootScreen({
+    hadSetupAtBoot,
+    wsLoading,
+    minSplashElapsed,
+    loadError: wsLoadError,
+    workspaceCount: workspaces.length,
+  })
+  if (bootScreen === 'splash') {
     return <SplashScreen />
+  }
+  // The workspace list request failed (backend down / proxy 502): say so and
+  // keep retrying. Never onboarding — the server has not said the list is empty.
+  if (bootScreen === 'unreachable') {
+    return (
+      <BackendUnreachableScreen
+        error={wsLoadError ?? ''}
+        retrying={wsLoadRetrying}
+        onRetry={retryWorkspaceLoad}
+      />
+    )
   }
   // List resolved and there are zero workspaces → onboarding. Closing the popup
   // without creating one provisions nothing (no default workspace).
-  if (!wsLoading && workspaces.length === 0) {
+  if (bootScreen === 'onboarding') {
     return <OnboardingScreen onCreate={handleCreateWorkspace} onAttach={handleAttachWorkspace} />
   }
 
@@ -690,7 +713,11 @@ export default function App() {
           />
         )}
 
-        <Suspense fallback={<LoadingState label={t('shell.loading')} className="flex-1" />}>
+        <Suspense
+          fallback={
+            <RouteSkeleton label={t('shell.loading')} header={HEADERLESS_VIEWS.has(view)} />
+          }
+        >
           {view === 'chat' && (
             <ChatView
               chat={chat}
@@ -757,7 +784,7 @@ export default function App() {
             />
           )}
           {view === 'rota' && activeWorkspaceId !== null && (
-            <Suspense fallback={<LoadingState label={t('shell.loading')} className="flex-1" />}>
+            <Suspense fallback={<RouteSkeleton label={t('shell.loading')} />}>
               <RotaPanel
                 workspaceId={activeWorkspaceId}
                 onError={setError}
@@ -769,7 +796,7 @@ export default function App() {
             </Suspense>
           )}
           {view === 'explorer' && activeWorkspaceId !== null && (
-            <Suspense fallback={<LoadingState label={t('shell.loadingMap')} className="flex-1" />}>
+            <Suspense fallback={<RouteSkeleton label={t('shell.loadingMap')} />}>
               <ExplorerView
                 workspaceId={activeWorkspaceId}
                 onError={setError}
@@ -801,9 +828,7 @@ export default function App() {
             />
           )}
           {view === 'flows' && (
-            <Suspense
-              fallback={<LoadingState label={t('shell.loadingFlows')} className="flex-1" />}
-            >
+            <Suspense fallback={<RouteSkeleton label={t('shell.loadingFlows')} />}>
               <FlowsPanel
                 agents={ctl.agents}
                 onError={setError}
@@ -937,7 +962,7 @@ export default function App() {
                 : 'th-drawer-from-right fixed inset-y-0 right-0 z-40 shrink-0 shadow-xl max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]'
             }
           >
-            <Suspense fallback={<LoadingState label={t('shell.loadingDetails')} />}>
+            <Suspense fallback={<SessionDetailFallback label={t('shell.loadingDetails')} />}>
               <SessionDetailPanel
                 sessionId={ctl.activeSessionId}
                 refreshKey={ctl.meterRefresh}

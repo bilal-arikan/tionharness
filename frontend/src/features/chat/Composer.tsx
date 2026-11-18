@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Paperclip, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '@/types'
 import { AttachmentChip } from './AttachmentChip'
@@ -6,7 +14,7 @@ import { WorkDirBadge } from './WorkDirBadge'
 import { api } from '@/api'
 import { PASTE_AS_FILE_THRESHOLD } from '@/shared/lib/attachments'
 import { useCatalog, thinkingOptionsForModel } from '@/shared/lib/catalog'
-import { BTN_ICON } from './composer/buttonStyles'
+import { BTN_ICON, BTN_ICON_ON } from './composer/buttonStyles'
 import { AgentSelect } from './composer/AgentSelect'
 import { ComposerPicker } from './composer/ComposerPicker'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './composer/pickerOptions'
@@ -97,6 +105,9 @@ interface Props {
   // menu in the composer or cycled with Shift+Tab; applied to the next message.
   permissionMode?: string
   onPermissionModeChange?: (v: string) => void
+  // Quiet status row rendered under the input card, on the composer's opaque
+  // ground (see ComposerStatusLine).
+  footer?: ReactNode
   agents: Agent[]
   // The agent dropdown's choices: conversation agents only (no worker profiles or
   // service system agents), plus the session's current agent. Defaults to
@@ -141,6 +152,7 @@ export function Composer({
   onAgentChange,
   commands,
   artifacts = [],
+  footer,
 }: Props) {
   const { t } = useTranslation('chat')
   // Per-session draft: unsent text is persisted in localStorage keyed by session,
@@ -162,9 +174,11 @@ export function Composer({
   // (eager vs on-demand tools) and what the MCP gateway has open. Informational
   // only — it never changes configuration, so it stays usable while streaming.
   const [toolsOpen, setToolsOpen] = useState(false)
-  // On narrow/portrait widths the per-turn pickers (thinking, permission, workdir)
-  // are collapsed behind a toggle to keep the toolbar from wrapping; they are
-  // always shown from `md:` up. Preference persists across sessions/reloads.
+  // One toggle folds the less-used toolbar controls away. From `md:` up the
+  // everyday pickers (thinking, workdir) are always shown and the toggle reveals
+  // only the rarely touched ones (permission mode, tool inspector); on narrow
+  // widths it reveals both groups, keeping the toolbar from wrapping. Preference
+  // persists across sessions/reloads.
   const [showControls, setShowControls] = useState(
     () => localStorage.getItem('tionharness.composerControlsOpen') === '1',
   )
@@ -174,6 +188,9 @@ export function Composer({
       localStorage.setItem('tionharness.composerControlsOpen', next ? '1' : '0')
       return next
     })
+  // The rarely used group never hides a state the user needs to see: a
+  // non-default permission mode or an open tool inspector keeps it on screen.
+  const showSecondary = showControls || !!permissionMode || toolsOpen
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   // Mirrors the latest text so voice-dictation callbacks append to the current
@@ -932,8 +949,9 @@ export function Composer({
           />
 
           {/* Toolbar row: left = target agent + per-turn pickers + workdir + attach;
-            right = send/streaming actions. Wraps on narrow (mobile) widths so the
-            send cluster drops to its own line instead of overflowing the viewport. */}
+            right = send/streaming actions. Every control shares one height
+            (CONTROL_H). Wraps on narrow (mobile) widths so the send cluster drops
+            to its own line instead of overflowing the viewport. */}
           <div className="flex flex-wrap items-center gap-1.5">
             <AgentSelect
               agents={selectableAgents ?? agents}
@@ -941,22 +959,9 @@ export function Composer({
               onChange={onAgentChange}
               disabled={!sessionId}
             />
-            {/* Narrow-screen toggle: reveals/hides the per-turn pickers below. Hidden
-              from `md:` up, where the pickers are always shown. */}
-            <button
-              type="button"
-              onClick={toggleControls}
-              title={t('composer.turnSettings')}
-              aria-label={t('composer.toggleTurnSettings')}
-              aria-expanded={showControls}
-              data-testid="composer-controls-toggle"
-              className={`${BTN_ICON} md:hidden ${showControls ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
-            >
-              <SlidersHorizontal size={18} />
-            </button>
-            {/* Per-turn pickers. `contents` keeps them as direct flex children (so the
-              toolbar gap is unaffected); collapsed on narrow widths unless toggled,
-              always shown from `md:` up. */}
+            {/* Everyday per-turn pickers. `contents` keeps them as direct flex
+              children (so the toolbar gap is unaffected); collapsed on narrow widths
+              unless toggled, always shown from `md:` up. */}
             <div className={`${showControls ? 'contents' : 'hidden'} md:contents`}>
               <ComposerPicker
                 value={thinkingLevel}
@@ -965,36 +970,7 @@ export function Composer({
                 header={t('composer.thinkingLevel')}
                 title={(c) => t('composer.thinkingLevelTitle', { label: c.label, hint: c.hint })}
               />
-              <ComposerPicker
-                value={permissionMode}
-                onChange={onPermissionModeChange}
-                options={permissionOptions}
-                header={t('composer.permissionMode')}
-                title={(c) => t('composer.permissionModeTitle', { label: c.label, hint: c.hint })}
-                menuWidthClass="w-60"
-                iconOnly
-              />
               <WorkDirBadge sessionId={sessionId} />
-              {/* Tool inspector: what this agent can use right now (active vs
-                on-demand) and what the MCP gateway has open. Read-only, so it is
-                never disabled by a streaming turn — only by having no agent to
-                inspect. Folded into this group so the narrow-width toolbar hides
-                it with the rest of the per-turn controls; collapsing the group
-                also closes an open panel, since the ⚙ toggle is not tagged
-                data-tool-access-toggle and so counts as an outside click. */}
-              <button
-                type="button"
-                onClick={() => setToolsOpen((o) => !o)}
-                disabled={!agentId}
-                title={t('composer.toolsTitle')}
-                aria-label={t('composer.tools')}
-                aria-expanded={toolsOpen}
-                data-testid="composer-tools"
-                data-tool-access-toggle=""
-                className={`${BTN_ICON} ${toolsOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
-              >
-                <Wrench size={18} />
-              </button>
             </div>
             {/* Attach button + hidden multi-file input. */}
             <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
@@ -1014,6 +990,50 @@ export function Composer({
               recognized text to the draft. Renders nothing when the browser lacks
               Web Speech recognition. Needs a session (nothing to dictate into). */}
             <MicButton disabled={!sessionId} onTranscript={appendTranscript} />
+
+            {/* The one toggle for everything folded away (see showControls). */}
+            <button
+              type="button"
+              onClick={toggleControls}
+              title={t('composer.turnSettings')}
+              aria-label={t('composer.toggleTurnSettings')}
+              aria-expanded={showControls}
+              data-testid="composer-controls-toggle"
+              className={showControls ? BTN_ICON_ON : BTN_ICON}
+            >
+              <SlidersHorizontal size={18} />
+            </button>
+            {/* Rarely used controls, behind the toggle at every width. */}
+            <div className={showSecondary ? 'contents' : 'hidden'}>
+              <ComposerPicker
+                value={permissionMode}
+                onChange={onPermissionModeChange}
+                options={permissionOptions}
+                header={t('composer.permissionMode')}
+                title={(c) => t('composer.permissionModeTitle', { label: c.label, hint: c.hint })}
+                menuWidthClass="w-60"
+                iconOnly
+              />
+              {/* Tool inspector: what this agent can use right now (active vs
+                on-demand) and what the MCP gateway has open. Read-only, so it is
+                never disabled by a streaming turn — only by having no agent to
+                inspect. Collapsing the group also closes an open panel, since the
+                toggle is not tagged data-tool-access-toggle and so counts as an
+                outside click. */}
+              <button
+                type="button"
+                onClick={() => setToolsOpen((o) => !o)}
+                disabled={!agentId}
+                title={t('composer.toolsTitle')}
+                aria-label={t('composer.tools')}
+                aria-expanded={toolsOpen}
+                data-testid="composer-tools"
+                data-tool-access-toggle=""
+                className={toolsOpen ? BTN_ICON_ON : BTN_ICON}
+              >
+                <Wrench size={18} />
+              </button>
+            </div>
 
             {/* Spacer pushes the send cluster to the right edge. */}
             <div className="flex-1" />
@@ -1035,6 +1055,7 @@ export function Composer({
             />
           </div>
         </div>
+        {footer}
       </div>
     </>
   )

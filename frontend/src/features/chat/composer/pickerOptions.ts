@@ -1,4 +1,5 @@
 // Option lists for the composer's per-turn pickers (see ComposerPicker).
+import { Hand, Lock, Shield, Zap, type LucideIcon } from 'lucide-react'
 import { i18next } from '@/i18n'
 
 const tx = (key: string) => i18next.t(key, { ns: 'chatControls' })
@@ -7,7 +8,10 @@ export interface PickerOption {
   value: string
   label: string
   hint: string
+  // A text glyph (the thinking-level intensity ramp).
   icon?: string
+  // An icon from the app's icon set; wins over `icon` when both are set.
+  Icon?: LucideIcon
   // When true the entry is shown greyed and non-selectable in the menu (e.g. a
   // reasoning tier the current model can't honour); `hint` carries the reason.
   disabled?: boolean
@@ -112,7 +116,7 @@ export const PERMISSION_OPTIONS: PickerOption[] = [
     get hint() {
       return tx('picker.permission.default.hint')
     },
-    icon: '🛡',
+    Icon: Shield,
   },
   {
     value: 'read-only',
@@ -122,7 +126,7 @@ export const PERMISSION_OPTIONS: PickerOption[] = [
     get hint() {
       return tx('picker.permission.readOnly.hint')
     },
-    icon: '🔒',
+    Icon: Lock,
   },
   {
     value: 'ask',
@@ -132,7 +136,7 @@ export const PERMISSION_OPTIONS: PickerOption[] = [
     get hint() {
       return tx('picker.permission.ask.hint')
     },
-    icon: '✋',
+    Icon: Hand,
   },
   {
     value: 'auto',
@@ -142,6 +146,6 @@ export const PERMISSION_OPTIONS: PickerOption[] = [
     get hint() {
       return tx('picker.permission.auto.hint')
     },
-    icon: '⚡',
+    Icon: Zap,
   },
 ]

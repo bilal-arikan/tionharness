@@ -181,7 +181,7 @@ function MarkdownImpl({ children, onOpenFile }: Props) {
           return <CodeBlock code={text.replace(/\n$/, '')} lang={match?.[1]} />
         }
         return (
-          <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 text-[0.85em] text-[var(--color-accent)]">
+          <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 text-[0.85em] text-[var(--color-text)]">
             {children}
           </code>
         )
@@ -195,7 +195,7 @@ function MarkdownImpl({ children, onOpenFile }: Props) {
             <button
               type="button"
               onClick={() => onOpenFile?.(pathTarget(url))}
-              className="break-all font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
+              className="break-all text-left font-mono text-[0.92em] underline decoration-dotted underline-offset-2 hover:text-[var(--color-accent)]"
             >
               {children}
             </button>

@@ -30,6 +30,12 @@
   padding-inline: max(var(--th-gutter), calc((100% - var(--th-measure)) / 2));
   transition: padding-inline var(--th-motion) var(--th-ease);
 }
+/* Prose inside the transcript is capped at a readable line length even when
+   its bubble is much wider. Only running text is capped: code blocks, tables,
+   diffs and tool rows keep the full width, where long lines are the content. */
+.th-transcript .sg-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4) {
+  max-width: 72ch;
+}
 /* Card-style blocks (composer chrome) keep a wider phone gutter than the
    transcript so the rounded card never touches the screen edge. */
 .th-measure-card {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { CircleCheck, ListTodo, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TodoItem } from '@/types'
 import { ScrollableCard } from '@/shared/components'
@@ -42,7 +42,11 @@ export function TodoPanel({ todos, dismissed, onDismiss }: Props) {
           onClick={() => setOpen((o) => !o)}
           className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left hover:bg-[var(--color-surface-2)]"
         >
-          <span>{allDone ? '✅' : '📋'}</span>
+          {allDone ? (
+            <CircleCheck size={14} className="shrink-0 text-[var(--color-success)]" />
+          ) : (
+            <ListTodo size={14} className="shrink-0 text-[var(--color-text-dim)]" />
+          )}
           <span className="font-medium text-[var(--color-text)]">{t('todos.title')}</span>
           {/* Slim progress bar. */}
           <span className="ml-1 hidden h-1.5 w-24 overflow-hidden rounded-full bg-[var(--color-border)] sm:block">

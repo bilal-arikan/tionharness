@@ -1,6 +1,7 @@
 import type { SessionInfo } from '@/types'
 import { Section } from './SessionDetailBits'
-import { formatTokens, pctOf, fillerColor } from './sessionDetailFormat'
+import { formatTokens, pctOf } from './sessionDetailFormat'
+import { buildContextRows, contextToneColor, type ContextRow } from './contextUsageModel'
 import { useTranslation } from 'react-i18next'
 
 const FILLER_LABEL_KEYS: Record<string, string> = {
@@ -44,6 +45,17 @@ export function SessionContextUsage({ info, ctxWindow, ctxUsed, ctxFree, ctxPct 
     const key = FILLER_LABEL_KEYS[filler.role]
     return key ? t(key) : filler.label
   }
+  const rows = buildContextRows(info.fillers, ctxWindow)
+  const rowLabel = (row: ContextRow) =>
+    row.filler ? fillerLabel(row.filler) : t('contextUsage.other')
+  // The folded row's tooltip names what it holds, so nothing becomes unreachable.
+  const rowTitle = (row: ContextRow) =>
+    row.folded
+      ? row.folded.map((f) => `${fillerLabel(f)}: ${formatTokens(f.tokens)}`).join('\n')
+      : row.calibrated
+        ? t('contextUsage.exact')
+        : t('contextUsage.estimated')
+  const hasEstimate = rows.some((row) => !row.calibrated)
   return (
     <Section
       title={t('contextUsage.title', {
@@ -53,46 +65,45 @@ export function SessionContextUsage({ info, ctxWindow, ctxUsed, ctxFree, ctxPct 
       })}
       info={t('contextUsage.explanation')}
     >
-      {/* Stacked usage bar: each filler a coloured segment, remainder free. */}
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-bg)]">
-        {info.fillers.map((f) => {
-          const label = fillerLabel(f)
-          return (
-            <div
-              key={f.role}
-              title={`${label}: ~${formatTokens(f.tokens)}`}
-              style={{
-                width: `${(f.tokens / ctxWindow) * 100}%`,
-                backgroundColor: fillerColor(f.role),
-              }}
-            />
-          )
-        })}
+      {/* Stacked usage bar: one segment per row, split by a 1px seam, the
+          remainder free. Segment and legend swatch share one colour source. */}
+      <div
+        data-testid="context-usage-bar"
+        className="flex h-2.5 w-full gap-px overflow-hidden rounded-full bg-[var(--color-bg)]"
+      >
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            data-tone={row.tone}
+            title={`${rowLabel(row)}: ${formatTokens(row.tokens)}`}
+            style={{
+              width: `${(row.tokens / ctxWindow) * 100}%`,
+              backgroundColor: contextToneColor(row.tone),
+            }}
+          />
+        ))}
       </div>
 
       <div className="mt-2.5 flex flex-col gap-1">
-        {info.fillers.map((f) => {
-          const label = fillerLabel(f)
-          return (
-            <div key={f.role} className="flex items-center gap-2 text-[11px]">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ backgroundColor: fillerColor(f.role) }}
-              />
-              <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
-                {label}
-                {f.count > 1 && <span className="text-[var(--color-text-dim)]"> ·{f.count}</span>}
-              </span>
-              <span
-                className="shrink-0 font-mono text-[var(--color-text-dim)]"
-                title={f.calibrated ? t('contextUsage.exact') : t('contextUsage.estimated')}
-              >
-                {f.calibrated ? '' : '~'}
-                {formatTokens(f.tokens)} · {pctOf(f.tokens, ctxWindow)}%
-              </span>
-            </div>
-          )
-        })}
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            data-testid={`context-usage-row-${row.key}`}
+            className="flex items-center gap-2 text-[11px]"
+          >
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
+              style={{ backgroundColor: contextToneColor(row.tone) }}
+            />
+            <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
+              {rowLabel(row)}
+              {row.count > 1 && <span className="text-[var(--color-text-dim)]"> ·{row.count}</span>}
+            </span>
+            <span className="shrink-0 font-mono text-[var(--color-text-dim)]" title={rowTitle(row)}>
+              {formatTokens(row.tokens)} · {pctOf(row.tokens, ctxWindow)}%
+            </span>
+          </div>
+        ))}
         {/* Free space */}
         <div className="flex items-center gap-2 text-[11px]">
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg)]" />
@@ -100,13 +111,19 @@ export function SessionContextUsage({ info, ctxWindow, ctxUsed, ctxFree, ctxPct 
             {t('contextUsage.free')}
           </span>
           <span className="shrink-0 font-mono text-[var(--color-text-dim)]">
-            ~{formatTokens(ctxFree)} · {pctOf(ctxFree, ctxWindow)}%
+            {formatTokens(ctxFree)} · {pctOf(ctxFree, ctxWindow)}%
           </span>
         </div>
       </div>
 
+      {/* One note instead of a "~" on every figure. */}
+      {hasEstimate && (
+        <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
+          {t('contextUsage.approxNote')}
+        </p>
+      )}
       {info.hasSummary && (
-        <p className="mt-2 text-[10px] text-[var(--color-text-dim)]">
+        <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
           {t('contextUsage.summarized', {
             count: info.summaryMsgCount,
             tokens: formatTokens(info.summaryTokens),
@@ -114,7 +131,7 @@ export function SessionContextUsage({ info, ctxWindow, ctxUsed, ctxFree, ctxPct 
         </p>
       )}
       {ctxUsed > ctxWindow && (
-        <p className="mt-1 text-[10px] text-[var(--color-warning)]">{t('contextUsage.exceeded')}</p>
+        <p className="mt-1 text-[11px] text-[var(--color-warning)]">{t('contextUsage.exceeded')}</p>
       )}
     </Section>
   )

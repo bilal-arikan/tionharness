@@ -88,9 +88,7 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
           )}
           {reply && (
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                {t('steps.result')}
-              </div>
+              <div className="mb-1 text-xs text-[var(--color-text-dim)]">{t('steps.result')}</div>
               <pre
                 className={`overflow-x-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 ${
                   step.isError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'

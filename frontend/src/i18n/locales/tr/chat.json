@@ -37,7 +37,12 @@
     "multipleQuestions_other": "Birkaç soru ({{count}})",
     "send": "Gönder"
   },
+  "collapsible": {
+    "showAll": "Tümünü göster",
+    "showLess": "Daha az göster"
+  },
   "assistant": {
+    "cacheRead": "Cache okuma",
     "badResponse": "Bu yanıt kötü",
     "cancelled": "Bu yanıt manuel olarak durduruldu. O ana kadarki içerik korundu.",
     "fullTrace": "tam iz",
