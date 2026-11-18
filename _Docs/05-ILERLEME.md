@@ -101,6 +101,28 @@ ekranı ve kendiliğinden toparlanma denendi. `go test ./...` içinde üç test 
 `TestCodexIdleWatchdogResumesAfterToolCompletes`, `tools`
 `TestCleanRoot_JunctionRootIsNotResolved`. Bu turda Go dosyası değişmedi.
 
+## Arayüz performansı: ilk hızlı düzeltmeler (2026-11-18)
+
+Bulgular ve ölçümler: [PERFORMANS-INCELEMESI-2026-11-18.md](PERFORMANS-INCELEMESI-2026-11-18.md).
+Bu turda düşük riskli maddeler uygulandı:
+
+- `vite.config.ts` `vendor-react` kuralı `/react/` alt dizgisi yerine tam paket yolu arıyor.
+  `@xyflow/react` artık başlangıç paketinde değil; ilk açılış JS+CSS 1.683 → 1.489 KB ham,
+  512 → 453 KB gzip.
+- Harita: yeni düğümler gelince mevcut düğümler tek toplu `nds.update` ile sabitleniyor
+  (eskiden düğüm başına; her güncelleme tüm kenarları yeniden bağlıyordu). Grafik vurgusu
+  aramayı 200 ms gecikmeyle izliyor.
+- Sohbet: `MessageList` ajan nesnelerini kadro başına bir kez çözüyor (satır memo'su her
+  karede kırılıyordu); `useTranscript` `transcriptPaging`'i memo'luyor.
+- `meterRefresh` `useThrottledValue` ile saniyede en fazla bir kez ilerliyor; akan turda her
+  kalıcı mesaj artık ayrı `listArtifacts` ve oturum bilgisi isteği tetiklemiyor.
+- Süreç tablosu: saniyelik sayaç `ProcessDuration` hücresinde, yalnız çalışan satırlar abone
+  ve gizli sekmede duruyor.
+
+Doğrulama: `tsc -b`, vitest 1224/1224 (Harita arama testi gecikmeyi bekleyecek şekilde
+güncellendi). Canlı yeniden ölçüm yapılmadı; `:8090` yeniden derlenip başlatılınca yeni paket
+devreye girer.
+
 ## Doküman düzeltmesi: web toggle'ı, Node sürümü, kalıtım alanları (2026-11-18)
 
 16–17 Kasım commit'lerinden sonra eskiyen yerler düzeltildi (davranış değişmedi):

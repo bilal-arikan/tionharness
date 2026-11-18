@@ -294,7 +294,11 @@ describe('ExplorerView', () => {
     expect(options[0].textContent).toContain('Fix login')
     await act(async () => (options[0] as HTMLButtonElement).click())
     expect(latestGraphProps().focusNodeId).toBe('session:SES1')
-    // The canvas gets the dimmed data too.
+    // The canvas gets the dimmed data too, once the debounced graph search
+    // (200 ms) catches up with the input.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250))
+    })
     const dimmed = latestGraphProps().nodes as { id: string; opacity?: number }[]
     expect(dimmed.find((n) => n.id === 'category:sessions')!.opacity).toBe(0.15)
   })

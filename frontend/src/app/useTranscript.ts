@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -200,14 +201,13 @@ export function useTranscript(
     setPaging(true)
     void load()
   }, [load])
-  return {
-    messages,
-    setMessages,
-    messagesLoading: loading,
-    refreshMessages,
-    transcriptPaging: {
+  // Memoized so consumers keyed on it (ChatView's current-todo memo re-parses
+  // the transcript) do not recompute on every streamed frame.
+  const messageCount = messages.length
+  const transcriptPaging = useMemo(
+    () => ({
       offset: page?.offset ?? 0,
-      total: page?.total ?? messages.length,
+      total: page?.total ?? messageCount,
       summary: page?.summary,
       participants: page?.participants,
       hasOlder: !!page?.hasMore,
@@ -216,6 +216,14 @@ export function useTranscript(
       loadOlder,
       loadNewer,
       loadLatest,
-    },
+    }),
+    [page, messageCount, paging, loadOlder, loadNewer, loadLatest],
+  )
+  return {
+    messages,
+    setMessages,
+    messagesLoading: loading,
+    refreshMessages,
+    transcriptPaging,
   }
 }

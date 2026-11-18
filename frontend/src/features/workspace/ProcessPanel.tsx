@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight, Cpu, Square } from 'lucide-react'
 import { api } from '@/api'
 import type { ProcessEntry, ProcessKind, ProcessStatus } from '@/types'
-import { clockTime, formatDurationMs, fullDateTime } from '@/shared/lib/time'
+import { clockTime, fullDateTime } from '@/shared/lib/time'
 import { Badge, EmptyState, PaneHeader, type BadgeTone } from '@/shared/components'
+import { ProcessDuration } from './ProcessDuration'
 
 interface Props {
   onError: (msg: string) => void
@@ -52,14 +53,6 @@ const KIND_OPTIONS: ProcessKind[] = ['code', 'provider', 'mcp', 'hook', 'externa
 // The "no session is linkable" verdict, shared so render-time fallbacks keep a
 // stable identity.
 const EMPTY_SESSIONS: ReadonlySet<string> = new Set()
-
-// elapsedMs is how long the entry has been running, or how long it ran. `now` is
-// passed in (rather than read here) so every row on one render shares an instant
-// and the running rows re-tick together.
-function elapsedMs(e: ProcessEntry, now: number): number {
-  const end = e.endedAt && e.endedAt > 0 ? e.endedAt : now
-  return Math.max(0, end - e.startedAt)
-}
 
 // ownerAgent is the agent side of the owner column: the name when the read side
 // resolved one, the raw id otherwise. Empty for a process spawned outside any
@@ -132,9 +125,6 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
   // Id of the row awaiting stop confirmation, then the one being stopped.
   const [confirmStop, setConfirmStop] = useState<string | null>(null)
   const [stopping, setStopping] = useState<string | null>(null)
-  // Shared "now" for the duration column, re-read once a second while at least
-  // one row is running.
-  const [now, setNow] = useState(() => Date.now())
   // Which of the sessions named by the rows still exist. The ledger keeps a
   // process after its session is deleted, so the owner column can only link the
   // ids in here. Kept together with the id set it was resolved for, so a row set
@@ -227,15 +217,9 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
     }
   }, [sessionIdKey, onError])
 
-  const hasRunning = useMemo(() => entries.some((e) => e.status === 'running'), [entries])
-
-  // Tick the duration column only while something is actually running — a
-  // history-only list has no moving number and should not wake the tab up.
-  useEffect(() => {
-    if (!hasRunning) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [hasRunning])
+  // The duration column ticks inside ProcessDuration: only running rows'
+  // cells subscribe to its shared clock, so the table itself does not re-render
+  // every second (and a history-only list never wakes the tab up).
 
   // Free-text filter over command, label and owner, applied client-side (the
   // backend filters owners by EXACT id, which is the wrong shape for a search
@@ -453,7 +437,7 @@ export function ProcessPanel({ onError, onOpenSession }: Props) {
                       className="px-2 py-1.5 text-[var(--color-text-dim)]"
                       data-testid="process-duration"
                     >
-                      {formatDurationMs(elapsedMs(e, now))}
+                      <ProcessDuration entry={e} />
                     </td>
                     <td className="px-2 py-1.5 font-mono">
                       {terminal ? (

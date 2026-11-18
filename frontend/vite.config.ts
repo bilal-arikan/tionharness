@@ -90,7 +90,10 @@ export default defineConfig({
             id.includes('vfile')
           )
             return 'vendor-markdown'
-          if (id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler'))
+          // Match the package directories exactly. A bare '/react/' substring also
+          // matched node_modules/@xyflow/react/, which pulled React Flow (and its
+          // CSS) into this eagerly preloaded chunk even though FlowsPanel is lazy.
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id))
             return 'vendor-react'
         },
       },

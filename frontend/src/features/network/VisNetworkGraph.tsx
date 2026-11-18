@@ -582,12 +582,16 @@ export function VisNetworkGraph({
       fitCleanupRef.current()
       const newIds = new Set(newNodeIds)
       const fixedBefore = new Map<string, Node['fixed']>()
+      const anchors: Node[] = []
       for (const id of nds.getIds() as string[]) {
         if (newIds.has(id)) continue
         const node = nds.get(id) as Node | null
         fixedBefore.set(id, node?.fixed)
-        nds.update({ id, fixed: { x: true, y: true } })
+        anchors.push({ id, fixed: { x: true, y: true } })
       }
+      // One batched update: every DataSet update makes vis-network re-wire all
+      // edges, so a per-node loop cost O(nodes x edges) on a large map.
+      nds.update(anchors)
       temporaryFixedRef.current = fixedBefore
 
       let completed = false

@@ -152,7 +152,20 @@ export function MessageList({
   // resolveAgent, not a raw find: a session outlives its agent, so the author of
   // an old turn may be deleted. It comes back flagged (AgentIdentity shows the
   // "silinmiş" badge) instead of undefined or a bare id.
-  const agentById = (id?: string) => resolveAgent(agents, id) ?? undefined
+  // Cached per roster: resolveAgent builds a fresh object on every call, and a new
+  // `agent` prop identity defeated the memo on every mounted row each render
+  // (20Hz while a turn streams, and on every scroll).
+  const resolvedAgents = useMemo(() => {
+    const byId = new Map<string, NonNullable<ReturnType<typeof resolveAgent>>>()
+    for (const a of agents) {
+      const r = resolveAgent(agents, a.id)
+      if (r) byId.set(a.id, r)
+    }
+    return byId
+  }, [agents])
+  // Unknown ids (deleted authors) still resolve per call to the "deleted" stub.
+  const agentById = (id?: string) =>
+    (id ? resolvedAgents.get(id) : undefined) ?? resolveAgent(agents, id) ?? undefined
   // Multi-participant thread detection (generic participant model): count the
   // distinct agents that authored or were addressed in this transcript. Only when
   // 2+ agents take part do we surface the "→ <recipient>" direction cue — a 1:1

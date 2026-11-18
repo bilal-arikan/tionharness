@@ -8,6 +8,7 @@ import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import { useTranscript } from './useTranscript'
 import { useReferencedAgents } from '@/shared/hooks/useReferencedAgents'
+import { useThrottledValue } from '@/shared/hooks/useThrottledValue'
 import type { Agent, AgentPatch, Artifact, Message, Session } from '@/types'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import { copyToClipboard } from '@/shared/lib/clipboard'
@@ -178,8 +179,13 @@ export function useSessionsController({
   // the user opens a NEW chat (newSession); switching to an existing session
   // leaves it unchanged so the composer does NOT steal focus on plain selection.
   const [focusSessionId, setFocusSessionId] = useState<string | null>(null)
-  const [meterRefresh, setMeterRefresh] = useState(0)
+  const [meterRefreshRaw, setMeterRefresh] = useState(0)
   const bumpMeter = useCallback(() => setMeterRefresh((n) => n + 1), [])
+  // Every persisted message emits a session event that bumps the meter, and each
+  // bump re-lists all artifacts (and, with the detail panel open, re-fetches the
+  // session info + usage). Throttled so a streaming turn costs one refresh per
+  // second instead of one per message; the final bump still lands.
+  const meterRefresh = useThrottledValue(meterRefreshRaw, 1000)
   // Entity selection carried by an initial/cross-workspace deep link, consumed
   // once by the workspace-load effect after agents+sessions arrive.
   const pendingRouteRef = useRef<Route | null>(INITIAL_ROUTE)

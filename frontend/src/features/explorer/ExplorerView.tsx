@@ -11,6 +11,7 @@ import {
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_EXPLORER, SIGNAL_EXPLORER_LIVE } from '@/app/eventToRefreshSignals'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { refToString } from '@/types'
 import { ViewPanel } from '@/features/view/ViewPanel'
 import { VisNetworkGraph } from '@/features/network/VisNetworkGraph'
@@ -57,6 +58,10 @@ export function ExplorerView({
 }: Props) {
   const { t } = useTranslation('explorer')
   const [search, setSearch] = useState('')
+  // The graph highlight rebuilds every vis node/edge, so it follows the input
+  // after a short pause instead of on each keystroke. The result list below the
+  // box stays live: it only filters the visible graph.
+  const graphSearch = useDebouncedValue(search, 200)
   // Persisted per browser: leaving the screen must not reset the packing.
   const [density, setDensity] = useStoredDensity('tionharness.explorerDensity')
   const [filter, setFilter, clearFilter] = useExplorerFilter()
@@ -89,7 +94,7 @@ export function ExplorerView({
     refreshLive,
   } = useExplorerGraph({
     onError,
-    search,
+    search: graphSearch,
     filter,
     collapsed: fold.collapsed,
     initialFocus: focusNode,
